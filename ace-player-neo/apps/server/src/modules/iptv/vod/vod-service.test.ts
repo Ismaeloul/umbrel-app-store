@@ -75,7 +75,7 @@ function vodCalls(rig: IptvTestRig, action: string): number {
 }
 
 describe('VodService contra el proveedor falso', () => {
-  it('la primera petición a la vista sincroniza; portada con novedades sin adultos, categorías y distintivos', async () => {
+  it('la primera petición a la vista sincroniza; portada con novedades (los adultos, como los demás), categorías y distintivos', async () => {
     const rig = await ready();
     const { vod, first } = await synced(rig);
     expect(first.state).toBe('preparing');
@@ -97,8 +97,13 @@ describe('VodService contra el proveedor falso', () => {
       'Mission: Impossible – Dead Reckoning',
       'Reserva',
       'Паразиты',
+      'Película adulta de prueba',
     ]);
-    expect(home.newMovies.some((card) => card.adult)).toBe(false);
+    /* Decisión de Isma (3-oct, D-VOD7): los títulos para adultos salen en la portada como los demás. */
+    expect(home.newMovies.at(-1)).toMatchObject({
+      title: 'Película adulta de prueba',
+      adult: true,
+    });
     expect(home.newMovies[0]).toMatchObject({
       year: 2023,
       rating: 8.3,
@@ -161,7 +166,7 @@ describe('VodService contra el proveedor falso', () => {
       limit: 60,
     });
     expect(spider.items.map((card) => card.title)).toEqual(['Spider-Man: No Way Home']);
-    /* Adultos: en la búsqueda sí, en «Todas» sin texto no. */
+    /* Adultos: en la búsqueda, en su categoría y en «Todas» (D-VOD7 de hoy). */
     const adult = await vod.browse({
       kind: 'movie',
       cat: 'all',
@@ -180,7 +185,7 @@ describe('VodService contra el proveedor falso', () => {
     });
     expect(inCategory.items.map((card) => card.title)).toEqual(['Película adulta de prueba']);
     const page1 = await vod.browse({ kind: 'movie', cat: 'all', sort: 'name', limit: 3 });
-    expect(page1.total).toBe(8);
+    expect(page1.total).toBe(9);
     expect(page1.nextCursor).not.toBeNull();
     const page2 = await vod.browse({
       kind: 'movie',

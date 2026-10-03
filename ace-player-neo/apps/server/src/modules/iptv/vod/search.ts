@@ -13,8 +13,9 @@
    - orden por niveles 0-4 (§6.2), luego lo más reciente y luego el título;
      se guardan los 2 000 mejores (`capped`), con caché LRU de 16 consultas.
    Sin texto: `byAdded` («Novedades») o A-Z perezoso, con el filtro de
-   categoría (`byCat`) y de distintivo (`tags`). Los adultos no salen en
-   «Todas» sin texto (D-VOD7), sí en su categoría y en la búsqueda. */
+   categoría (`byCat`) y de distintivo (`tags`). Los adultos salen siempre
+   en su categoría y en la búsqueda; en «Todas» sin texto, lo que diga
+   `VOD_ADULT_POLICY` (adultos.ts, D-VOD7: hoy, como los demás). */
 
 import { VOD_SEARCH, VOD_TAGS, type VodTag } from '@ace/shared';
 import { cleanChannelsQuery } from '../search.js';
@@ -352,7 +353,9 @@ export function searchPage(
 
 /**
  * Una página sin texto (§6.3): «Novedades» (`byAdded`) o A-Z, con los
- * filtros. Sin categoría (`bucket` null) los adultos no salen.
+ * filtros. Dentro de su categoría los adultos salen siempre; sin categoría
+ * (`bucket` null), según `adults` (quien llama pasa `VOD_ADULT_POLICY`,
+ * adultos.ts; por defecto, salen).
  */
 export function listPage(
   table: VodTable,
@@ -360,8 +363,9 @@ export function listPage(
   sort: 'added' | 'name',
   offset: number,
   limit: number,
+  options: { readonly adults?: boolean } = {},
 ): VodPage {
-  const excludeAdult = filter.bucket === null;
+  const excludeAdult = filter.bucket === null && options.adults === false;
   let order: ArrayLike<number>;
   if (filter.bucket !== null && sort === 'added') order = table.categoryRows(filter.bucket);
   else order = sort === 'name' ? table.byTitle() : table.byAdded;

@@ -47,6 +47,7 @@ import type { IptvKeys } from '../../../config/keys.js';
 import type { IptvFetchPolicy, NetClient } from '../../net/types.js';
 import { categoryId, decodeCursor, encodeCursor } from '../browse.js';
 import type { XtreamCredentials } from '../xtream.js';
+import { VOD_ADULT_POLICY } from './adultos.js';
 import { VodArtCache, type ArtReply } from './art.js';
 import {
   loadVodCatalog,
@@ -814,13 +815,19 @@ export class VodService {
         order: none ? Number.MAX_SAFE_INTEGER - 1 : bucket,
       });
     }
-    /* Las de adultos al final (D-VOD7); «Sin categoría», antes de ellas. */
-    out.sort((a, b) => Number(a.adult) - Number(b.adult) || a.order - b.order);
+    /* En el orden del panel y «Sin categoría» al final; las de adultos, donde
+       diga `VOD_ADULT_POLICY` (D-VOD7: hoy, como las demás). */
+    const adultRank = (category: VodCategory): number =>
+      VOD_ADULT_POLICY.categoriesLast && category.adult ? 1 : 0;
+    out.sort((a, b) => adultRank(a) - adultRank(b) || a.order - b.order);
     return out.slice(0, CATEGORY_MAX).map(({ order: _order, ...category }) => category);
   }
 
+  /** Distintivos de «Todas» (los chips de la portada), con los adultos según `VOD_ADULT_POLICY`. */
   private tagCountsOf(table: VodTable): VodTagCount[] {
-    return listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, 0).tagCounts.map((item) => ({
+    return listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, 0, {
+      adults: VOD_ADULT_POLICY.all,
+    }).tagCounts.map((item) => ({
       tag: item.tag,
       count: item.count,
     }));
@@ -828,8 +835,11 @@ export class VodService {
 
   private homeParts(catalog: VodCatalog): NonNullable<VodService['homeCache']> {
     if (this.homeCache?.catalog === catalog) return this.homeCache;
+    /* «Novedades en películas» y «Series actualizadas»: los adultos, según `VOD_ADULT_POLICY`. */
     const newest = (table: VodTable): number[] =>
-      listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, HOME_ROWS).rows.slice();
+      listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, HOME_ROWS, {
+        adults: VOD_ADULT_POLICY.home,
+      }).rows.slice();
     this.homeCache = {
       catalog,
       rows: { movie: newest(catalog.tables.movie), series: newest(catalog.tables.series) },
@@ -968,7 +978,7 @@ export class VodService {
     const filter: VodFilter = { bucket, tagBit: query.tag ? tagBit(query.tag) : 0 };
     const page = parsed
       ? searchPage(searchCached(table, parsed, bucket), table, filter, offset, query.limit)
-      : listPage(table, filter, query.sort, offset, query.limit);
+      : listPage(table, filter, query.sort, offset, query.limit, { adults: VOD_ADULT_POLICY.all });
     const other = VOD_KINDS.find((kind) => kind !== query.kind) as VodKind;
     const progress = this.progressMap();
     return {

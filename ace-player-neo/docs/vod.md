@@ -392,9 +392,17 @@ exige retenido < 45 MB con 150 000 + 30 000.
 
 ### 4.9 Adultos (D-VOD7)
 
-Siguiendo D25 («todo desbloqueado»): los títulos y categorías para adultos **se ven** en su categoría y en la
-búsqueda, con la cápsula «+18». **No salen** en la portada ni en «Todas» sin texto buscado, y sus categorías van al
-final de la lista. La portada la ve toda la casa. Isma puede pedir que salgan también ahí.
+**Decisión de Isma (3-oct-2026): los títulos para adultos salen en la portada como los demás.** Siguiendo D25
+(«todo desbloqueado»), se ven en todas partes: la portada («Novedades en películas» y «Series actualizadas»),
+«Todas» sin texto buscado, su categoría y la búsqueda, con la cápsula «+18» (`adult: true` en la tarjeta, la ficha
+y la categoría). Sus categorías van en el orden del panel, como las demás.
+
+**Un solo sitio para cambiarlo:** `apps/server/src/modules/iptv/vod/adultos.ts` (`VOD_ADULT_POLICY`: `home`, `all`
+y `categoriesLast`). En su categoría y en la búsqueda salen siempre, sea cual sea la política. Qué es «para adultos»
+no cambia (§4.3: `is_adult` o el nombre de la categoría).
+
+Antes (hasta el 3-oct): fuera de la portada y de «Todas» sin texto, y sus categorías al final; «la portada la ve
+toda la casa». Isma lo cambió al contestar la pregunta 4 de §19.3.
 
 ---
 
@@ -517,9 +525,9 @@ Los empates van por `added` (más reciente primero) y luego por título.
 
 Una sola petición (D-VOD28) con:
 - «Seguir viendo» (§10.3), 20 como mucho;
-- «Novedades en películas»: 20 por `byAdded`, sin adultos;
-- «Series actualizadas»: 20 por `last_modified`, sin adultos;
-- las categorías de los dos tipos, con su número (las de adultos al final);
+- «Novedades en películas»: 20 por `byAdded` (los adultos, como los demás: D-VOD7);
+- «Series actualizadas»: 20 por `last_modified` (ídem);
+- las categorías de los dos tipos, con su número en el orden del panel (las de adultos también, D-VOD7);
 - los distintivos con número por tipo, para pintar solo los chips que tienen algo.
 
 Se calcula una vez por catálogo y versión de progreso, y se guarda (LRU de 4). Objetivo: < 30 ms. Las filas por
@@ -1142,8 +1150,8 @@ export const VodHomeSchema = z.strictObject({
   truncated: z.boolean(),
   stale: z.boolean(),
   continue: z.array(VodContinueSchema).max(20),
-  newMovies: z.array(VodCardSchema).max(20),       // «Novedades en películas», sin adultos
-  updatedSeries: z.array(VodCardSchema).max(20),   // «Series actualizadas», sin adultos
+  newMovies: z.array(VodCardSchema).max(20),       // «Novedades en películas» (adultos: D-VOD7)
+  updatedSeries: z.array(VodCardSchema).max(20),   // «Series actualizadas» (adultos: D-VOD7)
   categories: z.strictObject({
     movie: z.array(VodCategorySchema).max(2_000),
     series: z.array(VodCategorySchema).max(2_000),
@@ -1671,7 +1679,7 @@ Cada estado vacío tiene una salida (`EmptyState` con `actions`).
 | `titles.test.ts` | «ES\| Oppenheimer (2023) 4K» → «Oppenheimer», 2023, castellano + 4k; «\|LAT\| Dune 4K» → «Dune», latino + 4k; «Amélie (2001) VOSE» conserva el acento; «Mission: Impossible – Dead Reckoning (2023)» intacto; «Reserva (2018)» intacto; «M+ …» sin cambiar; «M3GAN» no pierde letras; «東京物語» y «Паразиты (2019)» se conservan; la categoría «PELIS LATINO» da latino; la limpieza nunca deja un título vacío |
 | `table.test.ts`, `table-codec.test.ts` | Construcción, `bySource`, `byCat`, `byAdded`, recorte en el tope con `truncated`, textos internados; ida y vuelta binaria; AAD de otro proveedor rechazado; fichero corrupto → vacío y nueva sincronización; sin `JSON.parse` de filas al cargar |
 | `ids.test.ts` | Ida y vuelta por tipo; el episodio lleva su `series_id`; otra huella → `null`; etiqueta falsa → `null`; un id de canal → `null`; `isIptvId(idVod) === true`; 100 000 hashes al azar no descifran; otro proveedor → otro id; **`classify(idVod)` nunca es `'engine'`**; `channelStream` y `libraryMutate` → `validation_error` con `detail: 'vod_id'` |
-| `search.test.ts` | Plegado que conserva la longitud; niveles 0-4 con un caso cada uno; «spiderman» encuentra «Spider-Man»; año como filtro («dune 2021»); varias palabras; `otherKindTotal`; más de 2 000 → `capped`; cursor `stale`; 2-80 caracteres (`empty_query`); adultos en la búsqueda pero no en la portada |
+| `search.test.ts` | Plegado que conserva la longitud; niveles 0-4 con un caso cada uno; «spiderman» encuentra «Spider-Man»; año como filtro («dune 2021»); varias palabras; `otherKindTotal`; más de 2 000 → `capped`; cursor `stale`; 2-80 caracteres (`empty_query`); adultos en la búsqueda y en su categoría siempre, y en «Todas» según `VOD_ADULT_POLICY` |
 | `catalog.test.ts` | Pasos de la sincronización con `fakeTransport`; aplicar solo con el mismo proveedor y revisión; la primera **no** se aplaza con alguien viendo y las siguientes sí (1 h); esperas tras fallos; modo por categorías tras `too_large`; `none` con listas vacías u objeto `user_info`; `skipped` llega a `IptvStatus.vod`; guardar, pausar y eliminar abortan |
 | `details.test.ts` | LRU por bytes; coalescencia (10 → 1 llamada); 1 en vuelo; 300 ms entre llamadas; 60 por minuto; con 8 en espera, `info: 'failed'`; precarga con cola ocupada → `pending`; serie de 8 MiB; TTL; topes de temporadas y episodios; temporadas deducidas; «Especiales» al final; prefijo del episodio quitado |
 | `art.test.ts` | Bytes mágicos (JPEG, PNG y WebP sí; SVG y HTML no); topes de bytes; imagen en la LAN rechazada aunque el proveedor esté en la LAN, salvo su host exacto; redirección a `127.0.0.1` bloqueada; `nosniff` y `CSP default-src 'none'`; LRU en disco; caché negativa; ETag y 304; `v` distinta → `no-cache`; tamaños de TMDB; 4 a la vez; ninguna URL ni host en los nombres de fichero |
@@ -1915,7 +1923,7 @@ quita de `WEB_FIXTURE_ROUTE_IDS` y actualiza `security.test.ts`. El mismo día, 
 | D-VOD4 | **Todo en `iptv/vod` y `remux/vod`**, relé en `relay-vod.ts`; sin módulo nuevo, sin tocar `StreamSourceSchema`, `STATE_SCOPES`, `VideoParamsSchema` ni nginx en la 0.9.0 | Módulo `vod` nuevo: saca JSON crudo del proveedor fuera de `iptv` (§2.4) y toca 4 registros alineados. `VodSession` dentro de `relay.ts`: es la zona del diagnóstico |
 | D-VOD5 | **Búsqueda por tipo** con `indexOf` sobre la tabla plegada, niveles 0-4, `otherKindTotal` y tope de 2 000 | Índice de palabras: más memoria y sin medir. Resultados mezclados de películas y series: orden confuso |
 | D-VOD6 | **Distintivos de lengua y calidad** (Castellano, Latino, VOSE, Multi, 4K) del título y la categoría, con chips | Tirarlos al limpiar: es lo primero que se mira en un catálogo español |
-| D-VOD7 | **Adultos:** visibles en su categoría y en la búsqueda (D25), fuera de la portada y de «Todas» sin texto | Esconderlos también en la búsqueda: va contra D25, que decidió Isma. Enseñarlos en la portada: la ve toda la casa |
+| D-VOD7 | **Adultos (cambiada por Isma el 3-oct-2026):** salen en la portada, en «Todas», en su categoría y en la búsqueda como los demás (D25), con la cápsula «+18»; sus categorías, en el orden del panel. Un solo sitio para cambiarlo: `vod/adultos.ts` (§4.9) | Esconderlos también en la búsqueda: va contra D25. La regla de antes (fuera de la portada y de «Todas», categorías al final) la descartó Isma |
 | D-VOD8 | **Carteles por proxy** con id y versión, caché de 256 MiB, solo raster, sin LAN salvo el host del proveedor, TMDB reducido | Enlace directo: lo impide la CSP y filtraría la URL. Redimensionar con ffmpeg: más procesos contra `pids_limit`. Precargar cientos: tráfico sin pedirlo |
 | D-VOD9 | **Estrategia C para todos**; sin A, B ni D en la v1 | A: solo web, solo MP4 H.264/AAC y AC-3 sin sonido en Chrome. B: cae hasta un GOP antes y no sirve a AVPlayer. D: cae antes, lista que crece y llena el disco |
 | D-VOD10 | **Relé VOD en serie** con caché de cabecera e índice, salto corto ≤ 32 MiB sin reabrir, EOF = fin, reapertura perezosa; redirección reutilizada solo si el Paso 0 lo valida | Pasar ffmpeg directo al proveedor: 2 conexiones por salto (medido). La `TsSession` del directo: 409 y vuelve al byte 0 |
@@ -1971,7 +1979,7 @@ quita de `WEB_FIXTURE_ROUTE_IDS` y actualiza `security.test.ts`. El mismo día, 
 2. ¿«Pelis y series» o «Cine» en la barra? (D-VOD21)
 3. Si alguien ve fútbol por AceStream en casa y otra persona pone una película, ¿la película debe cortar el fútbol,
    como pasa hoy con los canales, o deberían poder convivir? (D-VOD11)
-4. ¿Los títulos para adultos también en la portada? (D-VOD7)
+4. ¿Los títulos para adultos también en la portada? (D-VOD7) → **sí**, contestada el 3-oct (§19.4)
 5. ¿Cuánto le importan los subtítulos (VOSE)? Decide si entran en la 0.9.0. (D-VOD15)
 6. ¿Puede lanzar el Paso 0 en su Umbrel con la app de IPTV del PC cerrada?
 
@@ -1983,6 +1991,7 @@ quita de `WEB_FIXTURE_ROUTE_IDS` y actualiza `security.test.ts`. El mismo día, 
    vez, porque no comparten conexión. Dos cosas por IPTV a la vez siguen sin poder ser con `max_connections = 1`:
    ahí manda la regla de la casa (la nueva corta la anterior, con aviso).
 4. Subtítulos: **pueden esperar** (D-VOD15: fuera de la primera versión).
+5. (3-oct) Adultos: **salen en la portada como los demás** (cambia D-VOD7, §4.9).
 
 ---
 
