@@ -48,7 +48,16 @@
      «LaLigaPlus»; «SUPER CUPA» → «Supercopa»; «R. MADRID» → «Real Madrid».
    - `platform`: VIX, Pluto TV, Rakuten TV, GOLD TV 24/7… (por el nombre o
      la categoría). No se emparejan por nombre con la agenda (su «LA LIGA 1»
-     no es «M+ LaLiga TV») y el buscador las pone detrás. */
+     no es «M+ LaLiga TV») y el buscador las pone detrás.
+
+   Con el corpus de nombres raros de la 0.9.0 (docs/buscador.md) se suma:
+   - País: cualquier símbolo lo separa del nombre («ES► », «ES ✪ », «ES ★ …
+     ★») y puede haber adornos delante («◉ ES: »).
+   - La copia con almohadilla («LA 1 #2», «TELECINCO HD #2 ★») es la copia 2,
+     como «(2)»; «#0» sigue siendo el canal de Movistar y se enseña con su
+     «#» («M+ #0», no «M+ 0»).
+   - RTVE detrás de su canal o delante del número («LA 1 TVE», «TVE 1») es
+     La 1: la misma fila. */
 
 import { channelSpelling, normalizeChannelKey, type IptvQuality } from '@ace/shared';
 
@@ -100,9 +109,12 @@ const COUNTRY_3 = new Set([
   'DZA', 'ALG', 'TUN', 'EGY', 'KSA', 'SAU', 'UAE', 'ARE', 'QAT', 'ISR', 'IRN', 'IRQ', 'KUR',
 ]); // prettier-ignore
 
-/* «ES: », «|ES| », «[ES] », «(ES) », «ES - », «ESPAÑA | », «ES • », «ES » », «ES ➤ », «ES TI - » (la segunda sigla es la plataforma). */
+/* «ES: », «|ES| », «[ES] », «(ES) », «ES - », «ESPAÑA | », «ES • », «ES » », «ES ➤ », «ES TI - » (la segunda sigla es la plataforma).
+   Desde la 0.9.0 (docs/buscador.md) cualquier símbolo separa («ES► », «ES ✪ », «ES ★ … ★») y puede haber adornos
+   delante («◉ ES: »): antes «ES► LA 1» se quedaba «ES LA 1», otra fila que el buscador ponía detrás de «La 10». El
+   punto, la coma y las comillas no separan («DR. HOUSE»). */
 const TITLE_COUNTRY_RE =
-  /^\s*[|[(]?\s*([A-Z]{2,3}|ESPAÑA|ESPANA|SPAIN)(?:\s+[A-Z]{2,3})?\s*[|\]):\-–•·▎┃»➤➜→>]+\s*/u;
+  /^[\s\p{P}\p{S}]*([A-Z]{2,3}|ESPAÑA|ESPANA|SPAIN)(?:\s+[A-Z]{2,3})?\s*(?:(?![.,'’"])[\p{P}\p{S}])+\s*/u;
 /* España delante sin separador: «ES DAZN 1», «ESP DAZN 1» (solo España: «DE PELÍCULA» es un canal). */
 const TITLE_SPAIN_BARE_RE = /^\s*(?:ES|ESP|SPAIN|ESPAÑA|ESPANA)\s+(?=[\p{L}\p{N}])/u;
 /* España al final, entre corchetes, paréntesis o barras: «DAZN 1 [ES]», «DAZN 1 |ES|», «DAZN 1 (ESP)»;
@@ -205,6 +217,10 @@ const BACKUP_RE =
   /\b(?:backup|back\s*up|bkp|bk|alt|alternativ[oa]|reserva|respaldo|multi(?:audio)?)(?:\s?\d{1,2})?\b/giu;
 /* La copia entre paréntesis o corchetes del final: «DAZN 1 (2)», «DAZN 1 [1]». */
 const MIRROR_RE = /\s*[([]\s*(\d{1,2})\s*[)\]]\s*$/u;
+/* La copia con almohadilla tras el nombre: «LA 1 #2» → «LA 1 (2)» (nunca «#0», que es un canal). */
+const HASH_COPY_RE = /(\S)\s*#\s*([1-9]\d?)(?![\p{L}\p{N}])/gu;
+/* «TVE 1», «TVE1»: La 1 (y La 2). */
+const TVE_NUMBER_TITLE_RE = /\br?tve\s*([12])\b/giu;
 
 /* Emojis, banderas (indicadores regionales) y adornos. */
 const EMOJI_RE = /\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}]|\u{FE0F}|\u{200D}/gu;
@@ -405,7 +421,12 @@ export function cleanIptvTitle(
   }
   text = text.replace(NOTE_RE, ' ');
   const backupTag = strip(text, BACKUP_TAG_RE);
-  text = backupTag.text.replace(DECOR_RE, ' ').replace(/#(?=[\p{L}\p{N}])/gu, '');
+  /* «LA 1 #2», «TELECINCO HD #2 ★»: la copia 2, como «(2)» (antes el «#» se quitaba y quedaba «LA 1 2», otro
+     canal). «#0» es un canal de Movistar y «#VAMOS», otro: esos se quedan sin el «#». */
+  text = backupTag.text
+    .replace(DECOR_RE, ' ')
+    .replace(HASH_COPY_RE, '$1 ($2)')
+    .replace(/#(?=[\p{L}\p{N}])(?!0(?![\p{L}\p{N}]))/gu, '');
   const hevcStep = strip(text, HEVC_RE);
   text = hevcStep.text;
   const hevc = hevcStep.found;
@@ -417,7 +438,10 @@ export function cleanIptvTitle(
     if (step.found) quality ??= value;
   }
   const backupStep = strip(text, BACKUP_RE);
-  text = collapse(backupStep.text);
+  /* RTVE detrás de su canal o delante del número: «LA 1 TVE» y «TVE 1» son La 1 (la misma fila). */
+  text = collapse(
+    backupStep.text.replace(BROADCASTER_INNER_RE, '$1').replace(TVE_NUMBER_TITLE_RE, 'La $1'),
+  );
   const spainLetter = SPAIN_LETTER_RE.exec(text);
   if (spainLetter && spainLetter.index > 0) {
     country ??= 'ES';

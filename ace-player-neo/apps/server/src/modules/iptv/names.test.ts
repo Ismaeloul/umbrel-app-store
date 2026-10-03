@@ -210,6 +210,55 @@ describe('cleanIptvTitle', () => {
   });
 });
 
+describe('cleanIptvTitle con el corpus de nombres raros (0.9.0, docs/buscador.md)', () => {
+  it.each([
+    /* Cualquier símbolo separa el país, y puede haber adornos delante. */
+    ['ES► LA 1 HD', 'LA 1', 'la 1', 'hd', 'ES', false],
+    ['ES ► LA 1', 'LA 1', 'la 1', null, 'ES', false],
+    ['ES ✪ LA 1', 'LA 1', 'la 1', null, 'ES', false],
+    ['ES ★ LA 1 ★', 'LA 1', 'la 1', null, 'ES', false],
+    ['ES » LA 1 FHD', 'LA 1', 'la 1', 'fhd', 'ES', false],
+    ['◉ ES: LA 1 FHD', 'LA 1', 'la 1', 'fhd', 'ES', false],
+    ['ES 4K LA 1', 'LA 1', 'la 1', 'uhd', 'ES', false],
+    ['ES: LA 1 4K', 'LA 1', 'la 1', 'uhd', 'ES', false],
+    ['|ES| LA 1 FHD', 'LA 1', 'la 1', 'fhd', 'ES', false],
+    ['[ES] LA 1 FHD ⁺', 'LA 1', 'la 1', 'fhd', 'ES', false],
+    /* La copia con almohadilla es una copia, no el número del canal. */
+    ['ES: LA 1 #2', 'LA 1', 'la 1', null, 'ES', true],
+    ['ES » TELECINCO HD #2 ★', 'TELECINCO', 'telecinco', 'hd', 'ES', true],
+    ['ES: LA 1 CATALUNYA #2', 'LA 1 CATALUNYA', 'la 1 catalunya', null, 'ES', true],
+    /* «#0» es un canal de Movistar (se enseña con su «#»); «#VAMOS», otro. */
+    ['ES: M+ #0 HD', 'M+ #0', 'movistar 0', 'hd', 'ES', false],
+    ['ES: #0 FHD', '#0', '0', 'fhd', 'ES', false],
+    ['ES: #VAMOS FHD', 'VAMOS', 'vamos', 'fhd', 'ES', false],
+    /* RTVE: «LA 1 TVE» y «TVE 1» son La 1. */
+    ['ES: LA 1 TVE HD', 'LA 1', 'la 1', 'hd', 'ES', false],
+    ['ES: TVE 1', 'La 1', 'la 1', null, 'ES', false],
+    ['ES: CLAN TVE', 'CLAN', 'clan', null, 'ES', false],
+    /* Grafías que juntan variantes: Tele 5, Antena3 y A3. */
+    ['ES: TELE5 SD', 'TELE5', 'telecinco', 'sd', 'ES', false],
+    ['ES: TELE 5 HD', 'TELE 5', 'telecinco', 'hd', 'ES', false],
+    ['ES: ANTENA3 FHD', 'ANTENA3', 'antena 3', 'fhd', 'ES', false],
+    ['ES: A3 HD', 'A3', 'antena 3', 'hd', 'ES', false],
+    ['ES: A3 SERIES HD', 'A3 SERIES', 'atreseries', 'hd', 'ES', false],
+    /* Lo que no es un país sigue sin serlo. */
+    ['DR. HOUSE', 'DR. HOUSE', 'dr house', null, null, false],
+  ])('%s', (title, display, key, quality, country, backup) => {
+    const clean = cleanIptvTitle(title);
+    expect(clean.display).toBe(display);
+    expect(clean.key).toBe(key);
+    expect(clean.quality).toBe(quality);
+    expect(clean.country).toBe(country);
+    expect(clean.backup).toBe(backup);
+  });
+
+  it('el «TELE 5» alemán tiene la clave de Telecinco, pero es otro canal (otro país)', () => {
+    const de = cleanIptvTitle('DE: TELE 5 HD');
+    expect(de.key).toBe('telecinco');
+    expect(de.country).toBe('DE');
+  });
+});
+
 describe('IptvRedactor', () => {
   const U = 'usuario-e2e';
   const P = 'Cl4ve-Secreta-E2E';
