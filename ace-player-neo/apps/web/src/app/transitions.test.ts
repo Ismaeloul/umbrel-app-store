@@ -6,7 +6,6 @@ import {
   finishEntranceAnimations,
   playerSwapsByName,
   REPRODUCTOR_CAMBIA,
-  REPRODUCTOR_FIJO,
   reproductorTransitionName,
   VISTA_CAMBIA,
   VISTA_ENTRA,
@@ -34,18 +33,14 @@ describe('sin elementos compartidos entre vistas (0.9.0)', () => {
         (match) => `${file}: ${match[1]}`,
       ),
     );
-    expect(named).toEqual(['app/Shell.tsx: playerSwap']);
-    const shell = sources().find(({ file }) => file === 'app/Shell.tsx')?.text ?? '';
-    expect(shell).toContain(
-      'name={playerSwap ? reproductorTransitionName(presentation) : REPRODUCTOR_FIJO}',
-    );
+    expect(named).toEqual(['app/Shell.tsx: reproductorTransitionName(presentation)']);
     const all = sources()
       .map(({ text }) => text)
       .join('\n');
     expect(all).not.toMatch(/partidoTransitionName|canalTransitionName|transitionName=/);
   });
 
-  it('en WebKit (y sin la API) el reproductor guarda su nombre fijo de siempre', () => {
+  it('en WebKit (y sin la API) el reproductor no lleva <ViewTransition>', () => {
     // Un elemento que solo entra recibe allí un ::view-transition-old con la
     // animación de salida y se queda pegado (fix/transicion-safari).
     const chrome = 'Google Inc.';
@@ -53,7 +48,9 @@ describe('sin elementos compartidos entre vistas (0.9.0)', () => {
     expect(playerSwapsByName({ viewTransitions: true, vendor: chrome })).toBe(true);
     expect(playerSwapsByName({ viewTransitions: true, vendor: apple })).toBe(false);
     expect(playerSwapsByName({ viewTransitions: false, vendor: chrome })).toBe(false);
-    expect(REPRODUCTOR_FIJO).toBe('ace-reproductor');
+    const shell = sources().find(({ file }) => file === 'app/Shell.tsx')?.text ?? '';
+    expect(shell).toContain('<PlayerTransition animate={playerSwap} presentation={presentation}>');
+    expect(shell).toMatch(/if \(!animate\) return children;/);
   });
 
   it('el reproductor lleva un nombre por presentación: de mini a grande no viaja', () => {

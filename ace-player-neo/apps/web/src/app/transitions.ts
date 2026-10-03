@@ -84,18 +84,18 @@ export const VISTA_CAMBIA = {
    descargarse sustituye a «Preparando el reproductor…») siguen siendo un
    fundido en su caja.
 
-   En WebKit (Safari y todo iOS) NO: allí un elemento que solo entra
-   también recibe un ::view-transition-old(nombre) y, con una animación de
-   autor que se repite de una transición a otra, la instantánea se queda
-   pegada a opacidad 1 (el fallo de las vistas superpuestas de la 0.8.4,
-   fix/transicion-safari, viewTransitionGuard.ts). Con dos nombres y la
-   clase, el reproductor entraría justo en ese caso; así que en WebKit (y sin
-   la API) se queda el nombre fijo de siempre, sin clases. Es la misma regla
-   que `pickViewMotion` de fix/transicion-safari: al unir las dos ramas,
-   `playerSwapsByName()` puede ser `viewMotion() === 'vt'`. */
-
-/** Nombre fijo del reproductor donde no hay cambio por presentación (WebKit). */
-export const REPRODUCTOR_FIJO = 'ace-reproductor';
+   En WebKit (Safari y todo iOS) el reproductor NO lleva <ViewTransition>
+   (Shell.tsx, PlayerTransition): allí un elemento que solo entra también
+   recibe un ::view-transition-old(nombre) y, con una animación de autor que
+   se repite de una transición a otra, la instantánea se queda pegada (el
+   fallo de las vistas superpuestas de la 0.8.4, fix/transicion-safari,
+   viewTransitionGuard.ts); y con el nombre fijo de antes, abrir un partido
+   lanzaba allí una transición del documento entera ENCIMA del fundido CSS de
+   las vistas (visto con WebKit de Playwright: más de 2 s viva). Sin ella,
+   abrir un partido en el iPhone es solo el fundido de las vistas, igual que
+   cambiar de pestaña. Es la misma regla que `pickViewMotion` de
+   fix/transicion-safari: al unir las dos ramas, `playerSwapsByName()` puede
+   ser `viewMotion() === 'vt'`. */
 
 /** Nombre de la View Transition del reproductor en cada presentación. */
 export function reproductorTransitionName(presentation: 'stage' | 'mini'): string {

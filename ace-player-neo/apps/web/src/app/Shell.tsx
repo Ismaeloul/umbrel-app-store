@@ -31,6 +31,7 @@ import {
   useState,
   ViewTransition,
   type CSSProperties,
+  type ReactNode,
 } from 'react';
 import {
   clearStatus,
@@ -57,7 +58,6 @@ import {
   finishEntranceAnimations,
   playerSwapsByName,
   REPRODUCTOR_CAMBIA,
-  REPRODUCTOR_FIJO,
   reproductorTransitionName,
   VISTA_CAMBIA,
   VISTA_ENTRA,
@@ -109,6 +109,30 @@ function ViewSlot({ vista, route, active }: { vista: Vista; route: Route; active
         </Suspense>
       </ErrorBoundary>
     </div>
+  );
+}
+
+/**
+ * La <ViewTransition> del reproductor (transitions.ts): con un nombre por
+ * presentación, al pasar de mini a grande (o al revés) uno se funde y el otro
+ * aparece como las vistas, sin viajar de una esquina a otra. En WebKit no
+ * hay ninguna (playerSwapsByName): allí abrir un partido es solo el fundido
+ * de las vistas, sin transiciones del documento que se queden pegadas.
+ */
+function PlayerTransition({
+  animate,
+  presentation,
+  children,
+}: {
+  animate: boolean;
+  presentation: PlayerPresentation;
+  children: ReactNode;
+}) {
+  if (!animate) return children;
+  return (
+    <ViewTransition name={reproductorTransitionName(presentation)} default={REPRODUCTOR_CAMBIA}>
+      {children}
+    </ViewTransition>
   );
 }
 
@@ -257,14 +281,7 @@ export function Shell() {
           {dockMounted || inPartido ? (
             <div className="stage" data-presentation={presentation}>
               {dockMounted && PlayerDock ? (
-                // Un nombre por presentación (transitions.ts, reproductorTransitionName):
-                // al pasar de mini a grande, o al revés, uno se funde y el otro
-                // aparece como las vistas; no viaja de una esquina a otra. En
-                // WebKit, el nombre fijo de siempre (playerSwapsByName).
-                <ViewTransition
-                  name={playerSwap ? reproductorTransitionName(presentation) : REPRODUCTOR_FIJO}
-                  default={playerSwap ? REPRODUCTOR_CAMBIA : 'auto'}
-                >
+                <PlayerTransition animate={playerSwap} presentation={presentation}>
                   <div className="dock" data-presentation={presentation}>
                     <ErrorBoundary what="el reproductor">
                       <Suspense fallback={<StagePlaceholder loading />}>
@@ -277,7 +294,7 @@ export function Shell() {
                       </Suspense>
                     </ErrorBoundary>
                   </div>
-                </ViewTransition>
+                </PlayerTransition>
               ) : (
                 <StagePlaceholder />
               )}
