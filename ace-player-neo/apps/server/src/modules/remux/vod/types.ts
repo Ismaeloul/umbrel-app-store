@@ -18,6 +18,10 @@ export interface VodVideoInfo {
   readonly height: number | null;
   /** 8, 10… o null si no se sabe (se da por 8). */
   readonly bitDepth: number | null;
+  /** H.264: `profile_idc`; HEVC: el perfil efectivo (`parseHvcC`). null si no se sabe. */
+  readonly profile: number | null;
+  /** 1 = 4:2:0, 2 = 4:2:2, 3 = 4:4:4; null si no se sabe (se da por 4:2:0). */
+  readonly chromaFormat: number | null;
 }
 
 /** Una pista de audio (`index` es su posición entre las de audio: `-map 0:a:<index>`). */
