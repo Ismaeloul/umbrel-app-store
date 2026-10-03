@@ -2,25 +2,32 @@
 
    Una entrada IPTV queda CONFIRMADA POR LA GUÍA solo si TODO esto se cumple:
 
-   1. Hora: el programa empieza entre 30 min antes y 15 min después del
-      saque, dura entre 80 y 240 min y acaba al menos 90 min después del saque.
+   1. Hora: el programa empieza entre 60 min antes y 15 min después del
+      saque, dura entre 80 y 240 min y acaba al menos 90 min después del saque
+      (agenda híbrida, D-propuesta: antes eran 30 min antes; hay guías que
+      meten la previa en el mismo programa y las dos reglas de la duración
+      ya impiden que cuele otro programa).
    2. Equipos: los dos en el MISMO campo (título, subtítulo o descripción), a
       menos de 40 caracteres uno de otro y separados por un separador de
       enfrentamiento (-, –, vs, v, x, ×, contra, /), sin tildes, en minúsculas
       y por palabra completa. Alias: la clave del equipo, la clave sin
-      prefijos (real, club, cd…) si queda con 5 letras o más, la tabla curada
-      `EPG_TEAM_ALIASES` y, si llegan, los nombres alternativos y cortos. Las
-      abreviaturas de 3 letras solo valen en el patrón compacto `AAA-BBB`.
-      Nunca valen solos real, madrid, sporting, racing, union, deportivo,
-      club ni city. Un alias seguido de B, C, II, Femenino, Sub-19, Juvenil,
-      Castilla, Atlético, Deportivo, Promesas… es el filial: no cuenta.
+      prefijos (real, club, cd…) si queda con 5 letras o más, la forma corta
+      de las guías («R. Madrid», «At. Madrid», «Ath. Club», «Dep. Alavés»),
+      la tabla curada `EPG_TEAM_ALIASES` y, si llegan, los nombres
+      alternativos y cortos. Los puntos y las partículas (de, del, la, el)
+      no cuentan: «Bayern de Múnich» es «Bayern Múnich». Las abreviaturas de
+      3 letras solo valen en el patrón compacto `AAA-BBB`. Nunca valen solos
+      real, madrid, sporting, racing, union, deportivo, club ni city. Un alias
+      seguido de B, C, II, Femenino, Sub-19, Juvenil, Castilla, Atlético,
+      Deportivo, Promesas… es el filial: no cuenta.
    3. Marcas de «no es el partido»: (R), [R], «R:», (D), (Dif.), repetición,
-      diferido, resumen, previa, rueda de prensa, análisis…, el elemento
-      `<previously-shown/>` o una categoría de noticias/magazine. Tampoco
-      valen otros deportes (baloncesto, ACB, Euroliga, fútbol sala,
-      balonmano…), el femenino (salvo que el partido lo sea) ni las
-      categorías inferiores (Youth League, juvenil, Sub-19…), en cualquier
-      campo o categoría.
+      diferido, resumen, previa, rueda de prensa, análisis, partidos
+      históricos o un año entre paréntesis («(2010)»)…, el elemento
+      `<previously-shown/>` o una categoría de noticias, magazine o
+      documental. Tampoco valen otros deportes (baloncesto, ACB, Euroliga,
+      fútbol sala, balonmano…), el femenino (salvo que el partido lo sea) ni
+      las categorías inferiores (Youth League, juvenil, Sub-19…), en
+      cualquier campo o categoría.
    4. Competición: el texto (título, subtítulo, descripción o categorías)
       nombra la familia del partido y ninguna otra; si no nombra ninguna, la
       tiene que nombrar el canal («DAZN LaLiga»). Sin familia conocida del
@@ -34,6 +41,16 @@
 import { IPTV_GUIDE_AMBIGUOUS_CHANNELS, LIBRARY_MIN_SCORE, footballTeamKey } from '@ace/shared';
 
 const MINUTE = 60_000;
+
+/** Regla 1: lo antes que puede empezar el programa respecto al saque. */
+export const GUIDE_EARLY_MS = 60 * MINUTE;
+/** Regla 1: lo más tarde que puede empezar el programa respecto al saque. */
+export const GUIDE_LATE_MS = 15 * MINUTE;
+/** Regla 1: duración de un programa que es un partido. */
+export const GUIDE_MIN_DURATION_MS = 80 * MINUTE;
+export const GUIDE_MAX_DURATION_MS = 240 * MINUTE;
+/** Regla 1: el programa sigue al menos esto después del saque. */
+export const GUIDE_AFTER_KICKOFF_MS = 90 * MINUTE;
 
 /** Un programa de la ventana útil de la guía (guide.ts). */
 export interface GuideProgramme {
@@ -174,6 +191,47 @@ export const EPG_TEAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
   'manchester united': ['manchester united', 'man united', 'man utd'],
   'paris saint germain': ['paris saint germain', 'psg', 'paris sg'],
   'bayern munich': ['bayern munich', 'bayern munchen', 'bayern'],
+  /* Los nombres en castellano de las guías de Movistar+ («Nápoles», «Oporto»…). */
+  napoli: ['napoli', 'napoles', 'ssc napoli'],
+  'ssc napoli': ['napoli', 'napoles', 'ssc napoli'],
+  juventus: ['juventus', 'juve'],
+  'as roma': ['roma', 'as roma'],
+  roma: ['roma', 'as roma'],
+  lazio: ['lazio', 'ss lazio'],
+  'ss lazio': ['lazio', 'ss lazio'],
+  'fc porto': ['porto', 'oporto', 'fc porto'],
+  porto: ['porto', 'oporto', 'fc porto'],
+  'sporting cp': ['sporting cp', 'sporting de portugal', 'sporting lisboa', 'sporting de lisboa'],
+  benfica: ['benfica', 'sl benfica'],
+  'sl benfica': ['benfica', 'sl benfica'],
+  'olympique marseille': ['olympique de marsella', 'marsella', 'olympique marseille', 'marseille'],
+  marseille: ['olympique de marsella', 'marsella', 'olympique marseille', 'marseille'],
+  'olympique lyonnais': ['olympique de lyon', 'olympique lyonnais', 'lyon'],
+  lyon: ['olympique de lyon', 'olympique lyonnais', 'lyon'],
+  'club brugge': ['club brugge', 'brujas', 'club brujas'],
+  'borussia dortmund': ['borussia dortmund', 'dortmund', 'b dortmund'],
+  'bayer leverkusen': ['bayer leverkusen', 'leverkusen'],
+  'rb leipzig': ['rb leipzig', 'leipzig'],
+  'tottenham hotspur': ['tottenham hotspur', 'tottenham'],
+  tottenham: ['tottenham hotspur', 'tottenham'],
+  'newcastle united': ['newcastle united', 'newcastle'],
+  newcastle: ['newcastle united', 'newcastle'],
+  'west ham united': ['west ham united', 'west ham'],
+  'psv eindhoven': ['psv eindhoven', 'psv'],
+  psv: ['psv eindhoven', 'psv'],
+};
+
+/*
+ * La forma corta con la que las guías escriben el primer nombre de un club:
+ * «R. Madrid», «At. Madrid», «Atl. Madrid», «Ath. Club», «Dep. Alavés»,
+ * «Sp. Gijón». Solo si lo que queda detrás no es una palabra débil.
+ */
+const SHORT_PREFIXES: Readonly<Record<string, readonly string[]>> = {
+  real: ['r'],
+  atletico: ['at', 'atl'],
+  athletic: ['ath'],
+  deportivo: ['dep'],
+  sporting: ['sp'],
 };
 
 /* Lo que va detrás del alias y lo convierte en el filial o el femenino. */
@@ -182,14 +240,27 @@ const RESERVE_AFTER_RE =
 /* Lo que va delante del alias y lo convierte en otro equipo («Bilbao Athletic»). */
 const RESERVE_BEFORE_RE = /\b(?:bilbao)\s*$/;
 
-/** Alias de un equipo para buscarlo en la guía (sin los débiles). */
+/* Partículas que unas guías ponen y otras no («Bayern de Múnich», «Celta de Vigo»). */
+const TEAM_PARTICLES_RE = /(?<![a-z0-9])(?:de|del|la|el)(?![a-z0-9])/g;
+
+/**
+ * Texto para buscar equipos: el de `normalizeGuideText` sin puntos («R.
+ * Madrid» → «r madrid») ni partículas. Los alias pasan por lo mismo, así que
+ * «Bayern de Múnich» y «Bayern Múnich» se encuentran el uno al otro.
+ */
+export function teamSearchText(value: string): string {
+  return normalizeGuideText(value)
+    .replace(/[()[\]/:.]/g, (char) => (char === '/' ? ' / ' : ' '))
+    .replace(TEAM_PARTICLES_RE, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Alias de un equipo para buscarlo en la guía (sin los débiles), en la forma de `teamSearchText`. */
 export function teamAliases(name: string, extra: readonly string[] = []): string[] {
   const out = new Set<string>();
   const add = (value: string): void => {
-    const alias = normalizeGuideText(value)
-      .replace(/[()[\]/:.]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+    const alias = teamSearchText(value).replace(/\//g, ' ').replace(/\s+/g, ' ').trim();
     if (!alias || WEAK_TEAM_WORDS.has(alias) || alias.length < 3) return;
     out.add(alias);
   };
@@ -205,12 +276,16 @@ export function teamAliases(name: string, extra: readonly string[] = []): string
     .split(' ')
     .filter((word) => !['de', 'del', 'la', 'el'].includes(word))
     .join(' ');
-  if (withoutParticles.split(' ').length >= 2) add(withoutParticles);
   for (const base of [raw, key, withoutParticles]) {
     const words = base.split(' ').filter(Boolean);
     const stripped = words.filter((word) => !TEAM_PREFIXES.has(word)).join(' ');
     if (stripped.replace(/\s/g, '').length >= 5) add(stripped);
     for (const alias of EPG_TEAM_ALIASES[base] ?? []) add(alias);
+    /* «R. Madrid», «At. Madrid», «Ath. Club»: la forma corta del primer nombre
+       (con lo de detrás, «r madrid» ya no es la palabra débil «madrid»). */
+    const [first = '', ...rest] = words;
+    const tail = rest.filter((word) => !['de', 'del', 'la', 'el'].includes(word)).join(' ');
+    if (tail) for (const short of SHORT_PREFIXES[first] ?? []) add(`${short} ${tail}`);
   }
   for (const alias of EPG_TEAM_ALIASES[key] ?? []) add(alias);
   for (const value of extra) {
@@ -253,8 +328,15 @@ function occurrences(text: string, alias: string): Occurrence[] {
 const SEPARATOR_RE = /^\s*(?:-|vs\.?|v\.?|x|contra|\/)\s*$/;
 const MAX_GAP = 40;
 
-/* ¿Están los dos equipos en este texto, cerca y separados por un separador? */
-function teamsInText(text: string, home: readonly string[], away: readonly string[]): boolean {
+/**
+ * ¿Están los dos equipos en este texto (ya pasado por `teamSearchText`),
+ * cerca y separados por un separador de enfrentamiento?
+ */
+export function teamsInText(
+  text: string,
+  home: readonly string[],
+  away: readonly string[],
+): boolean {
   const homeHits = home.flatMap((alias) => occurrences(text, alias));
   if (!homeHits.length) return false;
   const awayHits = away.flatMap((alias) => occurrences(text, alias));
@@ -298,9 +380,13 @@ const NOT_LIVE_RE = new RegExp(
     '\\b(?:resumen|resumenes|highlights|mejores momentos|goles de)\\b',
     '\\b(?:previa|prepartido|pre-partido|postpartido|post partido|post-partido)\\b',
     '\\b(?:rueda de prensa|analisis|tertulia|magazine)\\b',
+    /* Partidos de archivo: «Partidos históricos», «Real Madrid - Barcelona (2010)». */
+    '\\b(?:historico|historicos|partidos para la historia)\\b',
+    '\\((?:19|20)\\d\\d\\)',
   ].join('|'),
 );
-const NOT_LIVE_CATEGORY_RE = /\b(?:news|magazine|talk|noticias|informativo|entrevista)\b/;
+const NOT_LIVE_CATEGORY_RE =
+  /\b(?:news|magazine|talk|noticias|informativo|entrevista|documental|documentary)\b/;
 const LIVE_MARK_RE = /\b(?:directo|en vivo|live)\b|\(l\)/;
 
 /** ¿El programa dice que no es el partido en directo? */
@@ -324,7 +410,8 @@ const WOMEN_RE = /\b(?:femenino|femenina|femeni|fem|women|womens|ladies)\b/;
 /* Categorías inferiores. */
 const YOUTH_RE = /\b(?:youth league|juvenil|sub[\s-]?\d{2}|u[\s-]?\d{2})\b/;
 
-function programmeTexts(programme: GuideProgramme): string[] {
+/** Título, subtítulo, descripción y categorías, normalizados. */
+export function programmeTexts(programme: GuideProgramme): string[] {
   return [programme.title, programme.subTitle, programme.desc, ...programme.categories].map(
     (field) => normalizeGuideText(field),
   );
@@ -343,7 +430,8 @@ export function isOtherEvent(programme: GuideProgramme, input: GuideMatchInput):
   );
 }
 
-function hasLiveMark(programme: GuideProgramme): boolean {
+/** ¿La guía dice que va en directo? (`<live/>`, «directo», «en vivo» o «(L)» en el título o el subtítulo). */
+export function hasLiveMark(programme: GuideProgramme): boolean {
   if (programme.live) return true;
   return [programme.title, programme.subTitle].some((field) =>
     LIVE_MARK_RE.test(normalizeGuideText(field)),
@@ -425,28 +513,81 @@ export function matchFamily(
 
 // --- Hora ---
 
+/** ¿Dura lo que un partido? (regla 1, sin mirar la hora). */
+export function programmeLastsAMatch(programme: Pick<GuideProgramme, 'start' | 'stop'>): boolean {
+  const duration = programme.stop - programme.start;
+  return duration >= GUIDE_MIN_DURATION_MS && duration <= GUIDE_MAX_DURATION_MS;
+}
+
 /** Regla 1: el programa cae a la hora del partido y dura lo de un partido. */
 export function programmeFitsKickoff(programme: GuideProgramme, kickoff: number): boolean {
-  const duration = programme.stop - programme.start;
   return (
-    programme.start >= kickoff - 30 * MINUTE &&
-    programme.start <= kickoff + 15 * MINUTE &&
-    duration >= 80 * MINUTE &&
-    duration <= 240 * MINUTE &&
-    programme.stop >= kickoff + 90 * MINUTE
+    programme.start >= kickoff - GUIDE_EARLY_MS &&
+    programme.start <= kickoff + GUIDE_LATE_MS &&
+    programmeLastsAMatch(programme) &&
+    programme.stop >= kickoff + GUIDE_AFTER_KICKOFF_MS
   );
+}
+
+const QUARTER = 15 * MINUTE;
+
+/**
+ * Saque que se deduce de un programa (agenda híbrida, cuando la guía mueve la
+ * hora o trae un partido que no está en la agenda): las guías empiezan el
+ * programa unos minutos antes, así que se redondea al cuarto de hora
+ * siguiente (20:50 → 21:00, 18:25 → 18:30, 21:00 → 21:00). Si así el
+ * programa ya no cubre el partido entero (regla 1), su inicio tal cual; si
+ * tampoco, null.
+ */
+export function kickoffFromProgramme(programme: GuideProgramme): number | null {
+  if (!programmeLastsAMatch(programme)) return null;
+  const start = Math.floor(programme.start / MINUTE) * MINUTE;
+  const rounded = Math.ceil(start / QUARTER) * QUARTER;
+  if (programmeFitsKickoff(programme, rounded)) return rounded;
+  if (programmeFitsKickoff(programme, start)) return start;
+  return null;
+}
+
+/** Alias de los dos equipos de un partido, listos para `programmeHasTeams`. */
+export interface TeamCache {
+  readonly home: string[];
+  readonly away: string[];
+  readonly homeAbbr: string[];
+  readonly awayAbbr: string[];
+}
+
+export function teamCache(
+  input: Pick<GuideMatchInput, 'home' | 'away' | 'homeAliases' | 'awayAliases'>,
+): TeamCache {
+  return {
+    home: teamAliases(input.home, input.homeAliases),
+    away: teamAliases(input.away, input.awayAliases),
+    homeAbbr: teamAbbreviations(input.homeAliases),
+    awayAbbr: teamAbbreviations(input.awayAliases),
+  };
+}
+
+/** Regla 2: los dos equipos en el mismo campo (título, subtítulo o descripción). */
+export function programmeHasTeams(programme: GuideProgramme, cache: TeamCache): boolean {
+  for (const field of [programme.title, programme.subTitle, programme.desc]) {
+    if (!field) continue;
+    if (teamsInText(teamSearchText(field), cache.home, cache.away)) return true;
+    if (
+      cache.homeAbbr.length &&
+      cache.awayAbbr.length &&
+      abbreviationsInText(normalizeGuideText(field), cache.homeAbbr, cache.awayAbbr)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Reglas 1 a 4 para un programa (sin mirar el canal). */
 export function programmeShowsMatch(
   programme: GuideProgramme,
   input: GuideMatchInput,
-  cache: {
-    readonly home: string[];
-    readonly away: string[];
-    readonly homeAbbr: string[];
-    readonly awayAbbr: string[];
-  },
+  cache: TeamCache,
   family: CompetitionFamily | null,
   /** Familia que nombra el canal («DAZN LaLiga» → laliga), o null. */
   channelFamily: CompetitionFamily | null = null,
@@ -454,24 +595,7 @@ export function programmeShowsMatch(
   if (!programmeFitsKickoff(programme, input.start)) return false;
   if (isNotLive(programme)) return false;
   if (isOtherEvent(programme, input)) return false;
-  let teams = false;
-  for (const field of [programme.title, programme.subTitle, programme.desc]) {
-    const text = normalizeGuideText(field);
-    if (!text) continue;
-    if (teamsInText(text, cache.home, cache.away)) {
-      teams = true;
-      break;
-    }
-    if (
-      cache.homeAbbr.length &&
-      cache.awayAbbr.length &&
-      abbreviationsInText(text, cache.homeAbbr, cache.awayAbbr)
-    ) {
-      teams = true;
-      break;
-    }
-  }
-  if (!teams) return false;
+  if (!programmeHasTeams(programme, cache)) return false;
   if (family) {
     /* La familia del partido sale en el texto (y ninguna otra) o, si el texto
        no nombra ninguna, en el nombre del canal. Mejor no emparejar que mal. */
@@ -492,12 +616,7 @@ export function confirmByGuide(
   options: GuideMatchOptions,
 ): GuideConfirmation[] {
   if (!Number.isFinite(input.start) || !input.home.trim() || !input.away.trim()) return [];
-  const cache = {
-    home: teamAliases(input.home, input.homeAliases),
-    away: teamAliases(input.away, input.awayAliases),
-    homeAbbr: teamAbbreviations(input.homeAliases),
-    awayAbbr: teamAbbreviations(input.awayAliases),
-  };
+  const cache = teamCache(input);
   if (!cache.home.length || !cache.away.length) return [];
   const family = matchFamily(input);
   const hasAgenda = input.channels.some((channel) => channel.trim() !== '');
@@ -541,4 +660,101 @@ export function confirmByGuide(
         Math.abs(a.programme.start - input.start) - Math.abs(b.programme.start - input.start),
     )
     .map(({ liveMark: _liveMark, ...item }) => item);
+}
+
+// --- Partidos que solo trae la guía (agenda híbrida) ---
+
+/** Rótulo de una familia cuando la agenda no trae ningún partido de ella. */
+export const COMPETITION_FAMILY_LABELS: Readonly<Record<CompetitionFamily, string>> = {
+  laliga: 'LaLiga EA Sports',
+  hypermotion: 'LaLiga Hypermotion',
+  ligaf: 'Liga F',
+  champions: 'Champions League',
+  europa: 'Europa League',
+  conference: 'Conference League',
+  copa: 'Copa del Rey',
+  supercopa: 'Supercopa de España',
+  premier: 'Premier League',
+  seriea: 'Serie A',
+  bundesliga: 'Bundesliga',
+  ligue1: 'Ligue 1',
+  nations: 'Nations League',
+  mundial: 'Mundial',
+  euro: 'Eurocopa',
+};
+
+/* Separadores de enfrentamiento CON espacios alrededor: el guion de
+   «Paris Saint-Germain» no separa nada. */
+const MATCHUP_SEPARATOR_RE = /\s+(?:-|–|—|vs\.?|v\.?|contra)\s+/giu;
+/* Un punto que cierra una frase, no el de una abreviatura («R. Sociedad», «At. Madrid», «C.F.»). */
+const SENTENCE_DOT = String.raw`(?<!(?:^|[\s(.])\p{L}{1,4})\.(?:\s|$)`;
+/* Lo que va antes del local («LaLiga EA Sports. Jornada 7: …», «Fútbol | …»). */
+const BEFORE_HOME_RE = new RegExp(
+  String.raw`^.*(?::|\||»|·|${SENTENCE_DOT}|\)\s|\]\s|\s[-–—]\s)`,
+  'u',
+);
+/* Lo que va después del visitante («… (Directo)», «…, desde el Camp Nou», «…. Jornada 7»). */
+const AFTER_AWAY_RE = new RegExp(String.raw`(?:\s*[([|,:·]|${SENTENCE_DOT}|\s[-–—]\s).*$`, 'u');
+/* Si así no sale un nombre, cualquier punto corta («Villarreal CF. Jornada 7»). */
+const AFTER_AWAY_LOOSE_RE = /\.(?:\s|$).*$/u;
+/* «Directo:», «(Directo)», «En vivo», «(L)» al principio o al final (palabras enteras: «Liverpool» no). */
+const LIVE_PREFIX_RE =
+  /^(?:\(\s*)?(?:en\s+)?(?:directo|en vivo|live)(?![\p{L}\p{N}])(?:\s*\))?\s*[:\-–]?\s*/iu;
+const LIVE_SUFFIX_RE =
+  /(?:\s+(?:en\s+)?(?:directo|vivo|live)|\s*\(\s*(?:en\s+)?(?:directo|vivo|live|l)\s*\))\s*$/iu;
+/* Palabras que no forman parte del nombre de un equipo. */
+const NOT_A_TEAM_RE =
+  /\b(?:jornada|futbol|liga|copa|partido|partidos|temporada|grupo|final|semifinal|semifinales|cuartos|octavos|dieciseisavos|directo|resumen|previa|programa|especial|highlights|league|serie|campeonato|torneo|amistoso|sports|deportes)\b/;
+
+function withoutLiveWords(value: string): string {
+  return value.replace(LIVE_PREFIX_RE, '').replace(LIVE_SUFFIX_RE, '').trim();
+}
+
+/** Mayúsculas de guía («REAL MADRID») a nombre normal («Real Madrid»); siglas de 2-3 letras, tal cual. */
+function tidyTeamName(value: string): string {
+  const name = value
+    .replace(/\s+/g, ' ')
+    .replace(/[\s.\-–—]+$/u, '')
+    .trim();
+  if (name !== name.toUpperCase() || !/\p{L}{4}/u.test(name)) return name;
+  return name
+    .split(' ')
+    .map((word) => {
+      const lower = word.toLowerCase();
+      if (['de', 'del', 'la', 'el', 'y'].includes(lower)) return lower;
+      if (word.length <= 3 && /^\p{Lu}+$/u.test(word)) return word;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(' ');
+}
+
+function plausibleTeam(name: string): boolean {
+  if (name.length < 3 || name.length > 40) return false;
+  if (!/\p{L}{2}/u.test(name)) return false;
+  if (name.split(/\s+/).length > 5) return false;
+  const text = normalizeGuideText(name);
+  if (!text || WEAK_TEAM_WORDS.has(text)) return false;
+  return !NOT_A_TEAM_RE.test(text) && competitionFamily(text) === null;
+}
+
+/**
+ * Los dos equipos de un texto de la guía («LaLiga EA Sports. Jornada 7: Real
+ * Sociedad - Villarreal», «Fútbol: Real Madrid vs. Barcelona (Directo)»), con
+ * sus nombres tal cual (sin las mayúsculas de guía), o null si no hay un
+ * enfrentamiento claro. Prueba cada separador, de izquierda a derecha.
+ */
+export function extractGuideMatchup(value: string): { home: string; away: string } | null {
+  const text = withoutLiveWords(String(value ?? '').replace(/\s+/g, ' '));
+  if (!text) return null;
+  for (const separator of text.matchAll(MATCHUP_SEPARATOR_RE)) {
+    const at = separator.index ?? 0;
+    const left = text.slice(0, at).replace(BEFORE_HOME_RE, '');
+    const right = text.slice(at + separator[0].length).replace(AFTER_AWAY_RE, '');
+    const home = tidyTeamName(withoutLiveWords(left));
+    let away = tidyTeamName(withoutLiveWords(right));
+    if (!plausibleTeam(away))
+      away = tidyTeamName(withoutLiveWords(right.replace(AFTER_AWAY_LOOSE_RE, '')));
+    if (plausibleTeam(home) && plausibleTeam(away)) return { home, away };
+  }
+  return null;
 }
