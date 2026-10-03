@@ -246,8 +246,21 @@ describe('cleanIptvTitle con el corpus de nombres raros (0.9.0, docs/buscador.md
     ['ES: ANTENA3 FHD', 'ANTENA3', 'antena 3', 'fhd', 'ES', false],
     ['ES: A3 HD', 'A3', 'antena 3', 'hd', 'ES', false],
     ['ES: A3 SERIES HD', 'A3 SERIES', 'atreseries', 'hd', 'ES', false],
-    /* Lo que no es un país sigue sin serlo. */
+    /* Lo que no es un país sigue sin serlo: la sigla pegada a «.», «&», «+», «!», «/» o «#» es parte del nombre. */
     ['DR. HOUSE', 'DR. HOUSE', 'dr house', null, null, false],
+    [
+      'AT&T SPORTSNET PITTSBURGH',
+      'AT&T SPORTSNET PITTSBURGH',
+      'at t sportsnet pittsburgh',
+      null,
+      null,
+      false,
+    ],
+    ['BT+ SPORT HD', 'BT+ SPORT', 'bt sport', 'hd', null, false],
+    ['GO! TV', 'GO! TV', 'go tv', null, null, false],
+    ['CN+ NEWS', 'CN+ NEWS', 'cn news', null, null, false],
+    ['AC/DC LIVE', 'AC/DC LIVE', 'ac dc live', null, null, false],
+    ['UK: AT&T SPORTSNET', 'AT&T SPORTSNET', 'at t sportsnet', null, 'UK', false],
   ])('%s', (title, display, key, quality, country, backup) => {
     const clean = cleanIptvTitle(title);
     expect(clean.display).toBe(display);

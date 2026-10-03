@@ -93,13 +93,24 @@ const COUNTRY_3: ReadonlySet<string> = new Set([
 /* Con 4 letras o más, solo estas. */
 const COUNTRY_LONG: ReadonlySet<string> = new Set(['exyu', 'latam', 'latino', 'espana', 'spain']);
 /*
- * El país (o un adorno) delante, con lo que lo separa del nombre: símbolos de
- * cualquier tipo («ES: », «|ES| », «ES► », «ES ✪ », «ES┃», «[ES] », «◉ ES:
- * ») o, sin símbolo, la plataforma detrás («ES TI - »). Se mira sobre el texto
- * plegado.
+ * El país (o un adorno) delante, con lo que lo separa del nombre: símbolos
+ * («ES: », «|ES| », «ES► », «ES ✪ », «ES┃», «[ES] », «◉ ES: ») y, entre la
+ * sigla y el símbolo, otra sigla («ES TI - », la plataforma; «VIP ES: »). Se
+ * mira sobre el texto plegado. NO separan: el punto, la coma y las comillas
+ * («Mr. Robot», «Dr. House», «St. Vincent»), «&», «+», «!», «?», «@», «$»,
+ * «%», «#», «/» y «\» («AT&T SPORTSNET», «BT+ SPORT», «GO! TV», «AC/DC»,
+ * «PPV #3») ni lo que abre un paréntesis o un corchete: con ellos, la sigla es
+ * parte del nombre (lo mismo que `cleanIptvTitle` en el servidor).
  */
 const LEAD_PREFIX_RE =
-  /^[\s\p{P}\p{S}]*([a-z]{2,6}|4k)(?:\s+[a-z]{2,3})?\s*(?:(?!#)[\p{P}\p{S}])+[\s\p{P}\p{S}]*/u;
+  /^[\s\p{P}\p{S}]*([a-z]{2,6}|4k)(?:\s+([a-z]{2,3}))?\s*(?:(?![.,'’"&+!?@$%#/\\([{])[\p{P}\p{S}])+[\s\p{P}\p{S}]*/u;
+/*
+ * Una primera palabra de 2 o 3 letras en caja de título («Mr», «It», «No»,
+ * «Up», «St») es parte del nombre, no un país: las listas escriben el país en
+ * mayúsculas («IT: RAI 1») y la gente lo escribe en minúsculas. Es lo que deja
+ * buscar «It: Capítulo 2» o «Up - Una aventura de altura» en Pelis y series.
+ */
+const TITLE_CASE_LEAD_RE = /^[\s\p{P}\p{S}]*\p{Lu}\p{Ll}{1,2}(?![\p{L}\p{N}])/u;
 /* España delante sin símbolo: «ES DAZN 1», «esp la 1» (otras siglas son palabras: «de», «la», «tv»). */
 const LEAD_SPAIN_RE = /^[\s\p{P}\p{S}]*(?:es|esp|espana|spain)\s+(?=[\p{L}\p{N}])/u;
 /* La copia del final: «(2)», «[2]». «#2» NO es una copia: numera canales distintos («LALIGA+ PPV #2»). */
@@ -176,6 +187,25 @@ function isCountryLike(code: string): boolean {
 }
 
 /*
+ * La sigla de delante con su separador (`LEAD_PREFIX_RE`), si es un país o un
+ * adorno. Con otra sigla detrás, solo si la primera es un país de 2 letras
+ * («ES TI - ») o un adorno delante de un país («VIP ES: »): «TOP GUN: …» o
+ * «HOT TUB: …» no pierden nada.
+ */
+function leadPrefix(
+  text: string,
+): { readonly length: number; readonly code: string; readonly second: string } | null {
+  const prefix = LEAD_PREFIX_RE.exec(text);
+  const code = prefix?.[1];
+  if (!prefix || !code || !isCountryLike(code)) return null;
+  const second = prefix[2] ?? '';
+  if (second && code.length !== 2 && !(ADORNMENT_CODES.has(code) && isCountryLike(second))) {
+    return null;
+  }
+  return { length: prefix[0].length, code, second };
+}
+
+/*
  * Quita el país (o el adorno) de delante, hasta tres veces («VIP | ES: …»), si queda algo detrás. `spain`: lo que
  * quitó era España (sus apodos valen: «ES: TELE 5» es Telecinco, «DE: TELE 5» no).
  */
@@ -183,14 +213,12 @@ function stripLead(text: string): { readonly text: string; readonly spain: boole
   let out = text;
   let spain = false;
   for (let guard = 0; guard < 3; guard += 1) {
-    const prefix = LEAD_PREFIX_RE.exec(out);
-    if (
-      prefix?.[1] &&
-      isCountryLike(prefix[1]) &&
-      /[\p{L}\p{N}]/u.test(out.slice(prefix[0].length))
-    ) {
-      out = out.slice(prefix[0].length);
-      if (SPAIN_LEAD_CODES.has(prefix[1])) spain = true;
+    const prefix = leadPrefix(out);
+    if (prefix && /[\p{L}\p{N}]/u.test(out.slice(prefix.length))) {
+      out = out.slice(prefix.length);
+      /* «ES: », «ES TI - » o «VIP ES: ». */
+      const country = ADORNMENT_CODES.has(prefix.code) ? prefix.second : prefix.code;
+      if (SPAIN_LEAD_CODES.has(country)) spain = true;
       continue;
     }
     const bare = LEAD_SPAIN_RE.exec(out);
@@ -221,13 +249,12 @@ const COPY_INNER_RE = /[([]\s*\d{1,2}\s*[)\]]/gu;
  */
 export function nameSearchWords(value: string): string[] {
   /* La «Ñ» suelta marca la versión española («BEIN SPORTS Ñ»): no es una palabra. */
-  let text = foldSearchText(
-    String(value ?? '')
-      .replace(ARROW_TAIL_RE, ' ')
-      .replace(/(^|\s)[Ññ](?=\s|$)/gu, '$1'),
-  );
-  /* El país de delante, antes de la grafía (la de Movistar mira el principio). */
-  const lead = stripLead(text);
+  const raw = String(value ?? '')
+    .replace(ARROW_TAIL_RE, ' ')
+    .replace(/(^|\s)[Ññ](?=\s|$)/gu, '$1');
+  let text = foldSearchText(raw);
+  /* El país de delante, antes de la grafía (la de Movistar mira el principio); «Mr», «It», «Up»… no lo son. */
+  const lead = TITLE_CASE_LEAD_RE.test(raw) ? { text, spain: false } : stripLead(text);
   text = lead.text;
   /* Los apodos de España, solo si el nombre lo es («ES: TELE 5 HD» → Telecinco; «DE: TELE 5», no). */
   if (lead.spain) text = spainChannelNicknames(text);
@@ -290,13 +317,16 @@ function finishWords(raws: readonly string[]): string[] {
  * adorno: «VIP - …», «4K | …»).
  */
 export function leadingCountry(value: string): string | null {
-  let text = foldSearchText(String(value ?? ''));
+  const raw = String(value ?? '');
+  if (TITLE_CASE_LEAD_RE.test(raw)) return null;
+  let text = foldSearchText(raw);
   for (let guard = 0; guard < 3; guard += 1) {
-    const prefix = LEAD_PREFIX_RE.exec(text);
-    const code = prefix?.[1];
-    if (prefix && code && isCountryLike(code)) {
-      if (!ADORNMENT_CODES.has(code)) return countryOfCode(code);
-      text = text.slice(prefix[0].length);
+    const prefix = leadPrefix(text);
+    if (prefix) {
+      if (!ADORNMENT_CODES.has(prefix.code)) return countryOfCode(prefix.code);
+      /* «VIP ES: …»: el país va detrás del adorno. */
+      if (prefix.second) return countryOfCode(prefix.second);
+      text = text.slice(prefix.length);
       continue;
     }
     return LEAD_SPAIN_RE.test(text) ? 'ES' : null;

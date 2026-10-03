@@ -122,10 +122,12 @@ const COUNTRY_3 = new Set([
 
 /* «ES: », «|ES| », «[ES] », «(ES) », «ES - », «ESPAÑA | », «ES • », «ES » », «ES ➤ », «ES TI - » (la segunda sigla es la plataforma).
    Desde la 0.9.0 (docs/buscador.md) cualquier símbolo separa («ES► », «ES ✪ », «ES ★ … ★») y puede haber adornos
-   delante («◉ ES: »): antes «ES► LA 1» se quedaba «ES LA 1», otra fila que el buscador ponía detrás de «La 10». El
-   punto, la coma y las comillas no separan («DR. HOUSE»). */
+   delante («◉ ES: »): antes «ES► LA 1» se quedaba «ES LA 1», otra fila que el buscador ponía detrás de «La 10». No
+   separan (la sigla es parte del nombre): el punto, la coma y las comillas («DR. HOUSE»), «&», «+», «!», «?», «@»,
+   «$», «%», «#», «/» y «\» («AT&T SPORTSNET», «BT+ SPORT», «GO! TV», «AC/DC», «PPV #3») ni lo que abre un paréntesis
+   o un corchete. Lo mismo que el módulo común (`LEAD_PREFIX_RE` de name-search.ts). */
 const TITLE_COUNTRY_RE =
-  /^[\s\p{P}\p{S}]*([A-Z]{2,3}|ESPAÑA|ESPANA|SPAIN)(?:\s+[A-Z]{2,3})?\s*(?:(?![.,'’"])[\p{P}\p{S}])+\s*/u;
+  /^[\s\p{P}\p{S}]*([A-Z]{2,3}|ESPAÑA|ESPANA|SPAIN)(?:\s+[A-Z]{2,3})?\s*(?:(?![.,'’"&+!?@$%#/\\([{])[\p{P}\p{S}])+\s*/u;
 /* España delante sin separador: «ES DAZN 1», «ESP DAZN 1» (solo España: «DE PELÍCULA» es un canal). */
 const TITLE_SPAIN_BARE_RE = /^\s*(?:ES|ESP|SPAIN|ESPAÑA|ESPANA)\s+(?=[\p{L}\p{N}])/u;
 /* España al final, entre corchetes, paréntesis o barras: «DAZN 1 [ES]», «DAZN 1 |ES|», «DAZN 1 (ESP)»;

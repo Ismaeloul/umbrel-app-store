@@ -121,6 +121,40 @@ describe('nameSearchWords: las palabras de un nombre tal cual lo da el panel', (
     expect(nameSearchKey('TV-3')).toBe('tv 3');
   });
 
+  it.each([
+    /* Títulos de Pelis y series: la palabra de 2 o 3 letras de delante es del título. */
+    ['Mr. Robot', 'mr robot'],
+    ['Dr. Strange', 'dr strange'],
+    ['St. Vincent', 'st vincent'],
+    ['It: Capítulo 2', 'it capitulo 2'],
+    ['No: la película', 'no la pelicula'],
+    ['Up - Una aventura de altura', 'up una aventura de altura'],
+    ['MR. ROBOT', 'mr robot'],
+    ['TOP GUN: MAVERICK', 'top gun maverick'],
+    /* Siglas pegadas a «&», «+», «!», «/» o «#»: parte del nombre. */
+    ['AT&T SPORTSNET', 'at t sportsnet'],
+    ['BT+ SPORT', 'bt sport'],
+    ['GO! TV', 'go tv'],
+    ['AC/DC LIVE', 'ac dc live'],
+    ['PPV #3', 'ppv 3'],
+    /* Los países de siempre se siguen quitando. */
+    ['IT: RAI 1 HD', 'rai 1'],
+    ['UK: AT&T SPORTSNET', 'at t sportsnet'],
+    ['VIP ES: TELE 5', 'telecinco'],
+  ])('«%s» → «%s» (no es un país)', (name, words) => {
+    expect(nameSearchKey(name)).toBe(words);
+  });
+
+  it('rankByName encuentra «Mr. Robot», «Dr. Strange» o «It: Capítulo 2» como se escriben', () => {
+    const titles = ['Mr. Robot', 'Robot Wars', 'Dr. Strange', 'It: Capítulo 2', 'St. Vincent'];
+    const find = (q: string): string[] => rankByName(titles, q, (name) => ({ name }));
+    expect(find('mr robot')).toEqual(['Mr. Robot']);
+    expect(find('dr strange')).toEqual(['Dr. Strange']);
+    expect(find('it capitulo 2')).toEqual(['It: Capítulo 2']);
+    expect(find('st vincent')).toEqual(['St. Vincent']);
+    expect(find('robot')[0]).toBe('Robot Wars');
+  });
+
   it('keySearchWords: lo mismo, más rápido, con una clave ya normalizada del catálogo', () => {
     expect(keySearchWords('rai uno')).toEqual(['rai', '1']);
     expect(keySearchWords('movistar laliga tv 2')).toEqual(['movistar', 'laliga', 'tv', '2']);
@@ -141,6 +175,10 @@ describe('nameSearchWords: las palabras de un nombre tal cual lo da el panel', (
     expect(leadingCountry('VIP - MOVISTAR LALIGA 4K')).toBeNull();
     expect(leadingCountry('LA LIGA 1')).toBeNull();
     expect(leadingCountry('LAT: ESPN')).toBe('LAT');
+    expect(leadingCountry('VIP ES: LA 1')).toBe('ES');
+    expect(leadingCountry('Mr. Robot')).toBeNull();
+    expect(leadingCountry('It: Capítulo 2')).toBeNull();
+    expect(leadingCountry('AT&T SPORTSNET')).toBeNull();
   });
 });
 
