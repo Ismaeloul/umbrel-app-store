@@ -1,23 +1,36 @@
-/* Los episodios de una temporada (docs/vod.md §12.6): fotograma 16:9, «3.
-   Título», la duración, lo visto en una barra si está empezado y «Visto»
-   (icono y texto, nunca solo color). Tocarlo reproduce. Su menú («Más
-   opciones», clic derecho o pulsación larga) tiene «Marcar como visto»,
-   «Marcar como no visto» y «Marcar hasta aquí como visto». */
+/* Los episodios de una temporada (docs/vod.md §12.6).
 
-import type { VodEpisode } from '@ace/shared';
+   - Con fotogramas: el fotograma 16:9 (o, si falta en ese episodio, su
+     NÚMERO grande sobre el color de la serie), «3. Título», la duración o lo
+     que queda, la barra de lo visto, «Visto» (icono y texto, nunca solo color)
+     y la sinopsis en 2 líneas.
+   - Si NINGÚN episodio de la temporada trae fotograma (muy habitual en IPTV):
+     una lista compacta con el número en un círculo, sin huecos grises.
+   - El episodio del botón principal se resalta con el borde dorado y su
+     cápsula («Continuar», «Siguiente» o «Empieza aquí»), como el aura de la
+     tarjeta elegida en la agenda.
+   Tocarlo reproduce. Su menú («Más opciones», clic derecho o pulsación
+   larga) tiene «Marcar como visto», «Marcar como no visto» y «Marcar hasta
+   aquí como visto». */
+
+import type { VodEpisode, VodSeriesMain } from '@ace/shared';
+import type { CSSProperties } from 'react';
 import { describeFailure } from '../../api/index.ts';
+import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
 import {
+  Capsule,
   Icon,
   Menu,
   MenuButton,
+  Num,
   ProgressBar,
   useContextMenu,
   type MenuItem,
 } from '../../ui/index.ts';
-import { Art } from './Art.tsx';
+import { Art, artFill } from './Art.tsx';
 import { useProgressMark } from './data.ts';
-import { durationText, playBlock, progressRatio, remainingText } from './model.ts';
+import { durationText, episodeTag, playBlock, progressRatio, remainingText } from './model.ts';
 import { canPlayHevc, playVod } from './play.ts';
 import { CINE_TEXT, formatBlocked } from './texts.ts';
 
@@ -26,26 +39,36 @@ export interface EpisodeListProps {
   seriesTitle: string;
   season: number;
   episodes: readonly VodEpisode[];
+  /** El episodio del botón principal (se resalta). */
+  mainId?: string | null;
+  mainAction?: VodSeriesMain['action'] | null;
 }
 
-function EpisodeRow({
-  episode,
-  seriesId,
-  seriesTitle,
-  season,
-}: {
+/** La cápsula del episodio del botón principal. */
+function mainBadge(action: VodSeriesMain['action'] | null | undefined): string | null {
+  if (action === 'resume') return CINE_TEXT.mainResume;
+  if (action === 'next') return CINE_TEXT.mainNext;
+  if (action === 'start') return CINE_TEXT.mainStart;
+  return null;
+}
+
+interface EpisodeRowProps {
   episode: VodEpisode;
   seriesId: string;
   seriesTitle: string;
   season: number;
-}) {
+  compact: boolean;
+  badge: string | null;
+}
+
+function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: EpisodeRowProps) {
   const mark = useProgressMark();
   const context = useContextMenu();
   const watched = episode.progress?.watched === true;
   const ratio = watched ? null : progressRatio(episode.progress);
   const block = playBlock(episode.playable, canPlayHevc(), episode.container);
   const name = `${episode.n}. ${episode.title}`;
-  const code = season === 0 ? CINE_TEXT.specials : `T${season} · E${episode.n}`;
+  const code = episodeTag(season, episode.n);
   const run = async (event: 'mark' | 'unmark' | 'mark-through') => {
     const error = await mark(episode.id, event);
     if (error) notify(describeFailure(error), { tone: 'err' });
@@ -82,12 +105,17 @@ function EpisodeRow({
       : formatBlocked(block.ext, 'episode')
     : null;
   return (
-    <li className="cine-episode" data-watched={watched || undefined} {...context.bind}>
+    <li
+      className={cx('cine-episode', compact && 'cine-episode--compact')}
+      data-watched={watched || undefined}
+      data-main={badge ? true : undefined}
+      {...context.bind}
+    >
       <button
         type="button"
         className="cine-episode__play press"
         disabled={block !== null}
-        aria-label={[name, duration, watched ? CINE_TEXT.watched : left, reason]
+        aria-label={[name, badge, duration, watched ? CINE_TEXT.watched : left, reason]
           .filter(Boolean)
           .join('. ')}
         onClick={() =>
@@ -100,22 +128,50 @@ function EpisodeRow({
           })
         }
       >
-        <span className="cine-episode__art">
-          <Art id={episode.id} art="still" v={episode.still} title={episode.title || seriesTitle} />
-          <span className="cine-episode__glyph">
-            <Icon name="play" size={20} />
+        {compact ? (
+          <span className="cine-episode__num" aria-hidden="true">
+            {watched ? (
+              <Icon name="check" size={20} />
+            ) : (
+              <Num value={String(episode.n)} condensed={false} />
+            )}
           </span>
-          {ratio !== null ? (
-            <ProgressBar
-              className="cine-episode__progress"
-              size="thin"
-              value={ratio}
-              label={`Visto: ${Math.round(ratio * 100)} %`}
-            />
-          ) : null}
-        </span>
+        ) : (
+          <span className="cine-episode__art">
+            {episode.still ? (
+              <Art
+                id={episode.id}
+                art="still"
+                v={episode.still}
+                title={episode.title || seriesTitle}
+              />
+            ) : (
+              <span className="cine-episode__big" aria-hidden="true">
+                <Num value={String(episode.n)} condensed={false} />
+              </span>
+            )}
+            <span className="cine-episode__glyph">
+              <Icon name="play" size={20} />
+            </span>
+            {ratio !== null ? (
+              <ProgressBar
+                className="cine-episode__progress"
+                size="thin"
+                value={ratio}
+                label={`Visto: ${Math.round(ratio * 100)} %`}
+              />
+            ) : null}
+          </span>
+        )}
         <span className="cine-episode__body">
-          <span className="cine-episode__title">{name}</span>
+          <span className="cine-episode__head">
+            <span className="cine-episode__title">{name}</span>
+            {badge ? (
+              <Capsule size="sm" tone="gold" className="cine-episode__badge">
+                {badge}
+              </Capsule>
+            ) : null}
+          </span>
           <span className="cine-episode__meta">
             {[duration, left].filter(Boolean).join(' · ')}
             {watched ? (
@@ -125,9 +181,17 @@ function EpisodeRow({
               </span>
             ) : null}
           </span>
+          {compact && ratio !== null ? (
+            <ProgressBar
+              className="cine-episode__line-progress"
+              size="thin"
+              value={ratio}
+              label={`Visto: ${Math.round(ratio * 100)} %`}
+            />
+          ) : null}
           {reason ? <span className="cine-episode__blocked">{reason}</span> : null}
-          {episode.plot ? <span className="cine-episode__plot">{episode.plot}</span> : null}
         </span>
+        {episode.plot ? <span className="cine-episode__plot">{episode.plot}</span> : null}
       </button>
       <MenuButton
         className="cine-episode__more"
@@ -140,9 +204,19 @@ function EpisodeRow({
   );
 }
 
-export function EpisodeList({ seriesId, seriesTitle, season, episodes }: EpisodeListProps) {
+export function EpisodeList({
+  seriesId,
+  seriesTitle,
+  season,
+  episodes,
+  mainId = null,
+  mainAction = null,
+}: EpisodeListProps) {
+  /* Sin ningún fotograma en la temporada, la lista compacta. */
+  const compact = episodes.every((episode) => episode.still === null);
+  const style = { '--ep-fill': artFill(seriesTitle) } as CSSProperties;
   return (
-    <ol className="cine-episodes">
+    <ol className={cx('cine-episodes', compact && 'cine-episodes--compact')} style={style}>
       {episodes.map((episode) => (
         <EpisodeRow
           key={episode.id}
@@ -150,6 +224,8 @@ export function EpisodeList({ seriesId, seriesTitle, season, episodes }: Episode
           seriesId={seriesId}
           seriesTitle={seriesTitle}
           season={season}
+          compact={compact}
+          badge={episode.id === mainId ? mainBadge(mainAction) : null}
         />
       ))}
     </ol>

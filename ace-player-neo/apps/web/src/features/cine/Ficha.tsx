@@ -1,16 +1,23 @@
 /* Ficha de una película o una serie (`?vista=cine/<id>`, docs/vod.md §12.6 y
-   §13).
+   §13), «como el centro de un partido»: lo importante en la primera pantalla.
 
-   - Cabecera: el fondo 16:9 con degradado (en escritorio, el cartel a la
-     izquierda), el título como h1 (el armazón le da el foco al navegar),
-     «2023 · 2 h 15 min · 7,3 · +13», géneros y distintivos como cápsulas y,
-     en películas, la línea técnica «1080p · H.264 · Audio: Castellano,
-     Inglés» (con «Según el proveedor» como `title`).
-   - Película: «Reproducir» o «Continuar · quedan 43 min»; discretos,
-     «Empezar desde el principio» y «Marcar como vista» / «Marcar como no
-     vista».
-   - Serie: el botón principal (§10.3), las temporadas y sus episodios.
-   - «Sinopsis» en 3 líneas con «Más», y «Reparto», «Dirección» y «País».
+   - Cabecera: el fondo 16:9 del proveedor con un degradado que lo funde con
+     la página; si no hay fondo (lo normal en listas reales), el propio cartel
+     desenfocado (o el color del título), nunca el cartel estirado. Encima, el
+     cartel GRANDE (también en el móvil), «Película» o «Serie», el título (h1:
+     el armazón le da el foco), el título original, «2021 · 2 h 36 min ·
+     ★ 8,0 · +12» y las cápsulas de lengua, calidad y géneros.
+   - El botón de play grande y amarillo, como «Ver ahora» en un partido:
+     «Reproducir» o «Seguir viendo desde 43:12» con la barra de lo visto y
+     «Quedan 1 h 53 min · Termina a las 23:47» (se recalcula cada minuto). En
+     una serie, «Continuar T2 · E3», «Siguiente capítulo: T2 · E4»…
+   - Discretos: «Empezar desde el principio», «Marcar como vista» y «Tráiler»
+     (YouTube en otra pestaña; solo si el proveedor lo da).
+   - La sinopsis (3 líneas con «Más» en el móvil; entera en el PC) y, en una
+     serie, las temporadas y sus episodios ANTES de los detalles.
+   - «Detalles»: dirección, reparto, géneros, país, estreno, título original,
+     la categoría (enlace a su rejilla) y la técnica («Según el proveedor»).
+     Lo que el proveedor no da no se pinta: nada de huecos.
    - Nunca en blanco (§7.3): se abre con lo que dice la tarjeta y, si la ficha
      del proveedor falla, «No se ha podido cargar la sinopsis.» con
      «Reintentar»; se puede reproducir igual.
@@ -18,29 +25,72 @@
      botón sale desactivado con el motivo escrito. */
 
 import type { VodMovie, VodSeries, VodTitle } from '@ace/shared';
-import { useLayoutEffect, useRef, useState } from 'react';
-import { ApiError, describeFailure } from '../../api/index.ts';
-import { useBack } from '../../app/router.tsx';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
+import { ApiError, describeFailure, isDemo } from '../../api/index.ts';
+import { useBack, useNavigate } from '../../app/router.tsx';
 import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
-import { Button, Capsule, EmptyState, Skeleton, SkeletonRows } from '../../ui/index.ts';
-import { Art } from './Art.tsx';
-import { seenCard, titleFromCard, useProgressMark, useVodTitle } from './data.ts';
 import {
-  metaLine,
+  Button,
+  Capsule,
+  EmptyState,
+  Icon,
+  Num,
+  ProgressBar,
+  Skeleton,
+  SkeletonRows,
+} from '../../ui/index.ts';
+import { Art, artFill } from './Art.tsx';
+import { seenCard, setCineState, titleFromCard, useProgressMark, useVodTitle } from './data.ts';
+import {
+  ageText,
+  clockText,
+  durationText,
+  endsAtText,
   orderedTags,
   playBlock,
+  progressRatio,
+  ratingText,
+  releasedText,
   remainingText,
   resumeAt,
+  seriesPlayLabel,
+  spanishCountry,
+  spanishGenres,
+  episodeTag,
   type PlayBlock,
 } from './model.ts';
 import { canPlayHevc, playVod } from './play.ts';
 import { Seasons } from './Seasons.tsx';
-import { CINE_TEXT, continueLabel, formatBlocked, TAG_LABEL } from './texts.ts';
+import {
+  CINE_TEXT,
+  episodeRunText,
+  formatBlocked,
+  resumeFromText,
+  seasonsText,
+  TAG_LABEL,
+} from './texts.ts';
 
 function blockText(block: PlayBlock, kind: 'movie' | 'episode'): string | null {
   if (!block) return null;
   return block.reason === 'hevc' ? CINE_TEXT.hevcBlocked : formatBlocked(block.ext, kind);
+}
+
+/** La hora de ahora, al día cada minuto (para «Termina a las 23:47»). */
+function useNow(stepMs = 60_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), stepMs);
+    return () => window.clearInterval(timer);
+  }, [stepMs]);
+  return now;
 }
 
 /** «1080p · H.264 · Audio: Castellano, Inglés». */
@@ -54,6 +104,70 @@ export function techLine(tech: VodMovie['tech']): string | null {
   return text || null;
 }
 
+/** Un título más largo que esto se escribe más pequeño (entero, sin cortarlo). */
+const LONG_TITLE = 48;
+
+/** La dirección del tráiler (el id ya viene validado por el contrato). */
+export function trailerUrl(id: string): string {
+  return `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
+}
+
+/** Temporadas de verdad (sin «Especiales»). */
+function realSeasons(series: VodSeries): number {
+  return series.seasons.filter((season) => season.n !== 0).length;
+}
+
+// ---- Cabecera -----------------------------------------------------------------------
+
+/** «2021 · 2 h 36 min · ★ 8,0 · +12»: cada dato en su sitio, con su nombre para el lector. */
+function MetaLine({ title }: { title: VodTitle }) {
+  const rating = ratingText(title.rating);
+  const age = title.kind === 'movie' ? ageText(title.ageRating) : null;
+  const items: Array<{ key: string; node: ReactNode }> = [];
+  if (title.year !== null)
+    items.push({ key: 'year', node: <Num value={String(title.year)} condensed={false} /> });
+  if (title.kind === 'movie') {
+    const duration = durationText(title.durationS);
+    if (duration) items.push({ key: 'dur', node: duration });
+  } else {
+    const n = realSeasons(title);
+    if (n > 0) items.push({ key: 'seasons', node: seasonsText(n) });
+  }
+  if (rating)
+    items.push({
+      key: 'rating',
+      node: (
+        <span className="cine-rating">
+          <Icon name="star-f" size={16} className="cine-rating__star" />
+          <span className="sr-only">{CINE_TEXT.rating} </span>
+          <Num value={rating} condensed={false} />
+        </span>
+      ),
+    });
+  if (items.length === 0 && !age) return null;
+  return (
+    <p className="cine-hero__meta">
+      {items.map((item, index) => (
+        <span key={item.key} className="cine-hero__meta-item">
+          {index > 0 ? (
+            <span className="cine-dot" aria-hidden="true">
+              ·
+            </span>
+          ) : null}
+          {item.node}
+        </span>
+      ))}
+      {/* La edad va en su recuadro, sin punto delante (al partirse la línea no queda «· +12»). */}
+      {age ? (
+        <span className="cine-age" title="Edad recomendada">
+          <span className="sr-only">Edad recomendada: </span>
+          {age}
+        </span>
+      ) : null}
+    </p>
+  );
+}
+
 function Synopsis({ plot }: { plot: string }) {
   const [open, setOpen] = useState(false);
   const [long, setLong] = useState(false);
@@ -65,14 +179,20 @@ function Synopsis({ plot }: { plot: string }) {
   }, [plot, open]);
   return (
     <section className="cine-synopsis" aria-labelledby="cine-synopsis-title">
-      <h2 id="cine-synopsis-title" className="cine-section__title">
+      <h2 id="cine-synopsis-title" className="sr-only">
         {CINE_TEXT.synopsis}
       </h2>
       <p ref={ref} className={cx('cine-synopsis__text', !open && 'cine-synopsis__text--clamp')}>
         {plot}
       </p>
       {long || open ? (
-        <Button variant="ghost" size="sm" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="cine-synopsis__more"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+        >
           {open ? CINE_TEXT.less : CINE_TEXT.more}
         </Button>
       ) : null}
@@ -80,25 +200,30 @@ function Synopsis({ plot }: { plot: string }) {
   );
 }
 
-function Credits({ title }: { title: VodTitle }) {
-  const rows: Array<[string, string]> = [];
-  if (title.cast.length) rows.push([CINE_TEXT.cast, title.cast.join(', ')]);
-  if (title.director) rows.push([CINE_TEXT.director, title.director]);
-  if (title.country) rows.push([CINE_TEXT.country, title.country]);
-  if (rows.length === 0) return null;
+function TrailerButton({ id, title }: { id: string | null | undefined; title: string }) {
+  if (!id) return null;
   return (
-    <dl className="cine-credits">
-      {rows.map(([term, value]) => (
-        <div key={term} className="cine-credits__row">
-          <dt>{term}</dt>
-          <dd>{value}</dd>
-        </div>
-      ))}
-    </dl>
+    <a
+      className="btn btn--quiet btn--sm press cine-trailer"
+      href={trailerUrl(id)}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${CINE_TEXT.trailer} de ${title} (${CINE_TEXT.newTab})`}
+      onClick={(event) => {
+        if (!isDemo()) return;
+        event.preventDefault();
+        notify(CINE_TEXT.trailerDemo, { tone: 'info', icon: 'info' });
+      }}
+    >
+      <Icon name="externo" size={18} />
+      <span className="btn__label">{CINE_TEXT.trailer}</span>
+    </a>
   );
 }
 
-function MovieActions({ movie }: { movie: VodMovie }) {
+// ---- Acciones -----------------------------------------------------------------------
+
+function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
   const mark = useProgressMark();
   const [busy, setBusy] = useState(false);
   const block = playBlock(movie.playable, canPlayHevc(), movie.tech.container);
@@ -106,7 +231,13 @@ function MovieActions({ movie }: { movie: VodMovie }) {
   const progress = movie.progress;
   const watched = progress?.watched === true;
   const resume = progress ? resumeAt(progress.posS, watched) : 0;
-  const left = progress && resume > 0 ? remainingText(progress.posS, progress.durS) : null;
+  const resuming = progress !== null && resume > 0;
+  const ratio = resuming ? progressRatio(progress) : null;
+  const left = resuming ? remainingText(progress.posS, progress.durS) : null;
+  const remainingS = resuming
+    ? Math.max(0, progress.durS - progress.posS)
+    : (movie.durationS ?? null);
+  const ends = block ? null : endsAtText(remainingS, now);
   const play = (startS?: number) =>
     playVod({
       id: movie.id,
@@ -120,30 +251,55 @@ function MovieActions({ movie }: { movie: VodMovie }) {
     setBusy(false);
     if (error) notify(describeFailure(error), { tone: 'err' });
   };
+  const line = [left, ends].filter(Boolean).join(' · ');
   return (
     <div className="cine-actions">
-      <Button
-        variant="primary"
-        icon="play"
-        disabled={block !== null}
-        aria-describedby={reason ? 'cine-play-reason' : undefined}
-        onClick={() => play()}
-      >
-        {left ? continueLabel(left) : CINE_TEXT.play}
-      </Button>
-      {left && !block ? (
-        <Button variant="quiet" icon="back" onClick={() => play(0)}>
-          {CINE_TEXT.fromStart}
+      <div className="cine-actions__main">
+        <Button
+          variant="primary"
+          icon="play"
+          className="cine-play"
+          disabled={block !== null}
+          aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
+          onClick={() => play()}
+        >
+          {resuming ? resumeFromText(clockText(progress.posS)) : CINE_TEXT.play}
         </Button>
-      ) : null}
-      <Button
-        variant="quiet"
-        icon={watched ? 'eye-off' : 'check'}
-        busy={busy}
-        onClick={() => void toggle()}
-      >
-        {watched ? CINE_TEXT.markMovieUnwatched : CINE_TEXT.markMovieWatched}
-      </Button>
+        {ratio !== null || line ? (
+          <div className="cine-actions__progress">
+            {ratio !== null ? (
+              <ProgressBar
+                className="cine-actions__bar"
+                size="thin"
+                value={ratio}
+                label={`Visto: ${Math.round(ratio * 100)} %`}
+              />
+            ) : null}
+            {line ? (
+              <p id="cine-play-line" className="cine-actions__line">
+                {line}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <div className="cine-actions__more">
+        {resuming && !block ? (
+          <Button variant="quiet" size="sm" icon="back" onClick={() => play(0)}>
+            {CINE_TEXT.fromStart}
+          </Button>
+        ) : null}
+        <Button
+          variant="quiet"
+          size="sm"
+          icon={watched ? 'eye-off' : 'check'}
+          busy={busy}
+          onClick={() => void toggle()}
+        >
+          {watched ? CINE_TEXT.markMovieUnwatched : CINE_TEXT.markMovieWatched}
+        </Button>
+        <TrailerButton id={movie.trailer} title={movie.title} />
+      </div>
       {reason ? (
         <p id="cine-play-reason" className="cine-actions__reason">
           {reason}
@@ -155,36 +311,69 @@ function MovieActions({ movie }: { movie: VodMovie }) {
 
 function SeriesActions({ series }: { series: VodSeries }) {
   const main = series.main;
-  if (!main) return null;
-  const episode = series.seasons
-    .flatMap((season) => season.episodes.map((item) => ({ season: season.n, item })))
-    .find((entry) => entry.item.id === main.episodeId);
-  const block = episode
-    ? playBlock(episode.item.playable, canPlayHevc(), episode.item.container)
-    : null;
+  const entry = main
+    ? series.seasons
+        .flatMap((season) => season.episodes.map((item) => ({ season: season.n, item })))
+        .find((candidate) => candidate.item.id === main.episodeId)
+    : undefined;
+  const block = entry ? playBlock(entry.item.playable, canPlayHevc(), entry.item.container) : null;
   const reason = blockText(block, 'episode');
+  const progress = entry?.item.progress ?? null;
+  const resuming = main?.action === 'resume' && progress !== null && !progress.watched;
+  const ratio = resuming ? progressRatio(progress) : null;
+  const left = resuming ? remainingText(progress.posS, progress.durS) : null;
+  const line = entry
+    ? [entry.item.title, left ?? durationText(entry.item.durationS)].filter(Boolean).join(' · ')
+    : '';
   return (
     <div className="cine-actions">
-      <Button
-        variant="primary"
-        icon="play"
-        disabled={block !== null}
-        aria-describedby={reason ? 'cine-play-reason' : undefined}
-        onClick={() =>
-          playVod({
-            id: main.episodeId,
-            kind: 'episode',
-            title: series.title,
-            subtitle: episode
-              ? `T${episode.season} · E${episode.item.n} · ${episode.item.title}`
-              : null,
-            seriesId: series.id,
-            startS: main.posS,
-          })
-        }
-      >
-        {main.label}
-      </Button>
+      {main ? (
+        <div className="cine-actions__main">
+          <Button
+            variant="primary"
+            icon="play"
+            className="cine-play"
+            disabled={block !== null}
+            aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
+            onClick={() =>
+              playVod({
+                id: main.episodeId,
+                kind: 'episode',
+                title: series.title,
+                subtitle: entry
+                  ? `${episodeTag(entry.season, entry.item.n)} · ${entry.item.title}`
+                  : null,
+                seriesId: series.id,
+                startS: main.posS,
+              })
+            }
+          >
+            {entry ? seriesPlayLabel(main.action, entry.season, entry.item.n) : main.label}
+          </Button>
+          {ratio !== null || line ? (
+            <div className="cine-actions__progress">
+              {ratio !== null ? (
+                <ProgressBar
+                  className="cine-actions__bar"
+                  size="thin"
+                  value={ratio}
+                  label={`Visto: ${Math.round(ratio * 100)} %`}
+                />
+              ) : null}
+              {line ? (
+                <p id="cine-play-line" className="cine-actions__line">
+                  {line}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {series.trailer ? (
+        <div className="cine-actions__more">
+          <TrailerButton id={series.trailer} title={series.title} />
+        </div>
+      ) : null}
       {reason ? (
         <p id="cine-play-reason" className="cine-actions__reason">
           {reason}
@@ -194,68 +383,162 @@ function SeriesActions({ series }: { series: VodSeries }) {
   );
 }
 
-function FichaHead({ title, onBack }: { title: VodTitle; onBack(): void }) {
-  const tags = orderedTags(title.tags);
-  const meta = metaLine({
-    year: title.year,
-    durationS: title.kind === 'movie' ? title.durationS : null,
-    rating: title.rating,
-    ageRating: title.kind === 'movie' ? title.ageRating : null,
-  });
-  const tech = title.kind === 'movie' ? techLine(title.tech) : null;
+// ---- Detalles -----------------------------------------------------------------------
+
+function Details({ title }: { title: VodTitle }) {
+  const navigate = useNavigate();
+  const rows: Array<{ term: string; value: ReactNode; title?: string }> = [];
+  if (title.director) rows.push({ term: CINE_TEXT.director, value: title.director });
+  if (title.cast.length) rows.push({ term: CINE_TEXT.cast, value: title.cast.join(', ') });
+  const genres = spanishGenres(title.genres);
+  if (genres.length) rows.push({ term: CINE_TEXT.genres, value: genres.join(', ') });
+  const country = spanishCountry(title.country);
+  if (country) rows.push({ term: CINE_TEXT.country, value: country });
+  const released = releasedText(title.released);
+  if (released) rows.push({ term: CINE_TEXT.released, value: released });
+  if (title.kind === 'movie' && title.originalTitle && title.originalTitle !== title.title)
+    rows.push({ term: CINE_TEXT.originalTitle, value: title.originalTitle });
+  if (title.kind === 'series' && title.episodeRunTimeS) {
+    const run = durationText(title.episodeRunTimeS);
+    if (run) rows.push({ term: CINE_TEXT.episodesTitle, value: episodeRunText(run) });
+  }
+  if (title.category) {
+    const category = title.category;
+    rows.push({
+      term: CINE_TEXT.category,
+      value: (
+        <button
+          type="button"
+          className="cine-details__link"
+          onClick={() => {
+            setCineState({ kind: title.kind, cat: category.id, tag: null, q: '' });
+            navigate({ vista: 'cine', id: null });
+          }}
+        >
+          {category.name}
+          <Icon name="chev-r" size={16} />
+        </button>
+      ),
+    });
+  }
+  if (title.kind === 'movie') {
+    if (title.tech.video)
+      rows.push({ term: CINE_TEXT.video, value: title.tech.video, title: CINE_TEXT.byProvider });
+    if (title.tech.audio.length)
+      rows.push({
+        term: CINE_TEXT.audio,
+        value: title.tech.audio.join(' / '),
+        title: CINE_TEXT.byProvider,
+      });
+    if (title.tech.container)
+      rows.push({ term: CINE_TEXT.format, value: title.tech.container.toUpperCase() });
+  }
+  if (rows.length === 0) return null;
   return (
-    <header className="cine-ficha__head">
-      <div className="cine-ficha__backdrop">
-        <Art
-          id={title.id}
-          art={title.backdrop ? 'backdrop' : 'poster'}
-          v={title.backdrop ?? title.poster}
-          title={title.title}
-          eager
-        />
+    <section className="cine-details" aria-labelledby="cine-details-title">
+      <h2 id="cine-details-title" className="cine-section__title">
+        {CINE_TEXT.details}
+      </h2>
+      <dl className="cine-details__list">
+        {rows.map((row) => (
+          <div key={row.term} className="cine-details__row" title={row.title}>
+            <dt>{row.term}</dt>
+            <dd>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+// ---- Ficha --------------------------------------------------------------------------
+
+function Hero({ title, onBack, now }: { title: VodTitle; onBack(): void; now: number }) {
+  const tags = orderedTags(title.tags);
+  const genres = spanishGenres(title.genres).slice(0, 3);
+  const background = title.backdrop ? 'backdrop' : title.poster ? 'blur' : 'tone';
+  const style = { '--hero-fill': artFill(title.title) } as CSSProperties;
+  return (
+    <div className="cine-hero" data-bg={background} style={style}>
+      <div className="cine-hero__bg" aria-hidden="true">
+        {title.backdrop ? (
+          <Art id={title.id} art="backdrop" v={title.backdrop} title={title.title} eager bare />
+        ) : title.poster ? (
+          <Art
+            id={title.id}
+            art="poster"
+            v={title.poster}
+            title={title.title}
+            eager
+            bare
+            className="cine-hero__blur"
+          />
+        ) : null}
       </div>
-      <Button variant="glass" size="sm" icon="chev-l" className="cine-ficha__back" onClick={onBack}>
+      <Button variant="glass" size="sm" icon="chev-l" className="cine-hero__back" onClick={onBack}>
         {CINE_TEXT.back}
       </Button>
-      <div className="cine-ficha__intro">
-        <div className="cine-ficha__poster">
+      <div className="cine-hero__top">
+        <div className="cine-hero__poster">
           <Art id={title.id} art="poster" v={title.poster} title={title.title} eager />
         </div>
-        <div className="cine-ficha__titles">
-          <h1 className="cine-ficha__title" tabIndex={-1}>
+        <div className="cine-hero__info">
+          <p className="cine-hero__kicker">
+            {title.kind === 'movie' ? CINE_TEXT.movieKicker : CINE_TEXT.seriesKicker}
+            {title.category ? (
+              <span className="cine-hero__cat">
+                <span className="cine-dot" aria-hidden="true">
+                  ·
+                </span>
+                {title.category.name}
+              </span>
+            ) : null}
+          </p>
+          <h1
+            className="cine-hero__title"
+            tabIndex={-1}
+            data-long={title.title.length > LONG_TITLE ? true : undefined}
+          >
             {title.title}
           </h1>
           {title.kind === 'movie' && title.originalTitle && title.originalTitle !== title.title ? (
-            <p className="cine-ficha__original">{title.originalTitle}</p>
+            <p className="cine-hero__original">{title.originalTitle}</p>
           ) : null}
-          {meta ? <p className="cine-ficha__meta">{meta}</p> : null}
-          {title.genres.length || tags.length || title.adult ? (
-            <div className="cine-ficha__capsules">
-              {title.adult ? (
-                <Capsule size="sm" tone="weak">
-                  {CINE_TEXT.adult}
-                </Capsule>
-              ) : null}
-              {tags.map((tag) => (
-                <Capsule key={tag} size="sm" tone="gold">
-                  {TAG_LABEL[tag]}
-                </Capsule>
-              ))}
-              {title.genres.map((genre) => (
-                <Capsule key={genre} size="sm">
-                  {genre}
-                </Capsule>
-              ))}
-            </div>
-          ) : null}
-          {tech ? (
-            <p className="cine-ficha__tech" title={CINE_TEXT.byProvider}>
-              {tech}
-            </p>
-          ) : null}
+          <MetaLine title={title} />
         </div>
+        {genres.length || tags.length || title.adult ? (
+          <div className="cine-hero__capsules">
+            {title.adult ? (
+              <Capsule size="sm" tone="weak">
+                {CINE_TEXT.adult}
+              </Capsule>
+            ) : null}
+            {tags.map((tag) => (
+              <Capsule key={tag} size="sm" tone="gold">
+                {TAG_LABEL[tag]}
+              </Capsule>
+            ))}
+            {genres.map((genre) => (
+              <Capsule key={genre} size="sm">
+                {genre}
+              </Capsule>
+            ))}
+          </div>
+        ) : null}
+        <div className="cine-hero__actions">
+          {title.kind === 'movie' ? (
+            <MovieActions movie={title} now={now} />
+          ) : (
+            <SeriesActions series={title} />
+          )}
+        </div>
+        {title.plot ? (
+          <div className="cine-hero__plot">
+            <Synopsis plot={title.plot} />
+          </div>
+        ) : null}
       </div>
-    </header>
+    </div>
   );
 }
 
@@ -274,6 +557,7 @@ export function Ficha({ id, active }: { id: string; active: boolean }) {
   const query = useVodTitle(id, active, card ? titleFromCard(card) : null);
   const title = query.data;
   const kindHint = title?.kind ?? card?.kind ?? 'movie';
+  const now = useNow();
   const goBack = () => back({ vista: 'cine', id: null });
 
   if (!title) {
@@ -313,8 +597,7 @@ export function Ficha({ id, active }: { id: string; active: boolean }) {
   const loadingInfo = title.info === 'pending' && query.isFetching;
   return (
     <article className="cine-ficha" data-kind={title.kind} aria-busy={loadingInfo || undefined}>
-      <FichaHead title={title} onBack={goBack} />
-      {title.kind === 'movie' ? <MovieActions movie={title} /> : <SeriesActions series={title} />}
+      <Hero title={title} onBack={goBack} now={now} />
       {title.info === 'failed' ? (
         <div className="cine-ficha__failed" role="alert">
           <p>{CINE_TEXT.noSynopsis}</p>
@@ -329,10 +612,9 @@ export function Ficha({ id, active }: { id: string; active: boolean }) {
           </Button>
         </div>
       ) : null}
-      {title.plot ? <Synopsis plot={title.plot} /> : null}
       {loadingInfo ? <SkeletonRows rows={2} label={CINE_TEXT.loading} /> : null}
-      <Credits title={title} />
       {title.kind === 'series' ? <Seasons series={title} /> : null}
+      <Details title={title} />
     </article>
   );
 }

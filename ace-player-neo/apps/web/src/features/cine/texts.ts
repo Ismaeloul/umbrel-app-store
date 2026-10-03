@@ -42,6 +42,17 @@ export const CINE_TEXT = {
   retry: 'Reintentar',
   capped: 'Hay más de 2.000 resultados: afina la búsqueda.',
   adult: '+18',
+  // Portada en filas y rejilla aparte (0.9.0)
+  seeAllRow: 'Ver todo',
+  moreCategories: 'Más categorías',
+  seeAllMovies: 'Ver todas las películas',
+  seeAllSeries: 'Ver todas las series',
+  allMovies: 'Todas las películas',
+  allSeries: 'Todas las series',
+  home: 'Inicio',
+  backHome: 'Volver a Películas y series',
+  exitSearch: 'Salir de la búsqueda',
+  rowFailed: 'No se ha podido cargar esta fila.',
   // Menú de «Seguir viendo» (§12.4)
   hideContinue: 'Quitar de Seguir viendo',
   markWatched: 'Marcar como visto',
@@ -50,16 +61,34 @@ export const CINE_TEXT = {
   seeDetails: 'Ver ficha',
   moreOptions: 'Más opciones',
   // Ficha (§12.6)
+  movieKicker: 'Película',
+  seriesKicker: 'Serie',
   play: 'Reproducir',
   fromStart: 'Empezar desde el principio',
   markMovieWatched: 'Marcar como vista',
   markMovieUnwatched: 'Marcar como no vista',
+  trailer: 'Tráiler',
+  trailerDemo: 'En el modo demo no se abren los tráileres de YouTube.',
+  newTab: 'se abre en YouTube, en otra pestaña',
   synopsis: 'Sinopsis',
   more: 'Más',
   less: 'Menos',
+  details: 'Detalles',
   cast: 'Reparto',
   director: 'Dirección',
   country: 'País',
+  genres: 'Géneros',
+  released: 'Estreno',
+  originalTitle: 'Título original',
+  category: 'Categoría',
+  video: 'Vídeo',
+  format: 'Formato',
+  rating: 'Nota',
+  episodesTitle: 'Episodios',
+  noEpisodes: 'Esta temporada todavía no tiene episodios.',
+  mainResume: 'Continuar',
+  mainNext: 'Siguiente',
+  mainStart: 'Empieza aquí',
   seasons: 'Temporadas',
   seasonsMenu: 'Elegir temporada',
   specials: 'Especiales',
@@ -113,6 +142,36 @@ export function titlesText(n: number, kind: VodKind): string {
 /** «10 episodios». */
 export function episodesText(n: number): string {
   return `${formatCount(n)} ${n === 1 ? 'episodio' : 'episodios'}`;
+}
+
+/** «3 temporadas» / «1 temporada». */
+export function seasonsText(n: number): string {
+  return `${formatCount(n)} ${n === 1 ? 'temporada' : 'temporadas'}`;
+}
+
+/** «Seguir viendo desde 43:12». */
+export function resumeFromText(clock: string): string {
+  return `Seguir viendo desde ${clock}`;
+}
+
+/** «Episodios de unos 45 min». */
+export function episodeRunText(duration: string): string {
+  return `Episodios de unos ${duration}`;
+}
+
+/** «Resultados de «dune»». */
+export function resultsTitle(q: string): string {
+  return `Resultados de «${q}»`;
+}
+
+/** «Ver las 1.234 películas» / «Ver las 12 series». */
+export function seeAllTitles(n: number, kind: VodKind): string {
+  return `Ver las ${titlesText(n, kind)}`;
+}
+
+/** «Ver todo: VOD | 4K, 9 películas» (nombre accesible del enlace de una fila). */
+export function seeRowLabel(name: string, n: number, kind: VodKind): string {
+  return `Ver todo: ${name}, ${titlesText(n, kind)}`;
 }
 
 /** Nada con «{q}» en películas (§12.5). */

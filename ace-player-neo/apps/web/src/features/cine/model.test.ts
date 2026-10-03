@@ -16,6 +16,16 @@ import {
   resumeAt,
   seriesMain,
   writeCineState,
+  ageText,
+  clockText,
+  endsAtText,
+  ratingText,
+  releasedText,
+  seasonName,
+  seriesPlayLabel,
+  showsGrid,
+  spanishCountry,
+  spanishGenres,
   type EpisodeProgressRef,
 } from './model.ts';
 import { formatBlocked, formatCount, titlesText } from './texts.ts';
@@ -35,25 +45,45 @@ describe('estado de la URL (docs/vod.md §12.2)', () => {
     expect(writeCineState('?vista=cine&demo=1&flag=cine', state)).toBe(
       '?vista=cine&demo=1&flag=cine&cine=series&cinecat=a1b2c3d4e5f6&cinetag=vose&cineq=dune&cineorden=az',
     );
-    // Lo que vale por defecto no se escribe (URLs cortas).
+    // Lo que vale por defecto no se escribe (URLs cortas); sin categoría, la portada.
     expect(
-      writeCineState('?vista=cine&cine=series&cineq=x', {
+      writeCineState('?vista=cine&cine=series&cineq=x&cinecat=all', {
         kind: 'movie',
-        cat: 'all',
+        cat: null,
         tag: null,
         q: '',
         order: 'novedades',
       }),
     ).toBe('?vista=cine');
+    // «Todas» SÍ se escribe: es la rejilla de todo, otra pantalla que la portada.
+    expect(
+      writeCineState('?vista=cine', { kind: 'movie', cat: 'all', tag: null, q: '', order: 'az' }),
+    ).toBe('?vista=cine&cinecat=all&cineorden=az');
   });
 
-  it('lo que no se entiende vale por defecto', () => {
+  it('lo que no se entiende vale por defecto (sin categoría: la portada)', () => {
     expect(readCineState('?cine=cosas&cinecat=<script>&cinetag=8k&cineorden=zz')).toEqual({
       kind: 'movie',
-      cat: 'all',
+      cat: null,
       tag: null,
       q: '',
       order: 'novedades',
+    });
+    expect(readCineState('?cinecat=all').cat).toBe('all');
+  });
+
+  it('portada o rejilla: una categoría, un distintivo o una búsqueda abren la rejilla', () => {
+    expect(showsGrid({ cat: null, tag: null }, '')).toBe(false);
+    expect(showsGrid({ cat: 'all', tag: null }, '')).toBe(true);
+    expect(showsGrid({ cat: 'a1b2c3d4e5f6', tag: null }, '')).toBe(true);
+    expect(showsGrid({ cat: null, tag: '4k' }, '')).toBe(true);
+    expect(showsGrid({ cat: null, tag: null }, 'dune')).toBe(true);
+    // La portada pide «todas» si alguien pide la rejilla sin categoría (un distintivo).
+    expect(browseQuery({ kind: 'movie', cat: null, tag: '4k', order: 'novedades' }, '')).toEqual({
+      kind: 'movie',
+      cat: 'all',
+      tag: '4k',
+      sort: 'added',
     });
   });
 
@@ -82,9 +112,9 @@ describe('estado de la URL (docs/vod.md §12.2)', () => {
 });
 
 describe('rejilla (§12.4)', () => {
-  it('3 columnas a 360 px, 4 a 480, 5 a 768, 6 a 1024 y 7 a 1280', () => {
+  it('carteles grandes: 2 columnas en el móvil, 3 desde 480, 4 desde 768, 5 desde 1024 y 6 desde 1280', () => {
     expect([320, 360, 479, 480, 767, 768, 1023, 1024, 1279, 1280, 2560].map(columnsFor)).toEqual([
-      3, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7,
+      2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
     ]);
   });
 
@@ -110,6 +140,68 @@ describe('etiquetas de tiempo y datos', () => {
       '2023 · 2 h 15 min · 7,3 · +13',
     );
     expect(metaLine({ year: null, rating: 8, ageRating: 'TP' })).toBe('8,0 · TP');
+    // Un 0 de nota o de edad es «sin dato» en los paneles Xtream: no se enseña.
+    expect(metaLine({ year: 2020, rating: 0, ageRating: '0' })).toBe('2020');
+    expect(ratingText(0)).toBeNull();
+    expect(ageText('00')).toBeNull();
+  });
+
+  it('«43:12» y «1:05:09»: dónde se sigue viendo', () => {
+    expect(clockText(2592)).toBe('43:12');
+    expect(clockText(3909)).toBe('1:05:09');
+    expect(clockText(5)).toBe('0:05');
+    expect(clockText(Number.NaN)).toBe('0:00');
+  });
+
+  it('«Termina a las 23:47»: ahora más lo que queda', () => {
+    const now = new Date(2026, 9, 3, 21, 55).getTime();
+    expect(endsAtText(6720, now)).toBe('Termina a las 23:47');
+    expect(endsAtText(0, now)).toBeNull();
+    expect(endsAtText(null, now)).toBeNull();
+  });
+
+  it('fecha de estreno en castellano, sin líos de zona horaria', () => {
+    expect(releasedText('2023-05-12')).toBe('12 de mayo de 2023');
+    expect(releasedText('2021-09-01')).toBe('1 de septiembre de 2021');
+    expect(releasedText('2021-13-01')).toBeNull();
+    expect(releasedText(null)).toBeNull();
+    expect(releasedText('12/05/2023')).toBeNull();
+  });
+
+  it('géneros de TMDB en inglés y países como código, en castellano', () => {
+    expect(spanishGenres(['Action', 'Science Fiction', 'Thriller', 'War', 'Drama'])).toEqual([
+      'Acción',
+      'Ciencia ficción',
+      'Suspense',
+      'Bélica',
+      'Drama',
+    ]);
+    // Ya en castellano, o sin traducción: tal cual; sin repetir.
+    expect(spanishGenres(['Comedia', 'Comedy', 'Kaiju'])).toEqual(['Comedia', 'Kaiju']);
+    expect(spanishCountry('US')).toBe('Estados Unidos');
+    expect(spanishCountry('es')).toBe('España');
+    expect(spanishCountry('Argentina')).toBe('Argentina');
+    expect(spanishCountry('  ')).toBeNull();
+  });
+
+  it('temporadas: «Season 2» o «s02» se ven como «Temporada 2»; un nombre de verdad se respeta', () => {
+    expect(seasonName(2, 'Season 2')).toBe('Temporada 2');
+    expect(seasonName(2, 's02')).toBe('Temporada 2');
+    expect(seasonName(2, 'S 2')).toBe('Temporada 2');
+    expect(seasonName(2, 'Temporada 02')).toBe('Temporada 2');
+    expect(seasonName(2, '2 сезон')).toBe('Temporada 2');
+    expect(seasonName(3, '')).toBe('Temporada 3');
+    expect(seasonName(0, 'Specials')).toBe('Especiales');
+    expect(seasonName(1, 'Parte 1')).toBe('Parte 1');
+    expect(seasonName(1, 'Libro uno: Agua')).toBe('Libro uno: Agua');
+  });
+
+  it('el botón principal de una serie, por su acción', () => {
+    expect(seriesPlayLabel('start', 1, 1)).toBe('Ver T1 · E1');
+    expect(seriesPlayLabel('resume', 2, 3)).toBe('Continuar T2 · E3');
+    expect(seriesPlayLabel('next', 2, 4)).toBe('Siguiente capítulo: T2 · E4');
+    expect(seriesPlayLabel('rewatch', 1, 1)).toBe('Volver a ver T1 · E1');
+    expect(seriesPlayLabel('next', 0, 2)).toBe('Siguiente capítulo: Especial 2');
   });
 
   it('los distintivos siempre en su orden', () => {

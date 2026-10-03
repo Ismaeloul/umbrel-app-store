@@ -1,7 +1,8 @@
 /* La rejilla de carteles (docs/vod.md §12.4): filas de N tarjetas sobre la
    lista virtual de Canales (VirtualList, con el scroll de la página), así una
    categoría de 20 000 películas pinta unas pocas filas. N sale del ancho de
-   la rejilla (3 a 360 px, 4 a 480, 5 a 768, 6 a 1024 y 7 a 1280; model.ts).
+   la rejilla (2 hasta 479 px, 3 desde 480, 4 desde 768, 5 desde 1024 y 6
+   desde 1280; model.ts).
 
    - El lector de pantalla ve UNA lista de tarjetas: cada tarjeta es un
      elemento con `aria-setsize` (el total, aunque no esté cargado) y
@@ -57,9 +58,10 @@ export function PosterGrid({ cards, total, label, onEndReached }: PosterGridProp
     start: index * columns,
     cards: row,
   }));
-  // Cartel 2:3 + título en 2 líneas + datos + cápsulas.
-  const cardWidth = Math.max(80, (width - (columns - 1) * 12) / columns);
-  const rowHeight = Math.round(cardWidth * 1.5 + 96);
+  // Cartel 2:3 + título en 2 líneas (15 px) + «2023 · ★ 7,4» + el aire de la fila.
+  const gap = width >= 768 ? 20 : 14;
+  const cardWidth = Math.max(80, (width - (columns - 1) * gap) / columns);
+  const rowHeight = Math.round(cardWidth * 1.5 + 92);
   return (
     <div
       ref={ref}

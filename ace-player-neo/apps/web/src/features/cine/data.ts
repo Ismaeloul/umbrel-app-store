@@ -14,8 +14,10 @@
 import {
   VOD_CLIENT,
   type VodArtKind,
+  type VodBrowseQuery,
   type VodBrowseResponse,
   type VodCard,
+  type VodKind,
   type VodProgressBody,
   type VodTitle,
 } from '@ace/shared';
@@ -62,6 +64,57 @@ export function setCineState(patch: Partial<CineUrlState>): void {
     );
   } catch {}
   urlStore.set((current) => (sameCineState(current, next) ? current : next));
+}
+
+/** Marca en history.state de la entrada de una rejilla abierta desde la portada. */
+interface GridHistoryState {
+  aceDepth?: number;
+  cineGrid?: boolean;
+}
+
+/** Dónde estaba la portada al abrir una rejilla, para volver a su sitio. */
+let homeScrollY = 0;
+
+/** Solo para Home: la posición de la portada al dejarla por una rejilla. */
+export function savedHomeScroll(): number {
+  return homeScrollY;
+}
+
+/**
+ * Abre la rejilla (una categoría, «Ver todo», un distintivo) desde la portada
+ * como una pantalla nueva: con su entrada en el historial, así «Atrás» (o el
+ * gesto del iPhone) vuelve a la portada y a su sitio. Desde la propia rejilla
+ * (otra categoría, otro distintivo) solo cambia el estado.
+ */
+export function openCineGrid(patch: Partial<CineUrlState>): void {
+  const current = readCineState(location.search);
+  if (current.cat !== null || current.tag !== null) {
+    setCineState(patch);
+    return;
+  }
+  const next = { ...current, ...patch };
+  homeScrollY = globalThis.scrollY ?? 0;
+  const depth = (history.state as GridHistoryState | null)?.aceDepth ?? 0;
+  try {
+    history.pushState(
+      { aceDepth: depth + 1, cineGrid: true } satisfies GridHistoryState,
+      '',
+      `${location.pathname}${writeCineState(location.search, next)}${location.hash}`,
+    );
+  } catch {}
+  urlStore.set((state) => (sameCineState(state, next) ? state : next));
+}
+
+/**
+ * Vuelve a la portada: «Atrás» si la rejilla se abrió desde ella (deshace la
+ * entrada del historial); si se llegó por un enlace, cambia el estado.
+ */
+export function closeCineGrid(): void {
+  if ((history.state as GridHistoryState | null)?.cineGrid) {
+    history.back();
+    return;
+  }
+  setCineState({ cat: null, tag: null, order: 'novedades', q: '' });
 }
 
 /** El estado de la URL de la vista, al día con Atrás/Adelante y con cada navegación. */
@@ -111,6 +164,22 @@ export function useVodHome(active: boolean) {
 }
 
 type BrowseScope = ReturnType<typeof browseQuery>;
+
+/** Tarjetas de cada fila de la portada (una por categoría). */
+export const ROW_SIZE = 20;
+
+/**
+ * Una fila de la portada: las 20 últimas de una categoría. Se pide solo
+ * cuando la fila se acerca a la pantalla (`enabled`): con muchas filas no se
+ * piden decenas de páginas (ni cientos de carteles) de golpe.
+ */
+export function useCategoryRow(kind: VodKind, cat: string, enabled: boolean) {
+  return useApiQuery(
+    'vodBrowse',
+    { query: { kind, cat: cat as VodBrowseQuery['cat'], sort: 'added', limit: ROW_SIZE } },
+    { enabled, staleTime: STALE_MS, retry: 1 },
+  );
+}
 
 /** Clave de la rejilla por páginas (bajo `vodBrowse`, así la invalida `iptv.status`). */
 export function pagesKey(scope: BrowseScope): QueryKey {
