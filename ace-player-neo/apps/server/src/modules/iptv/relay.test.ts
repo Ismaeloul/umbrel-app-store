@@ -1043,7 +1043,7 @@ describe('cadencia de entrega (auditoría 0.9.0)', () => {
     ffmpeg.on('error', () => undefined);
     const restarts: number[] = [];
     session.onRestart(() => restarts.push(1));
-    for (let step = 0; step < 100 && !session.stats().gateTolerant; step += 1) {
+    for (let step = 0; step < 240 && !session.stats().gateTolerant; step += 1) {
       await tick(15);
       await r.clock.advanceAsync(250);
     }

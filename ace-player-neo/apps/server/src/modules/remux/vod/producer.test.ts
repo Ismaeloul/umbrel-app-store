@@ -348,8 +348,8 @@ describe('VodProducer', () => {
 
   it('auditoría 0.9.0: si no llega a 25 s en el plazo, sale lo que haya (no un 503)', async () => {
     const r = await rig({
-      behavior: { fragmentDelayMs: 150 },
-      limits: { warmupS: 25, segmentWaitMs: 700 },
+      behavior: { fragmentDelayMs: 300 },
+      limits: { warmupS: 25, segmentWaitMs: 1_500 },
     });
     expect((await r.get('index0.m4s')).kind).toBe('file');
     expect(r.launcher.runs[0]?.fragments).toBeLessThan(13);

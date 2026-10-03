@@ -111,6 +111,13 @@ Para validar un arreglo: el mismo escenario antes y después, y comparar `resume
 | `ts-panel-real` | mezcla de un panel barato (colchón 4 s, tope 1,5×, parones de 2-12 s, corte cada 75 s) | en las 3 grabaciones (web, web con ffmpeg 8.1.2 y `sola`) el canal MUERE en la primera reconexión del relé |
 | `ts-costura` | el origen pega dos trozos cada 60 s sin cortar (cambio de fuente) | el patrón de Isma entero: `PIPELINE_ERROR_DECODE` → «reconectando (1/3)» → la instancia nueva arranca 20 s atrás (TARGETDURATION 4) y vuelve a caer en el MISMO segmento (2/3) → cuando TARGETDURATION vuelve a 2, hls.js salta +10 s adelante → siguiente costura (3/3) → «Tu IPTV no responde» |
 | `ts-gop6`, `ts-gop6-irregular`, `ts-50fps` | GOP largo, 1080p50 E-AC-3 | |
+| `ts-golpes-10s` | el proveedor de Isma medido en crudo (0.9.0): lo retenido de golpe cada 8-11 s, uno de cada 9 silencios de 15 s, sin pérdidas | con la 0.9.0 sin arreglar: el relé reconectaba en cada silencio de más de 10 s y el vigilante reiniciaba el remux; arreglado (cadencia): arranca, 1 conexión, ni un «reconectando» |
+| `ts-golpes-10s-parones` | lo mismo y además 15 s sin nada a los 90 y 180 s (20-25 s sin un byte) | pasa del plazo del relé (2× la cadencia): reconecta y hay parón, sin «reconectando» en la web |
+| `ts-costura-4s`, `ts-costura-3s-gop5` | costuras cada 3-4 s (como «LA 1 ³») | la puerta pasa a modo tolerante a los ~20 s |
+
+En Windows (el PC de Isma) hace falta `IPTV_LAB_LOOPBACK=::1` (relé, backend y web en `::1`), y el código anterior a
+la 0.9.0 casi nunca arranca: ffmpeg renombra `index.m3u8.tmp` encima de la lista y falla si alguien la está leyendo
+(el backend la leía en cada aviso de la carpeta; ahora una vez cada 250 ms como mucho).
 | `hls-limpio` | HLS del proveedor, segmentos de 6 s | bien (retraso ~12 s) |
 | `hls-lento` | segmentos a 1,2× y retrasos | bien (retraso ~25 s) |
 | `hls-reinicio` | el codificador HLS se reinicia (secuencia desde 0) | reenganche con ~6 s de imagen parada |
