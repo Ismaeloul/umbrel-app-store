@@ -267,11 +267,14 @@ export const IPTV_RELAY = {
 export const IPTV_BUSY_STATUSES: readonly number[] = [403, 429, 456, 458, 509];
 
 /**
- * `-rw_timeout` de ffmpeg con origen IPTV, en MICROsegundos (§6.3): por encima
- * del peor caso del relé, 41 s de reconexiones más los 8 s de abrir otra
- * variante (49 s). Si ffmpeg muriera antes, la sesión se cerraría sin probarla.
+ * `-rw_timeout` de ffmpeg con origen IPTV (el directo), en MICROsegundos
+ * (§6.3): por encima del peor caso del relé. Con un proveedor a golpes el plazo
+ * sin bytes llega a 30 s (auditoría 0.9.0): 30 + (1 + 8) + (2 + 8) + (4 + 8) =
+ * 61 s de reconexiones, más los 8 s de abrir otra variante (69 s). Si ffmpeg
+ * muriera antes, la sesión se cerraría sin probarla. (El VOD va con el suyo,
+ * `VOD_FFMPEG_RW_TIMEOUT_US`.)
  */
-export const IPTV_FFMPEG_RW_TIMEOUT_US = 55_000_000;
+export const IPTV_FFMPEG_RW_TIMEOUT_US = 75_000_000;
 /** Espera del remux IPTV: 2 segmentos o este tope (`iptv_timeout`, §6.3). */
 export const IPTV_REMUX_READY_MS = 20 * SECOND;
 

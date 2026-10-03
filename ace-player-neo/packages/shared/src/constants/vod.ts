@@ -185,6 +185,13 @@ export const VOD_PLAY = {
 } as const;
 
 /**
+ * `-rw_timeout` de ffmpeg en el VOD, en MICROsegundos (docs/vod.md §9.6): por
+ * encima del peor caso de reapertura del relé VOD (≈ 31 s). Aparte del directo
+ * (`IPTV_FFMPEG_RW_TIMEOUT_US`, 75 s desde la 0.9.0).
+ */
+export const VOD_FFMPEG_RW_TIMEOUT_US = 55_000_000;
+
+/**
  * Presupuesto de `vodStream` (§9.12). La suma de los cuatro primeros cabe
  * en `grantMs`, que queda 10 s por debajo del plazo de la web
  * (`VOD_CLIENT.streamMs`), y ese, por debajo de los 60 s de `location /api/`

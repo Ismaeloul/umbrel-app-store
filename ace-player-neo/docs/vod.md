@@ -891,7 +891,7 @@ ffmpeg -hide_banner -loglevel warning -nostdin
 
 - **Nunca `first_pts=0`** (T11, hallazgo 7). Nada se comparte con los `hlsFlags` del directo: fichero aparte, y así
   `remux/args.ts` (zona del diagnóstico) no se toca.
-- `-rw_timeout` 55 s (`IPTV_FFMPEG_RW_TIMEOUT_US`), por encima del peor caso de reapertura del relé (≈ 31 s) y de los
+- `-rw_timeout` 55 s (`VOD_FFMPEG_RW_TIMEOUT_US`; el directo va a 75 s), por encima del peor caso de reapertura del relé (≈ 31 s) y de los
   reintentos por ocupado.
 - **Probado junto en el navegador:** todo menos `-protocol_whitelist`, `-rw_timeout`, `-threads` y `-metadata` (vienen
   del remux del directo) y `-tag:v hvc1` (probado aparte: la salida sale como `hvc1`).
