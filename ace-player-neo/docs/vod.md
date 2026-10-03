@@ -5,9 +5,11 @@ Lo pidió Isma el 29-sep-2026: su IPTV «viene con series y pelis», y quiere qu
 para elegir entre pelis o series. Parte de la 0.8.2 publicada. La web va primero; la app de iOS llega después y la API
 se diseña para las dos (§17).
 
-**Estado: propuesta (29-sep-2026), con las respuestas de Isma del 30-sep (§19.4).** Hecho: el contrato (VOD-1, rama
-`vod/1-contrato`: `packages/shared` y las 6 rutas como esqueleto que responde 501) y el guion del Paso 0
-(`scripts/vod-sondeo.mjs`, §3). Este documento sale de tres diseños hechos con lentes
+**Estado: propuesta (29-sep-2026), con las respuestas de Isma del 30-sep (§19.4).** Dónde está cada pieza, qué está
+hecho, qué falla y el plan hasta la 0.9.0: **`docs/vod-estado.md`** (manda sobre lo que diga aquí de ramas y
+paquetes). Hecho: el contrato (VOD-1: `packages/shared` y las 6 rutas como esqueleto que responde 501) y el guion del
+Paso 0 (`scripts/vod-sondeo.mjs`, §3); en la rama de la 0.9.0 se unen con la web de navegar (VOD-3), el catálogo
+(VOD-2, sin revisar) y el principio de la reproducción (VOD-4). Este documento sale de tres diseños hechos con lentes
 distintas (lo más simple y robusto, la mejor experiencia y la escala con seguridad) y de una revisión que los puntuó
 contra el código real. Gana el primero, con injertos de los otros dos. El anexo §20 dice qué viene de dónde y qué se
 descartó.
