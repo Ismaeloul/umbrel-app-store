@@ -9,6 +9,9 @@ import {
   type VodMovie,
   type VodSeries,
 } from '@ace/shared';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEMO_VOD_IDS,
@@ -18,7 +21,7 @@ import {
   demoVodTitle,
   resetDemoVod,
 } from './demo-data.ts';
-import { demoArtSrc, demoArtSvg } from './demo-art.ts';
+import { demoArtSrc, demoArtSvg, POSTER_TEXT, posterTextBaselines } from './demo-art.ts';
 
 afterEach(() => resetDemoVod());
 
@@ -166,5 +169,60 @@ describe('demo de Películas y series', () => {
     expect(svg).toMatch(/^<svg /);
     expect(svg).not.toMatch(/<script|on\w+=/i);
     expect(demoArtSrc(DEMO_VOD_IDS.movie, 'still', '3fa9c210')).toMatch(/^data:image\/svg\+xml/);
+  });
+});
+
+describe('el título pintado en el cartel (0.9.0: «unos muy arriba y otros muy abajo»)', () => {
+  /** Las coordenadas de cada línea del título de un cartel de la demo. */
+  const textLines = (title: string) =>
+    [
+      ...demoArtSvg(DEMO_VOD_IDS.movie, 'poster', 'v1', title).matchAll(
+        /<text x="([\d.]+)" y="([\d.]+)"[^>]*>([^<]*)</g,
+      ),
+    ].map(([, x, y, text]) => ({ x: Number(x), y: Number(y), text }));
+
+  it('con 1, 2 o 3 líneas, la ÚLTIMA va siempre a la misma altura y crece hacia arriba', () => {
+    const coco = textLines('Coco');
+    const relatos = textLines('Relatos salvajes');
+    const guerra = textLines('Mientras dure la guerra');
+    expect([coco.length, relatos.length, guerra.length]).toEqual([1, 2, 3]);
+    for (const lines of [coco, relatos, guerra]) {
+      expect(lines.at(-1)?.y).toBe(POSTER_TEXT.lastBaseline);
+      lines.forEach((line) => expect(line.x).toBe(POSTER_TEXT.x));
+    }
+    expect(guerra.map((line) => line.y)).toEqual(posterTextBaselines(3));
+    expect(guerra[0]?.y).toBeLessThan(relatos[0]?.y ?? 0);
+  });
+
+  it('un título larguísimo no pasa de 4 líneas (la última con «…»)', () => {
+    const lines = textLines('Misión: Imposible – Sentencia mortal parte uno y algo más largo');
+    expect(lines).toHaveLength(POSTER_TEXT.maxLines);
+    expect(lines.at(-1)?.text).toMatch(/…$/);
+    expect(lines.at(-1)?.y).toBe(POSTER_TEXT.lastBaseline);
+  });
+
+  it('los fondos y fotogramas no llevan título (va escrito debajo)', () => {
+    expect(demoArtSvg(DEMO_VOD_IDS.movie, 'backdrop', 'v1', 'Coco')).not.toMatch(/<text/);
+  });
+
+  it('la misma geometría que el cartel sin imagen (.cine-art__name de cine.css)', () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), 'cine.css'),
+      'utf8',
+    );
+    const start = css.indexOf('.cine-art__name {');
+    const rule = css.slice(start, css.indexOf('}', start));
+    // Sobre un cartel de 200 × 300: x 18 = 9 %, letra 24 = 12 % del ancho, abajo 24 = 8 %.
+    expect(rule).toMatch(new RegExp(`left:\\s*${(POSTER_TEXT.x / 200) * 100}%`));
+    expect(rule).toMatch(/bottom:\s*8%/);
+    expect(rule).toMatch(
+      new RegExp(`font-size:\\s*max\\(12px,\\s*${(POSTER_TEXT.size / 200) * 100}cqi\\)`),
+    );
+    const lineHeight = (POSTER_TEXT.lineHeight / POSTER_TEXT.size).toFixed(2).replace('.', '\\.');
+    expect(rule).toMatch(new RegExp(`line-height:\\s*${lineHeight}`));
+    expect(rule).toMatch(new RegExp(`-webkit-line-clamp:\\s*${POSTER_TEXT.maxLines}`));
+    // La caja de la última línea acaba a 24 de abajo (8 %): su línea base, por encima.
+    expect(POSTER_TEXT.lastBaseline).toBeLessThan(300 - 24);
+    expect(POSTER_TEXT.lastBaseline).toBeGreaterThan(300 - 24 - POSTER_TEXT.lineHeight);
   });
 });

@@ -180,14 +180,28 @@
 .cine,
 .cine-skeleton {
   --cine-card-w: clamp(136px, 38vw, 200px);
+  /* Una tarjeta de «Seguir viendo» (la imagen 16:9 y su «Más opciones»). */
+  --cine-continue-w: clamp(240px, 72vw, 320px);
+  /* El halo de una tarjeta al pasar el ratón o pulsarla: envuelve el cartel
+     y su texto con este aire alrededor (el texto no toca su borde). */
+  --cine-halo: 8px;
+  /* Lo que el texto de debajo del cartel entra respecto a su borde: las
+     esquinas del cartel son redondas y, pegado, parecía que se salía. */
+  --cine-text-inset: 4px;
+}
+.cine-rail,
+.cine-continue {
+  --prail-gap: 14px;
+  /* Sitio arriba para el halo (la pista recorta lo que se sale): 4 px más
+     que los 6 de siempre, devueltos con el margen para no mover nada. */
+  --prail-pad-top: calc(var(--cine-halo) + 2px);
+  margin-top: -4px;
 }
 .cine-rail {
   --prail-item-w: var(--cine-card-w);
-  --prail-gap: 14px;
 }
 .cine-continue {
-  --prail-item-w: clamp(240px, 72vw, 320px);
-  --prail-gap: 14px;
+  --prail-item-w: var(--cine-continue-w);
 }
 @media (min-width: 768px) {
   .cine-rail {
@@ -204,14 +218,26 @@
       calc(-1 * (var(--gutter) + var(--safe-right)));
   }
 }
-/* Las flechas flotan sobre el carrusel (`.press` les ponía position: relative). */
-.cine-rail .prail__arrow,
-.cine-continue .prail__arrow {
-  position: absolute;
-  top: calc(var(--cine-card-w) * 0.75);
+/* Escritorio: alineados con el titular, pero con el aire del halo a los lados
+   (relleno, y a la izquierda un margen negativo que lo devuelve, como
+   «Emitiendo ahora» de Canales): sin él, el halo del primer cartel salía
+   cortado en recto. A la derecha no hace falta margen: el relleno de una
+   pista se ve (los carteles pasan por él) y solo añade sitio al final. */
+@media (min-width: 1024px) {
+  .cine-rail,
+  .cine-continue {
+    --prail-pad: calc(var(--cine-halo) + 2px);
+    margin-left: calc(-1 * (var(--cine-halo) + 2px));
+  }
 }
-.cine-continue .prail__arrow {
-  top: calc(clamp(240px, 72vw, 320px) * 0.28);
+/* Las flechas, a media altura del cartel 2:3 (alto = 1,5 × ancho)… */
+.prail.cine-rail .prail__arrow {
+  top: calc(var(--prail-pad-top) + var(--cine-card-w) * 0.75);
+}
+/* …o de la imagen 16:9 de «Seguir viendo» (su ancho es el de la tarjeta menos
+   los 40 px de «Más opciones»: 44 del botón − 6 de margen + 2 de hueco). */
+.prail.cine-continue .prail__arrow {
+  top: calc(var(--prail-pad-top) + (var(--cine-continue-w) - 40px) * 0.28125);
 }
 
 /* ---- Imagen con relleno (Art.tsx) ---------------------------------------------- */
@@ -240,7 +266,12 @@
   opacity: 0.9;
 }
 /* Cartel sin imagen: el título abajo a la izquierda sobre el color del título,
-   con un degradado, como un cartel de verdad. Escala con la tarjeta. */
+   con un degradado, como un cartel de verdad. Escala con la tarjeta.
+   La ÚLTIMA línea va siempre a la misma altura (anclado abajo, al 8 %): un
+   título de 1, 2 o 3 líneas crece hacia arriba y en una fila todos acaban
+   alineados. Los carteles de la demo (demo-art.ts, POSTER_TEXT) pintan su
+   título con esta misma geometría (9 %, 12 % del ancho, 1,05 y 8 %): si cambia
+   aquí, cambia allí (lo comprueba demo.test.ts). */
 .cine-art--poster {
   container-type: inline-size;
 }
@@ -260,7 +291,7 @@
   bottom: 8%;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
+  -webkit-line-clamp: 4;
   overflow: hidden;
   font-size: max(12px, 12cqi);
   font-weight: 800;
@@ -286,6 +317,44 @@
 }
 .cine-art[data-state='image'] .cine-art__img {
   opacity: 1;
+}
+
+/* ---- Halo de las tarjetas (PosterCard y «Seguir viendo») -------------------------
+   Al pasar el ratón o pulsar, un fondo suave envuelve el cartel Y su texto con
+   `--cine-halo` de aire alrededor y por DETRÁS (el cartel no se aclara). Antes
+   era el velo de `.press`, del tamaño justo de la tarjeta: el texto tocaba su
+   borde (lo vio Isma en «Coco» y en «Seguir viendo», 0.9.0). En «Seguir
+   viendo» envuelve también su «Más opciones». */
+.cine-card,
+.cine-continue__item {
+  position: relative;
+  isolation: isolate;
+}
+.cine-card::before,
+.cine-continue__item::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: calc(-1 * var(--cine-halo));
+  border-radius: calc(var(--r-m) + var(--cine-halo));
+  background: var(--text);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-rapido) var(--ease-rapido);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cine-card:hover::before,
+  .cine-continue__item:hover::before {
+    opacity: 0.06;
+  }
+}
+.cine-card:active::before,
+.cine-continue__item:has(> .cine-continue__card:active)::before {
+  opacity: 0.1;
+}
+.cine-card.press::after,
+.cine-continue__card.press::after {
+  content: none;
 }
 
 /* ---- Tarjeta (PosterCard.tsx) -------------------------------------------------- */
@@ -337,6 +406,14 @@
   left: 8px;
   right: 8px;
   bottom: 8px;
+}
+/* El texto de debajo del cartel (y el de «Seguir viendo») entra lo mismo en
+   todos los carruseles: `--cine-text-inset` respecto al borde del cartel. */
+.cine-card__title,
+.cine-card__meta,
+.cine-continue__title,
+.cine-continue__line {
+  padding-inline: var(--cine-text-inset);
 }
 .cine-card__title {
   display: -webkit-box;
