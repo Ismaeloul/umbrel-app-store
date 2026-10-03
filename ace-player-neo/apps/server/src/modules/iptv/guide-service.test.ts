@@ -86,6 +86,8 @@ describe('Guía TV en el servicio (§20.5)', () => {
     const view = await r.service.view();
     expect(view.provider?.guide.available).toBe(true);
     expect(view.provider?.guide.channelsWithGuide).toBeGreaterThan(window?.byChannel.size ?? 0);
+    /* El mismo número que «Todos» de la Guía TV (un canal con varias variantes cuenta una vez). */
+    expect(view.provider?.guide.channelsWithGuide).toBe(all.all);
     /* El partido de la guía de siempre está en la parrilla de M+ LaLiga TV 2. */
     const liga = all.channels.find((row) => row.name === 'M+ LaLiga TV 2');
     const now = r.core.clock.now();

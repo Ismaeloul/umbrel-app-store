@@ -662,18 +662,26 @@ export class IptvServiceImpl implements IptvService {
     return count;
   }
 
-  /** Canales del catálogo con programación en la guía completa (se cuenta una vez por catálogo y guía). */
+  /**
+   * Canales del catálogo con programación en la guía completa: los mismos que
+   * salen en «Todos» de la Guía TV (un canal = clave limpia y país, con sus
+   * variantes, §17). Se cuenta una vez por catálogo y guía.
+   */
   private fullChannelsWithGuide(reader: GuideReader): number {
     const catalog = this.catalog;
     if (!catalog) return 0;
     const key = `${catalog.providerId}|${catalog.builtAt}|${reader.version}`;
     if (this.fullGuideCount?.key === key) return this.fullGuideCount.count;
-    let count = 0;
+    const channels = new Set<string>();
     for (const tvg of reader.channels().keys()) {
-      if (catalog.groupsByTvgId(tvg).length) count += 1;
+      for (const group of catalog.groupsByTvgId(tvg)) {
+        for (const entry of catalog.group(group)) {
+          if (entry.tvgId.trim().toLowerCase() === tvg) channels.add(channelIdOf(entry));
+        }
+      }
     }
-    this.fullGuideCount = { key, count };
-    return count;
+    this.fullGuideCount = { key, count: channels.size };
+    return channels.size;
   }
 
   /** Lo que la Guía TV necesita saber del estado (docs/iptv.md §20.5). */

@@ -4624,9 +4624,10 @@ las lee por nombre.
 
 ### 20.7 Ajustes y lo que ya había
 
-- **«N canales con programación»** (`IptvStatus.guide.channelsWithGuide`) cuenta ya **todos** los `tvg-id` de la guía
-  completa que tienen canal en el catálogo (antes, solo los de la ventana de partidos: «93»). `available` es verdad si
-  hay ventana de partidos o guía completa; `updatedAt`, la de la descarga.
+- **«N canales con programación»** (`IptvStatus.guide.channelsWithGuide`) cuenta ya **todos** los canales con guía
+  completa: los mismos que salen en «Todos» (un canal con varias variantes, aunque tengan `tvg-id` distintos, cuenta
+  una vez). Antes, solo los `tvg-id` de la ventana de partidos («93»). `available` es verdad si hay ventana de partidos
+  o guía completa; `updatedAt`, la de la descarga.
 - `guide-match.ts`, `layer.ts` y la agenda híbrida no cambian: siguen leyendo la ventana (`this.guide`). Si algún día
   quieren más (por ejemplo, partidos que no parecen un evento), `GuideReader` permite consultar la completa.
 - Guardar con otro proveedor y eliminar la IPTV borran `guia.db` (y su `.next`); pausar no la borra (la API dice
