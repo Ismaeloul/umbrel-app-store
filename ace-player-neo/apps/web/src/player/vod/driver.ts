@@ -215,7 +215,7 @@ export class VodDriver {
 
   // ---- Imagen y medidor ----------------------------------------------------------
 
-  /** Primer fotograma: «Reanudado en 43:12» con «Empezar desde el principio» (§12.7). */
+  /** Primer fotograma: «Reanudado en 43:12» con «Desde el principio» (§12.7). */
   onFirstFrame(): void {
     this.demoAt = this.now();
     if (this.resumedAtS === null || this.resumedAnnounced) return;

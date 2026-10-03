@@ -9,7 +9,8 @@ export const VOD_TEXT = {
   preparingMovie: 'Preparando la película…',
   preparingEpisode: 'Preparando el episodio…',
   resumed: (at: number) => `Reanudado en ${clockText(at)}`,
-  fromStart: 'Empezar desde el principio',
+  /** En el aviso «Reanudado en 43:12»: corto, para que el aviso quepa en una línea. */
+  fromStart: 'Desde el principio',
   seeking: 'Buscando…',
   loading: 'Cargando…',
   paused: 'En pausa',

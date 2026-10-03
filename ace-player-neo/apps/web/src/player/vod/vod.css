@@ -127,6 +127,9 @@
 .vod-clock {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  /* Con solo «0:01» (móvil) seguía siendo un botón de 44. */
+  min-width: var(--tap);
   height: var(--tap);
   padding: 0 10px;
   border-radius: var(--r-pill);
@@ -141,6 +144,10 @@
 }
 .vod-forward {
   padding: 0 8px 0 12px;
+}
+.vod-next {
+  gap: 4px;
+  padding: 0 10px 0 16px;
 }
 .vod-forward__icon {
   transform: scaleX(-1);

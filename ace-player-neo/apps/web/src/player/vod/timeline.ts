@@ -21,7 +21,7 @@ export const VOD_NEXT_UP_COUNTDOWN_MS = 10_000;
 export const VOD_STILL_WATCHING_AFTER = 3;
 /** Sin respuesta a «¿Sigues viendo?»: se pausa y se suelta la sesión (§12.9). */
 export const VOD_STILL_WATCHING_TIMEOUT_MS = 60_000;
-/** «Reanudado en 43:12» con «Empezar desde el principio» (§12.7). */
+/** «Reanudado en 43:12» con «Desde el principio» (§12.7). */
 export const VOD_RESUMED_NOTICE_MS = 5_000;
 /** Media Session: `setPositionState` cada 2 s (§12.7). */
 export const VOD_POSITION_STATE_MS = 2_000;

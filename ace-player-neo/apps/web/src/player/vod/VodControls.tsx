@@ -199,8 +199,9 @@ function VodClock({ vod }: { vod: VodPlayback }) {
       ) : (
         <>
           <Num value={clockText(vod.positionS)} />
+          {/* Con espacios de verdad: los normales se los comía el flex («20:55/49:00»). */}
           <span className="vod-clock__of" aria-hidden="true">
-            {' / '}
+            {' / '}
           </span>
           <Num value={clockText(vod.durationS)} />
         </>
@@ -308,7 +309,7 @@ export function VodControls({ state, ctx }: { state: PlayerState; ctx: PlayerCon
               }))}
             />
           ) : null}
-          {vod?.next ? (
+          {vod?.next && ctx.compact ? (
             <IconButton
               icon="chev-r"
               label={`Siguiente episodio: ${vod.next.label}`}
@@ -316,6 +317,18 @@ export function VodControls({ state, ctx }: { state: PlayerState; ctx: PlayerCon
               variant="video"
               onClick={actions.nextEpisode}
             />
+          ) : vod?.next ? (
+            // Con sitio, dice lo que hace (una flecha sola no se entendía).
+            <button
+              type="button"
+              className="player-back vod-next press"
+              aria-label={`Siguiente episodio: ${vod.next.label}`}
+              title="Siguiente episodio (N)"
+              onClick={actions.nextEpisode}
+            >
+              <span>Siguiente</span>
+              <Icon name="chev-r" size={18} />
+            </button>
           ) : null}
           {ctx.canFullscreen ? (
             <IconButton

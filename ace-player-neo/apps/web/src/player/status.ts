@@ -61,7 +61,8 @@ export function vodStatusFor(state: PlayerState): StatusContent | null {
     case 'pausado':
       return {
         text: vod?.ended ? VOD_TEXT.ended : VOD_TEXT.paused,
-        icon: 'pause',
+        // Terminada no es una pausa: la marca de hecho, no el icono de pausa.
+        icon: vod?.ended ? 'check' : 'pause',
         ...(clock ? { meta: clock } : {}),
       };
     case 'reproduciendo':
