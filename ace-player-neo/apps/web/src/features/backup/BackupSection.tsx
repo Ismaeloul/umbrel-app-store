@@ -159,18 +159,24 @@ function IptvSecretForm({
 }) {
   const client = useQueryClient();
   const [value, setValue] = useState('');
+  const [username, setUsername] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userError, setUserError] = useState<string | null>(null);
   const m3u = outcome.kind === 'm3u';
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
-    if (!value.trim()) {
-      setError(m3u ? 'Escribe la dirección de la lista.' : 'Escribe la contraseña.');
-      return;
-    }
+    /* El usuario Xtream no viaja en claro en la copia (es tan secreto como la
+       contraseña, docs/iptv.md §1.4): se pide junto a ella. */
+    const missingUser = !m3u && !username.trim();
+    const missingValue = !value.trim();
+    setUserError(missingUser ? 'Escribe el usuario.' : null);
+    setError(
+      missingValue ? (m3u ? 'Escribe la dirección de la lista.' : 'Escribe la contraseña.') : null,
+    );
+    if (missingUser || missingValue) return;
     setBusy(true);
-    setError(null);
     try {
       const name = outcome.name ?? undefined;
       await api('iptvSave', {
@@ -179,7 +185,7 @@ function IptvSecretForm({
           : {
               kind: 'xtream',
               server: outcome.server ?? '',
-              username: outcome.username ?? '',
+              username: username.trim(),
               password: value,
               ...(name ? { name } : {}),
             },
@@ -197,13 +203,25 @@ function IptvSecretForm({
   return (
     <form className="set-stack bk-iptv" onSubmit={save} noValidate aria-labelledby="bk-iptv-t">
       <h3 id="bk-iptv-t" className="bk-part__title">
-        Falta {m3u ? 'la dirección de la lista' : 'la contraseña'} de tu IPTV
+        Falta {m3u ? 'la dirección de la lista' : 'el usuario y la contraseña'} de tu IPTV
       </h3>
       <p className="set-help">
         {m3u
           ? `La copia trae «${outcome.name ?? 'IPTV'}» (${outcome.host ?? 'sin host'}) sin su dirección, porque lleva la contraseña dentro.`
-          : `Servidor ${outcome.server ?? '?'} · usuario ${outcome.username ?? '?'}. La contraseña no venía en la copia.`}
+          : `Servidor ${outcome.server ?? '?'}. El usuario y la contraseña no venían en la copia.`}
       </p>
+      {m3u ? null : (
+        <TextField
+          label="Usuario de la IPTV"
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          maxLength={IPTV_SECRET_MAX}
+          value={username}
+          error={userError}
+          onChange={(event) => setUsername(event.target.value)}
+        />
+      )}
       <TextField
         label={m3u ? 'Dirección de la lista' : 'Contraseña de la IPTV'}
         type={m3u ? 'url' : 'password'}

@@ -439,13 +439,15 @@ conservador). Todas se pueden revertir.
   algo que no es una copia 400 `backup_invalid`, más de 2 MiB (nginx) 413
   `backup_too_large`.
 - **Otra semilla**: la instalación nueva tiene otro `APP_SEED`, así que nada
-  de la copia depende de las claves de este Umbrel. La contraseña Xtream (o
-  la URL M3U entera, que la lleva dentro) va solo si se pide, cifrada con
-  una clave de Isma: scrypt (N 2^15, r 8, p 1, sal de 16 bytes) y
-  AES-256-GCM con AAD `ace-copia|<versión>|<tipo>`; al abrir solo se admiten
-  N hasta 2^17. Sin ella, la IPTV queda «pendiente» y la web pide la
-  contraseña (o la URL) y la guarda con «Guardar IPTV» (con su prueba
-  rápida). Con ella, se restaura sin prueba rápida (`iptv.restore`), cifrada
+  de la copia depende de las claves de este Umbrel. El usuario y la
+  contraseña Xtream (o la URL M3U entera, que los lleva dentro) van solo si
+  se pide, cifrados con una clave de Isma: scrypt (N 2^15, r 8, p 1, sal de
+  16 bytes) y AES-256-GCM con AAD `ace-copia|<versión>|<tipo>`; al abrir solo
+  se admiten N hasta 2^17. En claro solo va el servidor Xtream: el usuario
+  es tan secreto como la contraseña (docs/iptv.md §1.4; la primera versión
+  lo dejaba en claro y la prueba de fugas del E2E lo cazó). Sin la clave, la
+  IPTV queda «pendiente» y la web pide el usuario y la contraseña (o la URL)
+  y la guarda con «Guardar IPTV» (con su prueba rápida). Con ella, se restaura sin prueba rápida (`iptv.restore`), cifrada
   con las claves de aquí, y sincroniza de fondo.
 - **Ids IPTV**: en otra instalación no se reconocen (etiqueta HMAC con otra
   clave). Los favoritos y recientes IPTV van marcados `iptv: true` y al

@@ -375,11 +375,15 @@ también los tests nuevos del otro verificador), ninguno saltado; `tsc
   `origin_forbidden`; lo fija `test/security.test.ts`) y con la regla
   anti-CSRF, también el GET de descarga (`sideEffects: true`): la copia lleva
   datos personales.
-- **Sin secretos por defecto**: la copia no lleva la contraseña Xtream ni la
-  URL M3U (que la lleva dentro). El usuario y el servidor Xtream sí (no
-  bastan para entrar). Nunca lleva dispositivos ni sus hashes, sesiones,
-  `nowPlaying` (su token), la semilla ni el token del motor.
-- **Con «Incluir la contraseña de la IPTV»**: cifrada con una clave que
+- **Sin secretos por defecto**: la copia no lleva el usuario ni la
+  contraseña Xtream, ni la URL M3U (que los lleva dentro). Solo el servidor
+  Xtream (`esquema://host[:puerto]`). El usuario es tan secreto como la
+  contraseña, igual que en `GET /api/v1/iptv` (docs/iptv.md §1.4): lo
+  comprueba la prueba de fugas de `e2e/iptv.spec.ts`, que recorre todas las
+  rutas GET. Nunca lleva dispositivos ni sus hashes, sesiones, `nowPlaying`
+  (su token), la semilla ni el token del motor.
+- **Con «Incluir la contraseña de la IPTV»**: usuario y contraseña (o la URL
+  M3U), cifrados con una clave que
   escribe Isma (mínimo 8 caracteres), scrypt (N 2^15, r 8, p 1, sal de 16
   bytes) → AES-256-GCM con AAD. Nunca en claro; la clave no se guarda. Al
   restaurar, el bloque solo se abre con esa clave (si no, 422
@@ -389,7 +393,7 @@ también los tests nuevos del otro verificador), ninguno saltado; `tsc
 - **Registro**: `passphrase` está en las rutas tapadas de pino; los fallos de
   validación solo registran rutas de campos, nunca valores; el registro de
   exportar/restaurar lleva recuentos y el tipo de IPTV, no datos. Los tests
-  buscan la contraseña y la clave en los logs.
+  buscan el usuario, la contraseña y la clave en los logs.
 - **Entrada**: tope de 2 MiB (el de nginx), JSON validado con zod estricto
   (claves desconocidas, topes de state.json y formas de cada campo); la web
   comprueba tamaño y formato antes de subir nada.

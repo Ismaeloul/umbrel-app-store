@@ -37,7 +37,7 @@ export const BACKUP_SECRET_LABEL = 'Incluir la contraseña de la IPTV';
 export const BACKUP_SECRET_HELP =
   'Va cifrada con una clave que eliges ahora. Sin esa clave nadie puede leerla, tampoco tú: apúntala.';
 export const BACKUP_NO_SECRET_HELP =
-  'Sin ella, al restaurar te pediremos otra vez la contraseña (o la dirección de la lista M3U).';
+  'Sin ella, al restaurar te pediremos otra vez el usuario y la contraseña (o la dirección de la lista M3U).';
 export const BACKUP_REPLACE_WARNING =
   'Reemplazar cambia tus favoritos, recientes, listas, «Tu fútbol» y ajustes por los de la copia. Lo de ahora se pierde.';
 export const BACKUP_MERGE_HELP =
@@ -193,7 +193,7 @@ export function iptvLine(iptv: BackupIptvOutcome): string {
     case 'needs_secret':
       return iptv.kind === 'm3u'
         ? `IPTV ${name}: después te pediremos la dirección de la lista.`
-        : `IPTV ${name}: después te pediremos la contraseña.`;
+        : `IPTV ${name}: después te pediremos el usuario y la contraseña.`;
   }
 }
 
@@ -225,7 +225,7 @@ export function createdLine(iso: string): string {
 export function doneMessage(result: BackupImportResponse): string {
   const base = result.mode === 'merge' ? 'Copia combinada con lo que tenías.' : 'Copia restaurada.';
   if (result.iptv.action === 'needs_secret') {
-    return `${base} Falta la ${result.iptv.kind === 'm3u' ? 'dirección de la lista' : 'contraseña'} de tu IPTV.`;
+    return `${base} Falta ${result.iptv.kind === 'm3u' ? 'la dirección de la lista' : 'el usuario y la contraseña'} de tu IPTV.`;
   }
   return base;
 }

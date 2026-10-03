@@ -659,7 +659,6 @@ export class IptvServiceImpl implements IptvService {
           : record.kind === 'xtream'
             ? record.origin
             : null,
-      username: secrets?.kind === 'xtream' ? secrets.username : null,
       secrets: secrets ? { ...secrets } : null,
     };
   }

@@ -176,7 +176,7 @@ export interface IptvBackupConfig {
   readonly host: string;
   /** Solo Xtream (sin credenciales). */
   readonly server: string | null;
-  readonly username: string | null;
+  /** Usuario y contraseña (Xtream) o la URL (M3U): solo para cifrarlos con la clave de Isma. */
   readonly secrets: IptvPlainSecrets | null;
 }
 

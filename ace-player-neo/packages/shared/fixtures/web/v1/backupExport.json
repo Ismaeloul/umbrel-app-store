@@ -89,7 +89,6 @@
     "enabled": true,
     "host": "proveedor.example:8080",
     "server": "http://proveedor.example:8080",
-    "username": "usuario",
     "secret": null
   },
   "browser": { "theme": "oscuro", "transparency": "normal", "playbackMode": "balanced" }

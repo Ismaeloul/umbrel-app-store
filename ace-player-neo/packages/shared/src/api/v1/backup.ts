@@ -12,10 +12,11 @@
    - «Tu fútbol» (preferencias), vínculos partido-canal hechos a mano y
      correcciones de canal (lo aprendido);
    - ajustes v2 (política de mismo canal);
-   - la IPTV: tipo, nombre, si está en pausa, host y, en Xtream, servidor y
-     usuario. La contraseña (Xtream) o la URL entera (M3U, que la lleva
-     dentro) SOLO si Isma lo pide, cifrada con una clave que escribe él
-     (scrypt + AES-256-GCM). Nunca en claro;
+   - la IPTV: tipo, nombre, si está en pausa, host y, en Xtream, servidor.
+     El usuario y la contraseña (Xtream) o la URL entera (M3U, que los lleva
+     dentro) SOLO si Isma lo pide, cifrados con una clave que escribe él
+     (scrypt + AES-256-GCM). Nunca en claro: como en GET /api/v1/iptv, el
+     usuario es tan secreto como la contraseña (docs/iptv.md §1.4);
    - opcional, `browser`: lo que la web guarda en el navegador (tema,
      transparencia, modo de reproducción). Lo añade la web al descargar y lo
      aplica ella al restaurar; el servidor solo lo valida y lo devuelve.
@@ -83,7 +84,7 @@ export const BackupSealedSchema = z.strictObject({
 });
 export type BackupSealed = z.infer<typeof BackupSealedSchema>;
 
-/** La IPTV en la copia: nunca la contraseña ni la URL de la lista en claro. */
+/** La IPTV en la copia: nunca el usuario, la contraseña ni la URL de la lista en claro. */
 export const BackupIptvSchema = z.strictObject({
   kind: IptvKindSchema,
   name: z.string().min(1).max(IPTV_NAME_MAX),
@@ -92,8 +93,6 @@ export const BackupIptvSchema = z.strictObject({
   host: z.string().max(260),
   /** Solo Xtream: `esquema://host[:puerto][/ruta]`, sin usuario ni contraseña. */
   server: z.string().max(2048).nullable(),
-  /** Solo Xtream. */
-  username: z.string().min(1).max(200).nullable(),
   /** Con «Incluir la contraseña de la IPTV»: los secretos, cifrados con la clave de Isma. */
   secret: BackupSealedSchema.nullable(),
 });
@@ -179,8 +178,8 @@ export type BackupCounts = z.infer<typeof BackupCountsSchema>;
  * - `restore`: se restaura con su contraseña (venía protegida y la clave vale);
  * - `keep`: se queda la de ahora (Combinar, o la copia no trae la contraseña);
  * - `needs_secret`: no hay IPTV ahora y la copia no trae la contraseña (o no
- *   se dio la clave): se restaura lo demás y la web pide la contraseña (Xtream)
- *   o la URL (M3U) para guardarla con «Guardar IPTV».
+ *   se dio la clave): se restaura lo demás y la web pide el usuario y la
+ *   contraseña (Xtream) o la URL (M3U) para guardarla con «Guardar IPTV».
  */
 export const BackupIptvActionSchema = z.enum(['none', 'restore', 'keep', 'needs_secret']);
 export type BackupIptvAction = z.infer<typeof BackupIptvActionSchema>;
@@ -194,7 +193,6 @@ export const BackupIptvOutcomeSchema = z.strictObject({
   name: z.string().max(IPTV_NAME_MAX).nullable(),
   host: z.string().max(260).nullable(),
   server: z.string().max(2048).nullable(),
-  username: z.string().max(200).nullable(),
   /** Favoritos y recientes de la IPTV que se re-emparejarán por nombre tras sincronizar. */
   relinkItems: z.number().int().nonnegative(),
 });

@@ -90,7 +90,6 @@ const PREVIEW: BackupImportResponse = {
     name: null,
     host: null,
     server: null,
-    username: null,
     relinkItems: 0,
   },
   browser: { theme: 'oscuro' },
@@ -305,7 +304,6 @@ describe('restaurar copia', () => {
         enabled: true,
         host: 'proveedor.example:8080',
         server: 'http://proveedor.example:8080',
-        username: 'isma',
         secret: {
           kdf: 'scrypt',
           n: 32768,
@@ -326,7 +324,6 @@ describe('restaurar copia', () => {
       name: 'Casa',
       host: 'proveedor.example:8080',
       server: 'http://proveedor.example:8080',
-      username: 'isma',
       relinkItems: 2,
     };
     setup({
@@ -344,7 +341,7 @@ describe('restaurar copia', () => {
     expect(imports()).toHaveLength(0);
     /* Sin clave también vale: la IPTV queda pendiente. */
     fireEvent.click(screen.getByRole('button', { name: 'Ver qué contiene' }));
-    await screen.findByText(/te pediremos la contraseña/);
+    await screen.findByText(/te pediremos el usuario y la contraseña/);
     expect(imports()[0]?.body).not.toHaveProperty('passphrase');
     expect(key).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Restaurar y reemplazar…' }));
@@ -352,8 +349,15 @@ describe('restaurar copia', () => {
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Sí, reemplazar' }),
     );
     const password = await screen.findByLabelText('Contraseña de la IPTV');
-    expect(screen.getByText(/usuario isma/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/El usuario y la contraseña no venían en la copia/),
+    ).toBeInTheDocument();
     fireEvent.change(password, { target: { value: 'secreta-iptv' } });
+    /* Sin el usuario no se guarda: la copia no lo trae en claro. */
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar IPTV' }));
+    expect(await screen.findByText('Escribe el usuario.')).toBeInTheDocument();
+    expect(net.calls.some((call) => call.method === 'PUT')).toBe(false);
+    fireEvent.change(screen.getByLabelText('Usuario de la IPTV'), { target: { value: 'isma' } });
     fireEvent.click(screen.getByRole('button', { name: 'Guardar IPTV' }));
     await waitFor(() =>
       expect(net.calls.find((call) => call.method === 'PUT')?.body).toEqual({
@@ -379,7 +383,6 @@ describe('restaurar copia', () => {
         enabled: true,
         host: 'h',
         server: null,
-        username: null,
         secret: { kdf: 'scrypt' },
       },
     });

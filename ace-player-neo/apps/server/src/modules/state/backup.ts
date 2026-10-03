@@ -327,7 +327,6 @@ export function createBackupService(deps: BackupDeps): BackupService {
         enabled: config.enabled,
         host: config.host,
         server: config.kind === 'xtream' ? config.server : null,
-        username: config.kind === 'xtream' ? config.username : null,
         secret,
       };
     }
@@ -394,7 +393,6 @@ export function createBackupService(deps: BackupDeps): BackupService {
       name: block?.name ?? null,
       host: block?.host ?? null,
       server: block?.server ?? null,
-      username: block?.username ?? null,
       relinkItems,
     };
     if (!block) return { action: 'none', ...base };

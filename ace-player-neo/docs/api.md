@@ -995,7 +995,7 @@ Todas `access: 'web'`, módulo `state`, con la regla anti-CSRF.
 
 | Ruta | Qué hace |
 | ---- | -------- |
-| `GET /api/v1/backup` | La copia (`BackupFileSchema`) como descarga: `Content-Disposition: attachment; filename="ace-player-neo-copia-AAAA-MM-DD.json"`. Sin la contraseña de la IPTV. |
+| `GET /api/v1/backup` | La copia (`BackupFileSchema`) como descarga: `Content-Disposition: attachment; filename="ace-player-neo-copia-AAAA-MM-DD.json"`. Sin el usuario ni la contraseña de la IPTV (ni la URL M3U). |
 | `POST /api/v1/backup/export` | `{ passphrase }` (8-256): la misma copia con `iptv.secret` cifrado con esa clave. Sin IPTV, igual que el GET. `409 iptv_secret_unreadable` si los secretos de ahora no se pueden leer. |
 | `POST /api/v1/backup/import` | `{ backup, mode?: 'replace' \| 'merge', dryRun?: true, passphrase? }` → `BackupImportResponse` (recuentos de ahora, de la copia y de después; si cambian «Tu fútbol» y los ajustes; qué pasa con la IPTV: `none`, `restore`, `keep` o `needs_secret`; y `browser` para que la web lo aplique). |
 

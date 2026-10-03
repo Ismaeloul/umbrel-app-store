@@ -151,6 +151,8 @@ describe('exportar', () => {
     expect(file.appVersion).toBe(a.core.config.appVersion);
     const text = JSON.stringify(file);
     expect(text).not.toContain(FAKE_IPTV_PASSWORD);
+    /* El usuario Xtream es tan secreto como la contraseña (docs/iptv.md §1.4). */
+    expect(text).not.toContain(FAKE_IPTV_USER);
     expect(text).not.toContain('9'.repeat(64));
     expect(text).not.toContain('dev_iphone01');
     expect(text).not.toContain(SEED_A);
@@ -161,7 +163,6 @@ describe('exportar', () => {
       enabled: true,
       host: FAKE_IPTV_HOST,
       server: SERVER,
-      username: FAKE_IPTV_USER,
       secret: null,
     });
     /* Los ids de la IPTV van marcados; los de AceStream, no. */
@@ -171,6 +172,7 @@ describe('exportar', () => {
     expect(file.settings.sameChannelPolicy).toBe('handoff');
     /* Ni en el registro. */
     expect(a.logs.join('')).not.toContain(FAKE_IPTV_PASSWORD);
+    expect(a.logs.join('')).not.toContain(FAKE_IPTV_USER);
   });
 
   it('M3U sin pedirlo: solo el host (la URL entera es secreta)', async () => {
@@ -197,6 +199,7 @@ describe('exportar', () => {
     const secret = file.iptv?.secret;
     expect(secret).toMatchObject({ kdf: 'scrypt', n: 32768, r: 8, p: 1, alg: 'A256GCM' });
     expect(JSON.stringify(file)).not.toContain(FAKE_IPTV_PASSWORD);
+    expect(JSON.stringify(file)).not.toContain(FAKE_IPTV_USER);
     expect(a.logs.join('')).not.toContain(CLAVE);
     const aad = `ace-copia|${BACKUP_SCHEMA_VERSION}|xtream`;
     expect(await openWithPassphrase(CLAVE, aad, secret!)).toEqual({
@@ -258,8 +261,11 @@ describe('restaurar', () => {
     /* La IPTV, guardada con las claves de AQUÍ, sincroniza y el re-emparejado
        lleva el favorito de la otra instalación a su canal. */
     const config = b.service.backupConfig();
-    expect(config).toMatchObject({ kind: 'xtream', name: 'Casa', username: FAKE_IPTV_USER });
-    expect(config?.secrets).toMatchObject({ password: FAKE_IPTV_PASSWORD });
+    expect(config).toMatchObject({ kind: 'xtream', name: 'Casa' });
+    expect(config?.secrets).toMatchObject({
+      username: FAKE_IPTV_USER,
+      password: FAKE_IPTV_PASSWORD,
+    });
     await b.service.idle();
     await b.service.relinkIdle();
     const tele = b.service.searchChannels('telecinco').channels[0]?.id as string;
@@ -283,8 +289,9 @@ describe('restaurar', () => {
       protected: false,
       kind: 'xtream',
       server: SERVER,
-      username: FAKE_IPTV_USER,
     });
+    /* Ni el usuario: la web lo pide junto a la contraseña. */
+    expect(JSON.stringify(done)).not.toContain(FAKE_IPTV_USER);
     expect(b.service.backupConfig()).toBeNull();
     expect(b.state.get().favorites).toHaveLength(2);
     /* Protegida pero sin dar la clave: igual, pendiente. */

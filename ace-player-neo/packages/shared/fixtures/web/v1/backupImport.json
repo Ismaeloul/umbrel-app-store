@@ -35,7 +35,6 @@
     "name": "Casa",
     "host": "proveedor.example:8080",
     "server": "http://proveedor.example:8080",
-    "username": "usuario",
     "relinkItems": 1
   },
   "browser": { "theme": "oscuro", "transparency": "normal", "playbackMode": "balanced" }

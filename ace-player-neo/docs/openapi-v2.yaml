@@ -2804,12 +2804,6 @@ paths:
                               - type: string
                                 maxLength: 2048
                               - type: "null"
-                          username:
-                            anyOf:
-                              - type: string
-                                minLength: 1
-                                maxLength: 200
-                              - type: "null"
                           secret:
                             anyOf:
                               - type: object
@@ -2867,7 +2861,6 @@ paths:
                           - enabled
                           - host
                           - server
-                          - username
                           - secret
                         additionalProperties: false
                       - type: "null"
@@ -3360,12 +3353,6 @@ paths:
                               - type: string
                                 maxLength: 2048
                               - type: "null"
-                          username:
-                            anyOf:
-                              - type: string
-                                minLength: 1
-                                maxLength: 200
-                              - type: "null"
                           secret:
                             anyOf:
                               - type: object
@@ -3423,7 +3410,6 @@ paths:
                           - enabled
                           - host
                           - server
-                          - username
                           - secret
                         additionalProperties: false
                       - type: "null"
@@ -3720,11 +3706,6 @@ paths:
                           - type: string
                             maxLength: 2048
                           - type: "null"
-                      username:
-                        anyOf:
-                          - type: string
-                            maxLength: 200
-                          - type: "null"
                       relinkItems:
                         type: integer
                         minimum: 0
@@ -3736,7 +3717,6 @@ paths:
                       - name
                       - host
                       - server
-                      - username
                       - relinkItems
                     additionalProperties: false
                   browser:

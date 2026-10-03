@@ -38,7 +38,6 @@ const preview = (extra: Partial<BackupImportResponse> = {}): BackupImportRespons
     name: null,
     host: null,
     server: null,
-    username: null,
     relinkItems: 0,
   },
   browser: null,
@@ -80,7 +79,7 @@ describe('copia de seguridad (modelo)', () => {
     );
     expect(
       doneMessage(preview({ iptv: { ...iptv, action: 'needs_secret', kind: 'xtream' } })),
-    ).toBe('Copia restaurada. Falta la contraseña de tu IPTV.');
+    ).toBe('Copia restaurada. Falta el usuario y la contraseña de tu IPTV.');
     expect(doneMessage(preview({ mode: 'merge' }))).toBe('Copia combinada con lo que tenías.');
   });
 
