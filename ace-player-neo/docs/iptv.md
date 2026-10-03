@@ -4534,8 +4534,12 @@ investigación).
   guía sin un solo partido daba `iptv_empty`; ahora vale para la parrilla.
 - **Fallos aislados:** si el disco falla al escribir la completa, se deja de escribir, se termina la de partidos y la
   completa se deshace (`fullGuideFailed`). Abortar (guardar, pausar, eliminar, apagar) deshace la completa a medias.
-- **Respaldo de Xtream** (`get_short_epg`, 40 canales deportivos): también se escribe en la completa con
-  `source: 'short'`, y la API lo dice con `partial: true`.
+- **Respaldo de Xtream** (`get_short_epg`, 40 canales deportivos): entra, como antes, si la guía falla **o llega sin
+  un solo partido** (la ventana de partidos sale entonces de ahí, y la guía completa del XMLTV, si la hay, se queda).
+  Si no hay guía completa del XMLTV, el respaldo se escribe en ella con `source: 'short'`, y la API lo dice con
+  `partial: true`.
+- **Con dos URL de guía** (M3U con dos `url-tvg`), vale la primera que traiga algo (partidos o guía completa); no se
+  mezclan.
 - **Primera vez tras la 0.9.0:** con `guia.enc` guardada y sin `guia.db`, la guía cuenta como vieja y se descarga a los
   15 s del arranque (con alguien viendo, se retrasa como siempre).
 - **Sello:** nunca repite el de la guía que hay (`builtAt` + 1 si coinciden).
