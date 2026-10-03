@@ -209,6 +209,11 @@ describe('la IPTV de ejemplo de la demo (§16.10)', () => {
     expect(root.categories?.[0]?.name).toBe('ES | DEPORTES');
     expect(root.categories?.at(-1)?.id).toBe('none');
     expect(root.facets?.type.some((v) => v.value === 'adultos')).toBe(true);
+    /* Los recuentos en los que se apoya el E2E de la pestaña (iptv-pestana.spec.ts). */
+    expect(root.categories).toHaveLength(20);
+    const count = (name: string) => root.categories?.find((c) => c.name === name)?.count;
+    expect(count('ES | DEPORTES')).toBe(222);
+    expect(count('ES | DAZN')).toBe(15);
   });
 
   it('una categoría por páginas: recorrerlas da `total` filas sin repetir', () => {

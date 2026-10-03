@@ -1,7 +1,7 @@
 /* `iptvBrowse` en el modo demo (docs/iptv.md §16.10): la «IPTV de ejemplo»
    (812 canales, como dice Ajustes → IPTV en la demo) con categorías y nombres
    como los de una lista real («ES | DAZN» con «DAZN F1» y «DAZN ACB 1…7»,
-   «ES | LALIGA» con «LALIGA+ PPV 1…9», «UK | SPORTS», «AR | BEIN», «XXX |
+   «ES | LALIGA» con «LALIGA+ PPV 1…5», «UK | SPORTS», «AR | BEIN», «XXX |
    ADULTS»…), para que la pestaña se pueda usar y probar sin servidor.
 
    Hace lo mismo que el servidor, a lo sencillo (812 canales): categoría,
@@ -112,7 +112,7 @@ const SEEDS: Seed[] = [
     language: ['es'],
     type: ['deportes'],
     channels: [
-      ...numbered('LALIGA+ PPV', 9, ['futbol'], HD),
+      ...numbered('LALIGA+ PPV', 5, ['futbol'], HD),
       ['LA LIGA TV BAR', ['futbol'], FHD],
       ['LaLiga TV Hypermotion', ['futbol'], HD],
       ['LaLiga TV Hypermotion 2', ['futbol'], HD],

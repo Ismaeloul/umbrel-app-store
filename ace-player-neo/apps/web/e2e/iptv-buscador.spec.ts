@@ -266,12 +266,13 @@ test(
     await conectarXtream(page);
     await buscar(page, 'dazn 1');
     const filas = enTuIptv(page).getByRole('link', { name: 'DAZN 1', exact: true });
-    // Una fila por canal: la de España (5 variantes) y la de Alemania; también la de UK (sin calidad).
+    // Una fila por canal: la de España (5 variantes) y la de Alemania; también la de UK (sin calidad). Entre las
+    // de fuera, la mejor calidad primero (docs/buscador.md): Alemania (720p) antes que UK.
     await expect(filas).toHaveCount(3);
     const espana = filas.nth(0).locator('xpath=ancestor::article[1]');
     await expect(espana.locator('.ch__tag')).toHaveText(['4K', '1080p', '720p', 'SD']);
     await expect(espana.getByText('IPTV', { exact: true })).toBeVisible();
-    const alemania = filas.nth(2).locator('xpath=ancestor::article[1]');
+    const alemania = filas.nth(1).locator('xpath=ancestor::article[1]');
     await expect(alemania.locator('.ch__tag')).toHaveText(['DE', '720p']);
     // Tocarla: arranca sola la mejor (1080p) y el panel enseña 4 carteles IPTV en orden.
     await filas.nth(0).click();
