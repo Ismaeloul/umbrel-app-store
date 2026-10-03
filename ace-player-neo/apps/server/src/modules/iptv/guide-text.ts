@@ -112,7 +112,7 @@ export function parseEpisode(nums: readonly XmltvEpisodeNum[] | undefined): Epis
     if (parsed) return parsed;
   }
   const shown = nums.find((num) => num.system === 'onscreen' || num.system === '');
-  const text = shown ? cleanGuideText(shown.value, 60) : '';
+  const text = shown ? cleanGuideText(shown.value, 59) : '';
   return text ? { season: null, episode: null, text } : NO_EPISODE;
 }
 

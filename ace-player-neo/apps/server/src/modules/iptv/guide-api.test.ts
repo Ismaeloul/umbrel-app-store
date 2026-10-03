@@ -23,6 +23,8 @@ import { Catalog, channelIdOf, nameQuality, type RawChannel } from './catalog.js
 import { GuideApi, type GuideSourceStatus } from './guide-api.js';
 import { GuideArt } from './guide-art.js';
 import { GuideStore, type GuideProgrammeInput, type GuideReader } from './guide-db.js';
+import { guideInputOf } from './guide-full.js';
+import type { XmltvProgramme } from './xmltv.js';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -373,6 +375,86 @@ describe('iptvGuideProgrammes y iptvGuideProgramme', () => {
     });
     expect(await code(() => r.api.programme(`${g}.1`, all.version))).toBe('not_found');
     expect(await code(() => r.api.programme(id, 'otro'))).toBe('guide_stale');
+  });
+
+  it('una guía hostil (todo larguísimo) da respuestas que siempre caben en el contrato', async () => {
+    const dir = tempDir('ace-guia-');
+    const store = new GuideStore(path.join(dir, 'guia.db'), dir, logger);
+    cleanups.push(() => store.close());
+    const writer = store.begin({ providerId: 'p_prueba01', builtAt: NOW, source: 'xmltv', logger });
+    const long = (n: number) => 'palabra '.repeat(n);
+    const programme: XmltvProgramme = {
+      channel: 'la1.es',
+      start: at(-1),
+      stop: at(1),
+      naiveTime: false,
+      title: long(80),
+      subTitle: long(80),
+      desc: long(400),
+      categories: Array.from({ length: 12 }, (_, i) => `${i} ${long(20)}`),
+      previouslyShown: true,
+      isNew: true,
+      live: true,
+      clump: null,
+      episodeNums: [{ system: 'onscreen', value: long(30) }],
+      date: '1999',
+      rating: long(10),
+      stars: '4/5',
+      directors: Array.from({ length: 6 }, (_, i) => `${i} ${long(20)}`),
+      actors: Array.from({ length: 12 }, (_, i) => `${i} ${long(20)}`),
+      icon: 'https://img.example/p.jpg',
+    };
+    writer.add(guideInputOf(programme, 'la1.es', 0, () => true) as GuideProgrammeInput);
+    for (let index = 0; index < 3; index += 1) {
+      writer.add(
+        guideInputOf(
+          {
+            ...programme,
+            start: at(1 + index),
+            stop: at(2 + index),
+            clump: { index: 1, total: 2 },
+          },
+          'la1.es',
+          0,
+          () => true,
+        ) as GuideProgrammeInput,
+      );
+    }
+    await writer.finish();
+    const reader = store.install('p_prueba01') as GuideReader;
+    const api = new GuideApi({
+      activeCatalog: () => catalog(),
+      reader: () => reader,
+      status: () => ({
+        enabled: true,
+        providerName: 'Casa',
+        hasGuideSource: true,
+        lastGuide: null,
+        fullGuideFailed: false,
+      }),
+      favoriteChannels: () => [],
+      qualityOf: nameQuality,
+      now: () => NOW,
+      art: new GuideArt({
+        net: {} as NetClient,
+        clock: new FakeClock(NOW),
+        logger,
+        policy: () => ({ lan: false }),
+      }),
+    });
+    const all = await api.channels({ scope: 'all' });
+    expect(IptvGuideResponseSchema.safeParse(all).success).toBe(true);
+    const g = all.channels[0]?.guide as number;
+    const slice = api.programmes({ v: all.version, ch: String(g), from: at(-2), to: at(6) });
+    expect(IptvGuideProgrammesResponseSchema.safeParse(slice).success).toBe(true);
+    for (const item of slice.channels[0]?.programmes ?? []) {
+      const detail = api.programme(item.id, all.version);
+      const parsed = IptvGuideProgrammeDetailSchema.safeParse(detail);
+      expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
+    }
+    expect(
+      IptvGuideNowResponseSchema.safeParse(api.now({ ids: all.channels[0]?.id as string })).success,
+    ).toBe(true);
   });
 });
 

@@ -89,6 +89,8 @@ describe('temporada y episodio', () => {
       episode: null,
       text: 'Especial de Navidad',
     });
+    /* El texto tal cual cabe en el contrato (60 con el «…»). */
+    expect(on('palabra '.repeat(30)).text?.length).toBeLessThanOrEqual(60);
     /* xmltv_ns manda sobre onscreen. */
     expect(
       parseEpisode([
