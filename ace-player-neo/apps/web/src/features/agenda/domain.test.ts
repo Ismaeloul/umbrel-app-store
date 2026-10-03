@@ -206,6 +206,37 @@ describe('bloques por competición', () => {
     expect(featuredMatch([c], NOW, {}, null)?.id).toBe(c.id);
     expect(laterMatches([a, b, c], NOW, {}, null).map((x) => x.id)).toEqual([c.id]);
   });
+  it('en «Todos», primero lo tuyo y la cantera al final (fix/agenda-filtrado)', () => {
+    const futures = matchAt(10, {
+      competition: 'LaLiga Futures',
+      home: 'FC Barcelona Academy',
+      away: 'Real Betis Academy',
+    });
+    const nations = matchAt(20, {
+      competition: 'UEFA Nations League',
+      home: 'Croacia',
+      away: 'Portugal',
+    });
+    const laliga = matchAt(90, {
+      competition: 'La Liga EA Sports',
+      home: 'FC Barcelona',
+      away: 'Getafe',
+    });
+    const prefs = { leagues: ['LaLiga'], teams: ['Barcelona'], nationalities: ['España'] };
+    expect(
+      groupByCompetition([futures, nations, laliga], NOW, {}, prefs).map((g) => g.competition),
+    ).toEqual(['La Liga EA Sports', 'UEFA Nations League', 'LaLiga Futures']);
+    expect(
+      groupByCompetition([futures, nations, laliga], NOW, {}, null).map((g) => g.competition),
+    ).toEqual(['UEFA Nations League', 'La Liga EA Sports', 'LaLiga Futures']);
+    // el escenario no se lo lleva la cantera aunque empiece antes
+    expect(featuredMatch([futures, laliga], NOW, {}, null)?.id).toBe(laliga.id);
+    expect(featuredMatch([futures], NOW, {}, null)?.id).toBe(futures.id);
+    // «Para ti» con los gustos del dueño: solo LaLiga
+    expect(visibleMatches([futures, nations, laliga], 'forYou', prefs).map((m) => m.id)).toEqual([
+      laliga.id,
+    ]);
+  });
 });
 
 describe('marcadores (regla 29)', () => {

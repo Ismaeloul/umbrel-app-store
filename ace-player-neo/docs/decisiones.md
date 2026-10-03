@@ -340,3 +340,40 @@ conservador). Todas se pueden revertir.
   `pairedBy` no se guarda en `devices.json` (esquema estricto: la 0.8.0 no lo
   leería y volver atrás dejaría a todos los iPhone sin emparejar); la
   revocación en cascada queda como propuesta (R-14 de `seguridad.md`).
+
+## D23. La agenda filtra por tus gustos de verdad (fix/agenda-filtrado)
+
+- **Qué pasaba** (2026-10-02, parón de selecciones): con LaLiga, el Barça y
+  España, «Para ti» decía que no había nada hoy ni mañana y el viernes
+  enseñaba LaLiga Futures (torneo de cantera, equipos «… Academy»). La regla
+  de la selección comparaba competiciones con «contiene»: "laliga futures"
+  contiene "laliga". Igual colaban el «Europeo Sub-21» («spain u21» empieza
+  por «spain ») y el «Amistoso Femenino» de España.
+- **Qué se hace**: lo juvenil, filial y femenino (`footballTeamIsVariant`,
+  `footballCompetitionIsMinor` en `@ace/shared`) solo entra si lo sigues por
+  su nombre. La selección es la absoluta masculina; sus competiciones se
+  comparan por nombre exacto o alias. Los favoritos casan por `idTeam` de
+  TheSportsDB cuando el partido trae escudo (`FAVORITE_TEAM_IDS`:
+  Barcelona = 133739); las preferencias siguen siendo texto (sin migrar el
+  estado: el id se deduce de la clave). En «Todos», los bloques con algo tuyo
+  van primero y la cantera al final; el escenario no destaca la cantera.
+  Diferencia aceptada con la 0.6.59 (el contraste la lista a propósito).
+  «Atlètic» solo cuenta al final del nombre («Atlètic Lleida» es un primer
+  equipo), «Willem II» no es filial y la «F» suelta de un «Grupo F» no es la
+  Liga F.
+- **iPhone**: `apps/ios/Sources/Core/Dominio/ParaTi.swift` porta las mismas
+  reglas (variantes, competiciones menores, `idTeam` del escudo) y
+  `scripts/generar-vectores.mjs` añade los casos del parón (LaLiga Futures,
+  Sub-21, Barcelona SC con su escudo…); la CI de iOS exige que el JSON esté al
+  día y que Swift dé lo mismo.
+- **TheSportsDB** (último recurso, tras futbolenlatv y la EPG): con la clave
+  gratuita `123`, `eventstv.php` da 1-2 emisiones al día, `eventsday.php` 3
+  partidos y `eventsnextleague.php`/`eventsseason.php` 1 y 15; pero
+  `eventsround.php` da la jornada entera. Ahora se pide por competición
+  (`THESPORTSDB_LEAGUES`, ids comprobados: LaLiga 4335, Hypermotion 4400,
+  Copa del Rey 4483, Supercopa 4511, Champions 4480, Europa 4481,
+  Conference 5071; las europeas solo con equipos españoles) y la selección
+  (`eventsnext.php?id=133909`). Unas 25-35 peticiones cada 30 min, en
+  tandas de 4 competiciones, a la vez que `eventstv.php` y con 10 s por
+  petición, para que una competición lenta no agote el plazo global de 60 s;
+  una competición caída solo marca la agenda `partial`.

@@ -162,7 +162,10 @@ export default function Agenda({ active }: ViewProps) {
     [dayMatches, mode, preferences],
   );
   const { scores } = useScores(dayMatches, now, active);
-  const groups = useMemo(() => groupByCompetition(matches, now, scores), [matches, now, scores]);
+  const groups = useMemo(
+    () => groupByCompetition(matches, now, scores, preferences),
+    [matches, now, scores, preferences],
+  );
   const dayEntries = useMemo(
     () =>
       days.map((item) => ({

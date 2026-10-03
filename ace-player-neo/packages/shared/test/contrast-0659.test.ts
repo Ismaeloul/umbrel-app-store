@@ -19,6 +19,7 @@ import {
   esFamiliaDe,
   footballMatchHighlighted,
   footballMatchInScope,
+  footballMatchIsMinor,
   footballTeamKey,
   leagueMatches,
   matchIsLaLigaHypermotion,
@@ -285,6 +286,8 @@ describe('contraste con index.html ("Para ti")', () => {
     { leagues: ['Bundesliga'], teams: ['Sevilla'], nationalities: ['Italia'] },
   ];
 
+  const CONTIENE_SOLO = ['Serie A Brasil', 'Premier League Ucrania', '2. Bundesliga'];
+
   it('footballMatchInScope y footballMatchHighlighted en una rejilla de partidos y gustos', () => {
     const diferencias: string[] = [];
     for (const competition of competiciones) {
@@ -299,8 +302,16 @@ describe('contraste con index.html ("Para ti")', () => {
           };
           for (const prefs of preferencias) {
             const etiqueta = `${competition} | ${home}-${away} | ${canal} | ${JSON.stringify(prefs)}`;
-            if (footballMatchInScope(match, prefs) !== original.inScope(match, prefs))
-              diferencias.push(`alcance ${etiqueta}`);
+            const nuevo = footballMatchInScope(match, prefs);
+            const antiguo = original.inScope(match, prefs);
+            /* Diferencias buscadas (fix/agenda-filtrado): la selección ya no
+               trae su Sub-21 ni las ligas que solo «contienen» el nombre
+               ("serie a" dentro de "Serie A Brasil"). Nunca al revés. */
+            const intencionada =
+              antiguo &&
+              !nuevo &&
+              (footballMatchIsMinor(match) || CONTIENE_SOLO.includes(competition));
+            if (nuevo !== antiguo && !intencionada) diferencias.push(`alcance ${etiqueta}`);
             if (footballMatchHighlighted(match, prefs) !== original.highlighted(match, prefs))
               diferencias.push(`resaltado ${etiqueta}`);
           }

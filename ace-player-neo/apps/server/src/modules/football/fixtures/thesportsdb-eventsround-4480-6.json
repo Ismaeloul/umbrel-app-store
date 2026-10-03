@@ -1,0 +1,61 @@
+{
+  "events": [
+    {
+      "idEvent": "2450001",
+      "strTimestamp": "2026-01-02T20:00:00",
+      "strEvent": "Galatasaray vs Barcelona",
+      "strSport": "Soccer",
+      "idLeague": "4480",
+      "strLeague": "UEFA Champions League",
+      "strSeason": "2025-2026",
+      "strHomeTeam": "Galatasaray",
+      "strAwayTeam": "Barcelona",
+      "intRound": "6",
+      "dateEvent": "2026-01-02",
+      "strTime": "20:00:00",
+      "idHomeTeam": "133947",
+      "idAwayTeam": "133739",
+      "strCountry": "",
+      "strStatus": "NS",
+      "strPostponed": "no"
+    },
+    {
+      "idEvent": "2450002",
+      "strTimestamp": "2026-01-02T20:00:00",
+      "strEvent": "Lens vs Sporting CP",
+      "strSport": "Soccer",
+      "idLeague": "4480",
+      "strLeague": "UEFA Champions League",
+      "strSeason": "2025-2026",
+      "strHomeTeam": "Lens",
+      "strAwayTeam": "Sporting CP",
+      "intRound": "6",
+      "dateEvent": "2026-01-02",
+      "strTime": "20:00:00",
+      "idHomeTeam": "133714",
+      "idAwayTeam": "133963",
+      "strCountry": "",
+      "strStatus": "NS",
+      "strPostponed": "no"
+    },
+    {
+      "idEvent": "2450003",
+      "strTimestamp": "2025-08-04T18:00:00",
+      "strEvent": "Ferencvaros vs Ludogorets",
+      "strSport": "Soccer",
+      "idLeague": "4480",
+      "strLeague": "UEFA Champions League",
+      "strSeason": "2025-2026",
+      "strHomeTeam": "Ferencvaros",
+      "strAwayTeam": "Ludogorets",
+      "intRound": "6",
+      "dateEvent": "2025-08-04",
+      "strTime": "18:00:00",
+      "idHomeTeam": "133925",
+      "idAwayTeam": "135290",
+      "strCountry": "",
+      "strStatus": "NS",
+      "strPostponed": "no"
+    }
+  ]
+}

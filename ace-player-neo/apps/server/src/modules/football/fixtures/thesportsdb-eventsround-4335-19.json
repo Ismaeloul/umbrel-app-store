@@ -1,0 +1,23 @@
+{
+  "events": [
+    {
+      "idEvent": "2440111",
+      "strTimestamp": "2026-01-06T20:00:00",
+      "strEvent": "Real Betis vs Barcelona",
+      "strSport": "Soccer",
+      "idLeague": "4335",
+      "strLeague": "Spanish La Liga",
+      "strSeason": "2025-2026",
+      "strHomeTeam": "Real Betis",
+      "strAwayTeam": "Barcelona",
+      "intRound": "19",
+      "dateEvent": "2026-01-06",
+      "strTime": "20:00:00",
+      "idHomeTeam": "134221",
+      "idAwayTeam": "133739",
+      "strCountry": "Spain",
+      "strStatus": "NS",
+      "strPostponed": "no"
+    }
+  ]
+}

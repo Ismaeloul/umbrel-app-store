@@ -11,6 +11,7 @@ import {
   HexColorSchema,
   NATIONALITY_RULES,
   cleanTitle,
+  footballTeamIsVariant,
   footballTeamKey,
   normalizePreferenceKey,
 } from '@ace/shared';
@@ -144,7 +145,12 @@ export function badgeShort(value: unknown): string | null {
  */
 export function isReserveName(name: unknown): boolean {
   const key = normalizePreferenceKey(name);
-  return /(?:^|\s)(?:b|ii|iii|atletic|castilla|promesas|sub ?\d{2}|u\d{2}|femenino|femenil|women|juvenil)$/.test(
-    key,
+  /* La misma detección que «Para ti» (cantera «Academy», «Juvenil A»,
+     «Femení», «W»…), más la forma antigua por si acaso. */
+  return (
+    footballTeamIsVariant(name) ||
+    /(?:^|\s)(?:b|ii|iii|atletic|castilla|promesas|sub ?\d{2}|u\d{2}|femenino|femenil|women|juvenil)$/.test(
+      key,
+    )
   );
 }

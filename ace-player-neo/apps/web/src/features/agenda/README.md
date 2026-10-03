@@ -36,7 +36,10 @@ Para otras vistas:
 - **Rótulos de canal:** la tarjeta pinta 2 y «+n» (en 360 px no caben 8); el
   escenario y el centro de partido los pintan **todos** (regla 30).
 - **Orden:** bloques por competición y, dentro, directo → próximos → terminados,
-  cada tramo por hora (opción A). «Tu equipo» resalta y nunca reordena (regla 27).
+  cada tramo por hora (opción A). «Tu equipo» resalta y nunca reordena dentro
+  del bloque (regla 27). En «Todos» con gustos, los bloques con algo tuyo van
+  primero y los de cantera, filiales o femenino al final (D23); el escenario no
+  destaca un partido de cantera si hay otro.
 - **Reloj único de Madrid** también para «Hoy»/«Mañana» (contradicción 13).
 - **Refresco:** sin sondeo de la agenda (§3.1); caduca a los 10 min y se vuelve a
   pedir al volver a la pestaña. Los marcadores sí se consultan (8 s / 45 s y solo

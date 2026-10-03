@@ -71,7 +71,10 @@ export default function AgendaColumn({ route, active }: ViewProps) {
     [dayMatches, mode, preferences],
   );
   const { scores } = useScores(dayMatches, now, active);
-  const groups = useMemo(() => groupByCompetition(matches, now, scores), [matches, now, scores]);
+  const groups = useMemo(
+    () => groupByCompetition(matches, now, scores, preferences),
+    [matches, now, scores, preferences],
+  );
 
   const open = (match: FootballMatch) => {
     if (match.id === currentId) return;
