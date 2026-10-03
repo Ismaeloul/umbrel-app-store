@@ -276,18 +276,20 @@ const VIEWS = [
   },
   { name: 'sistema', search: '?vista=sistema&flag=sistema' },
   // Películas y series (docs/vod.md §12.11): con `?flag=cine`; en vivo solo
-  // salen si el servidor ya tiene películas y series.
-  { name: 'cine', search: '?vista=cine&flag=cine', ready: '.cine-grid' },
+  // salen si el servidor ya tiene películas y series. La portada va en filas
+  // (`.cine-row`); la rejilla (`.cine-grid`) es otra pantalla.
+  { name: 'cine', search: '?vista=cine&flag=cine', ready: '.cine-row .cine-card' },
   {
     name: 'cine-categoria',
     search: '?vista=cine&flag=cine',
-    ready: '.cine-grid',
+    ready: '.cine-row .cine-card',
     prepare: async (page) => {
-      // En el móvil y la tableta, un chip de la fila; en escritorio, la lista del panel.
+      // «Ver todo» de la fila de la categoría: abre su rejilla.
       await page
-        .getByRole('button', { name: /^VOD \| 4K/ })
+        .getByRole('button', { name: /^Ver todo: VOD \| 4K/ })
         .first()
         .click();
+      await page.waitForSelector('.cine-grid .cine-card', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
   },
@@ -295,19 +297,19 @@ const VIEWS = [
   {
     name: 'cine-pelicula',
     search: '?vista=cine&flag=cine',
-    ready: '.cine-grid',
+    ready: '.cine-row .cine-card',
     prepare: async (page) => {
-      await page.locator('.cine-grid .cine-card').first().click();
-      await page.waitForSelector('.cine-ficha__title', { timeout: 10_000 });
+      await page.locator('.cine-row .cine-card').first().click();
+      await page.waitForSelector('.cine-hero__title', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
   },
   {
     name: 'cine-serie',
     search: '?vista=cine&flag=cine&cine=series',
-    ready: '.cine-grid',
+    ready: '.cine-row .cine-card',
     prepare: async (page) => {
-      await page.locator('.cine-grid .cine-card').first().click();
+      await page.locator('.cine-row .cine-card').first().click();
       await page.waitForSelector('.cine-episodes', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },

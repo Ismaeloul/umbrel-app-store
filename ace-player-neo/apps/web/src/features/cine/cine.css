@@ -880,7 +880,13 @@
   .cine-hero__bg {
     left: 0;
     right: 0;
-    border-radius: var(--r-xl);
+    /* Solo la esquina de arriba a la derecha se ve (lo demás lo funde la máscara):
+       redondear las otras dejaba un hilo en la esquina de la izquierda. */
+    border-radius: 0 var(--r-xl) 0 0;
+  }
+  .cine-hero[data-bg='blur'] .cine-hero__bg,
+  .cine-hero[data-bg='tone'] .cine-hero__bg {
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
   }
   /* La imagen nace arriba a la derecha y se funde hacia la izquierda (donde
      van el cartel y los textos) y hacia abajo. */
