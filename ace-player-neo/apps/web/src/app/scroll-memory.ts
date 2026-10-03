@@ -14,6 +14,7 @@ const positions = new Map<string, number>();
  */
 export function scrollKey(route: Route): string {
   if (route.vista === 'cine') return `cine:${route.id ?? 'portada'}`;
+  if (route.vista === 'sala') return `sala:${route.id}`;
   return route.vista === 'partido' ? formatVista(route) : route.vista;
 }
 

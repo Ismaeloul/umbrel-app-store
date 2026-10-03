@@ -25,6 +25,7 @@ export const FEATURE_FOLDER: Record<Exclude<Vista, 'sistema'>, string> = {
   buscar: 'buscar',
   ajustes: 'ajustes',
   partido: 'partido',
+  sala: 'sala',
 };
 
 function find<T>(modules: Record<string, Loader<T>>, path: string): Loader<T> | null {

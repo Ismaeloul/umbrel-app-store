@@ -1,30 +1,20 @@
-/* Reproducir una película o un episodio desde Películas y series.
+/* Reproducir una película o un episodio desde Películas y series (docs/vod.md
+   §12.7): la ficha, «Seguir viendo» y los episodios llaman aquí. Pide al
+   reproductor (player/api.ts, diminuto: no arrastra hls.js) que lo abra y
+   lleva al escenario (`?vista=sala/<id>`, §12.8), como un partido.
 
-   Hasta VOD-6 (docs/vod.md §16: el reproductor en modo VOD, `playVod()` de
-   player/api.ts, la vista `sala` y el progreso al reproducir) esto es un
-   aviso «Próximamente»: la ficha, «Seguir viendo» y los episodios ya llaman
-   aquí, así que el reproductor solo tendrá que cambiar este fichero.
-
-   `canPlayHevc()` es la misma prueba que hará el reproductor (§12.7) y aquí
+   `canPlayHevc()` es la misma prueba que hace el reproductor (§12.7) y aquí
    solo sirve para no ofrecer un «Reproducir» que seguro falla (§12.6). */
 
-import { notify } from '../../notices/index.ts';
-import { CINE_TEXT } from './texts.ts';
+import type { Navigate } from '../../app/router.tsx';
+import { playVod as playerPlayVod, vodRoute, type VodPlayRequest } from '../../player/api.ts';
 
-export interface VodPlayRequest {
-  /** Película o episodio (id sellado). */
-  id: string;
-  kind: 'movie' | 'episode';
-  title: string;
-  subtitle?: string | null;
-  seriesId?: string | null;
-  /** Segundos; ausente = el progreso guardado (0 = desde el principio). */
-  startS?: number;
-}
+export type { VodPlayRequest } from '../../player/api.ts';
 
-/** Hoy: el aviso de que llega en la siguiente versión. */
-export function playVod(_request: VodPlayRequest): void {
-  notify(CINE_TEXT.comingSoon, { tone: 'info', icon: 'info' });
+/** Abre la película o el episodio en el reproductor y, con `navigate`, va a su escenario. */
+export function playVod(request: VodPlayRequest, navigate?: Navigate): void {
+  if (!playerPlayVod(request)) return;
+  navigate?.(vodRoute(request.id.toLowerCase()));
 }
 
 let hevc: boolean | null = null;

@@ -62,14 +62,17 @@ function ContinueCard({ entry }: { entry: VodContinue }) {
         className="cine-continue__card press"
         aria-label={`${entry.title}. ${line}`}
         onClick={() =>
-          playVod({
-            id: entry.id,
-            kind: entry.kind,
-            title: entry.title,
-            subtitle: entry.subtitle,
-            seriesId: entry.seriesId,
-            ...(entry.isNext ? { startS: 0 } : {}),
-          })
+          playVod(
+            {
+              id: entry.id,
+              kind: entry.kind,
+              title: entry.title,
+              subtitle: entry.subtitle,
+              seriesId: entry.seriesId,
+              ...(entry.isNext ? { startS: 0 } : {}),
+            },
+            navigate,
+          )
         }
       >
         <span className="cine-continue__art" data-art={art?.art ?? 'none'}>

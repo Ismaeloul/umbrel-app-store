@@ -67,6 +67,7 @@ import {
   type StreamGrant,
   type StreamProtocol,
   type TimeRangesLike,
+  type VodGrant,
 } from '@ace/shared';
 import { api } from '../api/client.ts';
 import { isAbortError, isApiError } from '../api/errors.ts';
@@ -75,6 +76,7 @@ import { isDemo } from '../api/mode.ts';
 import { routeKey, queryClient } from '../api/query.ts';
 import { onSseEvent } from '../api/sse.ts';
 import { setPlayerPresence } from '../app/player-presence.ts';
+import type { Route } from '../app/routes.ts';
 import { shallowEqual } from '../lib/store.ts';
 import { recordWebLog } from '../lib/web-log.ts';
 import { notify as defaultNotify, type NotifyOptions } from '../notices/notify.ts';
@@ -94,6 +96,9 @@ import {
   type PlayOptions,
   type PlayOrigin,
   type SourceFailure,
+  type VodItem,
+  vodChannel,
+  vodRoute,
 } from './api.ts';
 import {
   ADVANCE_EPSILON_S,
@@ -142,6 +147,10 @@ import {
 } from './engines/index.ts';
 import type { StreamPosition } from './engines/types.ts';
 import { derivePhase, isEngaged, nextState, type ConnEvent, type ConnState } from './machine.ts';
+import { VodDriver, type VodHost } from './vod/driver.ts';
+import type { VodProgressSend } from './vod/progress.ts';
+import { VOD_TEXT, vodErrorAction, vodErrorText } from './vod/texts.ts';
+import { VOD_SEEK_STEP_S, VOD_SEEK_TIMEOUT_MS } from './vod/timeline.ts';
 
 /** Lo que el orquestador usa del <video> (el de verdad o uno falso en los tests). */
 export interface MediaElementLike extends MediaLike {
@@ -183,7 +192,45 @@ export interface RuntimeDeps {
   subscribe?: typeof onSseEvent;
   /** window/document para el ciclo de vida de la página (null en algún test). */
   lifecycle?: { window: Window; document: Document } | null;
+  /** Películas y series: guardar el progreso (por defecto, features/cine/data.ts cargado aparte). */
+  vodProgress?: VodProgressSend;
+  /**
+   * ¿Decodifica este navegador ese tipo? (`video/mp4; codecs="…"`). Con MSE,
+   * `MediaSource.isTypeSupported`; con HLS nativo (`native`), `canPlayType`.
+   */
+  supportsType?: (type: string, native: boolean) => boolean;
 }
+
+/** HEVC en fMP4 (docs/vod.md §9.11): `hevc=1` solo si el navegador lo decodifica. */
+export const HEVC_PROBE_TYPE = 'video/mp4; codecs="hvc1.1.6.L120.90"';
+/** Colchón antes de dar play() a una película: la lista es completa y el servidor va por delante. */
+export const VOD_INITIAL_BUFFER_S = 3;
+/** Plazo para ese colchón: tras pedirla, el servidor prepara el primer trozo (§9.12). */
+export const VOD_INITIAL_MAX_WAIT_MS = 45_000;
+/** Espera antes de la reconexión automática en la posición. */
+export const VOD_RECONNECT_DELAY_MS = 1_000;
+
+function supportsTypeDefault(type: string, native: boolean): boolean {
+  try {
+    if (!native) {
+      const MS = (globalThis as { MediaSource?: { isTypeSupported?(t: string): boolean } })
+        .MediaSource;
+      if (typeof MS?.isTypeSupported === 'function') return MS.isTypeSupported(type);
+    }
+    const video = globalThis.document?.createElement('video');
+    return Boolean(video?.canPlayType?.(type));
+  } catch {
+    return false;
+  }
+}
+
+/** El progreso VOD de verdad: el POST (y la demo) viven en features/cine/data.ts, cargado aparte. */
+const sendVodProgressDefault: VodProgressSend = async (id, body, options) => {
+  const data = await import('../features/cine/data.ts');
+  await data.postVodProgress(id, body, options);
+  // «Seguir viendo desde…» en la ficha y en la portada, al momento.
+  if (body.event !== 'tick') void data.invalidateAfterProgress(queryClient);
+};
 
 interface SourceAttempt {
   channel: PlayChannel & { hash: string };
@@ -234,6 +281,36 @@ interface Connection {
   pausedTicks: number;
   /** play() del vigilante desde que el cabezal avanzó por última vez (tope PAUSED_REPLAY_MAX). */
   pausedReplays: number;
+}
+
+/** Un intento nuevo con una fuente (P3/P25): sus contadores y sus métricas desde cero. */
+function newSourceAttempt(
+  channel: PlayChannel & { hash: string },
+  origin: PlayOrigin,
+): SourceAttempt {
+  return {
+    channel,
+    origin,
+    requestedAt: Date.now(),
+    startedAt: null,
+    arrancoSent: false,
+    finalSent: false,
+    lastSigueAt: 0,
+    reconnects: [],
+    lastRebufferNoticeAt: 0,
+    metrics: {
+      ttffMs: null,
+      remuxStartMs: null,
+      rebuffers: 0,
+      rebufferMs: 0,
+      reconnects: 0,
+      latencySum: 0,
+      latencyCount: 0,
+    },
+    metricsSent: false,
+    failed: false,
+    iptv: channel.iptv === true,
+  };
 }
 
 function newConnection(id: number, recovery: boolean, profile: PlaybackProfile): Connection {
@@ -422,8 +499,12 @@ export class PlayerRuntime {
   private readonly setPresence: typeof setPlayerPresence;
   private readonly onLibrary: (library: unknown) => void;
   private readonly log: (message: string, data?: unknown) => void;
+  private readonly sendVodProgress: VodProgressSend;
+  private readonly supportsType: (type: string, native: boolean) => boolean;
 
   private conn: ConnState = 'idle';
+  /** Una película o un episodio (docs/vod.md §12.7); null con el directo. */
+  private vod: VodDriver | null = null;
   private source: SourceAttempt | null = null;
   private connection: Connection | null = null;
   private connectionSeq = 0;
@@ -473,6 +554,9 @@ export class PlayerRuntime {
         });
       });
 
+    this.sendVodProgress = deps.vodProgress ?? sendVodProgressDefault;
+    this.supportsType = deps.supportsType ?? supportsTypeDefault;
+
     this.controller = new PlayerController(this.video, {
       isDemo: () => this.demo(),
       isActive: (key) => key === this.controllerKey(),
@@ -512,6 +596,13 @@ export class PlayerRuntime {
       case 'play':
         this.play(command.channel, command.options);
         break;
+      case 'play-vod':
+        this.playVod(command.item, {
+          route: command.route,
+          ...(command.startS !== undefined ? { startS: command.startS } : {}),
+          ...(command.audio !== undefined ? { audio: command.audio } : {}),
+        });
+        break;
       case 'stop':
         this.stop();
         break;
@@ -534,32 +625,17 @@ export class PlayerRuntime {
     this.endSource(current?.failed ? null : 'cambio de canal');
     this.clearReconnect();
     this.carry = null;
-    this.source = {
-      channel,
-      origin: options.origin ?? 'user',
-      requestedAt: Date.now(),
-      startedAt: null,
-      arrancoSent: false,
-      finalSent: false,
-      lastSigueAt: 0,
-      reconnects: [],
-      lastRebufferNoticeAt: 0,
-      metrics: {
-        ttffMs: null,
-        remuxStartMs: null,
-        rebuffers: 0,
-        rebufferMs: 0,
-        reconnects: 0,
-        latencySum: 0,
-        latencyCount: 0,
-      },
-      metricsSent: false,
-      failed: false,
-      iptv: channel.iptv === true,
-    };
+    // De una película a un canal: su última marca de progreso y su sesión fuera.
+    if (this.vod) {
+      this.endVod();
+      this.releaseSession('channel_change');
+    }
+    this.source = newSourceAttempt(channel, options.origin ?? 'user');
     this.waitingForEngine = false;
     this.lastStats = null;
     this.setState({
+      kind: 'live',
+      vod: null,
       channel,
       origin: this.source.origin,
       route,
@@ -580,9 +656,201 @@ export class PlayerRuntime {
     this.connect({ recovery: false });
   }
 
+  /**
+   * Una película o un episodio (docs/vod.md §12.7): suelta lo que sonara (el
+   * directo o el título anterior, con su última marca de progreso) y pide
+   * `vodStream`. El mismo título ya sonando y sin otra posición: no hace nada.
+   */
+  playVod(
+    item: VodItem,
+    options: { route?: Route; startS?: number; audio?: number } = {},
+    autoChain = 0,
+  ): void {
+    const route = options.route ?? vodRoute(item.id);
+    const current = this.vod;
+    if (
+      current &&
+      current.item.id === item.id &&
+      options.startS === undefined &&
+      options.audio === undefined &&
+      isEngaged(this.conn)
+    ) {
+      this.setState({ route });
+      this.setPresence({ active: true, route });
+      return;
+    }
+    this.endSource(this.source?.failed ? null : 'cambio de título');
+    this.clearReconnect();
+    this.carry = null;
+    if (current) this.endVod();
+    // Lo que sonaba se suelta YA: la única plaza del proveedor es para esto (§12.7).
+    if (this.session) {
+      this.endConnection();
+      this.releaseSession('channel_change');
+    }
+    const channel = vodChannel(item);
+    this.source = newSourceAttempt(channel, 'user');
+    this.vod = new VodDriver(this.vodHost(), item, {
+      ...(options.startS !== undefined ? { startS: options.startS } : {}),
+      ...(options.audio !== undefined ? { audio: options.audio } : {}),
+      autoChain,
+      send: this.sendVodProgress,
+    });
+    this.waitingForEngine = false;
+    this.lastStats = null;
+    this.setState({
+      kind: 'vod',
+      vod: this.vod.snapshot(),
+      channel,
+      origin: 'user',
+      route,
+      idleReason: null,
+      attempt: null,
+      started: false,
+      ttffMs: null,
+      stats: null,
+      streamSource: 'iptv',
+      live: IDLE_LIVE,
+      bufferAheadS: 0,
+      rebuffering: null,
+      demo: this.demo(),
+    });
+    this.setPresence({ active: true, route });
+    this.connect({ recovery: false });
+  }
+
+  /** Lo que el driver VOD usa del orquestador (vod/driver.ts). */
+  private vodHost(): VodHost {
+    return {
+      video: this.video,
+      demo: () => this.demo(),
+      playing: () => this.conn === 'activa' && this.controller.state.desiredPlaying,
+      seekMedia: (target) =>
+        this.controller.seekTo(target, { origin: 'timeline', timeoutMs: VOD_SEEK_TIMEOUT_MS }),
+      notify: (text, options) => this.notify(text, options),
+      publish: () => this.publishVod(),
+      playNext: (item, autoChain) => this.playVod(item, { route: vodRoute(item.id) }, autoChain),
+      idle: () => this.idleVod(),
+      leave: () => this.stop(),
+      demoEnded: () => {
+        this.controller.requestPause('ended');
+        this.vod?.onEnded();
+      },
+    };
+  }
+
+  /** El estado público de la película (posición, tarjeta del final…). */
+  private publishVod(): void {
+    if (this.vod) this.setState({ vod: this.vod.snapshot() });
+  }
+
+  /** Se deja la película: su última marca de progreso (`stop`) y sus temporizadores. */
+  private endVod(options: { keepalive?: boolean } = {}): void {
+    const vod = this.vod;
+    if (!vod) return;
+    this.vod = null;
+    vod.dispose(options);
+  }
+
+  /**
+   * «¿Sigues viendo?» sin respuesta en 60 s (§12.9): pausa y se suelta la
+   * sesión, para que la única plaza del proveedor no se quede ocupada toda
+   * la noche. «Reintentar» sigue donde iba.
+   */
+  private idleVod(): void {
+    const vod = this.vod;
+    if (!vod) return;
+    vod.cancelNextUp();
+    vod.retry();
+    this.endConnection();
+    this.releaseSession('user');
+    this.controller.reset();
+    this.resetVideo();
+    this.transition('agotado');
+    vod.fail('vod_idle', 'retry');
+    this.setState({
+      attempt: null,
+      idleReason: 'fallo',
+      message: VOD_TEXT.stillWatchingIdle,
+      rebuffering: null,
+      vod: vod.snapshot(),
+    });
+  }
+
+  // ---- Película: acciones de la interfaz (VodControls, teclado, Media Session) ----
+
+  /** ±10 s (varias pulsaciones seguidas, un salto). */
+  vodSeekBy(delta: number): void {
+    this.vod?.interacted();
+    if (this.conn !== 'activa' && !(this.demo() && this.vod?.grant)) return;
+    this.vod?.seekBy(delta);
+  }
+
+  /** La barra, al soltar; Media Session `seekto`. */
+  vodSeekTo(target: number): void {
+    this.vod?.interacted();
+    if (this.conn !== 'activa' && !(this.demo() && this.vod?.grant)) return;
+    void this.vod?.seekTo(target);
+  }
+
+  /** «Siguiente episodio» (botón, N, Media Session) o «Ver ahora» en la tarjeta. */
+  vodNext(): void {
+    this.vod?.interacted();
+    this.vod?.goNext(false);
+  }
+
+  /** «Ver créditos». */
+  vodWatchCredits(): void {
+    this.vod?.watchCredits();
+  }
+
+  /** «¿Sigues viendo?» → «Seguir viendo». */
+  vodKeepWatching(): void {
+    this.vod?.keepWatching();
+  }
+
+  /** «¿Sigues viendo?» → «Salir». */
+  vodLeave(): void {
+    this.vod?.leave();
+  }
+
+  /** «Ver de nuevo» (película terminada). */
+  vodReplay(): void {
+    const vod = this.vod;
+    if (!vod) return;
+    vod.interacted();
+    if (this.conn === 'activa') {
+      vod.replay();
+      void this.controller.requestPlay('replay');
+      return;
+    }
+    this.playVod(vod.item, { startS: 0 });
+  }
+
+  /** Otra pista de audio: se reabre en la posición con ella (y se recuerda, §10.4). */
+  vodSetAudio(index: number): void {
+    const vod = this.vod;
+    const track = vod?.grant?.vod.audio.find((entry) => entry.index === index);
+    if (!vod || !track || index === vod.grant?.vod.audioIndex) return;
+    vod.progress.audio(vod.positionS, vod.durationS, track.lang);
+    this.playVod(vod.item, { startS: vod.positionS, audio: index });
+  }
+
+  /** Alguien ha tocado algo: no es un maratón desatendido (§12.9). */
+  vodInteraction(): void {
+    this.vod?.interacted();
+  }
+
+  /** Solo para los tests. */
+  vodDriver(): VodDriver | null {
+    return this.vod;
+  }
+
   stop(reason: IdleReason = 'detenido'): void {
     const hadSource = this.source !== null;
     this.clearReconnect();
+    // Una película: su última marca de progreso («Seguir viendo desde…»).
+    this.endVod();
     this.endSource(reason === 'traspasado' ? 'traspasado a otro dispositivo' : 'detenida');
     this.endConnection();
     if (reason !== 'traspasado') this.releaseSession('user');
@@ -611,6 +879,8 @@ export class PlayerRuntime {
       bufferAheadS: 0,
       rebuffering: null,
       nerdOpen: false,
+      kind: 'live',
+      vod: null,
     });
     this.setPresence({ active: false, immersive: false });
   }
@@ -623,12 +893,17 @@ export class PlayerRuntime {
     source.failed = false;
     source.finalSent = false;
     this.clearReconnect();
+    // Una película sigue en la posición guardada, con su reconexión otra vez.
+    this.vod?.retry();
+    this.publishVod();
     this.setPresence({ active: true });
     this.connect({ recovery: source.startedAt !== null });
   }
 
   private changeMode(mode: PlaybackMode): void {
     if (!this.source || !isEngaged(this.conn)) return;
+    // Una película no tiene modos de directo (§12.7).
+    if (this.vod) return;
     // P11: en iPhone el remux no cambia con el modo; reconectar solo cortaría.
     if (this.connection?.engineKind === 'native' || this.demo()) return;
     this.log(`Modo ${mode}: se reengancha el canal con el perfil nuevo`);
@@ -684,6 +959,8 @@ export class PlayerRuntime {
 
   /** Mide el directo ahora: ventana, borde útil (con colchón de seguridad) y retraso. */
   measureLive(): LiveMeasure | null {
+    // Una película no tiene directo: su línea de tiempo la lleva el driver.
+    if (this.vod) return null;
     const media = this.video;
     const window = readSeekWindow(media) ?? fallbackRangeWindow(media.buffered);
     if (!window) return null;
@@ -703,6 +980,7 @@ export class PlayerRuntime {
   /** Botón DIRECTO (inventario §8.2, textos de index.html:5038-5056). */
   async goLive(): Promise<CommandResult> {
     if (!this.source) return { ok: false, reason: 'inactive' };
+    if (this.vod) return { ok: false, reason: 'vod' };
     if (this.demo()) {
       const result = await this.controller.goLive(null);
       this.notify('Ya estás en el directo (en demo no hay retardo)', {
@@ -771,6 +1049,11 @@ export class PlayerRuntime {
   /** −30 s para repetir la jugada (B-091, index.html:5061-5074). */
   async back(seconds = BACK_SECONDS): Promise<CommandResult> {
     if (!this.source) return { ok: false, reason: 'inactive' };
+    // En una película, «atrás» son 10 s (J, ←, Media Session).
+    if (this.vod) {
+      this.vodSeekBy(-VOD_SEEK_STEP_S);
+      return { ok: true, reason: 'vod' };
+    }
     if (this.demo()) {
       this.notify('En la demo no hay imagen guardada que repetir', { kind: 'signal' });
       return { ok: false, reason: 'demo' };
@@ -866,6 +1149,10 @@ export class PlayerRuntime {
     this.transition(this.conn === 'reconectando' ? 'reintentar' : 'solicitar');
     this.controller.setSession(this.controllerKey());
     this.resetVideo();
+    if (this.vod) {
+      this.connectVod(this.vod, connection, recovery, freshSession);
+      return;
+    }
     const iptv = this.isIptvSource();
     this.setState({
       message: iptv
@@ -929,7 +1216,124 @@ export class PlayerRuntime {
       });
   }
 
+  /**
+   * Una película o un episodio (§12.7): `vodStream` (también en la demo,
+   * que contesta con su lista de prueba) y, ANTES de cargar nada, si el
+   * navegador decodifica ese vídeo. Si no, error de códec sin volver a llamar
+   * al proveedor (y se suelta la sesión recién abierta).
+   */
+  private connectVod(
+    vod: VodDriver,
+    connection: Connection,
+    recovery: boolean,
+    freshSession: boolean,
+  ): void {
+    this.setState({
+      message: recovery
+        ? VOD_TEXT.reconnecting(vod.positionS)
+        : vod.item.kind === 'episode'
+          ? VOD_TEXT.preparingEpisode
+          : VOD_TEXT.preparingMovie,
+      rebuffering: null,
+      vod: vod.snapshot(),
+    });
+    const previous = this.session;
+    const release =
+      previous && freshSession ? this.releaseSessionNow(previous, 'error') : Promise.resolve();
+    const identity = this.identity();
+    const query = vod.streamQuery(
+      { client: streamClient(this.platform), viewer: identity.viewer, device: identity.device },
+      !this.demo() && this.supportsType(HEVC_PROBE_TYPE, !this.platform.mse || this.platform.ios),
+    );
+    void release
+      .then(() =>
+        this.request('vodStream', {
+          params: { id: vod.item.id },
+          query,
+          signal: connection.abort.signal,
+        }),
+      )
+      .then((grant: VodGrant) => {
+        if (!this.isCurrent(connection) || this.vod !== vod) return;
+        const demo = this.demo();
+        const kind: EngineKind | null = demo ? 'demo' : chooseEngine(grant.protocol, this.platform);
+        if (!demo && kind && !this.supportsType(VodDriver.codecType(grant), kind === 'native')) {
+          // El navegador no puede con este vídeo: nada de cargarlo ni de reintentar.
+          void this.releaseSessionNow(
+            {
+              id: grant.session.id,
+              heartbeatMs: grant.session.heartbeatMs,
+              url: grant.url,
+              protocol: grant.protocol,
+              remux: grant.remux,
+              lastBeatAt: Date.now(),
+            },
+            'error',
+          );
+          vod.accept(grant);
+          this.fail(grant.vod.video.codec === 'hevc' ? VOD_TEXT.codecHevc : VOD_TEXT.codecOther, {
+            retryable: false,
+            code: 'vod_codec',
+          });
+          return;
+        }
+        vod.accept(grant);
+        this.adoptSession(grant);
+        this.transition('concedida');
+        this.setState({
+          protocol: grant.protocol,
+          streamSource: 'iptv',
+          codec: { video: grant.codec.video, audio: grant.codec.audio },
+          sessionId: grant.session.id,
+          vod: vod.snapshot(),
+        });
+        this.attachEngine(connection, kind, demo ? 'demo:' : grant.url, grant);
+      })
+      .catch((error: unknown) => {
+        if (!this.isCurrent(connection) || isAbortError(error)) return;
+        this.onGrantError(error);
+      });
+  }
+
+  /** Un error de `vodStream` (§13): `vod_busy` con `retryAfterS` espera y reintenta una vez. */
+  private onVodGrantError(vod: VodDriver, error: unknown): void {
+    if (!isApiError(error)) {
+      this.fail('No se pudo abrir el vídeo', { detail: String(error) });
+      return;
+    }
+    if (SYSTEM_ERRORS.has(error.code)) {
+      this.failSystem(error.message, 'fallo', error.code);
+      return;
+    }
+    const plan = vod.planError(
+      error.code,
+      error.data?.['retryAfterS'],
+      error.retryable || error.status === 504,
+    );
+    if (plan.kind === 'busy-retry') {
+      this.endConnection();
+      this.transition('fallo');
+      this.setState({ message: VOD_TEXT.busyWaiting, attempt: null });
+      this.notify(VOD_TEXT.busyWaiting, { kind: 'signal', signal: 'checking' });
+      this.clearReconnect();
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        if (this.vod !== vod || this.conn !== 'reconectando') return;
+        this.connect({ recovery: false });
+      }, plan.delayMs);
+      return;
+    }
+    const message = error.code.startsWith('vod_')
+      ? vodErrorText(error.code, error.data?.['reason'])
+      : error.message;
+    this.fail(message, { retryable: plan.retryable, code: error.code });
+  }
+
   private onGrantError(error: unknown): void {
+    if (this.vod) {
+      this.onVodGrantError(this.vod, error);
+      return;
+    }
     if (!isApiError(error)) {
       this.fail('No se pudo abrir el canal: reconectando', { detail: String(error) });
       return;
@@ -1023,12 +1427,13 @@ export class PlayerRuntime {
     }
     const profile = grant ? PLAYBACK_PROFILES[grant.latency.mode] : connection.profile;
     connection.profile = profile;
-    const demoFails = kind === 'demo' && /ca[ií]d/i.test(this.source?.channel.title ?? '');
+    const vod = this.vod;
+    const demoFails = !vod && kind === 'demo' && /ca[ií]d/i.test(this.source?.channel.title ?? '');
     // No se borra aquí: si esta instancia no llega a saber dónde va, la siguiente usa la misma.
-    const carried = kind === 'hls' ? this.takeCarry(url) : null;
+    const carried = kind === 'hls' && !vod ? this.takeCarry(url) : null;
     const startFrom = carried?.position ?? null;
     const inPlaceUsed = carried?.inPlaceUsed.length ? carried.inPlaceUsed : null;
-    const guardSequence = kind === 'hls' && this.isIptvSource();
+    const guardSequence = kind === 'hls' && this.isIptvSource() && !vod;
     this.loadEngine(kind)
       .then((factory) => {
         if (!this.isCurrent(connection)) return;
@@ -1040,6 +1445,7 @@ export class PlayerRuntime {
           ...(startFrom ? { startFrom } : {}),
           ...(inPlaceUsed ? { inPlaceUsed } : {}),
           ...(guardSequence ? { guardSequence } : {}),
+          ...(vod ? { vod: { startS: vod.startS() } } : {}),
           callbacks: {
             onReady: () => {
               if (this.isCurrent(connection)) this.onEngineReady(connection);
@@ -1100,6 +1506,17 @@ export class PlayerRuntime {
       return;
     }
     this.transition('motor-listo');
+    // Una película: unos segundos y a sonar (la lista es completa, el servidor va por delante).
+    if (this.vod) {
+      this.waitBuffer(connection, {
+        initial: true,
+        target: VOD_INITIAL_BUFFER_S,
+        maxWait: VOD_INITIAL_MAX_WAIT_MS,
+        onReady: () => this.beginPlayback(connection),
+        onTimeout: () => this.fail('Tu IPTV tarda demasiado en dar el vídeo'),
+      });
+      return;
+    }
     this.setState({ message: 'Señal encontrada: cargando los primeros segundos…' });
     const kind = connection.engineKind === 'hls' ? 'hls' : 'mpegts';
     this.waitBuffer(connection, {
@@ -1180,6 +1597,16 @@ export class PlayerRuntime {
     this.setState({ message: null, attempt: null, idleReason: null });
     this.startMeter();
     if (!source) return;
+    if (this.vod) {
+      if (source.startedAt === null) {
+        source.startedAt = Date.now();
+        source.metrics.ttffMs = source.startedAt - source.requestedAt;
+        this.setState({ started: true, ttffMs: source.metrics.ttffMs });
+      }
+      this.vod.onFirstFrame();
+      this.publishVod();
+      return;
+    }
     if (source.startedAt === null) {
       const now = Date.now();
       source.startedAt = now;
@@ -1259,6 +1686,10 @@ export class PlayerRuntime {
   /** Un tic del vigilante (index.html:5231-5266), con sus contadores en la conexión (P5). */
   private tick(connection: Connection | null = this.connection): void {
     if (!connection || !this.isCurrent(connection) || this.demo()) return;
+    /* Una película no tiene vigilante de directo (§12.7): ni retención ni
+       salto de hueco; hls.js reintenta sus trozos y un fallo de verdad llega
+       por `onFatal` o por el <video>. */
+    if (this.vod) return;
     const media = this.video;
     const native = connection.engineKind === 'native';
     if (this.conn === 'conectando' || this.conn === 'precarga' || this.conn === 'arrancando') {
@@ -1367,6 +1798,7 @@ export class PlayerRuntime {
   private maybeSigue(): void {
     const source = this.source;
     if (!source?.startedAt || this.demo()) return;
+    if (this.vod) return;
     const now = Date.now();
     if (now - source.lastSigueAt < OUTCOME_KEEPALIVE_MS) return;
     source.lastSigueAt = now;
@@ -1378,6 +1810,8 @@ export class PlayerRuntime {
   /** Rebuffer (index.html:5177-5206): retener, llenar el colchón y seguir. NUNCA salta al directo. */
   private startRebuffer(connection: Connection): void {
     const source = this.source;
+    // En una película, un `waiting` es cargar, no una señal irregular que retener.
+    if (this.vod) return;
     if (
       !source ||
       !this.isCurrent(connection) ||
@@ -1430,6 +1864,8 @@ export class PlayerRuntime {
 
   /** Dónde empieza lo cargado tras un hueco pequeño delante del cabezal (C2), o null. */
   private holeAhead(connection: Connection): number | null {
+    // En una película un hueco es un error de verdad, no la costura del remux reiniciado (§3.3).
+    if (this.vod) return null;
     const targetDuration =
       connection.engine?.liveWindow?.()?.targetDuration || DEFAULT_TARGET_DURATION_S;
     return nextBufferedStart(this.video, HOLE_SKIP_TARGET_DURATIONS * targetDuration);
@@ -1437,6 +1873,7 @@ export class PlayerRuntime {
 
   /** Salta el hueco con el controlador (así `seeking` se sabe y nadie lo toma por pausa). */
   private skipHole(connection: Connection, start: number): void {
+    if (this.vod) return;
     const from = this.video.currentTime;
     this.log(`Hueco en el búfer: de ${from.toFixed(2)} a ${start.toFixed(2)} s, se salta`);
     connection.stuckTicks = 0;
@@ -1481,6 +1918,10 @@ export class PlayerRuntime {
     const source = this.source;
     if (!source || this.conn === 'idle' || this.conn === 'error' || this.conn === 'reconectando')
       return;
+    if (this.vod) {
+      this.failVod(this.vod, reason, { retryable, code, detail });
+      return;
+    }
     this.endConnection();
     const now = Date.now();
     source.reconnects = source.reconnects.filter((at) => now - at < RECONNECT_WINDOW_MS);
@@ -1566,6 +2007,57 @@ export class PlayerRuntime {
       signal: reply.next ? 'checking' : 'fail',
     });
     this.setPresence({ active: reply.next });
+  }
+
+  /**
+   * Una película se ha cortado (§12.7): UNA reconexión automática en la
+   * posición («Se ha cortado. Seguimos desde 43:12.»), con una sesión nueva;
+   * la segunda vez, o un `vod_*` que no se arregla reintentando, el error de
+   * §13 con su salida. Nunca hay puente a AceStream ni `sourcesOutcome`.
+   */
+  private failVod(
+    vod: VodDriver,
+    reason: string,
+    {
+      retryable,
+      code,
+      detail,
+    }: { retryable: boolean; code?: string | undefined; detail?: string | undefined },
+  ): void {
+    const source = this.source;
+    if (!source) return;
+    this.endConnection();
+    if (detail) this.log(`Fallo: ${reason}`, detail);
+    if (retryable && vod.takeReconnect()) {
+      source.metrics.reconnects += 1;
+      const text = VOD_TEXT.reconnecting(vod.positionS);
+      this.transition('fallo');
+      this.setState({ attempt: null, message: text, rebuffering: null, vod: vod.snapshot() });
+      this.notify(text, { kind: 'signal', tone: 'warn', icon: 'refresh' });
+      this.clearReconnect();
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        if (this.vod !== vod || this.conn !== 'reconectando') return;
+        this.connect({ recovery: true, freshSession: true });
+      }, VOD_RECONNECT_DELAY_MS);
+      return;
+    }
+    const failure = code ?? 'vod_dropped';
+    source.failed = true;
+    this.report(code ? 'source' : 'client', failure, reason, { detail });
+    this.releaseSession('error');
+    this.controller.reset();
+    this.resetVideo();
+    this.transition('agotado');
+    vod.fail(failure, vodErrorAction(failure));
+    this.setState({
+      attempt: null,
+      rebuffering: null,
+      idleReason: 'fallo',
+      message: reason,
+      vod: vod.snapshot(),
+    });
+    this.notify(reason, { kind: 'signal', tone: 'err', signal: 'fail' });
   }
 
   /** Fallo que no es de la fuente (motor caído, remux lleno, falta ffmpeg…): se enseña y no se salta. */
@@ -1691,6 +2183,8 @@ export class PlayerRuntime {
     })
       .then((response) => {
         if (this.session !== session) return;
+        // Una película no cambia de protocolo (no hay `stream.modeChanged` que perder).
+        if (this.vod) return;
         // Se perdió un `stream.modeChanged` por SSE: el latido trae el protocolo actual.
         if (response.protocol !== session.protocol || response.url !== session.url) {
           this.reattach(
@@ -1799,6 +2293,7 @@ export class PlayerRuntime {
 
   private onModeChanged(data: SseEventData<'stream.modeChanged'>): void {
     if (!this.ours(data) || data.to === this.session?.protocol) return;
+    if (this.vod) return;
     this.reattach(
       data.url,
       data.to,
@@ -1810,6 +2305,8 @@ export class PlayerRuntime {
 
   private onReopened(data: SseEventData<'stream.reopened'>): void {
     if (!this.ours(data)) return;
+    // Una película no tiene remux que se reinicie bajo la misma lista.
+    if (this.vod) return;
     const session = this.session;
     const sameUrl = session !== null && session.url === data.url;
     /* C3: el servidor reinició el remux de la IPTV SIN cortar la lista
@@ -1853,7 +2350,7 @@ export class PlayerRuntime {
    */
   private onListReset(reason: string): void {
     const session = this.session;
-    if (!session) return;
+    if (!session || this.vod) return;
     this.log(reason);
     const reattached = this.reattach(
       session.url,
@@ -1911,6 +2408,15 @@ export class PlayerRuntime {
       default: {
         const iptv = this.isIptvSource();
         this.dropSession();
+        /* Una película: un `vod_*` se enseña como si lo devolviera `vodStream`
+           (§13; `vod_dropped` ya lo reintentó el servidor); lo demás gasta la
+           reconexión en la posición. */
+        if (this.vod) {
+          const code = data.code ?? null;
+          if (code?.startsWith('vod_')) this.fail(vodErrorText(code), { retryable: false, code });
+          else this.fail('La señal se ha cortado', { detail: code ?? data.reason });
+          return;
+        }
         // IPTV: `iptv_dropped`, `iptv_disabled`, `iptv_removed`, `iptv_busy`… y, por
         // si un `remux_died` gana la carrera, cualquier cierre del remux (§7.2).
         if (isIptvSourceError(data.code, iptv) || (iptv && data.reason === 'remux_failed')) {
@@ -1979,7 +2485,14 @@ export class PlayerRuntime {
       const extra = [name, error?.message?.slice(0, 200)].filter(Boolean).join(': ');
       broken(extra ? `evento del vídeo (${extra})` : 'evento del vídeo');
     });
-    on('ended', () => broken('evento del vídeo (ended)'));
+    on('ended', () => {
+      // En una película el final es el final: «Terminada» o el siguiente episodio (§12.9).
+      if (this.vod) {
+        if (this.conn === 'activa') this.vod.onEnded();
+        return;
+      }
+      broken('evento del vídeo (ended)');
+    });
     on('timeupdate', () => {
       const session = this.session;
       if (session && Date.now() - session.lastBeatAt >= session.heartbeatMs) this.beat();
@@ -1998,6 +2511,8 @@ export class PlayerRuntime {
     const connection = this.connection;
     const media = this.video;
     if (!connection || this.conn !== 'activa') return;
+    // Una película no retiene: la rueda de «Cargando…» y hls.js hacen el resto (§12.7).
+    if (this.vod) return;
     if (media.paused || media.readyState >= 3) return;
     if (connection.engineKind !== 'hls') {
       this.startRebuffer(connection);
@@ -2054,6 +2569,8 @@ export class PlayerRuntime {
       // esto se perdían sus métricas (P23). Si la página va a la caché de ida
       // y vuelta (persisted) puede volver y seguir: se mandarán al acabar.
       if (!event.persisted) this.endSource('página cerrada', { keepalive: true });
+      // La posición de la película, antes de soltar la sesión (con `keepalive`).
+      this.vod?.pageHide(event.persisted);
       this.releaseOnPageHide();
     };
     const onPageShow = (event: PageTransitionEvent) => {
@@ -2079,6 +2596,8 @@ export class PlayerRuntime {
     if (!this.source || this.conn !== 'activa' || this.demo()) return;
     // Los temporizadores de una pestaña oculta van estrangulados: latido ya.
     this.beat();
+    // Una película terminada no es un corte; un error del <video> ya llegó por su evento.
+    if (this.vod) return;
     const media = this.video;
     const wantsPlay = this.controller.state.desiredPlaying;
     if (
@@ -2107,6 +2626,14 @@ export class PlayerRuntime {
   private meter(): void {
     const source = this.source;
     if (!source || this.conn !== 'activa') return;
+    if (this.vod) {
+      this.vod.measure();
+      this.setState({
+        bufferAheadS: Math.round(bufferAhead(this.video) * 10) / 10,
+        vod: this.vod?.snapshot() ?? null,
+      });
+      return;
+    }
     const live = this.measureLive();
     const ahead = bufferAhead(this.video);
     const info: LiveInfo = live
@@ -2162,6 +2689,15 @@ export class PlayerRuntime {
       following: snapshot.followingLiveEdge,
     };
     const last = this.lastPublished;
+    // Una película en pausa: se guarda dónde (§10.2).
+    if (
+      this.vod &&
+      this.conn === 'activa' &&
+      last.desiredPlaying === true &&
+      patch.desiredPlaying === false &&
+      !this.vod.ended
+    )
+      this.vod.progress.pause(this.vod.positionS, this.vod.durationS);
     if (
       last.phase === patch.phase &&
       last.conn === patch.conn &&
@@ -2179,6 +2715,8 @@ export class PlayerRuntime {
   private sendOutcome(resultado: 'arranco' | 'fallo' | 'cayo', segundos: number): void {
     const source = this.source;
     if (!source || this.demo()) return;
+    // Una película no es una fuente que se puntúe.
+    if (this.vod) return;
     if (resultado === 'arranco') {
       if (source.arrancoSent) return;
       source.arrancoSent = true;
@@ -2263,6 +2801,8 @@ export class PlayerRuntime {
   }
 
   private recordHistory(channel: PlayChannel & { hash: string }): void {
+    // Las películas tienen su propio «Seguir viendo» (el progreso), no Recientes.
+    if (this.vod) return;
     void this.request('libraryMutate', {
       body: {
         action: 'history-upsert',
@@ -2284,6 +2824,7 @@ export class PlayerRuntime {
   destroy(): void {
     if (this.destroyed) return;
     this.clearReconnect();
+    this.endVod();
     if (this.source) this.endSource('reproductor cerrado');
     this.endConnection();
     this.releaseSession('user');

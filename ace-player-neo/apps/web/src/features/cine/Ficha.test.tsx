@@ -9,6 +9,7 @@ import movieFixture from '@fixtures/web/v1/vodTitle.json';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { resetScrollMemory, saveScroll, savedScroll } from '../../app/scroll-memory.ts';
 import { resetToasts } from '../../notices/toasts.ts';
+import { playerStore, resetPlayerApi } from '../../player/api.ts';
 import { json, mockFetch, type MockCall } from '../../test/fetch.ts';
 import { DEMO_VOD_IDS, resetDemoVod } from './demo-data.ts';
 import { episodeName } from './EpisodeList.tsx';
@@ -129,14 +130,27 @@ describe('película', () => {
     expect(screen.queryByRole('link', { name: /Tráiler/ })).toBeNull();
   });
 
-  it('reproducir dice «Próximamente» hasta que llegue el reproductor', async () => {
+  it('«Reproducir» abre la película en el reproductor y lleva a su escenario (sala/<id>)', async () => {
+    resetPlayerApi();
     serveTitle({ ...MOVIE, progress: null });
     fireEvent.click(await screen.findByRole('button', { name: 'Reproducir' }));
-    expect(
-      await screen.findByText(
-        'Próximamente: la reproducción de películas y series llega en la siguiente versión.',
-      ),
-    ).toBeInTheDocument();
+    const state = playerStore.get();
+    expect(state.kind).toBe('vod');
+    expect(state.channel).toMatchObject({ hash: MOVIE.id, title: 'Dune', iptv: true });
+    expect(state.route).toEqual({ vista: 'sala', id: MOVIE.id });
+    await waitFor(() => expect(location.search).toContain(`vista=sala/${MOVIE.id}`));
+    resetPlayerApi();
+  });
+
+  it('«Seguir viendo desde…» pide la posición guardada (sin `startS`: la decide el servidor)', async () => {
+    resetPlayerApi();
+    serveTitle(MOVIE);
+    fireEvent.click(await screen.findByRole('button', { name: /Seguir viendo desde/ }));
+    expect(playerStore.get()).toMatchObject({
+      kind: 'vod',
+      route: { vista: 'sala', id: MOVIE.id },
+    });
+    resetPlayerApi();
   });
 
   it('«Marcar como vista» manda la marca y «Marcar como no vista» la quita', async () => {

@@ -197,6 +197,7 @@ function TrailerButton({ id, title }: { id: string | null | undefined; title: st
 // ---- Acciones -----------------------------------------------------------------------
 
 function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
+  const navigate = useNavigate();
   const mark = useProgressMark();
   const [busy, setBusy] = useState(false);
   const block = playBlock(movie.playable, canPlayHevc(), movie.tech.container);
@@ -212,12 +213,15 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
     : (movie.durationS ?? null);
   const ends = block ? null : endsAtText(remainingS, now);
   const play = (startS?: number) =>
-    playVod({
-      id: movie.id,
-      kind: 'movie',
-      title: movie.title,
-      ...(startS === undefined ? {} : { startS }),
-    });
+    playVod(
+      {
+        id: movie.id,
+        kind: 'movie',
+        title: movie.title,
+        ...(startS === undefined ? {} : { startS }),
+      },
+      navigate,
+    );
   const toggle = async () => {
     setBusy(true);
     const error = await mark(movie.id, watched ? 'unmark' : 'mark');
@@ -283,6 +287,7 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
 }
 
 function SeriesActions({ series }: { series: VodSeries }) {
+  const navigate = useNavigate();
   const main = series.main;
   const entry = main
     ? series.seasons
@@ -309,16 +314,19 @@ function SeriesActions({ series }: { series: VodSeries }) {
             disabled={block !== null}
             aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
             onClick={() =>
-              playVod({
-                id: main.episodeId,
-                kind: 'episode',
-                title: series.title,
-                subtitle: entry
-                  ? `${episodeTag(entry.season, entry.item.n)} · ${entry.item.title}`
-                  : null,
-                seriesId: series.id,
-                startS: main.posS,
-              })
+              playVod(
+                {
+                  id: main.episodeId,
+                  kind: 'episode',
+                  title: series.title,
+                  subtitle: entry
+                    ? `${episodeTag(entry.season, entry.item.n)} · ${entry.item.title}`
+                    : null,
+                  seriesId: series.id,
+                  startS: main.posS,
+                },
+                navigate,
+              )
             }
           >
             {entry ? seriesPlayLabel(main.action, entry.season, entry.item.n) : main.label}
