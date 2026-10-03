@@ -42,7 +42,10 @@ export interface VodHost {
  * redirecciones, identity, espera al socket de P6) y Range. Sin los
  * ayudantes de vitest: también lo usa el guion del laboratorio.
  */
-export function netOpener(clock: Clock): (request: VodOpenRequest) => Promise<OpenedStream> {
+export function netOpener(
+  clock: Clock,
+  idleMs: number = IPTV_RELAY.idleMs,
+): (request: VodOpenRequest) => Promise<OpenedStream> {
   const net = createFetcher({
     clock,
     resolver: systemResolver,
@@ -52,7 +55,7 @@ export function netOpener(clock: Clock): (request: VodOpenRequest) => Promise<Op
   });
   return (request) =>
     net.openStream(request.url, {
-      idleMs: IPTV_RELAY.idleMs,
+      idleMs,
       headersMs: IPTV_RELAY.headersMs,
       accept: '*/*',
       identity: true,
@@ -63,11 +66,11 @@ export function netOpener(clock: Clock): (request: VodOpenRequest) => Promise<Op
 
 export async function createVodHost(
   host: string,
-  options: { readonly clock?: Clock; readonly logger?: Logger } = {},
+  options: { readonly clock?: Clock; readonly logger?: Logger; readonly idleMs?: number } = {},
 ): Promise<VodHost> {
   const clock = options.clock ?? createSystemClock();
   const logger = options.logger ?? createSilentLogger();
-  const opener = netOpener(clock);
+  const opener = netOpener(clock, options.idleMs);
   const opens: VodOpenRequest[] = [];
   const sessions = new Map<string, VodSession>();
   const sockets = new Set<Socket>();

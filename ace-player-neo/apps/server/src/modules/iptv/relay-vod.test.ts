@@ -380,6 +380,28 @@ describe('VodSession: cortes con quien lee parado (pausa)', () => {
     expect(dropped).toEqual([]);
   });
 
+  it('la contrapresión no dispara el plazo de inactividad de net: la conexión parada sigue viva', async () => {
+    const origin = await createFakeVodOrigin(host, files, { rateMbps: 40 });
+    closers.push(() => origin.close());
+    /* `net` cortaría una conexión sin datos en 200 ms (en producción, el idleMs del relé)… */
+    const vod = await createVodHost(host, { idleMs: 200 });
+    closers.push(() => vod.close());
+    const session = vod.session(origin.url('1.mkv'), 'mkv', {
+      limits: { ...FAST, pauseExemptMs: 60_000, reopenMax: 0 },
+    });
+    const dropped: string[] = [];
+    session.onDropped((code) => dropped.push(code));
+    const res = heldLeg(session);
+    await until(() => res.bytes > 0);
+    /* …pero parado 600 ms por quien lee, no corta: `guardBody` lo desarma sin lectura. */
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    res.play();
+    await new Promise<void>((resolve) => res.once('finish', () => resolve()));
+    expect(Buffer.concat(res.received).equals(small)).toBe(true);
+    expect(vod.opens).toHaveLength(1);
+    expect(dropped).toEqual([]);
+  });
+
   it('sin pausa, dos cortes con un tope de 1 → vod_dropped', async () => {
     const { origin, vod } = await rig({ dropAtBytes: 1536 * 1024 });
     const session = vod.session(origin.url('1.mkv'), 'mkv', {

@@ -644,7 +644,10 @@ export class VodSession {
     /* Sin tamaño conocido, un final limpio es el final del fichero. */
     const eof = this.size !== null ? up.pos >= this.size : up.error === null && up.end === null;
     const boundedDone = up.end !== null && up.pos > up.end;
-    /* Un corte a mitad. Con quien lee parado (pausa) no cuenta. */
+    /* Un corte a mitad. Con quien lee parado (pausa) no cuenta. (El plazo de
+       inactividad de `net` no salta por la contrapresión: `guardBody` lo
+       desarma mientras no se lee; si salta es que el proveedor se calló, y eso
+       sí cuenta.) */
     const now = this.deps.clock.now();
     const paused =
       leg.lastStallMs > this.limits.pauseExemptMs ||
