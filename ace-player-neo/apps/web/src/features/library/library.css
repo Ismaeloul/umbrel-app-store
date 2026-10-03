@@ -254,6 +254,13 @@
   color: var(--text-3);
   white-space: nowrap;
 }
+/* Con un partido en directo, el minuto y «En directo» ocupan el sitio del subtítulo: en el móvil las etiquetas
+   (IPTV y calidades) bajan a su línea en vez de cortarse contra el borde de la tarjeta (0.9.0, docs/buscador.md).
+   Las filas sin partido no cambian: ahí se recorta el subtítulo. */
+.ch__meta--wrap {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
 .ch__sub {
   min-width: 0;
   overflow: hidden;

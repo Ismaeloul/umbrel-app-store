@@ -251,6 +251,7 @@ export function ChannelRow({
   const title = item.title || 'Canal sin nombre';
   const nameRef = useRef<HTMLSpanElement>(null);
   useNameHighlight(nameRef, highlight, title);
+  const hasTags = iptv || Boolean(tags?.length) || ace > 0;
 
   return (
     <article
@@ -290,7 +291,7 @@ export function ChannelRow({
             ) : null}
           </span>
           <OnAirLine onAir={onAir} scoreHidden={scoreHidden} id={lineId} />
-          <span className="ch__meta" id={metaId}>
+          <span className={cx('ch__meta', live && hasTags && 'ch__meta--wrap')} id={metaId}>
             {onScreen ? (
               <span className="ch__onair">
                 <span className="ch__eq" aria-hidden="true">
@@ -318,7 +319,7 @@ export function ChannelRow({
             ) : (
               <span className="ch__sub">{subtitle}</span>
             )}
-            {iptv || tags?.length || ace > 0 ? (
+            {hasTags ? (
               <span className="ch__tags">
                 {iptv ? (
                   <Capsule tone="neutral" size="sm" icon="tv" className="ch__src ch__iptv">
