@@ -514,7 +514,10 @@ conservador). Todas se pueden revertir.
   botón atrás: el router lanza la vuelta justo después del `popstate`, que
   React pinta sin View Transition). Fuera la transición compartida de los
   escudos (`partido-<id>`); el reproductor lleva un nombre por presentación
-  (`ace-reproductor-mini`/`-stage`) para fundirse en vez de viajar. La
+  (`ace-reproductor-mini`/`-stage`) para fundirse en vez de viajar, salvo en
+  WebKit, donde no lleva `<ViewTransition>` (con fix/transicion-safari, abrir
+  un partido allí es solo el fundido CSS de las vistas; probado con WebKit de
+  Playwright: sin transiciones del documento y sin vistas superpuestas). La
   animación de los escudos queda para la app de iPhone.
 - **Vuelta atrás**: no cambia ningún fichero de `data/`; volver a la 0.8.4 es
   seguro (se pierde la ruta nueva).

@@ -145,7 +145,8 @@ Ninguna duración va escrita a mano en el CSS: siempre un token.
   0.9.0): abrir un partido, y volver de él (también con el botón atrás), es el
   mismo fundido que cambiar de pestaña; el reproductor lleva un nombre por
   presentación (`ace-reproductor-mini`/`-stage`) para fundirse en vez de viajar
-  de la esquina al escenario (`src/app/transitions.ts`). La animación de los
+  de la esquina al escenario (`src/app/transitions.ts`); en WebKit no lleva
+  ninguna transición (allí todo es el fundido CSS de las vistas). La animación de los
   escudos que viajan queda para la app de iPhone. Cada vista va en su propia
   `<ViewTransition>` dentro de su `<Activity>`: la que se deja sale y la que se
   abre entra, cada
