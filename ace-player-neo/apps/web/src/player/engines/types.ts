@@ -99,6 +99,13 @@ export interface EngineArgs {
   inPlaceUsed?: ReadonlyArray<{ at: number; position: number }>;
   /** Solo hls.js con IPTV: vigilar que la MEDIA-SEQUENCE no vaya hacia atrás (C3). */
   guardSequence?: boolean;
+  /**
+   * Una película o un episodio (docs/vod.md §12.7): la lista VOD completa y
+   * desde dónde empezar. hls.js va sin nada del directo (sin `liveSync*`, con
+   * el búfer de una película); el HLS nativo pone el cabezal ahí al tener
+   * metadatos (la lista ya lleva `EXT-X-START`, esto es el respaldo).
+   */
+  vod?: { startS: number } | null;
 }
 
 export type EngineFactory = (args: EngineArgs) => Engine;

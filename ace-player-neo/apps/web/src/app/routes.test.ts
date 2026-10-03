@@ -210,3 +210,15 @@ describe('Películas y series (docs/vod.md §12.1 y §12.2)', () => {
     expect(navLabel('biblioteca')).toBe('Canales');
   });
 });
+
+describe('sala (docs/vod.md §12.2 y §12.8)', () => {
+  const ID = 'c1d2e3f4a5b60718293a4b5c6d7e8f9012345678';
+  it('`sala/<40 hex>` es el escenario de una película; sin id válido, la portada de cine', () => {
+    expect(parseVista(`sala/${ID.toUpperCase()}`)).toEqual({ vista: 'sala', id: ID });
+    expect(parseVista('sala/xyz')).toEqual({ vista: 'cine', id: null });
+    expect(formatVista({ vista: 'sala', id: ID })).toBe(`sala/${ID}`);
+    expect(routeDepth({ vista: 'sala', id: ID })).toBe(12);
+    expect(scrollKey({ vista: 'sala', id: ID })).toBe(`sala:${ID}`);
+    expect(navParent('sala')).toBeNull();
+  });
+});

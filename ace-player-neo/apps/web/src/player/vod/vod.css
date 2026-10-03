@@ -1,0 +1,274 @@
+/* El reproductor con una película o un episodio (docs/vod.md §12.7 y §12.9):
+   la barra de tiempo encima de la fila de controles de siempre, el tiempo, y
+   las tarjetas del final. Mismo cristal y mismo blanco sobre vídeo que el
+   directo (player.css). */
+
+/* Abajo: la barra a lo ancho y, debajo, la fila de controles. */
+.player-chrome__bottom.vod-bottom {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.vod-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.player-chrome[data-visible='true'] .vod-row > *,
+.player-chrome[data-visible='true'] .vod-row .player-chrome__group > * {
+  pointer-events: auto;
+}
+.player-chrome[data-visible='true'] .player-chrome__bottom > .vod-row {
+  pointer-events: none;
+}
+
+/* ---- Barra de tiempo ---- */
+.vod-bar {
+  --p: 0;
+  --b: 0;
+  position: relative;
+  height: 28px;
+  margin: 0 6px;
+  touch-action: none;
+}
+.vod-bar__track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.28);
+  transition: transform var(--dur-rapido) var(--ease-estandar);
+}
+.vod-bar:hover .vod-bar__track,
+.vod-bar[data-dragging='true'] .vod-bar__track,
+.vod-bar:focus-within .vod-bar__track {
+  transform: scaleY(1.5);
+}
+.vod-bar__loaded,
+.vod-bar__played {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+}
+.vod-bar__loaded {
+  background: rgb(255 255 255 / 0.38);
+  transform: scaleX(var(--b));
+}
+.vod-bar__played {
+  background: var(--accent);
+  transform: scaleX(var(--p));
+}
+/* El deslizador de verdad, transparente encima (teclado, lector, arrastre). */
+.vod-bar__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.vod-bar__input:disabled {
+  cursor: default;
+}
+.vod-bar__input::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+.vod-bar__input::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
+  -webkit-appearance: none;
+}
+.vod-bar__input::-moz-range-track {
+  background: transparent;
+}
+.vod-bar__input::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+}
+.vod-bar__input:focus-visible {
+  outline: none;
+}
+.vod-bar__input:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--accent);
+}
+.vod-bar__tip {
+  --x: 0;
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: clamp(28px, calc(var(--x) * 100%), calc(100% - 28px));
+  translate: -50% 0;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  color: var(--on-video);
+  font-size: var(--fs-12);
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ---- Tiempo y +10 ---- */
+.vod-clock {
+  display: inline-flex;
+  align-items: center;
+  height: var(--tap);
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  color: var(--on-video);
+  font-size: var(--fs-13);
+  font-weight: 650;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}
+.vod-clock__of {
+  opacity: 0.7;
+}
+.vod-forward {
+  padding: 0 8px 0 12px;
+}
+.vod-forward__icon {
+  transform: scaleX(-1);
+}
+/* En el móvil no cabe todo: el tiempo transcurrido / total se queda en la barra de estado. */
+@container (max-width: 419px) {
+  .vod-clock {
+    padding: 0 6px;
+    font-size: var(--fs-12);
+  }
+  .vod-clock__of,
+  .vod-clock__of ~ .num-cells {
+    display: none;
+  }
+}
+
+/* ---- Tarjetas del final ---- */
+.vod-card {
+  position: absolute;
+  z-index: 4;
+  right: 12px;
+  bottom: 96px;
+  display: grid;
+  gap: 10px;
+  max-width: min(360px, calc(100% - 24px));
+  padding: 12px 14px;
+  border-radius: var(--r-l, 16px);
+  color: var(--on-video);
+  animation: vod-card-entra var(--dur-estandar) var(--ease-out) both;
+}
+.vod-card__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.vod-card__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+}
+.vod-card__kicker {
+  font-size: var(--fs-12);
+  font-weight: 600;
+  opacity: 0.85;
+}
+.vod-card__title {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--fs-15, 15px);
+  font-weight: 720;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.vod-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.vod-card--end {
+  right: 50%;
+  bottom: 50%;
+  translate: 50% 50%;
+  justify-items: center;
+  text-align: center;
+}
+@keyframes vod-card-entra {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (max-width: 767px) {
+  .vod-card {
+    right: 8px;
+    bottom: 84px;
+    padding: 10px 12px;
+  }
+}
+
+/* Cuenta atrás: un anillo que se vacía a saltos (lo pinta React cuatro veces por
+   segundo; sin animación CSS que recalcule nada) y el número en el centro. */
+.vod-ring {
+  --ring-left: 1;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+}
+.vod-ring__svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.vod-ring__track,
+.vod-ring__fill {
+  fill: none;
+  stroke-width: 3;
+}
+.vod-ring__track {
+  stroke: rgb(255 255 255 / 0.25);
+}
+.vod-ring__fill {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--ring-left));
+}
+.vod-ring__n {
+  font-size: var(--fs-13);
+  font-weight: 750;
+}
+
+/* El mini con una película: una barra fina bajo la segunda línea. */
+.player-mini__progress {
+  margin-top: 3px;
+}
+
+/* La demo de una película: un fondo (no hay vídeo; el título va en el rótulo de la demo). */
+.vod-demo-picture {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(120% 90% at 30% 20%, rgb(255 255 255 / 0.1), transparent 60%),
+    linear-gradient(135deg, #1d2236, #0c0d14 70%);
+}

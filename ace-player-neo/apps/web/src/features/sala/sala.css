@@ -1,0 +1,62 @@
+/* El escenario de una película o un episodio (docs/vod.md §12.8): bajo el
+   reproductor, el título, la segunda línea, «Ver ficha» y la tarjeta del
+   siguiente episodio. */
+
+.sala {
+  display: grid;
+  gap: 14px;
+  max-width: 960px;
+  padding: 16px 16px 8px;
+}
+.sala__head {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.sala__title {
+  margin: 0;
+  font-size: var(--fs-22, 22px);
+  font-weight: 760;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.sala__title:focus-visible {
+  outline: none;
+}
+.sala__sub {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-14, 14px);
+}
+.sala__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sala__bar {
+  max-width: 420px;
+}
+.sala__next {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  max-width: 420px;
+  padding: 14px 16px;
+  border-radius: var(--r-l, 16px);
+}
+.sala__kicker {
+  margin: 0;
+  color: var(--accent-ink);
+  font-size: var(--fs-12);
+  font-weight: 650;
+}
+.sala__next-title {
+  margin: 0;
+  font-size: var(--fs-15, 15px);
+  font-weight: 700;
+}
+@media (min-width: 768px) {
+  .sala {
+    padding: 20px 4px 8px;
+  }
+}

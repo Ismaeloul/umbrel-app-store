@@ -104,6 +104,9 @@ function setup({
   const notices: string[] = [];
   const failures: SourceFailure[] = [];
   const beacons: Array<[string, string]> = [];
+  /** Películas: las marcas de progreso mandadas y qué códecs «decodifica» el navegador. */
+  const progress: Array<Record<string, unknown>> = [];
+  const codecs = { supported: (_type: string) => true };
   const reply: { next: boolean; message: string | null } = { next: false, message: null };
   /** Lo que hace el oyente de onSourceFailed antes de contestar (p. ej. play() de la siguiente). */
   const hooks: { onFailed?: (failure: SourceFailure) => void } = {};
@@ -134,6 +137,10 @@ function setup({
     onLibrary: () => {},
     log: () => {},
     lifecycle,
+    supportsType: (type) => codecs.supported(type),
+    vodProgress: async (id, body, options) => {
+      progress.push({ id, ...body, keepalive: options.keepalive === true });
+    },
   });
   runtimes.push(runtime);
   return {
@@ -145,6 +152,8 @@ function setup({
     notices,
     failures,
     beacons,
+    progress,
+    codecs,
     reply,
     hooks,
     get state() {
@@ -1729,5 +1738,292 @@ describe('Descargar fallos: con qué código se da una fuente por perdida', () =
     }
     expect(t.state.phase).toBe('error');
     expect(lastReport(t)).toMatchObject({ cause: 'source', code: 'player_source_failed' });
+  });
+});
+
+describe('películas y series (VOD-6, docs/vod.md §12.7 y §12.9)', () => {
+  const MOVIE_ID = 'c1d2e3f4a5b60718293a4b5c6d7e8f9012345678';
+  const EP2 = 'e1d2e3f4a5b60718293a4b5c6d7e8f9012345678';
+  const VOD_SID = 's_vodPrueba1234';
+
+  function vodGrant(extra: Record<string, unknown> = {}) {
+    return {
+      ...grant('hls', 'balanced', VOD_SID),
+      url: `/api/v1/video/${VOD_SID}/index.m3u8`,
+      remux: true,
+      source: 'iptv' as const,
+      codec: { video: 'h264', audio: 'aac', source: 'ffprobe' },
+      vod: {
+        id: MOVIE_ID,
+        kind: 'movie',
+        seriesId: null,
+        title: 'Dune',
+        subtitle: null,
+        durationS: 9360,
+        startS: 0,
+        resumed: false,
+        audio: [
+          {
+            index: 0,
+            label: 'Castellano 5.1',
+            lang: 'spa',
+            codec: 'ac3',
+            channels: 6,
+            converted: true,
+          },
+        ],
+        audioIndex: 0,
+        video: { codec: 'h264', codecs: 'avc1.640028', width: 1920, height: 1080 },
+        next: null,
+        poster: null,
+        ...extra,
+      },
+    };
+  }
+
+  function vodSetup(extra: Record<string, unknown> = {}) {
+    const t = setup();
+    t.handlers.vodStream = (input) =>
+      vodGrant({ startS: Number(input.query?.start ?? 0), ...extra });
+    return t;
+  }
+
+  async function vodPlaying(t: Harness, startS?: number) {
+    t.runtime.playVod(
+      { id: MOVIE_ID, kind: 'movie', title: 'Dune' },
+      startS === undefined ? {} : { startS },
+    );
+    await flush();
+    const engine = t.engines.last();
+    const at = startS ?? 0;
+    engine.args.callbacks.onReady();
+    t.video._currentTime = at;
+    t.video.setBuffered([[at, at + 20]]);
+    await vi.advanceTimersByTimeAsync(250);
+    t.video.advance(0.1);
+    await flush();
+    expect(t.state.conn).toBe('activa');
+    return engine;
+  }
+
+  it('pide vodStream (cliente, visor, hevc) y engancha hls.js con la lista VOD; ni Recientes ni sourcesOutcome', async () => {
+    const t = vodSetup();
+    const engine = await vodPlaying(t);
+    expect(t.callsTo('channelStream')).toHaveLength(0);
+    expect(t.callsTo('vodStream')[0]!.input).toMatchObject({
+      params: { id: MOVIE_ID },
+      query: { client: 'web', viewer: 'v_prueba', device: 'web_prueba', hevc: '1' },
+    });
+    expect(t.callsTo('vodStream')[0]!.input.query).not.toHaveProperty('start');
+    expect(engine.kind).toBe('hls');
+    expect(engine.args.vod).toEqual({ startS: 0 });
+    expect(engine.args.guardSequence).toBeUndefined();
+    expect(t.state).toMatchObject({ kind: 'vod', streamSource: 'iptv', phase: 'reproduciendo' });
+    expect(t.state.vod).toMatchObject({ id: MOVIE_ID, durationS: 9360, failure: null });
+    expect(t.callsTo('libraryMutate')).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(t.callsTo('sourcesOutcome')).toHaveLength(0);
+  });
+
+  it('un vídeo que el navegador no decodifica: error de códec sin cargar ni reintentar, y suelta la sesión', async () => {
+    const t = vodSetup({
+      video: { codec: 'hevc', codecs: 'hvc1.2.4.L120.B0', width: 3840, height: 2160 },
+    });
+    t.codecs.supported = (type) => !type.includes('hvc1');
+    t.runtime.playVod({ id: MOVIE_ID, kind: 'movie', title: 'Dune' });
+    await flush();
+    expect(t.callsTo('vodStream')[0]!.input.query).toMatchObject({ hevc: '0' });
+    expect(t.engines.created).toHaveLength(0);
+    expect(t.state.phase).toBe('error');
+    expect(t.state.message).toBe(
+      'Este navegador no reproduce vídeo HEVC. Prueba en Safari o en el iPhone.',
+    );
+    expect(t.state.vod?.failure).toEqual({ code: 'vod_codec', action: 'title' });
+    expect(t.callsTo('sessionRelease')[0]!.input.params).toEqual({ sid: VOD_SID });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(t.callsTo('vodStream')).toHaveLength(1);
+  });
+
+  it('el salto de hueco de la 0.8.3 NO actúa con una película, ni la retención por rebúfer', async () => {
+    const t = vodSetup();
+    await vodPlaying(t);
+    t.video._currentTime = 20;
+    t.video.setBuffered([
+      [0, 20],
+      [20.6, 40],
+    ]);
+    t.video.stall();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(t.video.currentTime).toBe(20);
+    expect(t.video.seeking).toBe(false);
+    expect(t.state.rebuffering).toBeNull();
+    expect(t.video.paused).toBe(false);
+    // Ni el vigilante: la imagen parada 30 s no reconecta (hls.js reintenta sus trozos).
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(t.callsTo('vodStream')).toHaveLength(1);
+    expect(t.state.conn).toBe('activa');
+  });
+
+  it('`ended` es el final, no un corte: «Terminada» y la marca `ended`', async () => {
+    const t = vodSetup();
+    await vodPlaying(t);
+    t.video.dispatchEvent(new Event('ended'));
+    await flush();
+    expect(t.state.vod?.ended).toBe(true);
+    expect(t.progress.at(-1)).toMatchObject({ id: MOVIE_ID, event: 'ended', posS: 9360 });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(t.callsTo('vodStream')).toHaveLength(1);
+  });
+
+  it('un corte reconecta UNA vez en la posición con sesión nueva; el segundo, el error con «Reintentar» (sigue ahí)', async () => {
+    const t = vodSetup();
+    const engine = await vodPlaying(t, 100);
+    await vi.advanceTimersByTimeAsync(500);
+    engine.args.callbacks.onFatal('HLS no pudo recuperarse (fragLoadError)', 'fragLoadError');
+    expect(t.state.message).toBe('Se ha cortado. Seguimos desde 1:40.');
+    expect(t.state.phase).toBe('reconectando');
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(t.callsTo('sessionRelease').length).toBeGreaterThanOrEqual(1);
+    const second = t.callsTo('vodStream')[1]!;
+    expect(second.input.query?.start).toBeCloseTo(100.1, 0);
+    const engine2 = t.engines.last();
+    expect(engine2).not.toBe(engine);
+    expect(engine2.args.vod?.startS).toBeCloseTo(100.1, 0);
+    engine2.args.callbacks.onFatal('HLS no pudo recuperarse (fragLoadError)');
+    expect(t.state.phase).toBe('error');
+    expect(t.state.vod?.failure?.action).toBe('retry');
+    expect(t.state.vod?.restarts).toBe(1);
+    t.runtime.retry();
+    await flush();
+    expect(t.callsTo('vodStream')).toHaveLength(3);
+    expect(t.callsTo('vodStream')[2]!.input.query?.start).toBeCloseTo(100.1, 0);
+  });
+
+  it('vod_busy con retryAfterS: «El proveedor tarda en liberar la conexión…» y un reintento solo, a los retryAfterS s', async () => {
+    const t = vodSetup();
+    let first = true;
+    t.handlers.vodStream = () => {
+      if (first) {
+        first = false;
+        throw new ApiError({ code: 'vod_busy', status: 503, data: { retryAfterS: 3 } });
+      }
+      return vodGrant();
+    };
+    t.runtime.playVod({ id: MOVIE_ID, kind: 'movie', title: 'Dune' });
+    await flush();
+    expect(t.state.message).toBe('El proveedor tarda en liberar la conexión…');
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(t.callsTo('vodStream')).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await flush();
+    expect(t.callsTo('vodStream')).toHaveLength(2);
+    expect(t.engines.created).toHaveLength(1);
+  });
+
+  it('vod_unsupported con su motivo: el texto de §13 y «Volver a la ficha», sin reintentos ni puente', async () => {
+    const t = vodSetup();
+    t.handlers.vodStream = () => {
+      throw new ApiError({ code: 'vod_unsupported', status: 422, data: { reason: 'sin_saltos' } });
+    };
+    t.runtime.playVod({ id: MOVIE_ID, kind: 'movie', title: 'Dune' });
+    await flush();
+    expect(t.state.phase).toBe('error');
+    expect(t.state.message).toBe(
+      'Tu proveedor no deja saltar dentro del vídeo; no se puede reproducir aquí.',
+    );
+    expect(t.state.vod?.failure).toEqual({ code: 'vod_unsupported', action: 'title' });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(t.callsTo('vodStream')).toHaveLength(1);
+    expect(t.failures).toHaveLength(0);
+  });
+
+  it('progreso: `tick` cada 15 s sonando, `pause` al pausar y `stop` al detener', async () => {
+    const t = vodSetup();
+    await vodPlaying(t, 600);
+    for (let i = 0; i < 34; i += 1) {
+      t.video.advance(0.5);
+      await vi.advanceTimersByTimeAsync(500);
+    }
+    expect(t.progress.some((entry) => entry['event'] === 'tick')).toBe(true);
+    t.runtime.pause();
+    await flush();
+    expect(t.progress.at(-1)).toMatchObject({ event: 'pause', durS: 9360 });
+    t.runtime.stop();
+    expect(t.progress.at(-1)).toMatchObject({ event: 'stop', id: MOVIE_ID });
+    expect((t.progress.at(-1)!['posS'] as number) > 600).toBe(true);
+    expect(t.state).toMatchObject({ kind: 'live', vod: null });
+  });
+
+  it('±10 s seguidos se juntan en un salto a los 300 ms y el `seek` sale 2 s después', async () => {
+    const t = vodSetup();
+    await vodPlaying(t, 100);
+    await vi.advanceTimersByTimeAsync(500);
+    t.runtime.vodSeekBy(10);
+    t.runtime.vodSeekBy(10);
+    t.runtime.vodSeekBy(10);
+    expect(t.state.vod?.seekingTo).toBeCloseTo(130.1, 0);
+    expect(t.video.currentTime).toBeCloseTo(100.1, 0);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(t.video.currentTime).toBeCloseTo(130.1, 0);
+    t.video.finishSeek();
+    await vi.advanceTimersByTimeAsync(2_100);
+    expect(t.progress.at(-1)).toMatchObject({ event: 'seek' });
+  });
+
+  it('siguiente episodio: tarjeta con cuenta atrás al final y a los 10 s, el siguiente (otra sesión, sin start)', async () => {
+    const t = vodSetup({
+      kind: 'episode',
+      seriesId: 'f1d2e3f4a5b60718293a4b5c6d7e8f9012345678',
+      title: 'The Office',
+      subtitle: 'T2 · E6 · Todo cambia',
+      durationS: 1440,
+      next: { id: EP2, title: 'La verdad', label: 'T2 · E7' },
+    });
+    await vodPlaying(t, 1425);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(t.state.vod?.nextUp?.mode).toBe('countdown');
+    await vi.advanceTimersByTimeAsync(10_000);
+    await flush();
+    const last = t.callsTo('vodStream').at(-1)!;
+    expect(last.input.params).toEqual({ id: EP2 });
+    expect(last.input.query).not.toHaveProperty('start');
+    expect(t.progress.some((entry) => entry['id'] === MOVIE_ID && entry['event'] === 'ended')).toBe(
+      true,
+    );
+    expect(t.state.channel).toMatchObject({ hash: EP2, subtitle: 'T2 · E7 · La verdad' });
+  });
+
+  it('«¿Sigues viendo?» tras 3 episodios seguidos solos; sin respuesta en 60 s, pausa y suelta la sesión', async () => {
+    const t = vodSetup({
+      kind: 'episode',
+      durationS: 1440,
+      next: { id: EP2, title: 'La verdad', label: 'T2 · E7' },
+    });
+    t.runtime.playVod({ id: MOVIE_ID, kind: 'episode', title: 'The Office' }, {}, 3);
+    await flush();
+    const engine = t.engines.last();
+    engine.args.callbacks.onReady();
+    t.video._currentTime = 1425;
+    t.video.setBuffered([[1425, 1440]]);
+    await vi.advanceTimersByTimeAsync(250);
+    t.video.advance(0.1);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(t.state.vod?.nextUp?.mode).toBe('still');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(t.state.phase).toBe('error');
+    expect(t.state.vod?.failure?.code).toBe('vod_idle');
+    expect(t.callsTo('sessionRelease').length).toBeGreaterThanOrEqual(1);
+    expect(t.callsTo('vodStream')).toHaveLength(1);
+  });
+
+  it('de una película a un canal en directo: la marca `stop` y el directo como siempre (kind live)', async () => {
+    const t = vodSetup();
+    await vodPlaying(t, 50);
+    t.runtime.play({ hash: HASH, title: 'M+ Liga de Campeones' });
+    expect(t.progress.at(-1)).toMatchObject({ event: 'stop', id: MOVIE_ID });
+    await flush();
+    expect(t.state).toMatchObject({ kind: 'live', vod: null });
+    expect(t.callsTo('channelStream')).toHaveLength(1);
+    expect(t.engines.last().args.vod).toBeUndefined();
   });
 });

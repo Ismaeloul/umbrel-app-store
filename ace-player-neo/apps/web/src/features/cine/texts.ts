@@ -103,8 +103,6 @@ export const CINE_TEXT = {
   noSynopsis: 'No se ha podido cargar la sinopsis.',
   hevcBlocked: 'Este navegador no reproduce vídeo HEVC. Prueba en Safari o en el iPhone.',
   truncatedSeries: 'Esta serie tiene más episodios de los que se pueden enseñar.',
-  // Reproducir antes de VOD-6: la ficha y la portada ya llaman aquí.
-  comingSoon: 'Próximamente: la reproducción de películas y series llega en la siguiente versión.',
   // Estados (§13)
   noIptvTitle: 'Conecta tu IPTV',
   noIptvText: 'Las películas y series salen de tu IPTV. Conéctala en Ajustes.',

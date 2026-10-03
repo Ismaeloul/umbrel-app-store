@@ -34,6 +34,8 @@ import {
   type VodProgressBody,
   type VodTag,
   type VodTagCount,
+  type VodAudioTrack,
+  type VodGrant,
   type VodTitle,
 } from '@ace/shared';
 import {
@@ -41,6 +43,7 @@ import {
   episodesThrough,
   isWatched,
   nextEpisode,
+  resumeAt,
   seasonLabel,
   seriesMain,
 } from './model.ts';
@@ -1479,3 +1482,98 @@ export const DEMO_VOD_IDS = {
   movieCategory: MOVIE_CATS.k4.id,
   adultCategory: MOVIE_CATS.adultos.id,
 } as const;
+
+// ---- Reproducir (§12.11): la concesión de prueba -------------------------------------------
+
+const AUDIO_CODECS: Record<string, string> = { 'AC-3': 'ac3', 'E-AC-3': 'eac3', AAC: 'aac' };
+const LANGS: Record<string, string> = {
+  Castellano: 'spa',
+  Latino: 'spa',
+  Inglés: 'eng',
+};
+
+/** «AC-3 5.1 · Castellano» → la pista del índice (§9.9). */
+function demoAudioTrack(text: string, index: number): VodAudioTrack {
+  const [tech = '', language = `Pista ${index + 1}`] = text.split(' · ');
+  const [codecName = 'AAC', layout = '2.0'] = tech.split(' ');
+  const codec = AUDIO_CODECS[codecName] ?? codecName.toLowerCase();
+  const channels = layout === '5.1' ? 6 : 2;
+  return {
+    index,
+    label: `${language}${channels === 6 ? ' 5.1' : ''}`,
+    lang: LANGS[language] ?? null,
+    codec,
+    channels,
+    converted: codec !== 'aac',
+  };
+}
+
+/**
+ * GET vodStream de la demo: una concesión con la duración de verdad del título,
+ * el progreso guardado, el siguiente episodio y sus pistas. No hay vídeo: el
+ * reproductor de la demo lleva un reloj de mentira (player/vod/driver.ts).
+ */
+export function demoVodStream(
+  id: string,
+  query: { start?: number | undefined; audio?: number | undefined },
+): VodGrant | null {
+  const movie = MOVIE_BY_ID.get(id);
+  const hit = EPISODE_BY_ID.get(id);
+  if (!movie && !hit) return null;
+  const durationS = (movie ? movie.durationS : hit?.episode.durationS) ?? (movie ? 6_300 : 2_640);
+  const saved = progress.get(id);
+  const resumeFrom = saved ? resumeAt(saved.posS, saved.watched) : 0;
+  const startS = Math.min(durationS - 1, Math.max(0, query.start ?? resumeFrom));
+  const tracks = (movie?.audio.length ? movie.audio : ['AAC 2.0 · Castellano']).map(demoAudioTrack);
+  const audioIndex =
+    query.audio !== undefined && tracks.some((track) => track.index === query.audio)
+      ? query.audio
+      : 0;
+  let next: VodGrant['vod']['next'] = null;
+  if (hit) {
+    const following = nextEpisode(hit.series.episodes, hit.episode);
+    const episode = following
+      ? hit.series.episodes.find((candidate) => candidate.id === following.id)
+      : undefined;
+    if (episode)
+      next = {
+        id: episode.id,
+        title: episode.title,
+        label: episodeCode(episode.season, episode.n, ' · '),
+      };
+  }
+  const sid = `s_demo${hex(`sesion:${id}:${startS}`, 12)}`;
+  return {
+    session: { id: sid, heartbeatMs: 15_000, expiresAfterMs: 45_000 },
+    url: `/api/v1/video/${sid}/index.m3u8`,
+    protocol: 'hls',
+    remux: true,
+    source: 'iptv',
+    codec: { video: 'h264', audio: 'aac', source: 'scanner' },
+    latency: { mode: 'balanced', initialBufferS: 3, rebuildS: 3, liveSync: null },
+    stats: { via: 'sse' },
+    handoff: false,
+    vod: {
+      id,
+      kind: movie ? 'movie' : 'episode',
+      seriesId: hit ? hit.series.card.id : null,
+      title: movie ? movie.card.title : (hit?.series.card.title ?? ''),
+      subtitle: hit
+        ? `${episodeCode(hit.episode.season, hit.episode.n, ' · ')} · ${hit.episode.title}`
+        : null,
+      durationS,
+      startS,
+      resumed: query.start === undefined && startS > 0,
+      audio: tracks,
+      audioIndex,
+      video: {
+        codec: movie?.playable === 'hevc' ? 'hevc' : 'h264',
+        codecs: movie?.playable === 'hevc' ? 'hvc1.1.6.L120.90' : 'avc1.640028',
+        width: 1920,
+        height: 1080,
+      },
+      next,
+      poster: movie ? movie.card.poster : (hit?.series.card.poster ?? null),
+    },
+  };
+}

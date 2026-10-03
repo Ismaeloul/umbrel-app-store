@@ -19,7 +19,8 @@
     var(--safe-bottom) + var(--tabbar-h) + var(--tabbar-gap) + var(--mini-h) + 36px
   );
 }
-.app[data-vista='partido'] .app-main {
+.app[data-vista='partido'] .app-main,
+.app[data-vista='sala'] .app-main {
   padding-bottom: calc(var(--safe-bottom) + 28px);
 }
 .app-main:focus-visible {
@@ -119,6 +120,10 @@
   /* 52 px de la pausa grande + 8 de aire. */
   --status-lift: -60px;
 }
+/* Con una película, además la barra de tiempo (28 px + 4 de hueco). */
+.stage:has(.player-chrome[data-visible='true'] .vod-bottom) .stage__status {
+  --status-lift: -92px;
+}
 .stage__status .status-line {
   min-height: 34px;
   max-width: min(100%, 560px);
@@ -212,7 +217,8 @@
   bottom: calc(var(--safe-bottom) + var(--tabbar-gap) + var(--tabbar-h) + 8px);
   min-height: var(--mini-h);
 }
-.app[data-layout='mobile'][data-vista='partido'] .dock[data-presentation='mini'] {
+.app[data-layout='mobile'][data-vista='partido'] .dock[data-presentation='mini'],
+.app[data-layout='mobile'][data-vista='sala'] .dock[data-presentation='mini'] {
   bottom: calc(var(--safe-bottom) + 12px);
 }
 .stage-placeholder {
@@ -497,6 +503,9 @@
   }
   .stage:has(.player-chrome[data-visible='true'] .player-chrome__bottom) .stage__status {
     --status-lift: -64px;
+  }
+  .stage:has(.player-chrome[data-visible='true'] .vod-bottom) .stage__status {
+    --status-lift: -100px;
   }
   .stage-placeholder {
     border-radius: var(--r-xl);

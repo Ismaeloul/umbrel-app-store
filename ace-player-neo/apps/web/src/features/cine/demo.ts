@@ -28,4 +28,20 @@ registerDemoHandlers({
     if (!title) throw new ApiError({ code: 'vod_not_found', status: 404, route: 'vodTitle' });
     return title;
   },
+  /* Reproducir en la demo (§12.11): la concesión de prueba con la duración del
+     título; el reproductor lleva un reloj de mentira (no hay vídeo). */
+  vodStream: async ({ params, query }) => {
+    const { demoVodStream } = await load();
+    await wait(400);
+    const number = (value: unknown) =>
+      value === undefined || value === null || value === '' || !Number.isFinite(Number(value))
+        ? undefined
+        : Number(value);
+    const grant = demoVodStream(params.id, {
+      start: number(query?.start),
+      audio: number(query?.audio),
+    });
+    if (!grant) throw new ApiError({ code: 'vod_not_found', status: 404, route: 'vodStream' });
+    return grant;
+  },
 });

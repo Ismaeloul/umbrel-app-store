@@ -59,7 +59,32 @@ export function originText(state: Pick<PlayerState, 'streamSource' | 'channel'>)
   return source ? `AceStream · ${source}` : 'AceStream';
 }
 
+/**
+ * Datos técnicos de una película (docs/vod.md §12.7): «Formato»
+ * (H.264 · AC-3 → AAC), «Preparado» (segundos por delante) y «Reinicios».
+ */
+export function vodNerdRows(state: PlayerState): Array<[string, string]> {
+  const vod = state.vod;
+  const ahead = vod ? Math.max(0, vod.bufferedEndS - vod.positionS) : null;
+  return [
+    ['Origen', 'IPTV · película o episodio'],
+    ['Formato', vod?.format ?? '—'],
+    ['Preparado', seconds(ahead)],
+    ['Reinicios', vod ? String(vod.restarts) : '—'],
+    ['Reproductor', state.engine ? ENGINE_NAME[state.engine] : '—'],
+    ['Entrega', state.protocol ? (DELIVERY[state.protocol] ?? state.protocol) : '—'],
+    [
+      'Primera imagen',
+      state.ttffMs !== null
+        ? `${(state.ttffMs / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} s`
+        : '—',
+    ],
+    ['Sesión', state.sessionId ?? '—'],
+  ];
+}
+
 export function nerdRows(state: PlayerState, engineText: string): Array<[string, string]> {
+  if (state.kind === 'vod') return vodNerdRows(state);
   const stats = state.stats;
   // IPTV (§8.1): sin pares (no hay enjambre) ni hash.
   const iptv = isIptvPlayback(state);

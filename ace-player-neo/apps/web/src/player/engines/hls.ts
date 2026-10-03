@@ -129,8 +129,39 @@ export interface InPlaceRecord {
 /** Con `startFrom`, no más atrás que borde − maxLatency + 2 s (si no, hls.js saltaría solo). */
 export const START_FROM_MARGIN_S = 2;
 
+/**
+ * Una película o un episodio (docs/vod.md §12.7): 30 s de búfer (60 como
+ * mucho), 60 s por detrás para volver sin pedir nada, y un fragmento puede
+ * tardar: tras un salto el servidor prepara el trozo nuevo (hasta 15 s,
+ * §9.7) y contesta 503 mientras tanto.
+ */
+export const HLS_VOD_CONFIG = {
+  maxBufferLength: 30,
+  maxMaxBufferLength: 60,
+  backBufferLength: 60,
+  fragLoadPolicy: {
+    default: {
+      maxTimeToFirstByteMs: 20_000,
+      maxLoadTimeMs: 60_000,
+      timeoutRetry: { maxNumRetry: 4, retryDelayMs: 0, maxRetryDelayMs: 0 },
+      errorRetry: { maxNumRetry: 6, retryDelayMs: 1_000, maxRetryDelayMs: 4_000 },
+    },
+  },
+} as const;
+
 /** La configuración que recibe hls.js (exportada para el test). */
-export function hlsConfig(profile: EngineArgs['profile']): Record<string, unknown> {
+export function hlsConfig(
+  profile: EngineArgs['profile'],
+  vod: EngineArgs['vod'] = null,
+): Record<string, unknown> {
+  if (vod)
+    return {
+      manifestLoadingTimeOut: 20_000,
+      ...HLS_PLAYLIST_RETRY,
+      ...HLS_VOD_CONFIG,
+      startPosition: Math.max(0, vod.startS),
+      enableInterstitialPlayback: false,
+    };
   return {
     manifestLoadingTimeOut: 20_000,
     fragLoadingTimeOut: 20_000,
@@ -239,12 +270,13 @@ export function createHlsEngine(Hls: HlsLib, args: EngineArgs): Engine {
     preloads: true,
     start() {
       if (destroyed || hls) return;
-      const config = hlsConfig(args.profile);
-      if (args.guardSequence) {
+      const config = hlsConfig(args.profile, args.vod);
+      // Con una película no hay remux que vuelva a empezar ni posición heredada (§12.7).
+      if (args.guardSequence && !args.vod) {
         const loader = guardedPlaylistLoader();
         if (loader) config.pLoader = loader;
       }
-      const startFrom = args.startFrom ?? null;
+      const startFrom = args.vod ? null : (args.startFrom ?? null);
       const levelLoaded = Hls.Events.LEVEL_LOADED;
       // Con posición heredada se espera a la lista para decir desde dónde cargar.
       if (startFrom && levelLoaded) config.autoStartLoad = false;

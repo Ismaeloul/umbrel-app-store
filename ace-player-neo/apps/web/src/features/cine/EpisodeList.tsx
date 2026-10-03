@@ -17,6 +17,7 @@
 import type { VodEpisode, VodSeriesMain } from '@ace/shared';
 import type { CSSProperties } from 'react';
 import { describeFailure } from '../../api/index.ts';
+import { useNavigate } from '../../app/router.tsx';
 import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
 import {
@@ -81,6 +82,7 @@ interface EpisodeRowProps {
 }
 
 function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: EpisodeRowProps) {
+  const navigate = useNavigate();
   const mark = useProgressMark();
   const context = useContextMenu();
   const watched = episode.progress?.watched === true;
@@ -153,13 +155,16 @@ function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: 
           .filter(Boolean)
           .join('. ')}
         onClick={() =>
-          playVod({
-            id: episode.id,
-            kind: 'episode',
-            title: seriesTitle,
-            subtitle: `${code} · ${episode.title}`,
-            seriesId,
-          })
+          playVod(
+            {
+              id: episode.id,
+              kind: 'episode',
+              title: seriesTitle,
+              subtitle: `${code} · ${episode.title}`,
+              seriesId,
+            },
+            navigate,
+          )
         }
       >
         {compact ? (

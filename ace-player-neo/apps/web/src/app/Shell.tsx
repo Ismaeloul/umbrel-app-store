@@ -78,6 +78,7 @@ const WHAT: Record<Vista, string> = {
   buscar: 'la búsqueda',
   ajustes: 'los ajustes',
   partido: 'el centro de partido',
+  sala: 'el reproductor',
   sistema: 'el sistema de diseño',
 };
 
@@ -203,23 +204,25 @@ export function Shell() {
   lastRoutes.current.set(route.vista, route);
 
   const inPartido = route.vista === 'partido';
-  const dockMounted = PlayerDock !== null && (inPartido || presence.active);
-  const presentation: PlayerPresentation = inPartido ? 'stage' : 'mini';
-  const immersive = presence.immersive || (inPartido && phoneLandscape);
+  // El escenario: un partido, o una película o un episodio (`sala`, docs/vod.md §12.2).
+  const inStage = inPartido || route.vista === 'sala';
+  const dockMounted = PlayerDock !== null && (inStage || presence.active);
+  const presentation: PlayerPresentation = inStage ? 'stage' : 'mini';
+  const immersive = presence.immersive || (inStage && phoneLandscape);
   const Aside = asideComponent(route.vista);
   const wideEnough = kind === 'desktop' || kind === 'wide';
   const asideAvailable = Aside !== null && wideEnough;
   const asideVisible = asideAvailable && asideOpen;
   const columnVisible = inPartido && kind === 'wide' && AgendaColumn !== null;
   const miniVisible = dockMounted && presentation === 'mini';
-  const tabbarVisible = kind === 'mobile' && !inPartido;
+  const tabbarVisible = kind === 'mobile' && !inStage;
 
   // Avisos: la línea de estado solo vive en el centro de partido; con el
   // vídeo a pantalla completa no se pinta ningún toast.
   useEffect(() => {
-    setWatching(inPartido);
-    if (!inPartido) clearStatus();
-  }, [inPartido]);
+    setWatching(inStage);
+    if (!inStage) clearStatus();
+  }, [inStage]);
   useEffect(() => setImmersive(immersive), [immersive]);
 
   // Sin View Transitions por vista: la vista que se deja se apaga encima de
@@ -325,7 +328,7 @@ export function Shell() {
           </aside>
         ) : null}
         <main id="contenido" className="app-main" tabIndex={-1}>
-          {dockMounted || inPartido ? (
+          {dockMounted || inStage ? (
             <div className="stage" data-presentation={presentation}>
               {dockMounted && PlayerDock ? (
                 <PlayerTransition animate={playerSwap} presentation={presentation}>
@@ -345,7 +348,7 @@ export function Shell() {
               ) : (
                 <StagePlaceholder />
               )}
-              {inPartido ? <StatusLineHost className="stage__status" /> : null}
+              {inStage ? <StatusLineHost className="stage__status" /> : null}
             </div>
           ) : null}
           <div className="views">

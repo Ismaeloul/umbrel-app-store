@@ -12,6 +12,7 @@
    | ajustes · ajustes/<sección>| { vista: 'ajustes', seccion }               |
    | partido/<id>               | { vista: 'partido', id, canal: null }       |
    | partido/canal/<hash>       | { vista: 'partido', id: null, canal: hash } |
+   | sala/<40 hex>              | { vista: 'sala', id } (película o episodio) |
    | sistema                    | { vista: 'sistema' } (solo con el flag)     |
 
    Lo que no se entiende acaba en la agenda.
@@ -28,7 +29,7 @@
 import { hasFlag, isSystemPageEnabled } from '../lib/flags.ts';
 
 export type Vista =
-  'agenda' | 'biblioteca' | 'guia' | 'cine' | 'buscar' | 'ajustes' | 'partido' | 'sistema';
+  'agenda' | 'biblioteca' | 'guia' | 'cine' | 'buscar' | 'ajustes' | 'partido' | 'sala' | 'sistema';
 
 export type Route =
   | { vista: 'agenda' }
@@ -42,6 +43,9 @@ export type Route =
   | { vista: 'buscar' }
   | { vista: 'ajustes'; seccion: string | null }
   | { vista: 'partido'; id: string | null; canal: string | null }
+  /* El escenario de una película o un episodio (docs/vod.md §12.2 y §12.8):
+     el reproductor en grande, como en un partido. */
+  | { vista: 'sala'; id: string }
   | { vista: 'sistema' };
 
 /**
@@ -87,6 +91,7 @@ export const VISTA_TITLE: Record<Vista, string> = {
   buscar: 'Buscar',
   ajustes: 'Ajustes',
   partido: 'Partido',
+  sala: 'Reproduciendo',
   sistema: 'Sistema de diseño',
 };
 
@@ -144,6 +149,13 @@ export function parseVista(
       const id = rest.join('/');
       return id && SEGMENT_RE.test(id) ? { vista: 'partido', id, canal: null } : DEFAULT_ROUTE;
     }
+    case 'sala': {
+      // `sala/<40 hex>`; sin un id válido, la portada de Películas y series.
+      const id = rest[0] ?? '';
+      return HASH_RE.test(id)
+        ? { vista: 'sala', id: id.toLowerCase() }
+        : { vista: 'cine', id: null };
+    }
     case 'sistema':
       return allowSystem ? { vista: 'sistema' } : DEFAULT_ROUTE;
     default:
@@ -167,6 +179,8 @@ export function formatVista(route: Route): string {
       return route.canal ? `partido/canal/${route.canal}` : `partido/${route.id ?? ''}`;
     case 'cine':
       return route.id ? `cine/${route.id}` : 'cine';
+    case 'sala':
+      return `sala/${route.id}`;
     default:
       return route.vista;
   }
@@ -190,6 +204,7 @@ export const VISTA_PARAMS: Record<Vista, readonly string[]> = {
   buscar: ['q'],
   ajustes: [],
   partido: [],
+  sala: [],
   sistema: [],
 };
 
@@ -243,6 +258,8 @@ export function sameRoute(a: Route, b: Route): boolean {
 export function routeDepth(route: Route): number {
   if (route.vista === 'partido') return 10;
   if (route.vista === 'sistema') return 11;
+  // El escenario de una película va por delante de su ficha (§12.2).
+  if (route.vista === 'sala') return 12;
   // La ficha de una película o una serie es un paso adelante de la portada (§12.2).
   if (route.vista === 'cine' && route.id) return 9;
   // La Guía TV es un paso adelante de Canales, su madre en la barra.
