@@ -474,15 +474,15 @@ const HAS_X264 =
     'libx264',
   ) ?? false;
 
-/* 4 s de 320x240 a 25 fps (GOP de `gop` cuadros), en MPEG-TS (vídeo 0x100, audio 0x101). */
-function x264Clip(dir: string, x264: string[], gop = 25): Buffer {
+/* `seconds` s de 320x240 a 25 fps (GOP de `gop` cuadros), en MPEG-TS (vídeo 0x100, audio 0x101). */
+function x264Clip(dir: string, x264: string[], gop = 25, seconds = 4): Buffer {
   const file = path.join(dir, 'clip.ts');
   const encode = spawnSync(
     'ffmpeg',
     [
       ...['-hide_banner', '-nostdin', '-v', 'error', '-y'],
-      ...['-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=25:duration=4'],
-      ...['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=4'],
+      ...['-f', 'lavfi', '-i', `testsrc2=size=320x240:rate=25:duration=${seconds}`],
+      ...['-f', 'lavfi', '-i', `sine=frequency=440:sample_rate=48000:duration=${seconds}`],
       ...['-c:v', 'libx264', '-preset', 'veryfast', '-g', `${gop}`, '-keyint_min', `${gop}`],
       ...['-sc_threshold', '0', ...x264, '-c:a', 'aac', '-f', 'mpegts', file],
     ],
@@ -543,6 +543,14 @@ describe.skipIf(!HAS_X264)('puerta TS: costura sin rastro en el TS (frame_num de
     ['sin B', ['-bf', '0']],
     ['B en pirámide', ['-bf', '2', '-x264-params', 'b-pyramid=normal']],
     ['entrelazado (MBAFF)', ['-bf', '2', '-flags', '+ildct+ilme', '-x264-params', 'tff=1']],
+    /* Auditoría 0.9.0 (¿falsos positivos del `frame_num`?): varios slices por cuadro, 4
+       referencias con B adaptativos, GOP abierto (punto de acceso sin IDR) y latencia cero. */
+    [
+      '4 slices, 4 referencias y B adaptativos',
+      ['-x264-params', 'slices=4:ref=4:bframes=3:b-adapt=2'],
+    ],
+    ['GOP abierto', ['-bf', '3', '-x264-params', 'open-gop=1']],
+    ['latencia cero', ['-tune', 'zerolatency']],
   ];
   for (const [label, x264] of clean) {
     it(`x264 ${label} sin pérdidas: ninguna costura y sale idéntico byte a byte`, () => {
@@ -594,4 +602,77 @@ describe.skipIf(!HAS_X264)('puerta TS: costura sin rastro en el TS (frame_num de
       }
     }, 20_000);
   }
+
+  /* Auditoría 0.9.0: con un GOP de 3 s la espera dura más que `seamPtsMs` (1,5 s). Antes, el
+     PTS del primer cuadro visto se comparaba con el último ENTREGADO (de antes de la costura) y
+     `lossSeam` pasaba a false por el mero paso del tiempo: el relé reiniciaba el remux. */
+  it('pérdida con GOP de 3 s: sigue siendo pérdida toda la espera, y el audio no se corta', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'ace-ts-gate-'));
+    try {
+      const holed = dropIdr(x264Clip(dir, ['-bf', '0'], 75, 7), 1);
+      const gate = new TsGate();
+      gate.wait({ forward: false, fresh: true });
+      /* Justo antes del IDR siguiente: casi 3 s esperando. */
+      const early = feed(gate, holed.data.subarray(0, holed.nextAt), 4096);
+      expect(gate.mode).toBe('waitRap');
+      expect(gate.lossSeam).toBe(true);
+      const out = Buffer.concat([early, feed(gate, holed.data.subarray(holed.nextAt), 4096)]);
+      expect(gate.seams).toBe(1);
+      const packets = parse(out);
+      const video = videoPts(packets);
+      expect(video.filter((pts) => pts > holed.idrPts && pts < holed.nextPts)).toEqual([]);
+      /* El audio de la espera ha pasado entero y en orden. */
+      const audio = audioPts(packets);
+      expectIncreasing(audio);
+      const during = audio.filter((pts) => pts > holed.idrPts + 9_000 && pts < holed.nextPts);
+      expect(during.length).toBeGreaterThan(5);
+      expect(decodeErrors(dir, out)).toBe('');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it('modo tolerante: la pérdida se cuenta pero no se espera (pasa todo, como antes de la puerta)', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'ace-ts-gate-'));
+    try {
+      const holed = dropIdr(x264Clip(dir, ['-bf', '0'], 25), 1);
+      const gate = new TsGate();
+      gate.wait({ forward: false, fresh: true });
+      gate.tolerant = true;
+      const out = feed(gate, holed.data, 4096);
+      expect(gate.seams).toBe(1);
+      expect(gate.tolerated).toBe(1);
+      expect(gate.mode).toBe('pass');
+      const video = videoPts(parse(out));
+      /* Los cuadros sin su IDR también salen (un poco de imagen rota antes que un parón). */
+      expect(
+        video.filter((pts) => pts > holed.idrPts && pts < holed.nextPts).length,
+      ).toBeGreaterThan(10);
+      expectIncreasing(audioPts(parse(out)));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it('una costura de verdad (salto del PTS) en modo tolerante sí se espera', () => {
+    const hand = new HandMux(HandMux.psiPackets());
+    const idr = Buffer.concat([nal(0x67, 20), nal(0x65, 200)]);
+    const p = Buffer.concat([nal(0x41, 100)]);
+    const gate = new TsGate();
+    gate.wait({ forward: false, fresh: true });
+    gate.tolerant = true;
+    const packets = parse(
+      feed(
+        gate,
+        hand.withPsi(
+          hand.pes(PID_VIDEO, 90_000, idr, { rai: true }),
+          hand.pes(PID_VIDEO, 180_000, p),
+          hand.pes(PID_VIDEO, 450_000, p),
+          hand.pes(PID_VIDEO, 453_600, idr, { rai: true }),
+        ),
+      ),
+    );
+    expect(gate.tolerated).toBe(0);
+    expect(videoPts(packets)).toEqual([90_000, 180_000, 453_600]);
+  });
 });
