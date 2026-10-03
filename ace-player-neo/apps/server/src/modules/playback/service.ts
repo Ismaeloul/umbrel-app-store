@@ -2400,6 +2400,12 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       const work = Promise.all(
         all.map(async (session) => {
           clock.clearTimeout(session.graceTimer);
+          if (session.vod) {
+            /* Como al cerrarla: primero ffmpeg y luego el relé (suelta la plaza del proveedor). */
+            await remux.closeVod(session.id).catch(() => undefined);
+            await session.vod.input.close().catch(() => undefined);
+            return;
+          }
           if (session.source === 'iptv') {
             await session.input?.close().catch(() => undefined);
             return;
