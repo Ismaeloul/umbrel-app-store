@@ -13,6 +13,7 @@ import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { fixture, json, mockFetch } from '../../test/fetch.ts';
 import { clearWebLog, recordWebLog } from '../../lib/web-log.ts';
 import { demoFaultsFile } from './demo.ts';
+import { unbrokenFileName } from './faults.ts';
 import { DIAG_LIMIT, VIRTUAL_FROM } from './DiagnosticsLog.tsx';
 import { CONFIRM_RESTART_MS, RECHECK_AFTER_RESTART_MS } from './engine.ts';
 import { HealthSection } from './HealthSection.tsx';
@@ -389,7 +390,7 @@ describe('Descargar fallos (0.9.0)', () => {
     expect(names[0]).toMatch(/^ace-player-neo-fallos-\d{4}-\d{2}-\d{2}-\d{4}\.json$/);
     await waitFor(() =>
       expect(toastStore.get().at(-1)?.text).toBe(
-        `Fallos descargados: ${names[0]} · ${saved.summary.nuestro} ${saved.summary.nuestro === 1 ? 'nuestro' : 'nuestros'}, ${saved.summary.deFuera} de fuera`,
+        `Fallos descargados: ${unbrokenFileName(names[0]!)} · ${saved.summary.nuestro} ${saved.summary.nuestro === 1 ? 'nuestro' : 'nuestros'}, ${saved.summary.deFuera} de fuera`,
       ),
     );
   });

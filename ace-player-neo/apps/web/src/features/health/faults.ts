@@ -70,9 +70,20 @@ export async function downloadFaults(
   return { name, file };
 }
 
+/**
+ * El nombre del fichero sin cortes a mitad de la fecha (en el móvil el aviso
+ * lo partía por cualquier guion): un «word joiner» (U+2060, invisible) tras
+ * los guiones entre cifras. Solo se puede cortar tras «ace-», «player-»,
+ * «neo-» o «fallos-», así que nunca se sale del aviso, ni en 320 px.
+ */
+export function unbrokenFileName(name: string): string {
+  return name.replace(/(\d)-(?=\d)/g, '$1-⁠');
+}
+
 /** El aviso al terminar: el nombre y, de un vistazo, cuántos son nuestros. */
 export function faultsNotice(name: string, file: DiagnosticsExport): string {
   const { nuestro, deFuera } = file.summary;
-  if (!nuestro && !deFuera) return `Fallos descargados: ${name} (sin fallos que contar)`;
-  return `Fallos descargados: ${name} · ${nuestro} ${nuestro === 1 ? 'nuestro' : 'nuestros'}, ${deFuera} de fuera`;
+  const shown = unbrokenFileName(name);
+  if (!nuestro && !deFuera) return `Fallos descargados: ${shown} (sin fallos que contar)`;
+  return `Fallos descargados: ${shown} · ${nuestro} ${nuestro === 1 ? 'nuestro' : 'nuestros'}, ${deFuera} de fuera`;
 }

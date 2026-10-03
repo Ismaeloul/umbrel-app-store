@@ -76,4 +76,14 @@ describe('el fichero de la demo', () => {
       faultsNotice('f.json', { ...file, summary: { ...file.summary, nuestro: 2, deFuera: 1 } }),
     ).toBe('Fallos descargados: f.json · 2 nuestros, 1 de fuera');
   });
+
+  it('el nombre del fichero no se parte a mitad de la fecha (móvil)', () => {
+    const file = demoFaultsFile(webDiagnostics());
+    const name = 'ace-player-neo-fallos-2026-10-03-1804.json';
+    const notice = faultsNotice(name, file);
+    // Se ve igual (el «word joiner» no se ve)…
+    expect(notice.replace(/⁠/g, '')).toContain(name);
+    // …la fecha va pegada y antes de ella sí se puede cortar.
+    expect(notice).toContain('fallos-2026-⁠10-⁠03-⁠1804.json');
+  });
 });
