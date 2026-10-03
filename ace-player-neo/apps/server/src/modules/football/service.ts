@@ -108,6 +108,8 @@ interface AgendaCache {
   pending: Promise<FootballSchedule> | null;
   /** El último refresco falló y se sirve la agenda vieja. */
   stale: boolean;
+  /** La copia con `stale: true` de `payload` (la misma en cada llamada: la agenda híbrida la reconoce). */
+  stalePayload: FootballSchedule | null;
 }
 
 function asRecord(value: unknown): Loose {
@@ -138,6 +140,7 @@ export class FootballServiceImpl implements FootballService {
     expiresAt: 0,
     pending: null,
     stale: false,
+    stalePayload: null,
   };
   private readonly embed: EmbedFunction;
   private demoPayload: FootballSchedule | null = null;
@@ -375,13 +378,15 @@ export class FootballServiceImpl implements FootballService {
       this.agenda.payload = payload;
       this.agenda.expiresAt = clock.now() + FOOTBALL_CACHE_MS;
       this.agenda.stale = false;
+      this.agenda.stalePayload = null;
       /* El catálogo de programación lo recuerda `withGuide` (con la guía encima). */
       return payload;
     } catch (error) {
       logger.warn({ errorCode: motivoDeFallo(error) }, 'agenda: ninguna fuente respondió a tiempo');
       if (this.agenda.payload) {
         this.agenda.stale = true;
-        return { ...this.agenda.payload, stale: true };
+        this.agenda.stalePayload ??= { ...this.agenda.payload, stale: true };
+        return this.agenda.stalePayload;
       }
       throw error instanceof AppError && error.code === 'football_unavailable'
         ? error
