@@ -209,9 +209,13 @@ describe.skipIf(!HAS_FFMPEG)('VodRun con ffmpeg de verdad (@ffmpeg)', () => {
 
   it('la entrada HTTP se corta a mitad: ffmpeg sale con 0, pero queda dicho en inputError', async () => {
     const file = ensureVodSample('mkv-h264-ac3');
-    const origin = await createFakeVodOrigin(await loopbackHost(), { '1.mkv': file }, {
-      dropAtBytes: Math.floor(statSync(file).size / 3),
-    });
+    const origin = await createFakeVodOrigin(
+      await loopbackHost(),
+      { '1.mkv': file },
+      {
+        dropAtBytes: Math.floor(statSync(file).size / 3),
+      },
+    );
     try {
       const rec = recorder();
       const run = new VodRun({
