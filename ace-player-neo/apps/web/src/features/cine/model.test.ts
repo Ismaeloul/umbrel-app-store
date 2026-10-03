@@ -23,6 +23,7 @@ import {
   releasedText,
   seasonName,
   seriesPlayLabel,
+  shortDateText,
   showsGrid,
   spanishCountry,
   spanishGenres,
@@ -166,6 +167,11 @@ describe('etiquetas de tiempo y datos', () => {
     expect(releasedText('2021-13-01')).toBeNull();
     expect(releasedText(null)).toBeNull();
     expect(releasedText('12/05/2023')).toBeNull();
+    // La emisión de un episodio, corta: «24 mar 2005».
+    expect(shortDateText('2005-03-24')).toBe('24 mar 2005');
+    expect(shortDateText('2016-09-01')).toBe('1 sept 2016');
+    expect(shortDateText('2016-9-1')).toBeNull();
+    expect(shortDateText(undefined)).toBeNull();
   });
 
   it('géneros de TMDB en inglés y países como código, en castellano', () => {

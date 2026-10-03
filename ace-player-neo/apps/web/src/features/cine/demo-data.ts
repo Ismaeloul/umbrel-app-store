@@ -689,6 +689,12 @@ interface SeriesExtra {
   country?: string | null;
   year?: null;
   episodePlots?: false;
+  /** Título original (`o_name`), si el proveedor lo da distinto. */
+  original?: string;
+  /** Edad recomendada (null = el proveedor no la da). */
+  age?: string | null;
+  /** Sinopsis de cada temporada (`overview`). */
+  seasonPlots?: Record<number, string>;
 }
 
 const SERIES_EXTRA: Record<string, SeriesExtra> = {
@@ -706,6 +712,12 @@ const SERIES_EXTRA: Record<string, SeriesExtra> = {
     released: '2017-05-02',
     trailer: true,
     seasonNames: 'parte',
+    age: '16',
+    seasonPlots: {
+      1: 'El Profesor y su banda entran en la Fábrica Nacional de Moneda y Timbre con 67 rehenes. Fuera, la inspectora Raquel Murillo dirige la negociación sin saber que el cerebro del golpe está más cerca de lo que cree.',
+      2: 'El atraco se complica: la policía estrecha el cerco, dentro surgen las primeras grietas en la banda y el Profesor tiene que improvisar para que el plan siga en pie.',
+      3: 'Años después, la banda vuelve a juntarse para rescatar a uno de los suyos con un golpe aún más difícil: el Banco de España.',
+    },
   },
   'The Office': {
     plot: 'El día a día de los empleados de una sucursal de una empresa de papel en Scranton, contado como un documental, con un jefe que quiere ser el más gracioso de la oficina.',
@@ -714,6 +726,12 @@ const SERIES_EXTRA: Record<string, SeriesExtra> = {
     released: '2005-03-24',
     seasonNames: 'season',
     country: 'US',
+    original: 'The Office (US)',
+    age: '12',
+    seasonPlots: {
+      1: 'Un equipo de documentales empieza a grabar en la sucursal de Scranton de Dunder Mifflin, donde Michael Scott se esfuerza demasiado por caer bien.',
+      2: 'Michael sigue al frente de la oficina entre bromas que salen mal, y Jim no sabe qué hacer con lo que siente por Pam, que está prometida.',
+    },
   },
   'Stranger Things': {
     plot: 'En un pueblo de Indiana, la desaparición de un niño destapa experimentos secretos, fuerzas sobrenaturales y a una niña muy extraña.',
@@ -729,6 +747,7 @@ const SERIES_EXTRA: Record<string, SeriesExtra> = {
     director: 'Vince Gilligan',
     released: '2008-01-20',
     trailer: true,
+    age: '18',
   },
   'Cuéntame cómo pasó': {
     plot: 'La familia Alcántara vive en un barrio de Madrid los cambios de España desde finales de los sesenta.',
@@ -742,6 +761,10 @@ const SERIES_EXTRA: Record<string, SeriesExtra> = {
     director: 'Johan Renck',
     released: '2019-05-06',
     trailer: true,
+    age: '16',
+    seasonPlots: {
+      1: 'Cinco episodios que siguen la explosión del reactor 4, la evacuación de Prípiat y la investigación de un científico que se juega todo por contar por qué ocurrió.',
+    },
   },
   'The Big Bang Theory': {
     plot: 'Dos físicos brillantes pero torpes en todo lo demás ven cómo cambia su vida cuando una vecina se muda al piso de enfrente.',
@@ -761,6 +784,7 @@ const SERIES_EXTRA: Record<string, SeriesExtra> = {
     country: null,
     year: null,
     episodePlots: false,
+    age: null,
   },
 };
 
@@ -786,6 +810,8 @@ interface DemoEpisode {
   durationS: number | null;
   still: string | null;
   playable: VodPlayable;
+  airDate: string | null;
+  rating: number | null;
 }
 
 interface DemoSeries {
@@ -800,9 +826,17 @@ interface DemoSeries {
   released: string | null;
   trailer: string | null;
   runTimeS: number | null;
+  originalTitle: string | null;
+  ageRating: string | null;
+  seasonPlots: Record<number, string>;
   seasonNames: SeriesExtra['seasonNames'];
   backdrop: string | null;
   episodes: DemoEpisode[];
+}
+
+/** «2005-03-24» + 7 días → «2005-03-31» (en UTC: sin cambios de hora). */
+function dayAfter(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
 }
 
 /** El nombre que da el proveedor a una temporada (la web enseña «Temporada N» si es genérico). */
@@ -837,6 +871,15 @@ const SERIES: DemoSeries[] = SERIES_SEEDS.map((seed, index) => {
       durationS: minutes > 0 ? (minutes + ((n * 7) % 9) - 4) * 60 : null,
       still,
       playable: index === 5 && season === 4 ? 'hevc' : 'yes',
+      // Emisión: una vez por semana desde el estreno, una temporada por año.
+      airDate:
+        extra.released && season > 0
+          ? dayAfter(extra.released, (season - 1) * 364 + (n - 1) * 7)
+          : null,
+      rating:
+        rating > 0 && extra.episodePlots !== false
+          ? Math.min(10, Math.round((rating - 0.6 + ((n * 7 + season * 3) % 10) / 10) * 10) / 10)
+          : null,
     });
   };
   seasons.forEach((count, s) => {
@@ -864,6 +907,9 @@ const SERIES: DemoSeries[] = SERIES_SEEDS.map((seed, index) => {
     released: extra.released ?? null,
     trailer: extra.trailer ? fakeTrailer(title) : null,
     runTimeS: minutes > 0 ? minutes * 60 : null,
+    originalTitle: extra.original ?? null,
+    ageRating: extra.age === undefined ? (['7', '12', '16'][index % 3] ?? '12') : extra.age,
+    seasonPlots: extra.seasonPlots ?? {},
     seasonNames: extra.seasonNames,
     backdrop: extra.backdrop === false ? null : stamp(`${id}:fondo`),
     episodes,
@@ -1320,8 +1366,8 @@ export function demoVodTitle(id: string): VodTitle | null {
         backdrop: null,
         tech: { container: null, video: null, audio: [] },
         playable: 'unknown',
+        releaseDate: null,
         trailer: null,
-        released: null,
       };
     return {
       ...known,
@@ -1341,8 +1387,8 @@ export function demoVodTitle(id: string): VodTitle | null {
         audio: movie.audio,
       },
       playable: movie.playable,
+      releaseDate: movie.released,
       trailer: movie.trailer,
-      released: movie.released,
     };
   }
   const series = SERIES_BY_ID.get(id);
@@ -1368,9 +1414,11 @@ export function demoVodTitle(id: string): VodTitle | null {
     tags: series.card.tags,
     adult: false,
     category: { id: series.cat.id, name: series.cat.name },
+    originalTitle: series.originalTitle,
+    ageRating: series.ageRating,
+    releaseDate: series.released,
     trailer: series.trailer,
-    released: series.released,
-    episodeRunTimeS: series.runTimeS,
+    episodeDurationS: series.runTimeS,
     seasons: numbers.map((n) => ({
       n,
       name: providerSeasonName(n, series.seasonNames),
@@ -1386,7 +1434,10 @@ export function demoVodTitle(id: string): VodTitle | null {
           still: e.still,
           playable: e.playable,
           progress: progressOf(e.id),
+          airDate: e.airDate,
+          rating: e.rating,
         })),
+      plot: series.seasonPlots[n] ?? null,
     })),
     main: seriesMain(
       series.episodes.map((e) => ({

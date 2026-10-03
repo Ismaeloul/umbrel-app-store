@@ -2,8 +2,9 @@
 
    - Con fotogramas: el fotograma 16:9 (o, si falta en ese episodio, su
      NÚMERO grande sobre el color de la serie), «3. Título», la duración o lo
-     que queda, la barra de lo visto, «Visto» (icono y texto, nunca solo color)
-     y la sinopsis en 2 líneas.
+     que queda, la fecha de emisión y la nota (si el proveedor las da), la
+     barra de lo visto, «Visto» (icono y texto, nunca solo color) y la
+     sinopsis en 2 líneas.
    - Si NINGÚN episodio de la temporada trae fotograma (muy habitual en IPTV):
      una lista compacta con el número en un círculo, sin huecos grises.
    - El episodio del botón principal se resalta con el borde dorado y su
@@ -30,7 +31,15 @@ import {
 } from '../../ui/index.ts';
 import { Art, artFill } from './Art.tsx';
 import { useProgressMark } from './data.ts';
-import { durationText, episodeTag, playBlock, progressRatio, remainingText } from './model.ts';
+import {
+  durationText,
+  episodeTag,
+  playBlock,
+  progressRatio,
+  ratingText,
+  remainingText,
+  shortDateText,
+} from './model.ts';
 import { canPlayHevc, playVod } from './play.ts';
 import { CINE_TEXT, formatBlocked } from './texts.ts';
 
@@ -109,6 +118,8 @@ function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: 
     ratio !== null && episode.progress
       ? remainingText(episode.progress.posS, episode.progress.durS)
       : null;
+  const aired = shortDateText(episode.airDate);
+  const rating = ratingText(episode.rating);
   const reason = block
     ? block.reason === 'hevc'
       ? CINE_TEXT.hevcBlocked
@@ -125,7 +136,15 @@ function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: 
         type="button"
         className="cine-episode__play press"
         disabled={block !== null}
-        aria-label={[name, badge, duration, watched ? CINE_TEXT.watched : left, reason]
+        aria-label={[
+          name,
+          badge,
+          duration,
+          watched ? CINE_TEXT.watched : left,
+          aired,
+          rating ? `${CINE_TEXT.rating} ${rating}` : null,
+          reason,
+        ]
           .filter(Boolean)
           .join('. ')}
         onClick={() =>
@@ -183,7 +202,13 @@ function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: 
             ) : null}
           </span>
           <span className="cine-episode__meta">
-            {[duration, left].filter(Boolean).join(' · ')}
+            {[duration, left, aired].filter(Boolean).join(' · ')}
+            {rating ? (
+              <span className="cine-rating">
+                <Icon name="star-f" size={16} className="cine-rating__star" />
+                <Num value={rating} condensed={false} />
+              </span>
+            ) : null}
             {watched ? (
               <span className="cine-episode__watched">
                 <Icon name="check" size={16} />

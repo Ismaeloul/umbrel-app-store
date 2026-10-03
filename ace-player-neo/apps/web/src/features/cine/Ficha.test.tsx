@@ -73,7 +73,7 @@ describe('película', () => {
     const details = screen.getByRole('heading', { name: 'Detalles' }).closest('section')!;
     expect(within(details).getByText('Reparto')).toBeInTheDocument();
     expect(within(details).getByText('Denis Villeneuve')).toBeInTheDocument();
-    expect(within(details).getByText('16 de septiembre de 2021')).toBeInTheDocument();
+    expect(within(details).getByText('15 de septiembre de 2021')).toBeInTheDocument();
     expect(within(details).getByText('2160p · H.264').closest('div')).toHaveAttribute(
       'title',
       'Según el proveedor',
@@ -86,7 +86,7 @@ describe('película', () => {
   it('el tráiler abre YouTube en otra pestaña; sin tráiler, no hay botón', async () => {
     const first = serveTitle(MOVIE);
     const trailer = await screen.findByRole('link', { name: /^Tráiler de Dune/ });
-    expect(trailer).toHaveAttribute('href', 'https://www.youtube.com/watch?v=abcDEF12345');
+    expect(trailer).toHaveAttribute('href', 'https://www.youtube.com/watch?v=Dune2021Tra');
     expect(trailer).toHaveAttribute('target', '_blank');
     expect(trailer).toHaveAttribute('rel', 'noopener noreferrer');
     first.unmount();
@@ -213,6 +213,16 @@ describe('serie', () => {
     const details = screen.getByRole('heading', { name: 'Detalles' }).closest('section')!;
     expect(within(details).getByText('Episodios de unos 22 min')).toBeInTheDocument();
     expect(within(details).getByText('24 de marzo de 2005')).toBeInTheDocument();
+    // Lo que vod-catalogo trae de más en una serie: título original y edad…
+    expect(document.querySelector('.cine-hero__original')?.textContent).toBe('The Office (US)');
+    expect(within(details).getByText('The Office (US)')).toBeInTheDocument();
+    expect(document.querySelector('.cine-hero__meta')?.textContent).toContain('+12');
+    // …y, en la temporada 1, su resumen y la emisión y la nota de cada episodio.
+    fireEvent.click(screen.getByRole('button', { name: 'Temporada 1' }));
+    expect(await screen.findByText(/le graba un equipo de documentales/)).toBeInTheDocument();
+    const pilot = document.querySelector('.cine-episode .cine-episode__meta');
+    expect(pilot?.textContent).toContain('24 mar 2005');
+    expect(pilot?.textContent).toContain('7,4');
     // Las temporadas y los episodios, ANTES de los detalles.
     const episodes = screen.getByRole('heading', { name: 'Episodios' });
     expect(

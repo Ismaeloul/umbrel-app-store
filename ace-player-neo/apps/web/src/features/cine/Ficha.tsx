@@ -105,6 +105,12 @@ export function trailerUrl(id: string): string {
   return `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
 }
 
+/** El título original (`o_name`), solo si no es el mismo que el que se enseña. */
+function originalTitle(title: VodTitle): string | null {
+  const original = title.originalTitle?.trim();
+  return original && original.toLowerCase() !== title.title.trim().toLowerCase() ? original : null;
+}
+
 /** Temporadas de verdad (sin «Especiales»). */
 function realSeasons(series: VodSeries): number {
   return series.seasons.filter((season) => season.n !== 0).length;
@@ -115,7 +121,7 @@ function realSeasons(series: VodSeries): number {
 /** «2021 · 2 h 36 min · ★ 8,0 · +12»: cada dato en su sitio, con su nombre para el lector. */
 function MetaLine({ title }: { title: VodTitle }) {
   const rating = ratingText(title.rating);
-  const age = title.kind === 'movie' ? ageText(title.ageRating) : null;
+  const age = ageText(title.ageRating);
   const items: Array<{ key: string; node: ReactNode }> = [];
   if (title.year !== null)
     items.push({ key: 'year', node: <Num value={String(title.year)} condensed={false} /> });
@@ -355,12 +361,12 @@ function Details({ title }: { title: VodTitle }) {
   if (genres.length) rows.push({ term: CINE_TEXT.genres, value: genres.join(', ') });
   const country = spanishCountry(title.country);
   if (country) rows.push({ term: CINE_TEXT.country, value: country });
-  const released = releasedText(title.released);
+  const released = releasedText(title.releaseDate);
   if (released) rows.push({ term: CINE_TEXT.released, value: released });
-  if (title.kind === 'movie' && title.originalTitle && title.originalTitle !== title.title)
-    rows.push({ term: CINE_TEXT.originalTitle, value: title.originalTitle });
-  if (title.kind === 'series' && title.episodeRunTimeS) {
-    const run = durationText(title.episodeRunTimeS);
+  const original = originalTitle(title);
+  if (original) rows.push({ term: CINE_TEXT.originalTitle, value: original });
+  if (title.kind === 'series' && title.episodeDurationS) {
+    const run = durationText(title.episodeDurationS);
     if (run) rows.push({ term: CINE_TEXT.episodesTitle, value: episodeRunText(run) });
   }
   if (title.category) {
@@ -462,8 +468,8 @@ function Hero({ title, onBack, now }: { title: VodTitle; onBack(): void; now: nu
           >
             {title.title}
           </h1>
-          {title.kind === 'movie' && title.originalTitle && title.originalTitle !== title.title ? (
-            <p className="cine-hero__original">{title.originalTitle}</p>
+          {originalTitle(title) ? (
+            <p className="cine-hero__original">{originalTitle(title)}</p>
           ) : null}
           <MetaLine title={title} />
         </div>

@@ -219,6 +219,16 @@ export function releasedText(date: string | null | undefined): string | null {
   return `${Number(day)} de ${name} de ${year}`;
 }
 
+/** «2005-03-24» → «24 mar 2005» (la emisión de un episodio, en su línea de datos). */
+export function shortDateText(date: string | null | undefined): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date ?? '');
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const name = MONTHS[Number(month) - 1];
+  if (!name || Number(day) < 1 || Number(day) > 31) return null;
+  return `${Number(day)} ${name === 'septiembre' ? 'sept' : name.slice(0, 3)} ${year}`;
+}
+
 /**
  * Géneros de TMDB que muchos paneles mandan en inglés («Action, Drama»), a su
  * nombre en español. Lo que no está en la tabla (o ya viene en español) se

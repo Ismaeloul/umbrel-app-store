@@ -53,7 +53,7 @@ describe('demo de Películas y series', () => {
     const oppenheimer = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.movie)) as VodMovie;
     expect(oppenheimer.plot).toMatch(/Oppenheimer/);
     expect(oppenheimer.cast.length).toBeGreaterThanOrEqual(8);
-    expect(oppenheimer.released).toBe('2023-07-21');
+    expect(oppenheimer.releaseDate).toBe('2023-07-21');
     expect(oppenheimer.trailer).toMatch(/^[\w-]{11}$/);
     const poor = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.moviePoor));
     expect(poor).toMatchObject({
@@ -70,19 +70,34 @@ describe('demo de Películas y series', () => {
     const twelve = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.seriesTwelve)) as VodSeries;
     expect(twelve.seasons).toHaveLength(12);
     expect(twelve.seasons[1]?.name).toBe('Season 2');
-    expect(twelve.episodeRunTimeS).toBe(1260);
+    expect(twelve.episodeDurationS).toBe(1260);
     const one = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.seriesOneSeason)) as VodSeries;
     expect(one.seasons).toHaveLength(1);
     const parts = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.seriesParts)) as VodSeries;
     expect(parts.seasons[0]?.name).toBe('Parte 1');
     expect(parts.trailer).toMatch(/^[\w-]{11}$/);
+    // Lo que el servidor saca de más de Xtream: resumen de temporada, emisión y nota del episodio.
+    expect(parts.seasons[0]?.plot).toMatch(/Fábrica Nacional/);
+    expect(parts.seasons[0]?.episodes[1]).toMatchObject({ airDate: '2017-05-09' });
+    expect(parts.seasons[0]?.episodes[1]?.rating).toBeGreaterThan(0);
+    const office = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.series)) as VodSeries;
+    expect(office).toMatchObject({ originalTitle: 'The Office (US)', ageRating: '12' });
     const noStills = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.seriesNoStills)) as VodSeries;
     expect(noStills.seasons.every((s) => s.episodes.every((e) => e.still === null))).toBe(true);
     const barrio = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.seriesPoor)) as VodSeries;
-    expect(barrio).toMatchObject({ poster: null, backdrop: null, plot: null, rating: null });
-    expect(barrio.seasons[0]?.episodes.every((e) => e.durationS === null && e.plot === null)).toBe(
-      true,
-    );
+    expect(barrio).toMatchObject({
+      poster: null,
+      backdrop: null,
+      plot: null,
+      rating: null,
+      ageRating: null,
+      releaseDate: null,
+    });
+    expect(
+      barrio.seasons[0]?.episodes.every(
+        (e) => e.durationS === null && e.plot === null && e.airDate === null && e.rating === null,
+      ),
+    ).toBe(true);
   });
 
   it('búsqueda por niveles: «spiderman» encuentra «Spider-Man» y dice cuántas series hay', () => {

@@ -229,7 +229,7 @@ contrato). Se ve con `?demo=1&flag=cine`.
 | §2 / §4 «0» de nota o de edad | Se ocultan (`ratingText`, `ageText`). | «Sin dato» en Xtream. |
 | §3.4 Serie | Temporadas y episodios ANTES de los detalles; «Temporada N» salvo nombre de verdad («Parte 1»); desplegable con más de 8; lista compacta si ninguna imagen; el número grande si falta una; el episodio del botón principal con el aura dorada y «Continuar» / «Siguiente» / «Empieza aquí»; «2005 · 4 temporadas · ★ 8,9» y «Episodios de unos 22 min». | Todo P0 de la investigación. |
 | §3.5 «Seguir viendo» con solo cartel | El cartel 2:3 entero a la izquierda sobre su color desenfocado. | Recortarlo a 16:9 se veía mal. |
-| §3.3 / §3.4 P1 del contrato | `trailer`, `released` y `episodeRunTimeS`, **opcionales** (commit `feat(contrato)` aparte). | Un servidor que no los mande no rompe nada. |
+| §3.3 / §3.4 P1 del contrato | Los campos **opcionales** de vod-catalogo, que los rellena: `releaseDate`, `trailer`, `episodeDurationS` y, de paso, `originalTitle` y `ageRating` de la serie, `plot` de cada temporada y `airDate` y `rating` de cada episodio (lo que la investigación dejaba para P2). | Un servidor que no los mande no rompe nada; con los mismos nombres en las dos ramas, al unir no chocan. |
 
 ### 5.2 Adoptado con cambios
 
@@ -248,10 +248,11 @@ contrato). Se ve con `?demo=1&flag=cine`.
 
 - **Servidor** (equipo vod-catalogo): §3.7 buscador (lista blanca de prefijos, distintivos de la consulta como
   filtro), «N/A», URLs de TMDB incompletas, fondo igual al cartel, `newMovies: []` sin `added`, y rellenar `trailer`,
-  `released` y `episodeRunTimeS` desde `youtube_trailer`, `releasedate`/`releaseDate` y `episode_run_time`. También
-  los adultos en `newMovies` y en «Todas» (D-VOD7 cambiada).
+  `releaseDate`, `episodeDurationS` y los demás campos nuevos desde `youtube_trailer`, `releasedate`/`releaseDate`,
+  `episode_run_time`, `o_name`, `age`, `overview` y `air_date`. También los adultos en `newMovies` y en «Todas»
+  (D-VOD7 cambiada).
 - **Reproductor** (VOD-6): siguiente episodio a `max(30 s, 2 %)`, interruptor de reproducción automática y el umbral
   de 2 min para entrar en «Seguir viendo» (cambia `VOD_PROGRESS` y sus vectores). «Reproducir» sigue en
   «Próximamente» (`play.ts`), con la ficha lista para enchufarlo.
-- **P2:** orden por año o nota, salto A-Z, «Otras versiones», portadas de temporada, emisión de episodios, botón de
-  reproducir al pasar el ratón.
+- **P2:** orden por año o nota, salto A-Z, «Otras versiones», portadas de temporada, botón de reproducir al pasar el
+  ratón. (La emisión de los episodios y el resumen de cada temporada ya salen: el servidor de vod-catalogo los trae.)

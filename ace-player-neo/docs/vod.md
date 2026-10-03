@@ -1614,7 +1614,10 @@ de otras apps (`docs/investigacion/pelis-y-series.md`, con «Qué hemos adoptado
   «Temporada N» salvo nombre de verdad del proveedor; con más de 8, un desplegable. Episodio con fotograma (o su número
   grande) o, si la temporada no tiene ninguno, la lista compacta con el número en un círculo; el del botón principal
   con el aura dorada y «Continuar», «Siguiente» o «Empieza aquí».
-- **Contrato** (opcional): `trailer`, `released` y `episodeRunTimeS` (§11.2).
+- **Contrato** (opcional, el mismo de vod-catalogo, que los rellena): película `releaseDate` y `trailer`; serie
+  `originalTitle`, `ageRating`, `releaseDate`, `trailer` y `episodeDurationS`; temporada `plot`; episodio `airDate` y
+  `rating` (§11.2). La web los enseña todos: título original y edad también en la serie, el resumen de cada temporada
+  (2 líneas con «Más») y «24 mar 2005 · ★ 7,4» en cada episodio.
 - **Demo:** 63 películas y 14 series, con fichas completas y casos pobres (§12.11 queda así).
 
 ---

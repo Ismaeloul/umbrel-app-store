@@ -8,7 +8,8 @@
      «s02» se ven como «Temporada 2» (model.ts, seasonName).
    - La temporada elegida viaja en la URL (`&temporada=`); sin ella, la del
      botón principal (el episodio por el que se va) o la primera.
-   - Debajo, «10 episodios · 45 min» y la lista (EpisodeList.tsx). */
+   - Debajo, «10 episodios», el resumen de la temporada si el proveedor lo da
+     (`overview`, recortado con «Más») y la lista (EpisodeList.tsx). */
 
 import type { VodSeries } from '@ace/shared';
 import { useState } from 'react';
@@ -16,6 +17,7 @@ import { useSearchParam } from '../../app/router.tsx';
 import { Button, Chip, Menu, type MenuItem } from '../../ui/index.ts';
 import { EpisodeList } from './EpisodeList.tsx';
 import { seasonName } from './model.ts';
+import { Synopsis } from './Synopsis.tsx';
 import { CINE_TEXT, episodesText } from './texts.ts';
 
 /** Con más temporadas que esto, un desplegable en vez de chips. */
@@ -105,6 +107,9 @@ export function Seasons({ series }: { series: VodSeries }) {
         {series.seasons.length < 2 ? `${seasonName(season.n, season.name)} · ` : ''}
         {episodesText(season.episodes.length)}
       </p>
+      {season.plot ? (
+        <Synopsis key={season.n} plot={season.plot} className="cine-seasons__plot" />
+      ) : null}
       {season.episodes.length ? (
         <EpisodeList
           seriesId={series.id}

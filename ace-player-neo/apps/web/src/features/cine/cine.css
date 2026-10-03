@@ -1075,6 +1075,21 @@
   font-size: var(--fs-13);
   font-weight: var(--wght-medium);
 }
+/* El resumen de la temporada (`overview`): más discreto que la sinopsis. */
+.cine-seasons__plot {
+  padding-inline: 2px;
+}
+.cine-seasons__plot .cine-synopsis__text {
+  color: var(--text-2);
+}
+.cine-seasons__plot .cine-synopsis__text--clamp {
+  -webkit-line-clamp: 2;
+}
+@media (min-width: 1024px) {
+  .cine-seasons__plot .cine-synopsis__text--clamp {
+    -webkit-line-clamp: 3;
+  }
+}
 .cine-episodes {
   display: grid;
   gap: 6px;
