@@ -476,9 +476,9 @@ conservador). Todas se pueden revertir.
 - **Vuelta atrás**: no cambia el formato de ningún fichero de `data/`;
   volver a la 0.8.3 es seguro (solo se pierden las rutas nuevas).
 
-## D-propuesta (vod-web). Pelis y series «como los partidos» (0.9.0, equipo/vod-web)
+## D26. Pelis y series «como los partidos» (0.9.0, equipo/vod-web)
 
-(El coordinador le pone número al unir.) Lo pidió Isma (pendiente.md, punto 7)
+Lo pidió Isma (pendiente.md, punto 7)
 y sale de la investigación de otras apps (`docs/investigacion/pelis-y-series.md`,
 §5 «Qué hemos adoptado y por qué»); el detalle de pantallas, en docs/vod.md
 §12.12.
