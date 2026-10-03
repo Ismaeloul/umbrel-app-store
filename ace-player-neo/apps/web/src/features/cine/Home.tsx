@@ -9,10 +9,14 @@
    - la REJILLA de carteles grandes, otra pantalla: una categoría o «Ver
      todo» (`cinecat`), un distintivo (`cinetag`) o una búsqueda (2 letras o
      más, 250 ms tras la última tecla). Con su cabecera («‹», el nombre y
-     «1.234 películas»), los chips de categorías (móvil y tableta), los de
-     distintivos y el orden «Novedades | A-Z».
+     «1.234 películas»), los chips de categorías (solo en la tableta: en el
+     móvil está «Categorías» arriba y los carteles necesitan el sitio) y una
+     fila con el orden «Novedades | A-Z» y los distintivos. Una búsqueda
+     dentro de una categoría se queda en ella y lo dice («0 películas en
+     VOD | 4K», «Buscar en todas las películas»).
    Abrir la rejilla desde la portada añade una entrada al historial: «Atrás»
-   (o el gesto del iPhone) vuelve a la portada, a su sitio.
+   (o el gesto del iPhone) vuelve a la portada, a su sitio, y el foco pasa
+   del «Ver todo» al título de la rejilla y vuelve (nunca a <body>).
 
    Cada estado vacío tiene su salida (EmptyState con acciones), y la región
    viva dice cuántos títulos hay tras cada cambio. */
@@ -67,11 +71,13 @@ import { TagChips } from './TagChips.tsx';
 import {
   CINE_TEXT,
   nothingFound,
+  nothingFoundIn,
   resultsTitle,
   seeAllTitles,
   seeOtherKind,
   staleText,
   TAG_LABEL,
+  titlesInText,
   titlesText,
   truncatedText,
 } from './texts.ts';
@@ -235,14 +241,21 @@ function otherKind(kind: VodKind): VodKind {
   return kind === 'movie' ? 'series' : 'movie';
 }
 
-/** El nombre de la rejilla: la búsqueda, la categoría o «Todas las películas». */
-function gridTitle(state: CineUrlState, q: string, home: VodHomeData): string {
-  if (q) return resultsTitle(q);
-  const all = state.kind === 'movie' ? CINE_TEXT.allMovies : CINE_TEXT.allSeries;
-  if (state.cat === null || state.cat === 'all') return all;
+/** El nombre de la categoría abierta (null = ninguna: la portada o «Todas»). */
+function categoryName(state: CineUrlState, home: VodHomeData): string | null {
+  if (state.cat === null || state.cat === 'all') return null;
   return (
     home.categories[state.kind].find((category) => category.id === state.cat)?.name ??
     CINE_TEXT.noCategory
+  );
+}
+
+/** El nombre de la rejilla: la búsqueda, la categoría o «Todas las películas». */
+function gridTitle(state: CineUrlState, q: string, home: VodHomeData): string {
+  if (q) return resultsTitle(q);
+  return (
+    categoryName(state, home) ??
+    (state.kind === 'movie' ? CINE_TEXT.allMovies : CINE_TEXT.allSeries)
   );
 }
 
@@ -544,9 +557,14 @@ function GridScreen({
   const tagCounts = first?.tags ?? data.tags[state.kind];
   const total = first?.total ?? null;
   const title = gridTitle(state, q, data);
-  const subtitle =
-    total !== null ? titlesText(total, state.kind) : state.tag ? TAG_LABEL[state.tag] : '';
-  const live = first && !pages.isFetching ? titlesText(first.total, state.kind) : '';
+  /* Buscar dentro de una categoría se queda en ella (§12.5): se dice dónde
+     («3 películas en VOD | 4K») y se ofrece buscar en todas. */
+  const scope = searching ? categoryName(state, data) : null;
+  const count = (n: number) =>
+    scope ? titlesInText(n, state.kind, scope) : titlesText(n, state.kind);
+  const subtitle = total !== null ? count(total) : state.tag ? TAG_LABEL[state.tag] : '';
+  const live = first && !pages.isFetching ? count(first.total) : '';
+  const searchAll = () => setCineState({ cat: 'all' });
   return (
     <section className="cine-browse" aria-labelledby={GRID_TITLE_ID}>
       <div className="cine-browse__head">
@@ -564,15 +582,30 @@ function GridScreen({
           {subtitle ? <p className="cine-browse__count">{subtitle}</p> : null}
         </div>
       </div>
+      {/* Sin nada, el estado vacío ya lo ofrece (grande): aquí no se repite. */}
+      {scope && total !== null && total > 0 ? (
+        <Button
+          variant="quiet"
+          size="sm"
+          icon="buscar"
+          className="cine-browse__everywhere"
+          onClick={searchAll}
+        >
+          {state.kind === 'movie' ? CINE_TEXT.searchAllMovies : CINE_TEXT.searchAllSeries}
+        </Button>
+      ) : null}
+      {/* Chips de categorías en la tableta (en el móvil se ocultan: está «Categorías»
+          en la cabecera y los carteles necesitan el sitio; en escritorio, el panel). */}
       {asideVisible || searching ? null : (
         <CategoryChips
           categories={categories}
           value={state.cat}
           onChange={(cat) => setCineState({ cat })}
+          className="cine-browse__cats"
         />
       )}
+      {/* El orden y los distintivos en una sola fila (en el móvil, se desliza). */}
       <div className="cine-filters">
-        <TagChips counts={tagCounts} value={state.tag} onChange={(tag) => setCineState({ tag })} />
         {searching ? null : (
           <Segmented
             label={CINE_TEXT.orderGroup}
@@ -582,6 +615,7 @@ function GridScreen({
             className="cine-order"
           />
         )}
+        <TagChips counts={tagCounts} value={state.tag} onChange={(tag) => setCineState({ tag })} />
       </div>
       {first?.capped ? <p className="cine-note">{CINE_TEXT.capped}</p> : null}
       <p className="sr-only" role="status" aria-live="polite">
@@ -592,6 +626,7 @@ function GridScreen({
         q={q}
         tag={state.tag}
         category={state.cat ?? 'all'}
+        scope={scope}
         first={first}
         cards={cards}
         label={
@@ -601,6 +636,7 @@ function GridScreen({
         }
         pages={pages}
         onClearSearch={onClearSearch}
+        onSearchAll={searchAll}
       />
     </section>
   );
@@ -611,11 +647,14 @@ interface GridAreaProps {
   q: string;
   tag: string | null;
   category: string;
+  /** La categoría en la que se busca (null = en todas). */
+  scope: string | null;
   first: VodBrowseResponse | undefined;
   cards: readonly VodCard[];
   label: string;
   pages: ReturnType<typeof useVodPages>;
   onClearSearch(): void;
+  onSearchAll(): void;
 }
 
 function GridArea({
@@ -623,11 +662,13 @@ function GridArea({
   q,
   tag,
   category,
+  scope,
   first,
   cards,
   label,
   pages,
   onClearSearch,
+  onSearchAll,
 }: GridAreaProps) {
   if (pages.isError && !pages.data)
     return (
@@ -645,6 +686,24 @@ function GridArea({
   if (first.total === 0) {
     if (q) {
       const other = first.otherKindTotal ?? 0;
+      /* Dentro de una categoría: puede estar en otra («Wonka» no está en
+         «VOD | 4K» pero sí en el catálogo). Lo primero, buscar en todas. */
+      if (scope)
+        return (
+          <EmptyState
+            title={nothingFoundIn(q, scope)}
+            actions={
+              <>
+                <Button variant="primary" icon="buscar" onClick={onSearchAll}>
+                  {kind === 'movie' ? CINE_TEXT.searchAllMovies : CINE_TEXT.searchAllSeries}
+                </Button>
+                <Button variant="quiet" icon="x" onClick={onClearSearch}>
+                  {CINE_TEXT.clearSearch}
+                </Button>
+              </>
+            }
+          />
+        );
       return (
         <EmptyState
           title={nothingFound(q, kind)}

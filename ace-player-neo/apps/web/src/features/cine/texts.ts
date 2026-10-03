@@ -52,6 +52,8 @@ export const CINE_TEXT = {
   home: 'Inicio',
   backHome: 'Volver a Películas y series',
   exitSearch: 'Salir de la búsqueda',
+  searchAllMovies: 'Buscar en todas las películas',
+  searchAllSeries: 'Buscar en todas las series',
   rowFailed: 'No se ha podido cargar esta fila.',
   // Menú de «Seguir viendo» (§12.4)
   hideContinue: 'Quitar de Seguir viendo',
@@ -177,6 +179,16 @@ export function seeRowLabel(name: string, n: number, kind: VodKind): string {
 /** Nada con «{q}» en películas (§12.5). */
 export function nothingFound(q: string, kind: VodKind): string {
   return `Nada con «${q}» en ${kind === 'movie' ? 'películas' : 'series'}`;
+}
+
+/** Una búsqueda dentro de una categoría (§12.5): «Nada con «wonka» en VOD | 4K». */
+export function nothingFoundIn(q: string, category: string): string {
+  return `Nada con «${q}» en ${category}`;
+}
+
+/** «3 películas en VOD | 4K»: lo encontrado, diciendo dónde se ha buscado. */
+export function titlesInText(n: number, kind: VodKind, category: string): string {
+  return `${titlesText(n, kind)} en ${category}`;
 }
 
 /** «Ver 3 series» / «Ver 1 película»: los aciertos del otro tipo. */

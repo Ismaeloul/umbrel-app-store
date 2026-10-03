@@ -1,7 +1,9 @@
 /* Categorías del proveedor (docs/vod.md §12.4):
    - en el móvil y la tableta, una hoja con la lista entera («Todas las
      categorías», desde la cabecera de la portada o desde la rejilla) y, en la
-     rejilla, una fila de chips con desplazamiento para saltar de una a otra;
+     rejilla de la tableta, una fila de chips con desplazamiento para saltar
+     de una a otra (en el móvil no: la cabecera ya tiene «Categorías» y los
+     carteles necesitan el sitio);
    - en escritorio (≥ 1024), la misma lista en el panel lateral (aside.tsx),
      con «Inicio» (la portada) delante.
    Las de adultos van al final (el servidor ya las ordena) con «+18». */
@@ -128,16 +130,21 @@ export interface CategoryChipsProps {
   categories: readonly VodCategory[];
   value: string | null;
   onChange(id: string): void;
+  className?: string;
 }
 
 /** La fila de chips de la rejilla: «Todas» y las primeras categorías (la elegida siempre a la vista). */
-export function CategoryChips({ categories, value, onChange }: CategoryChipsProps) {
+export function CategoryChips({ categories, value, onChange, className }: CategoryChipsProps) {
   if (categories.length === 0) return null;
   const first = categories.slice(0, ROW_CATEGORIES_MAX);
   const chosen = categories.find((category) => category.id === value);
   const row = chosen && !first.includes(chosen) ? [chosen, ...first] : first;
   return (
-    <div className="cine-chips cine-chips--scroll" role="group" aria-label={CINE_TEXT.categories}>
+    <div
+      className={cx('cine-chips cine-chips--scroll', className)}
+      role="group"
+      aria-label={CINE_TEXT.categories}
+    >
       <Chip pressed={value === 'all' || value === null} onClick={() => onChange('all')}>
         {CINE_TEXT.all}
       </Chip>

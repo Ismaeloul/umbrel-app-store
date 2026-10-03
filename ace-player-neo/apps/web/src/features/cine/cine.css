@@ -467,11 +467,11 @@
 .cine-chips--scroll > * {
   flex: none;
 }
+/* «Novedades | A-Z» y, a su lado, los distintivos. */
 .cine-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: var(--s-3);
   min-width: 0;
 }
@@ -479,6 +479,48 @@
   flex: none;
   width: max-content;
   min-width: 200px;
+}
+/* «Buscar en todas las películas» (una búsqueda dentro de una categoría). */
+.cine-browse__everywhere {
+  justify-self: start;
+}
+/* En el teléfono (también en horizontal) los carteles necesitan el sitio:
+   sin la fila de categorías (están en «Categorías», arriba) y el orden y los
+   distintivos en UNA fila que se desliza. Así la primera fila de carteles,
+   con su título, cabe entera en la pantalla al abrir una categoría. */
+@media (max-width: 767.98px), (orientation: landscape) and (max-height: 540px) {
+  .cine[data-screen='rejilla'] {
+    gap: var(--s-4);
+  }
+  .cine-browse {
+    gap: var(--s-3);
+  }
+  .cine-browse__cats {
+    display: none;
+  }
+  .cine-filters {
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    touch-action: pan-x pan-y;
+    margin-inline: calc(var(--s-1) * -1);
+    padding: 4px var(--s-1);
+    scroll-padding-inline: var(--s-1);
+  }
+  .cine-filters::-webkit-scrollbar {
+    display: none;
+  }
+  .cine-filters > * {
+    flex: none;
+  }
+  .cine-filters .cine-tags {
+    flex-wrap: nowrap;
+  }
+  .cine-order {
+    min-width: 0;
+  }
 }
 
 /* ---- Categorías: lista de la hoja y del panel lateral ----------------------------- */

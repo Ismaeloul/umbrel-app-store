@@ -11,6 +11,7 @@ import { json, mockFetch } from '../../test/fetch.ts';
 import homeNone from '@fixtures/variantes/vodHome.none.json';
 import homePreparing from '@fixtures/variantes/vodHome.preparing.json';
 import homeUnsupported from '@fixtures/variantes/vodHome.unsupported.json';
+import CineAside from './aside.tsx';
 import { DEMO_VOD_IDS, demoVodBrowse, demoVodHome, resetDemoVod } from './demo-data.ts';
 import { demoRoutes, queryOf, renderCine } from './test-utils.tsx';
 
@@ -353,6 +354,59 @@ describe('búsqueda (§12.5)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Borrar búsqueda' }));
     expect(field).toHaveValue('');
     expect(await screen.findByRole('heading', { name: 'Seguir viendo' })).toBeInTheDocument();
+  });
+
+  it('dentro de una categoría busca ahí y lo dice: «0 películas en VOD | 4K» y «Buscar en todas»', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine({ search: `?vista=cine&cinecat=${DEMO_VOD_IDS.movieCategory}` });
+    await screen.findByRole('heading', { level: 2, name: 'VOD | 4K' });
+    const field = screen.getByRole('searchbox', { name: 'Buscar películas' });
+    fireEvent.change(field, { target: { value: 'wonka' } });
+    // Wonka no está en «VOD | 4K» (sí en el catálogo): no basta con «Nada con «wonka» en películas».
+    expect(
+      await screen.findByRole('heading', { name: 'Nada con «wonka» en VOD | 4K' }),
+    ).toBeInTheDocument();
+    // Bajo el título y en la región viva.
+    expect(document.querySelector('.cine-browse__count')?.textContent).toBe(
+      '0 películas en VOD | 4K',
+    );
+    expect(
+      screen.getAllByRole('status').some((node) => node.textContent === '0 películas en VOD | 4K'),
+    ).toBe(true);
+    expect(queryOf(gridCalls().at(-1)!)).toMatchObject({ cat: DEMO_VOD_IDS.movieCategory });
+    const everywhere = screen.getAllByRole('button', { name: 'Buscar en todas las películas' });
+    expect(everywhere).toHaveLength(1);
+    fireEvent.click(everywhere[0]!);
+    await waitFor(() => expect(location.search).toContain('cinecat=all'));
+    expect((await screen.findAllByText('1 película')).length).toBeGreaterThan(0);
+    expect(field).toHaveValue('wonka');
+  });
+
+  it('el panel lateral marca la categoría en la que se busca (y nada si se busca desde la portada)', async () => {
+    net = mockFetch(demoRoutes());
+    const aside = <CineAside route={{ vista: 'cine', id: null }} active />;
+    const first = renderCine({
+      search: `?vista=cine&cinecat=${DEMO_VOD_IDS.movieCategory}&cineq=wonka`,
+      layout: { kind: 'desktop', asideVisible: true },
+      ui: aside,
+    });
+    const nav = await screen.findByRole('navigation', { name: 'Categorías' });
+    expect(within(nav).getByRole('button', { name: /^VOD \| 4K/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    first.unmount();
+    renderCine({
+      search: '?vista=cine&cineq=wonka',
+      layout: { kind: 'desktop', asideVisible: true },
+      ui: aside,
+    });
+    const again = await screen.findByRole('navigation', { name: 'Categorías' });
+    expect(
+      within(again)
+        .getAllByRole('button')
+        .filter((button) => button.getAttribute('aria-pressed') === 'true'),
+    ).toHaveLength(0);
   });
 
   it('Esc borra el texto y «/» enfoca el buscador', async () => {
