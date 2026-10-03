@@ -1703,7 +1703,9 @@ typecheck` pasa sin tocar `football/resolution.ts` (T3).
 - **retenido < 45 MB** tras GC (medido: 31 MiB con 170 000);
 - p95 de búsqueda < 25 ms (medido: 2-10 ms);
 - sincronización < 30 s;
-- carga en frío de `vod.enc` con un pico < 40 MB.
+- carga en frío de `vod.enc` con un pico < 48 MB (lo retenido incluido), **medida en un proceso aparte**: dentro del
+  de Vitest salía «+0,0 MB» o 60 MB según cuándo pasara el GC. Medido en la 0.9.0 (PC de Isma, Node 24): 37-40 MB
+  de pico, 22 MB retenidos, ~270 ms.
 
 ### 15.3 Integración con el proveedor falso
 
