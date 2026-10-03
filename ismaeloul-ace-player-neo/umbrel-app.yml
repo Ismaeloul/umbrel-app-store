@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.8.3"
+version: "0.8.4"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,30 +13,37 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  IPTV sin cortes: el video de tu IPTV ya no se para ni salta hacia
-  delante y hacia atras. El rele ya no se cuelga al reconectar y, cuando la
-  señal de tu proveedor da un salto, solo sigue desde una imagen completa:
-  sin imagen rota ni reconexiones en cadena.
+  Agenda: en "Para ti" ya no salen partidos de juveniles, filiales,
+  femenino, regionales ni Sub-21, salvo que sigas a ese equipo. "Barcelona"
+  es el primer equipo del FC Barcelona y "España" la seleccion absoluta
+  masculina. En "Todos" van primero tus competiciones y, si la fuente
+  principal no tiene una competicion, se busca en TheSportsDB.
 
-  Reinicios sin saltos: si el video se reinicia, sigue en el mismo punto,
-  sin volver 30 segundos atras, y te avisa con "Tu IPTV se ha reconectado
-  sin cortar la imagen".
+  Partido destacado: en el ordenador la tarjeta del partido destacado es
+  compacta, una banda horizontal. En el movil no cambia.
 
-  Reproductor: ya no se pausa por huecos pequeños y DIRECTO funciona
-  tambien mientras el video esta parado. La distancia al directo se mide en
-  segundos, asi que ya no salta por su cuenta, y un trozo dañado se salta
-  en el sitio.
+  Reproductor: los controles se esconden a los 2,5 segundos, tambien
+  despues de pulsar pantalla completa, y al momento si el raton sale del
+  video. "Vas en directo" ya no enseña ninguna cifra de retraso.
 
-  Partidos: al entrar en un partido ya sale tu IPTV, sin pulsar Rebuscar, y
-  Gol Play tambien se busca en tu IPTV. Si la busqueda no llega a tiempo,
-  sale un error con "Reintentar" en vez de "no hay fuentes". Despues de
-  Rebuscar, si tu IPTV tiene el partido, lo dice: "Tu IPTV tiene este
-  partido · Ver por IPTV".
+  Cambio rapido de canal: pasa de un favorito a otro con las flechas
+  arriba y abajo en el ordenador o deslizando a los lados en el movil. Un
+  cartel dice "Favorito 3/12" y solo se abre el canal en el que te paras.
 
-  Buscar: champions, la champions o ucl, tve o rtve y a3 encuentran sus
-  canales, y laliga tv pone primero M+ LaLiga. Los resultados de AceStream
-  van ordenados por parecido con lo que buscas y, si falla el motor, sale
-  una linea pequeña con "Reintentar" en vez de un cartel rojo.
+  Arranque instantaneo: 3 minutos antes de un partido de tus equipos
+  favoritos la mejor fuente ya esta lista, asi que empieza al momento. Se
+  apaga y se enciende en Ajustes, Reproduccion.
+
+  Ajustes: se ven por secciones, una cada vez. Seccion nueva "Copia de
+  seguridad" para descargar tus ajustes y restaurarlos; la contraseña de tu
+  IPTV va solo si quieres y protegida con una clave tuya.
+
+  Navegacion: las transiciones entre todas las pestañas son suaves e
+  iguales, se han revisado todas las animaciones y la direccion de la
+  pagina ya no arrastra parametros de otras vistas.
+
+  Logo: el logo de Umbrel en todas partes, en la cabecera, en la pestaña
+  del navegador y en el icono al instalar la app.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []
