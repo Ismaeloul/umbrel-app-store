@@ -148,13 +148,25 @@ describe('nameSearchWords: las palabras de un nombre tal cual lo da el panel', (
   });
 
   it('rankByName encuentra «Mr. Robot», «Dr. Strange» o «It: Capítulo 2» como se escriben', () => {
-    const titles = ['Mr. Robot', 'Robot Wars', 'Dr. Strange', 'It: Capítulo 2', 'St. Vincent'];
+    const titles = [
+      'Mr. Robot',
+      'Robot Wars',
+      'Dr. Strange',
+      'It: Capítulo 2',
+      'St. Vincent',
+      'Up - Una aventura de altura',
+    ];
     const find = (q: string): string[] => rankByName(titles, q, (name) => ({ name }));
     expect(find('mr robot')).toEqual(['Mr. Robot']);
     expect(find('dr strange')).toEqual(['Dr. Strange']);
     expect(find('it capitulo 2')).toEqual(['It: Capítulo 2']);
     expect(find('st vincent')).toEqual(['St. Vincent']);
     expect(find('robot')[0]).toBe('Robot Wars');
+    /* Escrito con la primera en mayúscula (el teclado del iPhone), igual. */
+    expect(find('Mr. Robot')).toEqual(['Mr. Robot']);
+    expect(find('It capitulo 2')).toEqual(['It: Capítulo 2']);
+    expect(find('Up una aventura')).toEqual(['Up - Una aventura de altura']);
+    expect(find('Up - Una aventura')).toEqual(['Up - Una aventura de altura']);
   });
 
   it('nameSearchTokens y keySearchTokens recuerdan los números escritos con letra', () => {
@@ -207,6 +219,30 @@ describe('parseNameQuery: lo que escribe una persona', () => {
     expect(parseNameQuery('de: dazn 1')).toMatchObject({ key: 'dazn 1', country: 'DE' });
     expect(parseNameQuery('de dazn')).toMatchObject({ key: 'de dazn', country: '' });
     expect(parseNameQuery('es').key).toBe('es');
+  });
+
+  it('la caja no cuenta: «Es la 1» o «Esp dazn» (el teclado del iPhone) son «es la 1» y «esp dazn»', () => {
+    expect(parseNameQuery('Es la 1')).toMatchObject({ key: 'la 1', country: '' });
+    expect(parseNameQuery('Esp dazn')).toMatchObject({ key: 'dazn', country: '' });
+    expect(parseNameQuery('Es dazn')).toMatchObject({ key: 'dazn', country: '' });
+    expect(parseNameQuery('Es tele 5').key).toBe('telecinco');
+    expect(parseNameQuery('Es a3').key).toBe('antena 3');
+    expect(parseNameQuery('Uk: la liga tv')).toMatchObject({ key: 'laliga tv', country: 'UK' });
+    /* Lo que no es un país sigue siendo una palabra, con mayúscula o sin ella. */
+    expect(parseNameQuery('Mr robot').key).toBe('mr robot');
+    expect(parseNameQuery('It capitulo 2').key).toBe('it capitulo 2');
+    expect(parseNameQuery('De dazn').key).toBe('de dazn');
+    /* Toda la tabla de esperados.ts (y algunas más), en minúsculas, en mayúsculas y con la primera en mayúscula. */
+    const parsed = (q: string) => {
+      const { key, country, required, typedOptional, aliases } = parseNameQuery(q);
+      return { key, country, required, typedOptional, aliases };
+    };
+    const extra = ['es la 1', 'esp dazn', 'es: dazn', 'mr. robot', 'up una aventura', 'it: rai 1'];
+    for (const q of [...ESPERADOS.map((item) => item.q), ...extra]) {
+      const lower = parsed(q.toLowerCase());
+      expect(parsed(q.toUpperCase()), q).toEqual(lower);
+      expect(parsed(q.charAt(0).toUpperCase() + q.slice(1).toLowerCase()), q).toEqual(lower);
+    }
   });
 
   it('«m», «mov», «m.», «m+» y «movistar plus» delante son Movistar', () => {

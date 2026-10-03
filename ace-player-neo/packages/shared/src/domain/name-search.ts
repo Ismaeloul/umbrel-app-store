@@ -21,9 +21,10 @@
       otra palabra como cifra («la uno» = «la 1», «RAI UNO» = «RAI 1»;
       «cero» siempre es 0, el «#0» de Movistar). Una palabra que empieza el
       nombre se deja como está: «Cuatro» y «Ten» son canales.
-   2. Lo que se escribe (`parseNameQuery`): las mismas palabras, el país que
-      se pide delante («uk: la liga tv»), «m» o «mov» delante como Movistar
-      y los alias (Champions, TVE, A3, A3 Series, Tele 5, TDP), que buscan
+   2. Lo que se escribe (`parseNameQuery`): las mismas palabras en cualquier
+      caja («Es la 1» del teclado del iPhone es «es la 1»), el país que se
+      pide delante («uk: la liga tv»), «m» o «mov» delante como Movistar y
+      los alias (Champions, TVE, A3, A3 Series, Tele 5, TDP), que buscan
       además otra cosa.
    3. El nivel de parecido (`nameTier`), de mejor a peor: 0 igual; 1 de la
       familia (sin el número del final o sin la marca de delante: «dazn» →
@@ -107,8 +108,10 @@ const LEAD_PREFIX_RE =
 /*
  * Una primera palabra de 2 o 3 letras en caja de título («Mr», «It», «No»,
  * «Up», «St») es parte del nombre, no un país: las listas escriben el país en
- * mayúsculas («IT: RAI 1») y la gente lo escribe en minúsculas. Es lo que deja
- * buscar «It: Capítulo 2» o «Up - Una aventura de altura» en Pelis y series.
+ * mayúsculas («IT: RAI 1»). Es lo que deja buscar «It: Capítulo 2» o «Up - Una
+ * aventura de altura» en Pelis y series. Solo en los NOMBRES: en lo que se
+ * escribe la caja no dice nada (el teclado del iPhone pone la primera letra en
+ * mayúscula, y «Es la 1» es «es la 1»), ver `parseNameQuery`.
  */
 const TITLE_CASE_LEAD_RE = /^[\s\p{P}\p{S}]*\p{Lu}\p{Ll}{1,2}(?![\p{L}\p{N}])/u;
 /* España delante sin símbolo: «ES DAZN 1», «esp la 1» (otras siglas son palabras: «de», «la», «tv»). */
@@ -268,13 +271,22 @@ export function nameSearchWords(value: string): string[] {
 
 /** `nameSearchWords` con los números que el nombre llevaba escritos con letra. */
 export function nameSearchTokens(value: string): NameSearchTokens {
+  return searchTokens(value, true);
+}
+
+/*
+ * `nameSearchTokens` de un nombre (`titleCase`: «Mr», «It», «Up» delante son
+ * parte de él, `TITLE_CASE_LEAD_RE`) o de lo que se escribe (sin eso: la caja
+ * de lo escrito no cuenta).
+ */
+function searchTokens(value: string, titleCase: boolean): NameSearchTokens {
   /* La «Ñ» suelta marca la versión española («BEIN SPORTS Ñ»): no es una palabra. */
   const raw = String(value ?? '')
     .replace(ARROW_TAIL_RE, ' ')
     .replace(/(^|\s)[Ññ](?=\s|$)/gu, '$1');
   let text = foldSearchText(raw);
   /* El país de delante, antes de la grafía (la de Movistar mira el principio); «Mr», «It», «Up»… no lo son. */
-  const lead = TITLE_CASE_LEAD_RE.test(raw) ? { text, spain: false } : stripLead(text);
+  const lead = titleCase && TITLE_CASE_LEAD_RE.test(raw) ? { text, spain: false } : stripLead(text);
   text = lead.text;
   /* Los apodos de España, solo si el nombre lo es («ES: TELE 5 HD» → Telecinco; «DE: TELE 5», no). */
   if (lead.spain) text = spainChannelNicknames(text);
@@ -583,7 +595,10 @@ export function nameQueryAliases(key: string): { key: string; maxTier: number }[
 /**
  * Lo que escribe una persona, listo para buscar: el país pedido delante (en
  * cualquier caja), «m»/«mov» delante como Movistar, las palabras de
- * `nameSearchWords` y los alias.
+ * `nameSearchWords` y los alias. La caja no cuenta en nada: el teclado del
+ * iPhone pone la primera letra en mayúscula, y «Es la 1» o «Esp dazn» son
+ * «es la 1» y «esp dazn» (la regla de «Mr», «It» o «Up» delante es solo de
+ * los nombres).
  */
 export function parseNameQuery(value: string): NameQuery {
   let text = String(value ?? '')
@@ -596,7 +611,7 @@ export function parseNameQuery(value: string): NameQuery {
     country = SPAIN_CODES.has(code) ? '' : code === 'gb' ? 'UK' : code.toUpperCase();
     text = text.slice(prefix[0].length);
   }
-  const words = nameSearchWords(text.replace(QUERY_MOVISTAR_RE, 'Movistar '));
+  const { words } = searchTokens(text.replace(QUERY_MOVISTAR_RE, 'Movistar '), false);
   const base = queryWordsOf(words);
   const all = new Set(words);
   return {
