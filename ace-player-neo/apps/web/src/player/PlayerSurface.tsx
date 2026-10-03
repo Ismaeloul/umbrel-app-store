@@ -21,7 +21,11 @@
      Con el dedo, un toque los enseña o los esconde (y se van a los 3 s).
    - Ratón: un clic pausa o reanuda (espera 190 ms para distinguirlo del
      doble clic, que pone pantalla completa); clic derecho, el menú propio.
-   - Móvil: deslizar hacia abajo sobre el vídeo lo minimiza. */
+   - Móvil: deslizar hacia abajo sobre el vídeo lo minimiza.
+   - Táctil: deslizar hacia arriba sobre el vídeo pasa al favorito siguiente
+     (cambiar de canal rápido, favorite-zap.ts). Hacia abajo, al anterior,
+     salvo en el móvil en vertical, donde hacia abajo sigue minimizando. El
+     toque (controles) y los gestos a los lados no cambian. */
 
 import {
   useCallback,
@@ -43,8 +47,10 @@ import { LiveDot } from '../ui/LiveRing.tsx';
 import { Menu, MenuButton, useContextMenu } from '../ui/Menu.tsx';
 import { Num } from '../ui/Num.tsx';
 import { usePlayer, type PlayerState } from './api.ts';
+import { ChannelMark } from '../ui/ChannelMark.tsx';
 import { CLICK_DELAY_MS, CONTROLS_HIDE_MS, CONTROLS_HIDE_TOUCH_MS } from './constants.ts';
 import { usePlayerContext, type PlayerContextValue } from './context.ts';
+import { useZapBanner } from './favorite-zap.ts';
 import { NerdPanel } from './NerdPanel.tsx';
 import { stageSlotStore } from './stage-slot.ts';
 import { liveButton, stageMessage } from './status.ts';
@@ -71,6 +77,37 @@ function ImmersivePill() {
       <button type="button" className="player-pill__action press" onClick={action.onAction}>
         {action.label}
       </button>
+    </div>
+  );
+}
+
+/**
+ * El cartel del cambio de canal rápido: dorsal, nombre, «3/12» y de dónde
+ * sale (IPTV o AceStream). Arriba y al centro, sobre el vídeo, unos 2 s.
+ * Es decorativo para los lectores de pantalla: el cambio se anuncia en la
+ * línea de estado (index.tsx).
+ */
+export function ZapBannerView() {
+  const banner = useZapBanner();
+  if (!banner) return null;
+  const { channel, position, total, committed } = banner;
+  return (
+    <div
+      className="player-zap glass--video"
+      data-committed={committed ? 'true' : 'false'}
+      aria-hidden="true"
+    >
+      <ChannelMark name={channel.title} size={40} />
+      <span className="player-zap__body">
+        <span className="player-zap__title">{channel.title}</span>
+        <span className="player-zap__meta">
+          <Icon name="star-f" size={16} className="player-zap__star" />
+          <span>Favorito</span>
+          <Num value={`${position}/${total}`} />
+          <span aria-hidden="true">·</span>
+          <span>{channel.iptv ? 'IPTV' : 'AceStream'}</span>
+        </span>
+      </span>
     </div>
   );
 }
@@ -336,12 +373,20 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
     wake();
   };
 
-  // Deslizar hacia abajo sobre el vídeo lo minimiza (móvil, no en horizontal).
+  /* En vertical sobre el vídeo: hacia abajo lo minimiza (móvil, no en
+     horizontal); con el dedo, hacia arriba pasa al favorito siguiente y,
+     donde abajo no minimiza (pantalla completa, horizontal, tableta), hacia
+     abajo al anterior. Con ratón no hay deslizamientos (el clic pausa). */
+  const minimizes = ctx.compact && !ctx.immersive;
+  const zapSwipes = !ctx.finePointer && hasChannel;
   useSwipe(hitRef, {
     axis: 'y',
-    enabled: ctx.compact && !ctx.immersive,
+    enabled: minimizes || zapSwipes,
     onSwipe: (direction) => {
-      if (direction === 'down') actions.minimize();
+      if (direction === 'down') {
+        if (minimizes) actions.minimize();
+        else if (zapSwipes) actions.zapFavorite(-1);
+      } else if (direction === 'up' && zapSwipes) actions.zapFavorite(1);
     },
   });
 
@@ -409,6 +454,7 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
       />
       <StageMessage state={state} ctx={ctx} />
       {ctx.immersive ? <ImmersivePill /> : null}
+      <ZapBannerView />
       {state.phase === 'bloqueado' ? (
         <button type="button" className="player-tap press" onClick={actions.tapToPlay}>
           <span className="player-tap__icon" aria-hidden="true">

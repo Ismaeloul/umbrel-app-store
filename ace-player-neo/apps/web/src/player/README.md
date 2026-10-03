@@ -191,6 +191,20 @@ Reglas que cumple (inventario §8, §9, §11, §17, §18 y §26):
 - **Atajos** (registro central, salen en «?»): Espacio/K, M, J, F, P, S, G, ← →
   (estos solo en grande, con canal y con el foco fuera de pestañas, campos,
   deslizadores y controles del reproductor, regla 9).
+- **Cambiar de canal rápido entre favoritos** (0.8.4, `favorite-zap.ts`): ↑ o
+  Re Pág = favorito anterior, ↓ o Av Pág = siguiente; con el dedo, deslizar
+  hacia arriba sobre el vídeo = siguiente y hacia abajo = anterior (en el
+  móvil en vertical, abajo sigue minimizando). Lista = favoritos de Canales
+  (AceStream e IPTV) en su orden guardado, con vuelta en los extremos; si lo
+  que suena no es favorito, ↓ va al primero y ↑ al último. Las pulsaciones
+  seguidas se acumulan y solo se abre el último canal a los 650 ms (la IPTV
+  tiene una sola conexión); el cartel (dorsal, nombre, «3/12», IPTV o
+  AceStream) dura unos 2 s y el cambio se anuncia en la línea de estado. Se
+  abre con `playChannel` (como tocarlo en Canales: un id IPTV nunca va directo
+  al motor). En el centro de partido también va por favoritos: es abrir otro
+  canal, que sustituye a la fuente del partido (una reproducción a la vez).
+  ↑ ↓ solo son del zapping con el foco en el reproductor o en ninguna parte
+  (o a pantalla completa / modo teatro); con el foco en la página desplazan.
 
 ## Decisiones (modo autónomo, criterio conservador)
 

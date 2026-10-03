@@ -339,6 +339,63 @@
   }
 }
 
+/* ---- Cambiar de canal rápido (favoritos, favorite-zap.ts) ------------------------- */
+/* El cartel de canal de la tele: dorsal, nombre, «3/12» y de dónde sale. Arriba
+   y al centro, en la misma cápsula de cristal que el resto de controles. */
+.player-zap {
+  position: absolute;
+  z-index: 6;
+  top: calc(max(12px, var(--safe-top)) + var(--tap) + 8px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  max-width: min(420px, calc(100% - 24px));
+  padding: 6px 18px 6px 6px;
+  border-radius: var(--r-l);
+  transform: translateX(-50%);
+  animation: ace-funde var(--dur-rapido) var(--ease-out) both;
+  pointer-events: none;
+}
+/* Opaco: en el móvil cae encima del panel «Conectando…» y debe leerse solo. */
+.player-zap.glass--video {
+  background: var(--glass-video-solid);
+}
+.player-zap .dorsal {
+  border-radius: 12px;
+}
+.player-zap__body {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.player-zap__title {
+  overflow: hidden;
+  font-size: var(--fs-17);
+  font-weight: var(--wght-strong);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-zap__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--on-video-2);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+.player-zap__star {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--accent);
+}
+/* Mientras se elige (aún no se ha abierto), algo más tenue. */
+.player-zap[data-committed='false'] .player-zap__title {
+  opacity: 0.86;
+}
+
 /* ---- «Toca para reproducir» ------------------------------------------------------ */
 .player-tap {
   position: absolute;

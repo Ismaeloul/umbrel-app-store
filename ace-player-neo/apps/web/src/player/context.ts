@@ -25,6 +25,8 @@ export interface PlayerActions {
   toggleNerd(): void;
   toggleFavorite(): void;
   zap(direction: 1 | -1): void;
+  /** Cambiar de canal rápido entre favoritos (↑ ↓, deslizar en vertical; favorite-zap.ts). */
+  zapFavorite(direction: 1 | -1): void;
   minimize(): void;
   expand(): void;
 }
@@ -42,6 +44,8 @@ export interface PlayerContextValue {
   canFullscreen: boolean;
   canPip: boolean;
   canZap: boolean;
+  /** Hay algún favorito al que saltar (distinto del que suena). */
+  canZapFavorites: boolean;
   isFavorite: boolean;
   /** Ratón de verdad: clic para pausar, doble clic para pantalla completa, menú contextual. */
   finePointer: boolean;
