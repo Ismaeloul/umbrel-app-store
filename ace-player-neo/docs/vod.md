@@ -440,6 +440,55 @@ no cambia (§4.3: `is_adult` o el nombre de la categoría).
 Antes (hasta el 3-oct): fuera de la portada y de «Todas» sin texto, y sus categorías al final; «la portada la ve
 toda la casa». Isma lo cambió al contestar la pregunta 4 de §19.3.
 
+### 4.10 Idiomas (equipo idiomas, 3-oct; D-propuesta «idiomas»)
+
+Lo pidió Isma al ver la vista previa: «al meterme a Pelis y series, que me des a elegir el idioma; castellano y
+latino separados; y que luego lo pueda editar: cambio el idioma al francés y busco».
+
+- **Idiomas** (`VOD_LANGS`, en el orden del selector): `castellano`, `latino`, `vose` (VO con subtítulos en
+  español), `ingles` (inglés o V.O.), `frances`, `italiano`, `aleman`, `portugues`, `catalan` y `otros` (una lengua
+  que se reconoce y no está en la lista). Un título puede tener varios (MULTI con las lenguas nombradas) o ninguno
+  («sin indicar»).
+- **De dónde salen:** del nombre de la categoría y de las marcas que la limpieza quita del título (las pistas de audio
+  vienen «und», Paso 0). Una sola tabla, pura y compartida: `packages/shared/src/domain/vod-langs.ts`
+  (`detectVodLangs`, `combineVodLangs`), probada con ~190 casos reales y falsos amigos
+  (`packages/shared/test/vod-langs.test.ts`); la usan el servidor (`titles.ts`) y la demo de la web. Reglas:
+  - los códigos solo en MAYÚSCULAS y como palabra; en una categoría, los de dos letras (y «POR», «CAT», «FIN»…) solo
+    como marca: «ES | », « - EN», «[DE]», «|IT|», «(EN)», «4K ES» o «ES/EN» («ES» también al principio o al final con
+    espacio). Así «PELÍCULAS EN ESPAÑOL», «CINE DE TERROR», «PELÍCULAS POR GÉNERO» o «LA CASA DE PAPEL» no engañan;
+  - las nacionalidades que no son de España ni Latinoamérica solo cuentan sueltas, al principio, como marca o tras
+    «en», «audio», «idioma», «doblaje», «versión»: «CINE FRANCÉS», «SERIES TURCAS», «ANIME JAPONÉS» y «SERIES USA»
+    dicen el origen (pueden ir dobladas) y no dan idioma; «CINE ESPAÑOL» o «CINE MEXICANO», sí;
+  - «Español», «ES», «ESP», «SPA», «Spanish» son castellano flojo: con latino es latino («ES | LATINO»), con VOSE son
+    los subtítulos («VOSE | ESPAÑOL»), salvo MULTI/DUAL. «Castellano», «CAST», «España» son firmes;
+  - el título manda: «Coco (FR)» en «ES | ANIMACIÓN» es francés; «ES - Coco» en «PELIS LATINO», latino.
+  - La limpieza quita ahora también «Coco 4K ES», «Dune - VO», «Amélie [FR]», «CAT - Pa negre» (código suelto al final
+    solo si el título no es todo mayúsculas o va tras un separador o una marca; nunca «IT», «DE» ni «BR»).
+- **Distintivos:** castellano/latino/VOSE salen de los idiomas (antes se unían título y categoría: «Amélie (2001)
+  VOSE» en «ES | PELÍCULAS» era castellano y VOSE; ahora, VOSE). En la web, los chips de la rejilla se quedan en
+  «Multi» y «4K».
+- **Tabla y `vod.enc`:** columna `langs` (Uint16). `VOD_CODEC_VERSION` 2: un `vod.enc` de antes no se lee, se descarta
+  y se vuelve a bajar (la 0.9.0 no ha salido).
+- **Filtro:** `langs=castellano,frances` y `unknown=0|1` (por defecto 1) en `vodHome` y `vodBrowse`. Portada:
+  novedades, categorías (las que se quedan a 0 no salen), distintivos y `shown` (lo que se ve) filtrados; `counts`,
+  `langs` y `noLang` son siempre del catálogo entero. Búsqueda: el filtro va DENTRO del recorrido (no sobre los 2 000
+  mejores) y `otherLangs` cuenta por idioma lo que casa pero queda fuera («3 en latino · Ver»); `otherKindTotal`,
+  también en tus idiomas. Caché de portada por filtro (4) y de búsqueda con el filtro en la clave.
+- **Los que no indican idioma:** se ven por defecto («Mostrar también los que no indican idioma» activado). En un panel
+  donde muchas categorías no llevan marca, esconderlos dejaría el catálogo medio vacío; quien quiera solo los marcados
+  lo apaga.
+- **La elección:** `GET/PUT /api/v1/vod/languages` (`vodLanguagesGet`/`vodLanguagesUpdate`, `web`) en
+  `v2/vod-idiomas.json` (`z.object` no estricto, como el arranque instantáneo), por casa: vale en el PC y en el
+  iPhone y sobrevive a eliminar la IPTV o cambiar de proveedor (no va en `vod.json`). `chosen: false` hasta la
+  primera vez; `langs: []` = todos. Entra en la copia de seguridad (`vod`, solo si se eligió; Reemplazar la pone,
+  Combinar solo si aquí no se había elegido; `vodLanguages` en la vista previa).
+- **Web** (`features/cine/Languages.tsx`): la primera vez, antes de la portada, «¿En qué idiomas las quieres ver?» en
+  la propia vista (castellano marcado de entrada; «Ahora no, ver todo»); el botón del globo en la cabecera
+  («Castellano y Francés») abre la hoja; también en Ajustes → IPTV. «Ver» de «3 en latino» pone `cineidioma=latino`:
+  la rejilla enseña solo ese idioma sin tocar lo elegido («Viendo solo en latino · Volver a mis idiomas»). La cápsula
+  de idioma de una tarjeta no sale si solo se ve un idioma. Si el servidor no sabe de idiomas o falla, se ve todo; si
+  guardar falla, la elección vale en esa pestaña.
+
 ---
 
 ## 5. Ids de película, serie y episodio (D-VOD3)
