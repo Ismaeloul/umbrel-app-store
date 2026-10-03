@@ -2,7 +2,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { CAT_NONE } from './parse.js';
-import { compactOf, foldKeepLength, rowAt, VodTable, VodTableBuilder } from './table.js';
+import {
+  compactOf,
+  foldKeepLength,
+  POSTER_DIR_MAX,
+  rowAt,
+  VodTable,
+  VodTableBuilder,
+} from './table.js';
+import { completeVodTables, decodeVodCatalog, encodeVodCatalog } from './table-codec.js';
 import { listRow, tableOf } from './test-support.js';
 
 describe('plegado que conserva la longitud', () => {
@@ -78,6 +86,34 @@ describe('VodTableBuilder', () => {
     expect(builder.add(listRow(3, 'C'))).toBe(false);
     expect((await builder.build()).n).toBe(2);
   });
+
+  it('70 000 títulos con carpeta de cartel propia: TODOS con cartel, también tras guardar y cargar (fallo 5)', async () => {
+    const n = 70_000;
+    const url = (i: number) => `https://cdn.panel.example/img/${i}/poster.jpg`;
+    const builder = new VodTableBuilder(n);
+    for (let i = 0; i < n; i += 1) builder.add(listRow(i + 1, `Título ${i}`, { poster: url(i) }));
+    const table = await builder.build();
+    expect(table.dirs).toHaveLength(POSTER_DIR_MAX);
+    for (const row of [0, 1, POSTER_DIR_MAX - 1, POSTER_DIR_MAX, POSTER_DIR_MAX + 1, n - 1]) {
+      expect(table.posterUrl(row), String(row)).toBe(url(row));
+    }
+    let missing = 0;
+    for (let row = 0; row < n; row += 1) if (table.posterUrl(row) !== url(row)) missing += 1;
+    expect(missing).toBe(0);
+    /* Ida y vuelta por `vod.enc` (el centinela es un valor más del Uint16). */
+    const meta = {
+      providerFp: '0123456789abcdef',
+      revision: 1,
+      builtAt: 1,
+      truncated: false,
+      skipped: 0,
+      mode: 'completo' as const,
+    };
+    const bytes = Buffer.concat(encodeVodCatalog(meta, { movie: table, series: VodTable.empty() }));
+    const loaded = await completeVodTables(decodeVodCatalog(bytes).raw);
+    expect(loaded.movie.posterUrl(n - 1)).toBe(url(n - 1));
+    expect(loaded.movie.posterUrl(POSTER_DIR_MAX + 5)).toBe(url(POSTER_DIR_MAX + 5));
+  }, 60_000);
 
   it('una tabla vacía', async () => {
     const empty = await tableOf([]);

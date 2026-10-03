@@ -23,6 +23,10 @@ import { CAT_NONE, RATING_NONE, type VodListRow } from './parse.js';
 
 export const FLAG_ADULT = 1;
 export const FLAG_POSTER = 2;
+/** Carpetas de carteles internadas como mucho (`posterDir` es un Uint16 y 0 es «sin cartel»). */
+export const POSTER_DIR_MAX = 0xfffe;
+/** Centinela de `posterDir`: sin carpeta, el fichero lleva la URL entera (fallo 5). */
+export const POSTER_DIR_WHOLE = 0xffff;
 
 /** Filas por trozo al montar los índices (se cede el hilo entre trozos, §4.7). */
 export const BUILD_CHUNK = 5_000;
@@ -203,7 +207,10 @@ export class VodTableBuilder {
   private dirOf(dir: string): number {
     const known = this.dirIndex.get(dir);
     if (known !== undefined) return known + 1;
-    if (this.dirs.length >= 0xfffe) return 0;
+    /* Tabla de carpetas llena (un panel con una carpeta por título): la fila
+       guarda la URL entera con el centinela «sin carpeta» (fallo 5). Antes
+       perdía el cartel a partir del título 65 534, sin aviso. */
+    if (this.dirs.length >= POSTER_DIR_MAX) return POSTER_DIR_WHOLE;
     this.dirs.push(dir);
     this.dirIndex.set(dir, this.dirs.length - 1);
     return this.dirs.length;
@@ -228,7 +235,7 @@ export class VodTableBuilder {
     if (row.poster) {
       const slash = row.poster.lastIndexOf('/');
       dir = this.dirOf(row.poster.slice(0, slash + 1));
-      file = dir ? row.poster.slice(slash + 1) : '';
+      file = dir === POSTER_DIR_WHOLE ? row.poster : row.poster.slice(slash + 1);
     }
     this.flags.push((row.adult ? FLAG_ADULT : 0) | (dir ? FLAG_POSTER : 0));
     this.tags.push(row.tags);
@@ -497,12 +504,13 @@ export class VodTable implements VodTableData {
   posterUrl(row: number): string | null {
     const dir = this.posterDir[row] as number;
     if (!dir) return null;
-    const base = this.dirs[dir - 1];
-    if (base === undefined) return null;
     const file = this.posterFiles.slice(
       this.posterOffsets[row],
       (this.posterOffsets[row + 1] as number) - 1,
     );
+    if (dir === POSTER_DIR_WHOLE) return file || null;
+    const base = this.dirs[dir - 1];
+    if (base === undefined) return null;
     return `${base}${file}`;
   }
 
