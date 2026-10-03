@@ -920,7 +920,17 @@ export class IptvServiceImpl implements IptvService {
       redactor.add(secrets.username);
       redactor.add(secrets.password);
     }
-    const account = options.test ? await this.quickTest(secrets, { lan }, signal, host) : null;
+    let account: XtreamAccount | null = null;
+    try {
+      account = options.test ? await this.quickTest(secrets, { lan }, signal, host) : null;
+    } catch (error) {
+      /* No se guarda nada, pero lo abortado arriba (la lista, la guía o el
+         VOD a medias) se queda sin programar: se vuelve a programar con lo
+         que había (M7). */
+      this.scheduleAll();
+      this.vod.reschedule();
+      throw error;
+    }
 
     const providerId = sameProvider && current ? current.id : newProviderId();
     const now = this.deps.clock.date().toISOString();

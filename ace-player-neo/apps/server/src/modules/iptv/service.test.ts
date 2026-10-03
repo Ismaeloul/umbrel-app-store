@@ -305,6 +305,30 @@ describe('trabajos (§3.4 y §3.5)', () => {
   });
 });
 
+describe('guardar con la prueba rápida fallando (M7)', () => {
+  it('lo abortado (lista y guía en marcha) se vuelve a programar', async () => {
+    const r = await rig();
+    await r.service.start();
+    await saveXtream(r);
+    const timers = r.service['timers'];
+    /* La lista y la guía estaban descargándose: sus temporizadores ya se habían consumido. */
+    for (const name of ['list', 'guide']) {
+      r.core.clock.clearTimeout(timers.get(name));
+      timers.delete(name);
+    }
+    expect(
+      await codeOf(
+        r.service.save(
+          { kind: 'xtream', server: SERVER, username: FAKE_IPTV_USER, password: 'mala' },
+          signal(),
+        ),
+      ),
+    ).toBe('iptv_auth_failed');
+    expect(timers.has('list')).toBe(true);
+    expect(timers.has('guide')).toBe(true);
+  });
+});
+
 describe('token caducado de una M3U con la guía descargándose (M6)', () => {
   it('el canal no espera a la guía: a los 10 s sigue sin la URL nueva, y la lista se refresca detrás', async () => {
     const r = await rig();
