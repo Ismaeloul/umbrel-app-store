@@ -28,7 +28,7 @@
    señal y el tapado. */
 
 import type { FootballMatch, LiveScore } from '@ace/shared';
-import { useId, ViewTransition, type CSSProperties, type ReactNode } from 'react';
+import { useId, type CSSProperties, type ReactNode } from 'react';
 import { cx } from '../../lib/cx.ts';
 import { competitionLogo } from '../../lib/teams.ts';
 import {
@@ -68,8 +68,6 @@ export interface HeroViewProps {
   /** Segundo toque en la cápsula: vuelve a tapar. */
   onHide?(): void;
   onOpen(match: FootballMatch): void;
-  /** Nombre de la View Transition del bloque de escudos (único en la página). */
-  transitionName?: string | null;
   /** «poster»: tarjeta versus XL (móvil y tableta); «band»: banda compacta (escritorio). */
   layout?: 'poster' | 'band';
 }
@@ -87,7 +85,6 @@ export function HeroView({
   onReveal,
   onHide,
   onOpen,
-  transitionName = null,
   layout = 'poster',
 }: HeroViewProps) {
   const titleId = useId();
@@ -179,7 +176,7 @@ export function HeroView({
           {matchTitle(match)}
         </h2>
         <div className="agenda-hero__band">
-          {transitionName ? <ViewTransition name={transitionName}>{teams}</ViewTransition> : teams}
+          {teams}
           <div className="agenda-hero__meta">
             <div className="agenda-hero__marks">
               <Capsule
@@ -248,7 +245,6 @@ export function HeroView({
           when={when}
           mine={mine}
           watching={watching}
-          transitionName={transitionName ?? undefined}
           className="agenda-hero__versus"
         >
           {signal ? <SignalCapsule signal={signal} size="md" /> : null}

@@ -5,8 +5,10 @@
 
    - Sobre el vídeo, arriba a la izquierda, la cápsula del marcador (tapada
      por defecto): la vista la proyecta con un portal en el hueco que publica
-     el reproductor (player/stage-slot.ts). Sin reproductor (cargándose, o en
-     los tests) va en su sitio, arriba de la vista.
+     el reproductor (player/stage-slot.ts). Sin armazón (los tests) va en su
+     sitio, arriba de la vista; con él, mientras el reproductor aún no ha
+     publicado el hueco, no se pinta (match-center.css: si no, la cabecera
+     saltaba en mitad del fundido de entrada).
    - Bajo el vídeo, la cabecera (competición, estado y los dos equipos) y el
      panel con pestañas Fuentes · Partido · Datos técnicos. Desde 1024 px ese
      panel va en el lateral (MatchAside.tsx), plegable; plegado, vuelve aquí.

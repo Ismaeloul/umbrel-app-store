@@ -53,7 +53,14 @@ import { useBack, useNavigate, useRoute } from './router.tsx';
 import { formatVista, type Route, type Vista } from './routes.ts';
 import { restoreScroll } from './scroll-memory.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
-import { finishEntranceAnimations, VISTA_CAMBIA, VISTA_ENTRA, VISTA_SALE } from './transitions.ts';
+import {
+  finishEntranceAnimations,
+  REPRODUCTOR_CAMBIA,
+  reproductorTransitionName,
+  VISTA_CAMBIA,
+  VISTA_ENTRA,
+  VISTA_SALE,
+} from './transitions.ts';
 import { useShortcut } from './shortcuts.ts';
 import { AgendaColumn, asideComponent, PlayerDock, viewComponent } from './views.tsx';
 import './shell.css';
@@ -246,7 +253,13 @@ export function Shell() {
           {dockMounted || inPartido ? (
             <div className="stage" data-presentation={presentation}>
               {dockMounted && PlayerDock ? (
-                <ViewTransition name="ace-reproductor">
+                // Un nombre por presentación (transitions.ts, reproductorTransitionName):
+                // al pasar de mini a grande, o al revés, uno se funde y el otro
+                // aparece como las vistas; no viaja de una esquina a otra.
+                <ViewTransition
+                  name={reproductorTransitionName(presentation)}
+                  default={REPRODUCTOR_CAMBIA}
+                >
                   <div className="dock" data-presentation={presentation}>
                     <ErrorBoundary what="el reproductor">
                       <Suspense fallback={<StagePlaceholder loading />}>

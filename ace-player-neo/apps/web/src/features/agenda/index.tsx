@@ -8,7 +8,7 @@
    el vídeo ni lo enseña (regla 6). Debajo, la tira de días y «Para ti» /
    «Todos», la tarjeta de primer uso y, por competición, una FILA HORIZONTAL
    de tarjetas versus (scroll-snap). Tocar una tarjeta abre el centro de
-   partido (con los escudos viajando hasta allí: View Transition). Deslizar la
+   partido con el mismo fundido que un cambio de pestaña. Deslizar la
    lista a los lados cambia de día; si habías bajado, la página vuelve a la
    tira para que se vea qué día es.
 
@@ -40,7 +40,6 @@ import type { ViewProps } from '../../app/contracts.ts';
 import { useLayout } from '../../app/layout.tsx';
 import { useNavigate } from '../../app/router.tsx';
 import { useShortcut } from '../../app/shortcuts.ts';
-import { partidoTransitionName } from '../../app/transitions.ts';
 import { preloadView } from '../../app/views.tsx';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
 import { cx } from '../../lib/cx.ts';
@@ -125,9 +124,6 @@ function LoadingRows() {
   );
 }
 
-/** Quién lleva el nombre de la transición compartida al abrir un partido. */
-type Opening = { id: string; from: 'hero' | 'list' } | null;
-
 export default function Agenda({ active }: ViewProps) {
   const navigate = useNavigate();
   const { kind } = useLayout();
@@ -145,7 +141,6 @@ export default function Agenda({ active }: ViewProps) {
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [prefsMounted, setPrefsMounted] = useState(false);
   const [cardDismissed, setCardDismissed] = useState(false);
-  const [opening, setOpening] = useState<Opening>(null);
   const [swipeDirection, setSwipeDirection] = useState<'next' | 'prev' | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -189,8 +184,8 @@ export default function Agenda({ active }: ViewProps) {
   const later = stageVisible ? laterMatches(matches, now, scores, selected?.id ?? null) : [];
 
   /* El centro de partido se descarga en un rato libre con la agenda a la
-     vista: abrir un partido lo pinta en la misma transición y los escudos
-     viajan hasta el marcador también la primera vez (views.tsx). */
+     vista: abrir un partido lo pinta en la misma transición que el fundido,
+     sin esqueleto, también la primera vez (views.tsx). */
   useEffect(() => {
     if (!active) return;
     const idle = globalThis.requestIdleCallback;
@@ -210,16 +205,12 @@ export default function Agenda({ active }: ViewProps) {
   };
 
   const openMatch = useCallback(
-    (match: FootballMatch, from: 'hero' | 'list' = 'list') => {
+    (match: FootballMatch) => {
       if (!match.channels?.length) {
         notify('El canal todavía no está anunciado', { tone: 'info' });
         return;
       }
       haptic('light');
-      // Solo un elemento lleva el nombre de la transición compartida (tiene
-      // que ser único en la página): el héroe o la tarjeta desde la que se
-      // abre; se queda para la vuelta atrás.
-      setOpening({ id: match.id, from });
       navigate({ vista: 'partido', id: match.id, canal: null });
     },
     [navigate],
@@ -467,11 +458,6 @@ export default function Agenda({ active }: ViewProps) {
         interaction={stageVisible ? 'select' : 'open'}
         onOpen={openMatch}
         onSelect={(chosen) => setAgendaSelected(chosen.id)}
-        transitionName={
-          opening?.from === 'list' && opening.id === match.id
-            ? partidoTransitionName(match.id)
-            : null
-        }
         menuItems={menuFor(match, available, scoreState)}
         staggerIndex={staggerIndex}
       />
@@ -496,13 +482,8 @@ export default function Agenda({ active }: ViewProps) {
         channels={channelInfo(featured, lookup)}
         mine={isMine(featured, preferences)}
         watching={watched === featured.id}
-        onOpen={(match) => openMatch(match, 'hero')}
+        onOpen={openMatch}
         layout={stageVisible ? 'band' : 'poster'}
-        transitionName={
-          opening?.from === 'hero' && opening.id === featured.id
-            ? partidoTransitionName(featured.id)
-            : null
-        }
       />
     );
   }

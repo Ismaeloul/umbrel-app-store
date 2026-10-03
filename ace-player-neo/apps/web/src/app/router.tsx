@@ -186,7 +186,18 @@ export function RouterProvider({ children, onBeforeChange, initialSearch }: Rout
       noteViewParams(location.search);
       const next = parseRoute(location.search);
       targetRef.current = next;
-      startTransition(() => commit(next, 'atras'));
+      // React pinta en el acto (y SIN View Transition) lo que se lanza dentro
+      // de un `popstate`, para que el navegador restaure el scroll. Aquí el
+      // scroll lo restaura el armazón, así que la vuelta atrás se lanza justo
+      // después del evento: así lleva el mismo fundido que cualquier cambio
+      // de pestaña (salir de un partido, Isma, 0.9.0). Sin la API (jsdom,
+      // navegadores viejos) no hay fundido que esperar: en el acto. Si en ese
+      // instante ya se ha ido a otra parte (otro popstate, un clic), manda eso.
+      const go = () => {
+        if (targetRef.current === next) startTransition(() => commit(next, 'atras'));
+      };
+      if (typeof document.startViewTransition === 'function') setTimeout(go, 0);
+      else go();
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);

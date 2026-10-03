@@ -1,21 +1,60 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  canalTransitionName,
   finishEntranceAnimations,
-  partidoTransitionName,
+  REPRODUCTOR_CAMBIA,
+  reproductorTransitionName,
   VISTA_CAMBIA,
   VISTA_ENTRA,
   VISTA_SALE,
 } from './transitions.ts';
 
-describe('nombres de transición', () => {
-  it('son identificadores CSS válidos y estables', () => {
-    expect(partidoTransitionName('fltv-2026-09-23-3')).toBe('partido-fltv-2026-09-23-3');
-    expect(partidoTransitionName('espn:401.7')).toBe('partido-espn_401_7');
-    expect(canalTransitionName('a1b2')).toBe('canal-a1b2');
-    expect(partidoTransitionName('x')).toMatch(/^[A-Za-z][A-Za-z0-9_-]*$/);
+const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/** Los .tsx de src/ (sin pruebas), con su ruta relativa y `/`. */
+function sources(): Array<{ file: string; text: string }> {
+  return readdirSync(SRC, { recursive: true })
+    .filter((file) => /\.tsx$/.test(file) && !/\.test\.tsx$/.test(file))
+    .map((file) => ({
+      file: file.replace(/\\/g, '/'),
+      text: readFileSync(path.join(SRC, file), 'utf8'),
+    }));
+}
+
+describe('sin elementos compartidos entre vistas (0.9.0)', () => {
+  it('ninguna <ViewTransition> con nombre salvo la del reproductor', () => {
+    // Abrir un partido es el mismo fundido que cambiar de pestaña: los escudos
+    // que «viajaban» de la agenda a la cabecera (partido-<id>) no deben volver.
+    const named = sources().flatMap(({ file, text }) =>
+      [...text.matchAll(/<ViewTransition\b[^>]*?\bname=\{?([^\s>}]+)/g)].map(
+        (match) => `${file}: ${match[1]}`,
+      ),
+    );
+    expect(named).toEqual(['app/Shell.tsx: reproductorTransitionName(presentation)']);
+    const all = sources()
+      .map(({ text }) => text)
+      .join('\n');
+    expect(all).not.toMatch(/partidoTransitionName|canalTransitionName|transitionName=/);
+  });
+
+  it('el reproductor lleva un nombre por presentación: de mini a grande no viaja', () => {
+    expect(reproductorTransitionName('mini')).toBe('ace-reproductor-mini');
+    expect(reproductorTransitionName('stage')).toBe('ace-reproductor-stage');
+    expect(reproductorTransitionName('mini')).not.toBe(reproductorTransitionName('stage'));
+    const css = rules(baseCss);
+    // Sin pareja: el que se va se apaga y el que llega aparece, como las vistas.
+    expect(css).toMatch(
+      new RegExp(
+        `::view-transition-old\\(\\.${REPRODUCTOR_CAMBIA}\\):only-child \\{[^}]*animation: ace-vt-sale var\\(--dur-rapido\\)`,
+      ),
+    );
+    expect(css).toMatch(
+      new RegExp(
+        `::view-transition-new\\(\\.${REPRODUCTOR_CAMBIA}\\):only-child \\{[^}]*animation: ace-funde var\\(--dur-rapido\\)`,
+      ),
+    );
   });
 });
 

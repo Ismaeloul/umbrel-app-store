@@ -98,6 +98,39 @@ describe('router', () => {
     expect(screen.getByTestId('ruta')).toHaveTextContent('agenda');
   });
 
+  it('con View Transitions, la vuelta atrás se lanza al acabar el popstate (lleva fundido)', async () => {
+    // React pinta SIN View Transition lo que se lanza dentro de un popstate:
+    // la vuelta atrás tiene que salir del evento para fundirse como las demás.
+    const doc = document as { startViewTransition?: unknown };
+    doc.startViewTransition = vi.fn();
+    try {
+      render(
+        <RouterProvider>
+          <Probe />
+        </RouterProvider>,
+      );
+      fireEvent.click(screen.getByText('biblioteca'));
+      history.replaceState({ aceDepth: 0 }, '', '/?vista=agenda');
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      expect(screen.getByTestId('ruta')).toHaveTextContent('biblioteca');
+      await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+      expect(screen.getByTestId('ruta')).toHaveTextContent('agenda');
+
+      // Si en ese instante se navega a otra parte, manda la navegación nueva.
+      history.replaceState({ aceDepth: 0 }, '', '/?vista=buscar');
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        fireEvent.click(screen.getByText('ajustes'));
+      });
+      await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+      expect(screen.getByTestId('ruta')).toHaveTextContent('ajustes');
+    } finally {
+      delete doc.startViewTransition;
+    }
+  });
+
   it('atrás sin historial propio va a la ruta de respaldo reemplazando', () => {
     render(
       <RouterProvider initialSearch="?vista=partido/m-9">

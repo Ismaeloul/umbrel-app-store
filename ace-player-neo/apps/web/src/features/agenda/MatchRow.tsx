@@ -217,8 +217,6 @@ export interface MatchRowViewProps {
   /** Tarjeta pequeña con siglas (columna del partido y «Luego»). */
   compact?: boolean;
   position?: RowPosition;
-  /** Solo la tarjeta que viaja al centro de partido lleva nombre (único en la página). */
-  transitionName?: string | null;
   /** `open`: el toque abre el partido; `select`: lo lleva al escenario (escritorio). */
   interaction?: 'open' | 'select';
   onOpen(match: FootballMatch): void;
@@ -241,7 +239,6 @@ export function MatchRowView({
   selected = false,
   compact = false,
   position = 'only',
-  transitionName = null,
   interaction = 'open',
   onOpen,
   onSelect,
@@ -325,7 +322,6 @@ export function MatchRowView({
           when={when}
           mine={mine}
           selected={selected}
-          transitionName={transitionName ?? undefined}
           className="agenda-row__versus"
         >
           {signal ? <SignalCapsule signal={signal} /> : null}
