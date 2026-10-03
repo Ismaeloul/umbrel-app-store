@@ -128,6 +128,24 @@ describe('confirmByGuide', () => {
     }
   });
 
+  it('con más de 30 min de previa, el programa tiene que cubrir el partido entero (105 min después del saque)', () => {
+    const at = (before: number, after: number): string[] =>
+      confirmed([
+        channel('M+ LaLiga TV 2', [
+          programme('LaLiga EA Sports: Real Sociedad - Villarreal', {
+            start: KICKOFF - before * MIN,
+            stop: KICKOFF + after * MIN,
+          }),
+        ]),
+      ]);
+    /* Hasta 30 min antes, como en la 0.8.3: basta con 90 min después del saque. */
+    expect(at(30, 90)).toEqual(['M+ LaLiga TV 2']);
+    /* De 20:15 a 22:30 no es un partido de las 21:00 (acabaría a las 22:50). */
+    expect(at(45, 90)).toEqual([]);
+    expect(at(60, 100)).toEqual([]);
+    expect(at(45, 105)).toEqual(['M+ LaLiga TV 2']);
+  });
+
   it('formas cortas de las guías: «R. Sociedad», «At. Madrid», «Ath. Club», partículas', () => {
     const at = (home: string, away: string, title: string): string[] =>
       confirmed([channel('M+ LaLiga TV 2', [programme(`LaLiga: ${title}`)])], {

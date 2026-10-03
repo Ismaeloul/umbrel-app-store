@@ -7,10 +7,14 @@
       reglas y los mismos candidatos que la resolución (`confirmByGuide` sobre
       `guideCandidates`): lo que se enseña en la agenda es lo que luego suena
       primero.
-   2. MUEVE la hora si futbolenlatv se equivoca: a su hora no hay nada, pero
-      ese mismo día la guía tiene el partido EN DIRECTO (marca de directo
-      obligatoria: las repeticiones sin marca son muy comunes, §15). Manda el
-      primer programa así del día; el saque sale de él (`kickoffFromProgramme`).
+   2. MUEVE la hora si futbolenlatv se equivoca: a su hora no hay nada (o un
+      programa que no puede ser un partido de esa hora, regla 1 de
+      guide-match.ts), pero ese mismo día la guía tiene el partido EN DIRECTO
+      (marca de directo obligatoria: las repeticiones sin marca son muy
+      comunes, §15). Manda el primer programa así del día; el saque sale de él
+      (`kickoffFromProgramme`). También si a su hora solo hay el partido SIN
+      marca y la guía lo tiene en directo antes ese día: lo de la hora de la
+      agenda es la repetición (una repetición va siempre después del directo).
    3. AÑADE un partido que la guía trae y la agenda no, con cuidado: solo en
       directo (marca obligatoria), de una competición que la agenda conoce
       (familia del texto o, si el texto no nombra ninguna, del canal), en un
@@ -217,19 +221,24 @@ function showHasTeams(show: LiveShow, cache: TeamCache): boolean {
   return false;
 }
 
-/** Saque de un partido que la guía tiene en directo ese día a otra hora (regla 2), o null. */
+/**
+ * Saque de un partido que la guía tiene en directo ese día a otra hora (regla
+ * 2), o null. Con `before`, solo los directos que empiezan antes de esa hora.
+ */
 function moveByGuide(
   input: GuideMatchInput,
   date: string,
   candidates: readonly GuideChannelCandidate[],
   shows: readonly LiveShow[],
   agendaScore: (display: string) => number,
+  before: number | null = null,
 ): { readonly start: number; readonly channels: string[] } | null {
   const cache = teamCache(input);
   const kickoffs = new Set<number>();
   for (const show of shows) {
     const kickoff = show.kickoff;
     if (kickoff === null || kickoff === input.start || show.date !== date) continue;
+    if (before !== null && kickoff >= before) continue;
     if (showHasTeams(show, cache)) kickoffs.add(kickoff);
   }
   for (const start of [...kickoffs].sort((a, b) => a - b)) {
@@ -319,6 +328,17 @@ export function guideAgenda(
     };
     const agendaScore = scorerFor(match.channels);
     const found = confirmByGuide(input, candidates, { agendaScore });
+    /* Lo de la hora de la agenda no lleva la marca de directo y la guía tiene
+       el partido EN DIRECTO ese mismo día, antes: lo de la hora de la agenda
+       es la repetición (una repetición siempre va después del directo). */
+    const earlier =
+      found.length && !found.some((item) => hasLiveMark(item.programme))
+        ? moveByGuide(input, match.date, candidates, shows, agendaScore, match.start)
+        : null;
+    if (earlier) {
+      confirmations.push({ matchId: match.id, ...earlier, moved: true });
+      continue;
+    }
     if (found.length) {
       confirmations.push({
         matchId: match.id,

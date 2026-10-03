@@ -191,6 +191,69 @@ describe('guideAgenda: mover la hora', () => {
     expect(result.confirmations[0]).toMatchObject({ start: KICKOFF, moved: false });
   });
 
+  it('a su hora solo la repetición sin marca y el directo antes, ese día: manda el directo', () => {
+    const early = KICKOFF - 3 * HOUR - 5 * MIN; // 15:25 → 15:30
+    const result = run([
+      channel('M+ LaLiga TV 2', [
+        programme('LaLiga: Real Sociedad - Villarreal (Directo)', early, 120),
+        programme('LaLiga: Real Sociedad - Villarreal', KICKOFF - 5 * MIN, 120),
+      ]),
+    ]);
+    expect(result.confirmations).toEqual([
+      {
+        matchId: 'fltv-1',
+        channels: ['M+ LaLiga TV 2'],
+        start: KICKOFF - 3 * HOUR,
+        moved: true,
+      },
+    ]);
+  });
+
+  it('un directo que empieza mucho antes y acaba antes del final de un partido a esa hora: es de antes', () => {
+    /* Agenda a las 18:30; la guía, en directo de 17:45 (o de 17:30) a 20:00: a las 18:30
+       acabaría a las 20:20. Manda la guía (17:45 o 17:30). */
+    for (const before of [45, 60]) {
+      const result = run([
+        channel('M+ LaLiga TV', [
+          programme(
+            'LaLiga: Real Sociedad - Villarreal (Directo)',
+            KICKOFF - before * MIN,
+            before + 90,
+          ),
+        ]),
+      ]);
+      expect(result.confirmations).toEqual([
+        {
+          matchId: 'fltv-1',
+          channels: ['M+ LaLiga TV'],
+          start: KICKOFF - before * MIN,
+          moved: true,
+        },
+      ]);
+    }
+  });
+
+  it('con la previa dentro y el partido entero después: confirma la hora de la agenda', () => {
+    for (const [before, after] of [
+      [30, 90],
+      [45, 110],
+      [60, 120],
+    ] as const) {
+      const result = run([
+        channel('M+ LaLiga TV', [
+          programme(
+            'LaLiga: Real Sociedad - Villarreal (Directo)',
+            KICKOFF - before * MIN,
+            before + after,
+          ),
+        ]),
+      ]);
+      expect(result.confirmations).toEqual([
+        { matchId: 'fltv-1', channels: ['M+ LaLiga TV'], start: KICKOFF, moved: false },
+      ]);
+    }
+  });
+
   it('nunca a otro día', () => {
     const nextDay = KICKOFF + 24 * HOUR;
     const result = run([

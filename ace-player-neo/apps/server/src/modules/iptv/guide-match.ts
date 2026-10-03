@@ -3,10 +3,12 @@
    Una entrada IPTV queda CONFIRMADA POR LA GUÍA solo si TODO esto se cumple:
 
    1. Hora: el programa empieza entre 60 min antes y 15 min después del
-      saque, dura entre 80 y 240 min y acaba al menos 90 min después del saque
-      (agenda híbrida, D-propuesta: antes eran 30 min antes; hay guías que
-      meten la previa en el mismo programa y las dos reglas de la duración
-      ya impiden que cuele otro programa).
+      saque, dura entre 80 y 240 min y acaba al menos 90 min después del
+      saque. Si empieza más de 30 min antes (la previa dentro del mismo
+      programa, agenda híbrida, D-propuesta; en la 0.8.3 el tope eran esos
+      30 min), tiene que cubrir el partido entero: acabar al menos 105 min
+      después del saque. Un programa en directo de 20:15 a 22:30 no es un
+      partido de las 21:00 (acabaría a las 22:50): es uno de antes.
    2. Equipos: los dos en el MISMO campo (título, subtítulo o descripción), a
       menos de 40 caracteres uno de otro y separados por un separador de
       enfrentamiento (-, –, vs, v, x, ×, contra, /), sin tildes, en minúsculas
@@ -51,6 +53,10 @@ export const GUIDE_MIN_DURATION_MS = 80 * MINUTE;
 export const GUIDE_MAX_DURATION_MS = 240 * MINUTE;
 /** Regla 1: el programa sigue al menos esto después del saque. */
 export const GUIDE_AFTER_KICKOFF_MS = 90 * MINUTE;
+/** Regla 1: un programa que empieza antes de esto (respecto al saque) lleva la previa dentro... */
+export const GUIDE_PREVIA_MS = 30 * MINUTE;
+/** ...y tiene que cubrir el partido entero (45 + descanso + 45 y el añadido). */
+export const GUIDE_PREVIA_AFTER_KICKOFF_MS = 105 * MINUTE;
 
 /** Un programa de la ventana útil de la guía (guide.ts). */
 export interface GuideProgramme {
@@ -635,11 +641,13 @@ export function programmeLastsAMatch(programme: Pick<GuideProgramme, 'start' | '
 
 /** Regla 1: el programa cae a la hora del partido y dura lo de un partido. */
 export function programmeFitsKickoff(programme: GuideProgramme, kickoff: number): boolean {
+  const withPrevia = programme.start < kickoff - GUIDE_PREVIA_MS;
   return (
     programme.start >= kickoff - GUIDE_EARLY_MS &&
     programme.start <= kickoff + GUIDE_LATE_MS &&
     programmeLastsAMatch(programme) &&
-    programme.stop >= kickoff + GUIDE_AFTER_KICKOFF_MS
+    programme.stop >=
+      kickoff + (withPrevia ? GUIDE_PREVIA_AFTER_KICKOFF_MS : GUIDE_AFTER_KICKOFF_MS)
   );
 }
 
