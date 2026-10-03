@@ -58,32 +58,105 @@ export function isAdultCategory(name: string): boolean {
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g;
 
-const ENTITIES: Readonly<Record<string, string>> = {
-  '&amp;': '&',
-  '&quot;': '"',
-  '&#39;': "'",
-  '&#039;': "'",
-  '&apos;': "'",
-  '&lt;': '<',
-  '&gt;': '>',
-  '&nbsp;': ' ',
+/* Entidades con nombre que mandan los paneles PHP (`htmlentities`) y que no
+   son una letra con tilde (esas salen de `ACCENT_MARK`). */
+const NAMED_ENTITIES: Readonly<Record<string, string>> = {
+  amp: '&',
+  quot: '"',
+  apos: "'",
+  lt: '<',
+  gt: '>',
+  nbsp: ' ',
+  iexcl: '¡',
+  iquest: '¿',
+  ordf: 'ª',
+  ordm: 'º',
+  laquo: '«',
+  raquo: '»',
+  middot: '·',
+  hellip: '…',
+  ndash: '–',
+  mdash: '—',
+  lsquo: '‘',
+  rsquo: '’',
+  sbquo: '‚',
+  ldquo: '“',
+  rdquo: '”',
+  bdquo: '„',
+  copy: '©',
+  reg: '®',
+  trade: '™',
+  deg: '°',
+  euro: '€',
+  szlig: 'ß',
+  aelig: 'æ',
+  AElig: 'Æ',
+  oelig: 'œ',
+  OElig: 'Œ',
+  oslash: 'ø',
+  Oslash: 'Ø',
 };
+
+/* `&aacute;`, `&Ntilde;`, `&uuml;`…: la letra más su marca combinada (NFC). */
+const ACCENT_MARK: Readonly<Record<string, string>> = {
+  acute: '́',
+  grave: '̀',
+  circ: '̂',
+  uml: '̈',
+  tilde: '̃',
+  cedil: '̧',
+  ring: '̊',
+};
+
+/** Un punto de código que se puede escribir (ni control, ni sustituto, ni fuera de Unicode). */
+function printableCodePoint(code: number): string {
+  if (!Number.isInteger(code) || code < 0x20 || code > 0x10ffff) return ' ';
+  if ((code >= 0x7f && code <= 0x9f) || (code >= 0xd800 && code <= 0xdfff)) return ' ';
+  return String.fromCodePoint(code);
+}
+
+/** Entidades HTML: con nombre, de letra con tilde y numéricas (decimales y hex). Una sola pasada. */
+export function decodeEntities(text: string): string {
+  if (!text.includes('&')) return text;
+  return text.replace(/&(#\d{1,7}|#x[0-9a-f]{1,6}|[A-Za-z]{2,8});/gi, (entity, body: string) => {
+    if (body[0] === '#') {
+      const hex = body[1] === 'x' || body[1] === 'X';
+      return printableCodePoint(parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10));
+    }
+    const named = NAMED_ENTITIES[body];
+    if (named !== undefined) return named;
+    const mark = ACCENT_MARK[body.slice(1)];
+    if (mark && /^[A-Za-z]$/.test(body[0] as string)) return `${body[0]}${mark}`.normalize('NFC');
+    return entity;
+  });
+}
+
+/** Recorta a `max` unidades sin partir un par sustituto (un emoji, un ideograma raro). */
+function sliceSafe(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const code = text.charCodeAt(max - 1);
+  return text.slice(0, code >= 0xd800 && code <= 0xdbff ? max - 1 : max);
+}
+
+/* Etiquetas que separan («<br>», «</p>»…): un espacio. Las demás («<b>»),
+   nada: «PEL<b>Í</b>CULAS» es una palabra. Solo lo que parece una etiqueta:
+   «nota < 5 y > 3» no es HTML. */
+const BLOCK_TAG = /<\/?(?:br|p|div|li|ul|ol|tr|td|h[1-6])\b[^<>]{0,200}>/gi;
+const INLINE_TAG = /<\/?[A-Za-z!][^<>]{0,200}>/g;
 
 /**
  * Texto del panel limpio: sin etiquetas HTML ni caracteres de control, con
- * las entidades comunes decodificadas, espacios juntados y recortado a `max`.
+ * las entidades decodificadas (también `&aacute;` y `&#233;`), espacios
+ * juntados y recortado a `max` sin partir un carácter.
  */
 export function cleanText(value: unknown, max: number): string {
   const text = looseString(value);
   if (!text) return '';
-  return text
-    .replace(/<[^>]{0,200}>/g, ' ')
-    .replace(/&(?:amp|quot|#0?39|apos|lt|gt|nbsp);/g, (entity) => ENTITIES[entity] ?? entity)
+  const clean = decodeEntities(text.replace(BLOCK_TAG, ' ').replace(INLINE_TAG, ''))
     .replace(CONTROL_CHARS, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, max)
     .trim();
+  return sliceSafe(clean, max).trim();
 }
 
 /** Id del proveedor: entero en [1, 2⁵³). */

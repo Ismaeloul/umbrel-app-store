@@ -28,6 +28,7 @@ import {
   type XtreamCallOptions,
   type XtreamCredentials,
 } from '../xtream.js';
+import { cleanText } from './parse.js';
 
 export type XtreamVodAction =
   | 'get_vod_categories'
@@ -58,19 +59,34 @@ export function xtreamVodApiUrl(
   return xtreamApiUrl(credentials, action, safe);
 }
 
-/** Categorías de películas o de series (id → nombre, en el orden del panel). */
-export function xtreamVodCategories(
+/** Largo máximo del nombre de una categoría VOD (el de `VodCategorySchema`). */
+const CATEGORY_NAME_MAX = 120;
+
+/**
+ * Categorías de películas o de series (id → nombre, en el orden del panel),
+ * con el nombre LIMPIO (fallo 9): sin HTML, entidades ni caracteres de
+ * control, como los títulos (§7.2). Una que se queda sin nombre se tira (sus
+ * títulos van a «Sin categoría»). Las del directo no se tocan aquí: sus ids
+ * salen del nombre y cambiarían.
+ */
+export async function xtreamVodCategories(
   net: NetClient,
   credentials: XtreamCredentials,
   kind: VodKind,
   options: XtreamCallOptions,
 ): Promise<Map<string, string>> {
-  return xtreamCategories(
+  const raw = await xtreamCategories(
     net,
     credentials,
     { ...options, limits: VOD_LIMITS.categories },
     kind === 'movie' ? 'get_vod_categories' : 'get_series_categories',
   );
+  const out = new Map<string, string>();
+  for (const [id, name] of raw) {
+    const clean = cleanText(name, CATEGORY_NAME_MAX);
+    if (clean) out.set(id, clean);
+  }
+  return out;
 }
 
 export interface VodListOutcome {
@@ -195,7 +211,9 @@ export async function xtreamVodInfo(
       maxBytes: limits.maxBytes,
       totalTimeoutMs: limits.totalMs,
       headers: HEADERS,
-      iptv: { ...options.policy, maxDecompressedBytes: limits.maxBytes * 3 },
+      /* El tope de la ficha vale DESCOMPRIMIDA (fallo 7): con gzip, `* 3`
+         dejaba llegar 24 MiB a `JSON.parse`. */
+      iptv: { ...options.policy, maxDecompressedBytes: limits.maxBytes },
       ...(options.signal ? { signal: options.signal } : {}),
     });
     return response.body;
