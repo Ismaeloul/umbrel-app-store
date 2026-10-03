@@ -24,17 +24,30 @@
      arrancar. Un 404 o un error del origen se recuerda 1 h (5 000 entradas). */
 
 import { createHash, createHmac } from 'node:crypto';
-import { mkdir, readdir, readFile, rename, rm, stat, utimes, writeFile, chmod } from 'node:fs/promises';
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  utimes,
+  writeFile,
+  chmod,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { IPTV_USER_AGENT, VOD_ART, type VodArtKind } from '@ace/shared';
 import { AppError } from '../../../core/errors.js';
 import type { Clock, TimerHandle } from '../../../core/clock.js';
+import { etagMatches } from '../../../core/reply.js';
 import type { Logger } from '../../../core/logger.js';
 import type { IptvKeys } from '../../../config/keys.js';
 import type { IptvFetchPolicy, NetClient } from '../../net/types.js';
 import { DIR_MODE, FILE_MODE } from '../crypto.js';
 
 export const ART_SWEEP_MS = 10 * 60_000;
+/** Un `.tmp` más joven que esto es una descarga en marcha (8 s como mucho): el barrido no lo toca. */
+export const ART_TMP_MAX_AGE_MS = 5 * 60_000;
 const NEGATIVE_MAX = 5_000;
 const CACHE_IMMUTABLE = 'private, max-age=31536000, immutable';
 const CACHE_PLAIN = 'private, no-cache';
@@ -82,15 +95,8 @@ export function tmdbSized(url: string, kind: VodArtKind): string {
   return parsed.toString();
 }
 
-/** ¿`If-None-Match` casa con el ETag (también `W/`, comillas y listas)? */
-export function etagMatches(header: string | undefined, etag: string): boolean {
-  if (!header) return false;
-  if (header.trim() === '*') return true;
-  return header
-    .split(',')
-    .map((part) => part.trim().replace(/^W\//, '').replace(/^"|"$/g, ''))
-    .includes(etag);
-}
+/* `etagMatches` es el de los escudos (core/reply.ts); se sigue exportando aquí. */
+export { etagMatches };
 
 export type ArtReply =
   | { readonly status: 200; readonly headers: Record<string, string>; readonly body: Buffer }
@@ -142,7 +148,9 @@ export class VodArtCache {
 
   start(): void {
     void this.sweep();
-    this.timer = this.deps.clock.setInterval(() => void this.sweep(), ART_SWEEP_MS, { unref: true });
+    this.timer = this.deps.clock.setInterval(() => void this.sweep(), ART_SWEEP_MS, {
+      unref: true,
+    });
   }
 
   stop(): void {
@@ -317,6 +325,13 @@ export class VodArtCache {
       for (const name of names) {
         const file = path.join(dir, name);
         if (!/^[a-f0-9]{32}$/.test(name)) {
+          /* El `.tmp` de una descarga EN MARCHA no se toca (fallo 10): solo
+             los restos viejos. Su `mtime` lo pone el disco, así que se
+             compara con la hora de verdad y no con el reloj del servicio. */
+          if (/^[a-f0-9]{32}\.tmp$/.test(name)) {
+            const info = await stat(file).catch(() => null);
+            if (info && Date.now() - info.mtimeMs < ART_TMP_MAX_AGE_MS) continue;
+          }
           await rm(file, { force: true }).catch(() => undefined);
           continue;
         }

@@ -129,7 +129,11 @@ describe('rutas de Películas y series sin IPTV', () => {
     const cases: Array<[string, number, string]> = [
       [`/api/v1/vod/titles/${VOD_ID}`, 503, 'vod_unavailable'],
       [`/api/v1/vod/titles/${VOD_ID}/art/poster?v=3fa9c210`, 404, 'vod_not_found'],
-      [`/api/v1/vod/titles/${VOD_ID}/stream?client=web&viewer=viewer_tab01`, 501, 'not_implemented'],
+      [
+        `/api/v1/vod/titles/${VOD_ID}/stream?client=web&viewer=viewer_tab01`,
+        501,
+        'not_implemented',
+      ],
     ];
     for (const [url, status, code] of cases) {
       const res = await app.inject({ method: 'GET', url, headers: web() });

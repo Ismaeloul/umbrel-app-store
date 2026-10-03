@@ -263,9 +263,7 @@ export function hasUserInfo(body: unknown): boolean {
 
 /** Acciones de categorías de `player_api` (directo, películas y series). */
 export type XtreamCategoryAction =
-  | 'get_live_categories'
-  | 'get_vod_categories'
-  | 'get_series_categories';
+  'get_live_categories' | 'get_vod_categories' | 'get_series_categories';
 
 /**
  * `get_live_categories` (o la acción VOD que se pida, docs/vod.md §4.2): id →

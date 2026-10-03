@@ -111,7 +111,7 @@ import {
 } from './search.js';
 import { createIptvRelay, type IptvRelayImpl, type RelayVariant } from './relay.js';
 import { IptvFiles } from './store.js';
-import { VodService } from './vod/vod-service.js';
+import { VodPreemptedError, VodService } from './vod/vod-service.js';
 import type {
   IptvBackupConfig,
   IptvCheckOptions,
@@ -240,6 +240,8 @@ export class IptvServiceImpl implements IptvService {
   private readonly redactor = new IptvRedactor();
   private lan = false;
   private heavy: HeavyJob | null = null;
+  /** Todos los trabajos pesados en marcha o en cola (`heavy` es el último). */
+  private readonly heavyJobs = new Set<HeavyJob>();
   private syncing = false;
   private readonly listeners = new Set<IptvListener>();
   private readonly timers = new Map<string, TimerHandle>();
@@ -435,7 +437,9 @@ export class IptvServiceImpl implements IptvService {
     this.unsubscribe = null;
     for (const timer of this.timers.values()) this.deps.clock.clearTimeout(timer);
     this.timers.clear();
-    this.heavy?.controller.abort(new AppError('iptv_disabled', { detail: 'apagando' }));
+    for (const job of this.heavyJobs) {
+      job.controller.abort(new AppError('iptv_disabled', { detail: 'apagando' }));
+    }
     this.probe?.controller.abort(new AppError('iptv_disabled'));
     await this.vod.stop();
     await this.relay.stop();
@@ -611,6 +615,12 @@ export class IptvServiceImpl implements IptvService {
   private vodStatus(): Pick<IptvStatus, 'vod'> {
     const vod = this.record?.kind === 'xtream' ? this.vod.status() : undefined;
     return vod ? { vod } : {};
+  }
+
+  /** ¿Es un id de Películas y series de este proveedor? (docs/vod.md §5.3). */
+  isVodId(id: string): boolean {
+    this.ensureLoaded();
+    return this.vod.isVodId(id);
   }
 
   private channelsWithGuide(window: GuideWindow): number {
@@ -1021,10 +1031,9 @@ export class IptvServiceImpl implements IptvService {
     return NO_IPTV;
   }
 
-  /** Aborta la sincronización, la guía y la sonda en curso (no hacen cola). */
+  /** Aborta la sincronización, la guía, el VOD y la sonda en curso o en cola. */
   private abortWork(code: 'iptv_disabled' | 'iptv_removed'): void {
-    const job = this.heavy;
-    if (job) job.controller.abort(new AppError(code));
+    for (const job of this.heavyJobs) job.controller.abort(new AppError(code));
     this.probe?.controller.abort(new AppError(code));
   }
 
@@ -1049,10 +1058,18 @@ export class IptvServiceImpl implements IptvService {
 
   // --- Trabajos pesados (un solo cerrojo) ---
 
+  /**
+   * Un trabajo pesado detrás del último (un solo cerrojo para la lista, la
+   * guía y el VOD). El directo y la guía NUNCA esperan a una sincronización
+   * de Películas y series (la 0.8.3 prometió «IPTV sin cortes»): si hay una
+   * VOD en marcha o en cola, se aborta con `VodPreemptedError` y el VOD se
+   * vuelve a pedir solo, detrás (docs/vod-estado.md §4.1, fallo 8).
+   */
   private runHeavy(kind: HeavyKind, task: (signal: AbortSignal) => Promise<void>): Promise<void> {
     const running = this.heavy;
     if (running && running.kind === kind && !running.controller.signal.aborted)
       return running.promise;
+    if (kind !== 'vod') this.preemptVod();
     const previous = running?.promise.catch(() => undefined) ?? Promise.resolve();
     const controller = new AbortController();
     const promise = previous
@@ -1061,12 +1078,33 @@ export class IptvServiceImpl implements IptvService {
         return task(controller.signal);
       })
       .finally(() => {
+        this.heavyJobs.delete(job);
         if (this.heavy?.promise === promise) this.heavy = null;
       });
     const job: HeavyJob = { kind, controller, promise };
     this.heavy = job;
+    this.heavyJobs.add(job);
     promise.catch(() => undefined);
     return promise;
+  }
+
+  /** Aborta las sincronizaciones VOD en marcha o en cola para que pase delante el directo o la guía. */
+  private preemptVod(): void {
+    let preempted = false;
+    for (const job of this.heavyJobs) {
+      if (job.kind !== 'vod' || job.controller.signal.aborted) continue;
+      job.controller.abort(new VodPreemptedError());
+      preempted = true;
+    }
+    if (preempted) this.vod.onPreempted();
+  }
+
+  /** ¿Hay una sincronización del directo o de la guía en marcha o en cola? (las VOD no cuentan: ceden). */
+  private liveWorkPending(): boolean {
+    for (const job of this.heavyJobs) {
+      if (job.kind !== 'vod' && !job.controller.signal.aborted) return true;
+    }
+    return false;
   }
 
   /** Sincroniza la lista de fondo. */
@@ -2055,7 +2093,8 @@ export class IptvServiceImpl implements IptvService {
     if (!this.active()) return;
     const age = this.deps.clock.now() - (this.catalog as Catalog).builtAt;
     const limit = mode === 'research' ? IPTV_REFRESH.researchStaleMs : IPTV_REFRESH.listMs;
-    if (age > limit && !this.heavy) void this.startSync('stale');
+    /* Una sincronización VOD en marcha no la frena: cede el sitio (fallo 8). */
+    if (age > limit && !this.liveWorkPending()) void this.startSync('stale');
     void this.checkAccount(false);
   }
 

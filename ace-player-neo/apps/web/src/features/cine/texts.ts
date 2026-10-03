@@ -129,15 +129,19 @@ export function staleText(day: string): string {
 /**
  * «Tu IPTV tiene más de 200.000 películas; se ven las primeras 200.000.» Si
  * lo recortado son las series (el tope de películas no se alcanzó), lo mismo
- * con las series.
+ * con las series. Sin llegar a ningún tope, `truncated` es que el modo por
+ * categorías se cortó por tiempo la primera vez (docs/vod.md §4.7): faltan
+ * categorías, no títulos de más.
  */
 export function truncatedText(
   counts: { movies: number; series: number },
   limits: { maxMovies: number; maxSeries: number },
 ): string {
-  if (counts.movies < limits.maxMovies && counts.series >= limits.maxSeries)
+  if (counts.movies >= limits.maxMovies)
+    return `Tu IPTV tiene más de ${formatCount(limits.maxMovies)} películas; se ven las primeras ${formatCount(limits.maxMovies)}.`;
+  if (counts.series >= limits.maxSeries)
     return `Tu IPTV tiene más de ${formatCount(limits.maxSeries)} series; se ven las primeras ${formatCount(limits.maxSeries)}.`;
-  return `Tu IPTV tiene más de ${formatCount(limits.maxMovies)} películas; se ven las primeras ${formatCount(limits.maxMovies)}.`;
+  return 'Faltan algunas categorías: tu IPTV tardaba demasiado en contestar. Se completarán en las próximas actualizaciones.';
 }
 
 /** «Este formato (AVI) no se puede reproducir en Ace Player.» */

@@ -2,7 +2,15 @@
    casa, redirecciones, cabeceras, caché en disco (LRU, nombres sin URL),
    caché negativa, ETag/304, `v`, tamaños de TMDB y 4 a la vez. */
 
-import { existsSync, mkdtempSync, readdirSync, statSync, utimesSync, writeFileSync, mkdirSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+  mkdirSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -70,7 +78,9 @@ describe('bytes mágicos y TMDB', () => {
     expect(tmdbSized(url, 'poster')).toBe('https://image.tmdb.org/t/p/w342/abc.jpg');
     expect(tmdbSized(url, 'backdrop')).toBe('https://image.tmdb.org/t/p/w780/abc.jpg');
     expect(tmdbSized(url, 'still')).toBe('https://image.tmdb.org/t/p/w300/abc.jpg');
-    expect(tmdbSized('https://otro.tmdb.org/t/p/w600/a.jpg', 'poster')).toBe('https://otro.tmdb.org/t/p/w600/a.jpg');
+    expect(tmdbSized('https://otro.tmdb.org/t/p/w600/a.jpg', 'poster')).toBe(
+      'https://otro.tmdb.org/t/p/w600/a.jpg',
+    );
     expect(etagMatches('W/"abc", "def"', 'def')).toBe(true);
   });
 });
@@ -107,18 +117,26 @@ describe('VodArtCache', () => {
   it('SVG, HTML y lo que pasa del tope → vod_not_found, y se recuerda 1 h', async () => {
     let body: Buffer = Buffer.from('<svg/>');
     const { art, transport, core } = rig(() => ({ body }));
-    expect(await codeOf(art.serve('http://img.example/a.svg', 'poster', undefined, undefined))).toBe('vod_not_found');
-    expect(await codeOf(art.serve('http://img.example/a.svg', 'poster', undefined, undefined))).toBe('vod_not_found');
+    expect(
+      await codeOf(art.serve('http://img.example/a.svg', 'poster', undefined, undefined)),
+    ).toBe('vod_not_found');
+    expect(
+      await codeOf(art.serve('http://img.example/a.svg', 'poster', undefined, undefined)),
+    ).toBe('vod_not_found');
     expect(transport.requests).toHaveLength(1);
     core.clock.advance(VOD_ART.negativeMs + 1);
     body = PNG;
-    expect(await codeOf(art.serve('http://img.example/a.svg', 'poster', undefined, undefined))).toBe('ok');
+    expect(
+      await codeOf(art.serve('http://img.example/a.svg', 'poster', undefined, undefined)),
+    ).toBe('ok');
     body = Buffer.concat([PNG, Buffer.alloc(VOD_ART.posterMaxBytes)]);
-    expect(await codeOf(art.serve('http://img.example/grande.png', 'poster', undefined, undefined))).toBe(
-      'vod_not_found',
-    );
+    expect(
+      await codeOf(art.serve('http://img.example/grande.png', 'poster', undefined, undefined)),
+    ).toBe('vod_not_found');
     /* Un fondo admite 2 MiB. */
-    expect(await codeOf(art.serve('http://img.example/fondo.png', 'backdrop', undefined, undefined))).toBe('ok');
+    expect(
+      await codeOf(art.serve('http://img.example/fondo.png', 'backdrop', undefined, undefined)),
+    ).toBe('ok');
   });
 
   it('la red de casa no vale salvo el host exacto del proveedor; redirección a 127.0.0.1 bloqueada', async () => {
@@ -128,23 +146,32 @@ describe('VodArtCache', () => {
       }
       return { body: PNG };
     });
-    expect(await codeOf(art.serve('http://router.casa.example/a.png', 'poster', undefined, undefined))).toBe(
-      'vod_not_found',
-    );
-    expect(await codeOf(art.serve('http://panel.casa.example:8080/a.png', 'poster', undefined, undefined))).toBe(
-      'ok',
-    );
-    expect(await codeOf(art.serve('http://panel.casa.example:9090/a.png', 'poster', undefined, undefined))).toBe(
-      'vod_not_found',
-    );
-    expect(await codeOf(art.serve('http://img.example/redirige', 'poster', undefined, undefined))).toBe(
-      'vod_not_found',
-    );
+    expect(
+      await codeOf(art.serve('http://router.casa.example/a.png', 'poster', undefined, undefined)),
+    ).toBe('vod_not_found');
+    expect(
+      await codeOf(
+        art.serve('http://panel.casa.example:8080/a.png', 'poster', undefined, undefined),
+      ),
+    ).toBe('ok');
+    expect(
+      await codeOf(
+        art.serve('http://panel.casa.example:9090/a.png', 'poster', undefined, undefined),
+      ),
+    ).toBe('vod_not_found');
+    expect(
+      await codeOf(art.serve('http://img.example/redirige', 'poster', undefined, undefined)),
+    ).toBe('vod_not_found');
   });
 
   it('TMDB se pide al tamaño justo', async () => {
     const { art, transport } = rig(() => ({ body: JPEG }));
-    await art.serve('https://image.tmdb.org/t/p/original/abc.jpg', 'backdrop', undefined, undefined);
+    await art.serve(
+      'https://image.tmdb.org/t/p/original/abc.jpg',
+      'backdrop',
+      undefined,
+      undefined,
+    );
     expect(transport.requests[0]?.url.pathname).toBe('/t/p/w780/abc.jpg');
   });
 
@@ -167,9 +194,9 @@ describe('VodArtCache', () => {
       art.serve(`http://img.example/${i}.png`, 'poster', undefined, undefined),
     );
     await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(await codeOf(art.serve('http://img.example/de-mas.png', 'poster', undefined, undefined))).toBe(
-      'vod_unavailable',
-    );
+    expect(
+      await codeOf(art.serve('http://img.example/de-mas.png', 'poster', undefined, undefined)),
+    ).toBe('vod_unavailable');
     let settled = 0;
     for (const promise of all) void promise.finally(() => (settled += 1));
     while (settled < all.length) {
@@ -200,5 +227,20 @@ describe('VodArtCache', () => {
     /* Se van los más viejos. */
     expect(left).not.toContain((0).toString(16).padStart(32, '0'));
     expect(left).toContain((total - 1).toString(16).padStart(32, '0'));
+  });
+
+  it('el barrido no borra el `.tmp` de una descarga en marcha; uno viejo, sí (fallo 10)', async () => {
+    const { art, dir } = rig(() => ({ body: PNG }));
+    const sub = path.join(dir, 'cd');
+    mkdirSync(sub, { recursive: true });
+    const fresh = path.join(sub, `${'c'.repeat(32)}.tmp`);
+    const stale = path.join(sub, `${'d'.repeat(32)}.tmp`);
+    writeFileSync(fresh, 'a medias');
+    writeFileSync(stale, 'resto');
+    const old = new Date(Date.now() - 60 * 60_000);
+    utimesSync(stale, old, old);
+    await art.sweep();
+    expect(existsSync(fresh)).toBe(true);
+    expect(existsSync(stale)).toBe(false);
   });
 });

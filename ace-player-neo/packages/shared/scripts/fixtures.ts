@@ -882,6 +882,8 @@ const vodDuneTitle: VodMovie = {
   playable: 'yes',
   progress: { posS: 2_592, durS: 9_360, watched: false },
   category: { id: VOD_CAT_4K, name: 'VOD | 4K' },
+  releaseDate: '2021-09-15',
+  trailer: 'Dune2021Tra',
 };
 
 const vodOfficeTitle: VodSeries = {
@@ -916,8 +918,12 @@ const vodOfficeTitle: VodSeries = {
           playable: 'yes',
           progress: { posS: 1_380, durS: 1_380, watched: true },
           container: 'mkv',
+          airDate: '2005-03-24',
+          rating: 7.4,
         },
       ],
+      plot: 'Michael Scott dirige la sucursal de Scranton mientras le graba un equipo de documentales.',
+      airDate: '2005-03-24',
     },
     {
       n: 2,
@@ -950,6 +956,11 @@ const vodOfficeTitle: VodSeries = {
   ],
   main: { episodeId: VOD_ID_OFFICE_S2E6, action: 'next', label: 'Siguiente: T2:E6', posS: 0 },
   truncated: false,
+  originalTitle: 'The Office (US)',
+  ageRating: '12',
+  releaseDate: '2005-03-24',
+  trailer: null,
+  episodeDurationS: 1_320,
 };
 
 const vodDuneGrant: VodGrant = {
@@ -1268,6 +1279,8 @@ export const VARIANT_FIXTURES = {
     backdrop: null,
     tech: { container: 'mkv', video: null, audio: [] },
     playable: 'unknown',
+    releaseDate: null,
+    trailer: null,
   },
   /* HEVC copiado con `hvc1` (hevc=1: el cliente lo decodifica, §9.11). */
   'vodStream.hevc': {

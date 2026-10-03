@@ -82,16 +82,18 @@ describe('reglas (§10.3)', () => {
     expect(nextEpisode(episodes, id(11))?.id).toBe(id(12));
     expect(nextEpisode(episodes, id(12))?.id).toBe(id(21));
     expect(nextEpisode(episodes, id(22))).toBeNull();
-    expect(nextEpisode([...episodes, { id: id(92), season: 0, number: 2, title: 'Otro' }], id(91))?.id).toBe(
-      id(92),
-    );
+    expect(
+      nextEpisode([...episodes, { id: id(92), season: 0, number: 2, title: 'Otro' }], id(91))?.id,
+    ).toBe(id(92));
     expect(nextEpisode(episodes, id(999))).toBeNull();
   });
 
   it('los 4 casos del botón principal', () => {
     const at = (entries: Array<[number, Partial<VodProgressEntry>]>) =>
       new Map(
-        entries.map(([n, entry]) => [id(n), { posS: 0, watched: false, updatedAt: 0, ...entry }] as const),
+        entries.map(
+          ([n, entry]) => [id(n), { posS: 0, watched: false, updatedAt: 0, ...entry }] as const,
+        ),
       );
     expect(seriesMain(episodes, new Map())).toEqual({
       episodeId: id(11),
@@ -99,7 +101,15 @@ describe('reglas (§10.3)', () => {
       label: 'Ver T1:E1',
       posS: 0,
     });
-    expect(seriesMain(episodes, at([[11, { watched: true, updatedAt: 1 }], [21, { posS: 300, updatedAt: 2 }]]))).toEqual({
+    expect(
+      seriesMain(
+        episodes,
+        at([
+          [11, { watched: true, updatedAt: 1 }],
+          [21, { posS: 300, updatedAt: 2 }],
+        ]),
+      ),
+    ).toEqual({
       episodeId: id(21),
       action: 'resume',
       label: 'Reanudar T2:E1',
@@ -123,44 +133,77 @@ describe('reglas (§10.3)', () => {
 describe('eventos (§10.2)', () => {
   it('validación: posS ≤ durS + 5, ±10 % de la duración conocida, 12 h sin ella', () => {
     const base = { event: 'tick' as const };
-    expect(() => applyProgressEvent([], movieTarget, { ...base, posS: 106, durS: 100 }, ctx(1))).toThrowError(
-      expect.objectContaining({ code: 'validation_error' }),
-    );
-    expect(() => applyProgressEvent([], movieTarget, { ...base, posS: 10, durS: 0 }, ctx(1))).toThrow();
     expect(() =>
-      applyProgressEvent([], movieTarget, { ...base, posS: 10, durS: 7000 }, ctx(1, { knownDurationS: 5000 })),
+      applyProgressEvent([], movieTarget, { ...base, posS: 106, durS: 100 }, ctx(1)),
+    ).toThrowError(expect.objectContaining({ code: 'validation_error' }));
+    expect(() =>
+      applyProgressEvent([], movieTarget, { ...base, posS: 10, durS: 0 }, ctx(1)),
+    ).toThrow();
+    expect(() =>
+      applyProgressEvent(
+        [],
+        movieTarget,
+        { ...base, posS: 10, durS: 7000 },
+        ctx(1, { knownDurationS: 5000 }),
+      ),
     ).toThrow();
     expect(
-      applyProgressEvent([], movieTarget, { ...base, posS: 10, durS: 5400 }, ctx(1, { knownDurationS: 5000 })),
+      applyProgressEvent(
+        [],
+        movieTarget,
+        { ...base, posS: 10, durS: 5400 },
+        ctx(1, { knownDurationS: 5000 }),
+      ),
     ).toHaveLength(1);
     expect(() =>
       applyProgressEvent([], movieTarget, { ...base, posS: 10, durS: 13 * 3600 }, ctx(1)),
     ).toThrow();
     /* Las marcas ignoran posS y durS. */
-    expect(applyProgressEvent([], movieTarget, { event: 'mark', posS: 0, durS: 0 }, ctx(1))[0]).toMatchObject({
+    expect(
+      applyProgressEvent([], movieTarget, { event: 'mark', posS: 0, durS: 0 }, ctx(1))[0],
+    ).toMatchObject({
       watched: true,
     });
   });
 
   it('tick, ended (con siguiente), unmark, hide y forget', () => {
-    let list = applyProgressEvent([], movieTarget, { event: 'tick', posS: 600, durS: 7200 }, ctx(1));
-    expect(list[0]).toMatchObject({ posS: 600, durS: 7200, watched: false, hidden: false, updatedAt: 1 });
+    let list = applyProgressEvent(
+      [],
+      movieTarget,
+      { event: 'tick', posS: 600, durS: 7200 },
+      ctx(1),
+    );
+    expect(list[0]).toMatchObject({
+      posS: 600,
+      durS: 7200,
+      watched: false,
+      hidden: false,
+      updatedAt: 1,
+    });
     list = applyProgressEvent(list, movieTarget, { event: 'hide', posS: 0, durS: 0 }, ctx(2));
     expect(list[0]?.hidden).toBe(true);
     expect(continueWatching(list)).toEqual([]);
     list = applyProgressEvent(list, movieTarget, { event: 'pause', posS: 700, durS: 7200 }, ctx(3));
     expect(list[0]?.hidden).toBe(false);
     const ep = episodes[0] as EpisodeRef;
-    list = applyProgressEvent(list, episodeTarget(ep), { event: 'ended', posS: 1320, durS: 1320 }, ctx(4, {
-      next: { id: id(12), label: 'T1 · E2 · Dos' },
-    }));
+    list = applyProgressEvent(
+      list,
+      episodeTarget(ep),
+      { event: 'ended', posS: 1320, durS: 1320 },
+      ctx(4, {
+        next: { id: id(12), label: 'T1 · E2 · Dos' },
+      }),
+    );
     expect(list.find((entry) => entry.id === ep.id)).toMatchObject({
       watched: true,
       next: { id: id(12), label: 'T1 · E2 · Dos' },
       seriesId: SERIES,
     });
     list = applyProgressEvent(list, movieTarget, { event: 'unmark', posS: 0, durS: 0 }, ctx(5));
-    expect(list.find((entry) => entry.id === movieTarget.id)).toMatchObject({ posS: 0, watched: false });
+    expect(list.find((entry) => entry.id === movieTarget.id)).toMatchObject({
+      posS: 0,
+      watched: false,
+    });
     list = applyProgressEvent(list, movieTarget, { event: 'forget', posS: 0, durS: 0 }, ctx(6));
     expect(list.find((entry) => entry.id === movieTarget.id)).toBeUndefined();
     expect(applySeriesEvent(list, SERIES, 'hide').every((entry) => entry.hidden)).toBe(true);
@@ -169,17 +212,34 @@ describe('eventos (§10.2)', () => {
 
   it('«Seguir viendo»: una entrada por serie, `isNext` y 20 como mucho', () => {
     let list: VodProgressEntry[] = [];
-    list = applyProgressEvent(list, episodeTarget(episodes[0] as EpisodeRef), { event: 'tick', posS: 300, durS: 1320 }, ctx(1));
-    list = applyProgressEvent(list, episodeTarget(episodes[1] as EpisodeRef), { event: 'ended', posS: 1320, durS: 1320 }, ctx(2, {
-      next: { id: id(21), label: 'T2 · E1 · El regreso' },
-    }));
+    list = applyProgressEvent(
+      list,
+      episodeTarget(episodes[0] as EpisodeRef),
+      { event: 'tick', posS: 300, durS: 1320 },
+      ctx(1),
+    );
+    list = applyProgressEvent(
+      list,
+      episodeTarget(episodes[1] as EpisodeRef),
+      { event: 'ended', posS: 1320, durS: 1320 },
+      ctx(2, {
+        next: { id: id(21), label: 'T2 · E1 · El regreso' },
+      }),
+    );
     list = applyProgressEvent(list, movieTarget, { event: 'tick', posS: 20, durS: 7200 }, ctx(3));
     const items = continueWatching(list);
     /* La película con 20 s no cuenta como empezada; de la serie, solo el último (visto, con siguiente). */
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ isNext: true, entry: { id: episodes[1]?.id } });
-    const many = Array.from({ length: 30 }, (_, i) =>
-      applyProgressEvent([], { ...movieTarget, id: id(500 + i) }, { event: 'tick', posS: 100, durS: 7200 }, ctx(i))[0],
+    const many = Array.from(
+      { length: 30 },
+      (_, i) =>
+        applyProgressEvent(
+          [],
+          { ...movieTarget, id: id(500 + i) },
+          { event: 'tick', posS: 100, durS: 7200 },
+          ctx(i),
+        )[0],
     ) as VodProgressEntry[];
     expect(continueWatching(many)).toHaveLength(VOD_PROGRESS.continueMax);
     expect(continueWatching(many)[0]?.entry.id).toBe(id(529));
@@ -187,7 +247,12 @@ describe('eventos (§10.2)', () => {
 
   it('mark-through marca este y los anteriores; el botón principal sigue desde ahí', () => {
     const through = episodes.slice(0, 3).map(episodeTarget);
-    const list = applyProgressEvent([], episodeTarget(episodes[2] as EpisodeRef), { event: 'mark-through', posS: 0, durS: 0 }, ctx(100, { through }));
+    const list = applyProgressEvent(
+      [],
+      episodeTarget(episodes[2] as EpisodeRef),
+      { event: 'mark-through', posS: 0, durS: 0 },
+      ctx(100, { through }),
+    );
     expect(list.filter((entry) => entry.watched)).toHaveLength(3);
     const map = new Map(list.map((entry) => [entry.id, entry] as const));
     expect(seriesMain(episodes, map)).toMatchObject({ action: 'next', episodeId: id(22) });
@@ -209,7 +274,12 @@ describe('eventos (§10.2)', () => {
       next: null,
       updatedAt: i,
     }));
-    list = applyProgressEvent(list, movieTarget, { event: 'tick', posS: 60, durS: 7200 }, ctx(99_999));
+    list = applyProgressEvent(
+      list,
+      movieTarget,
+      { event: 'tick', posS: 60, durS: 7200 },
+      ctx(99_999),
+    );
     expect(list).toHaveLength(VOD_PROGRESS.itemsMax);
     expect(list.some((entry) => entry.id === id(10_000))).toBe(false);
     let prefs = applyPref([], SERIES, { audio: 'spa' }, 1);
@@ -237,7 +307,12 @@ describe('VodDocStore (v2/vod.json)', () => {
     if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600);
     const withTick = (posS: number) => (doc: ReturnType<typeof store.read>) => ({
       ...doc,
-      progress: applyProgressEvent(doc.progress, movieTarget, { event: 'tick', posS, durS: 7200 }, ctx(clock.now())),
+      progress: applyProgressEvent(
+        doc.progress,
+        movieTarget,
+        { event: 'tick', posS, durS: 7200 },
+        ctx(clock.now()),
+      ),
     });
     store.soft(withTick(100));
     const read = () => JSON.parse(readFileSync(file, 'utf8')) as { progress: VodProgressEntry[] };
@@ -260,7 +335,12 @@ describe('VodDocStore (v2/vod.json)', () => {
     await store.write((doc) => ({
       ...doc,
       providerFp: '0123456789abcdef',
-      progress: applyProgressEvent([], movieTarget, { event: 'tick', posS: 60, durS: 7200 }, ctx(clock.now())),
+      progress: applyProgressEvent(
+        [],
+        movieTarget,
+        { event: 'tick', posS: 60, durS: 7200 },
+        ctx(clock.now()),
+      ),
     }));
     await store.reset('fedcba9876543210');
     expect(store.read()).toMatchObject({ providerFp: 'fedcba9876543210', progress: [] });
@@ -269,6 +349,8 @@ describe('VodDocStore (v2/vod.json)', () => {
     expect(existsSync(file)).toBe(false);
     expect(existsSync(`${file}.bak`)).toBe(false);
     /* Otra instancia sobre la misma ruta empieza vacía. */
-    expect(new VodDocStore({ file, clock, logger: createSilentLogger() }).read().progress).toEqual([]);
+    expect(new VodDocStore({ file, clock, logger: createSilentLogger() }).read().progress).toEqual(
+      [],
+    );
   });
 });

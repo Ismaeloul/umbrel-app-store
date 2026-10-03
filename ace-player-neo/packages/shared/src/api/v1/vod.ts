@@ -108,11 +108,11 @@ export const VodHomeSchema = z.strictObject({
   /** La última sincronización falló: se sigue con la copia de `builtAt`. */
   stale: z.boolean(),
   continue: z.array(VodContinueSchema).max(20),
-  /** «Novedades en películas», sin adultos. */
+  /** «Novedades en películas» (los títulos para adultos, como los demás: D-VOD7). */
   newMovies: z.array(VodCardSchema).max(20),
-  /** «Series actualizadas», sin adultos. */
+  /** «Series actualizadas» (ídem). */
   updatedSeries: z.array(VodCardSchema).max(20),
-  /** Con su número; las de adultos, al final. */
+  /** Con su número, en el orden del panel (las de adultos también: D-VOD7). */
   categories: z.strictObject({
     movie: z.array(VodCategorySchema).max(2_000),
     series: z.array(VodCategorySchema).max(2_000),
@@ -183,6 +183,16 @@ const VodTitleCategorySchema = z
   .strictObject({ id: IptvCategoryIdSchema, name: z.string().max(120) })
   .nullable();
 
+/** Una fecha del panel ya normalizada (`releasedate`, `air_date`…): `AAAA-MM-DD`. */
+export const VodDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'fecha AAAA-MM-DD');
+
+/**
+ * El tráiler de la ficha (`youtube_trailer` de Xtream): SOLO el id de
+ * YouTube de 11 caracteres, nunca una URL. La web abre
+ * `https://www.youtube.com/watch?v=<id>` en otra pestaña.
+ */
+export const VodTrailerSchema = z.string().regex(/^[A-Za-z0-9_-]{11}$/, 'id de YouTube');
+
 export const VodMovieSchema = z.strictObject({
   kind: z.literal('movie'),
   id: HashSchema,
@@ -212,6 +222,10 @@ export const VodMovieSchema = z.strictObject({
   playable: VodPlayableSchema,
   progress: VodProgressSchema.nullable(),
   category: VodTitleCategorySchema,
+  /** Fecha de estreno (`releasedate`). Opcional: un servidor anterior no la manda. */
+  releaseDate: VodDateSchema.nullable().optional(),
+  /** Tráiler (`youtube_trailer`): el id de YouTube. Opcional. */
+  trailer: VodTrailerSchema.nullable().optional(),
 });
 export type VodMovie = z.infer<typeof VodMovieSchema>;
 
@@ -231,6 +245,10 @@ export const VodEpisodeSchema = z.strictObject({
    * servidor que no lo sepa no lo manda (la película lo lleva en `tech`).
    */
   container: z.string().max(8).optional(),
+  /** Fecha de emisión (`air_date` o `releasedate` del episodio). Opcional. */
+  airDate: VodDateSchema.nullable().optional(),
+  /** Nota del episodio (0-10). Opcional. */
+  rating: z.number().min(0).max(10).nullable().optional(),
 });
 export type VodEpisode = z.infer<typeof VodEpisodeSchema>;
 
@@ -268,12 +286,26 @@ export const VodSeriesSchema = z.strictObject({
         n: z.number().int().min(0).max(999),
         name: z.string().max(80),
         episodes: z.array(VodEpisodeSchema).max(500),
+        /** Sinopsis de la temporada (`overview`). Opcional. */
+        plot: z.string().max(600).nullable().optional(),
+        /** Fecha de la temporada (`air_date` de `seasons`), para «Temporada 2 · 2006». Opcional. */
+        airDate: VodDateSchema.nullable().optional(),
       }),
     )
     .max(100),
   main: VodSeriesMainSchema.nullable(),
   /** Pasó de 100 temporadas, 500 episodios por temporada o 3 000 en total. */
   truncated: z.boolean(),
+  /** Título original (`o_name`). Opcional: un servidor anterior no lo manda. */
+  originalTitle: z.string().max(200).nullable().optional(),
+  /** Edad recomendada (`age`, `mpaa_rating`). Opcional. */
+  ageRating: z.string().max(16).nullable().optional(),
+  /** Fecha del estreno de la serie (`releaseDate`). Opcional. */
+  releaseDate: VodDateSchema.nullable().optional(),
+  /** Tráiler (`youtube_trailer`): el id de YouTube. Opcional. */
+  trailer: VodTrailerSchema.nullable().optional(),
+  /** Duración típica de un episodio (`episode_run_time`), en segundos. Opcional. */
+  episodeDurationS: z.number().int().positive().max(86_400).nullable().optional(),
 });
 export type VodSeries = z.infer<typeof VodSeriesSchema>;
 

@@ -37,8 +37,13 @@ const titles = (table: Awaited<ReturnType<typeof catalog>>, rows: ArrayLike<numb
 describe('parseVodQuery', () => {
   it('2-80 caracteres (si no, empty_query) y el mismo plegado', () => {
     expect(() => parseVodQuery('a')).toThrowError(expect.objectContaining({ code: 'empty_query' }));
-    expect(() => parseVodQuery('  ')).toThrowError(expect.objectContaining({ code: 'empty_query' }));
-    expect(parseVodQuery('  Amélie  PARÍS ')).toMatchObject({ words: ['amelie', 'paris'], compact: 'amelieparis' });
+    expect(() => parseVodQuery('  ')).toThrowError(
+      expect.objectContaining({ code: 'empty_query' }),
+    );
+    expect(parseVodQuery('  Amélie  PARÍS ')).toMatchObject({
+      words: ['amelie', 'paris'],
+      compact: 'amelieparis',
+    });
     expect(parseVodQuery('x'.repeat(200)).words[0]).toHaveLength(80);
   });
 });
@@ -57,12 +62,7 @@ describe('searchTable', () => {
   it('orden por nivel, lo más reciente y el título; adultos incluidos', async () => {
     const table = await catalog();
     const hits = searchTable(table, parseVodQuery('dune'), null);
-    expect(titles(table, hits.rows)).toEqual([
-      'Dune',
-      'Dune',
-      'Dune: Parte Dos',
-      'Parte de Dune',
-    ]);
+    expect(titles(table, hits.rows)).toEqual(['Dune', 'Dune', 'Dune: Parte Dos', 'Parte de Dune']);
     /* Los dos «Dune» (nivel 0): el más reciente primero. */
     expect(table.yearOf(hits.rows[0] as number)).toBe(2021);
     const duna = searchTable(table, parseVodQuery('dun'), null);
@@ -98,7 +98,9 @@ describe('searchTable', () => {
   });
 
   it('más de 2 000 aciertos → capped y los 2 000 mejores', async () => {
-    const rows = Array.from({ length: 2_100 }, (_, i) => listRow(i + 1, `Película ${i}`, { added: i }));
+    const rows = Array.from({ length: 2_100 }, (_, i) =>
+      listRow(i + 1, `Película ${i}`, { added: i }),
+    );
     const table = await tableOf(rows);
     const hits = searchCached(table, parseVodQuery('pelicula'), null);
     expect(hits.total).toBe(2_100);
@@ -113,24 +115,42 @@ describe('searchTable', () => {
 });
 
 describe('listPage (sin texto)', () => {
-  it('«Novedades» sin adultos en «Todas»; en su categoría, sí', async () => {
+  it('«Novedades» en «Todas»: los adultos como los demás (D-VOD7 de hoy) o fuera; en su categoría, siempre', async () => {
     const table = await catalog();
-    const all = listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, 3);
-    expect(titles(table, all.rows)).toEqual(['Dune: Parte Dos', 'Spider-Man: No Way Home', 'Dune']);
-    expect(all.total).toBe(7);
+    /* Decisión de Isma (VOD_ADULT_POLICY.all): salen como los demás. */
+    const all = listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, 3, { adults: true });
+    expect(titles(table, all.rows)).toEqual([
+      'Dunas adultas',
+      'Dune: Parte Dos',
+      'Spider-Man: No Way Home',
+    ]);
+    expect(all.total).toBe(8);
     expect(all.more).toBe(true);
-    const adult = listPage(table, { bucket: 1, tagBit: 0 }, 'added', 0, 10);
-    expect(titles(table, adult.rows)).toEqual(['Dunas adultas']);
+    /* Con la regla de antes (`adults: false`), fuera de «Todas». */
+    const without = listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, 3, { adults: false });
+    expect(titles(table, without.rows)).toEqual([
+      'Dune: Parte Dos',
+      'Spider-Man: No Way Home',
+      'Dune',
+    ]);
+    expect(without.total).toBe(7);
+    /* En su categoría salen con cualquiera de las dos. */
+    for (const adults of [true, false]) {
+      const adult = listPage(table, { bucket: 1, tagBit: 0 }, 'added', 0, 10, { adults });
+      expect(titles(table, adult.rows)).toEqual(['Dunas adultas']);
+    }
     const none = listPage(table, { bucket: 2, tagBit: 0 }, 'added', 0, 10);
     expect(none.total).toBe(5);
   });
 
   it('A-Z plegado, distintivo y página siguiente', async () => {
     const table = await catalog();
-    const az = listPage(table, { bucket: null, tagBit: 0 }, 'name', 0, 2);
+    const az = listPage(table, { bucket: null, tagBit: 0 }, 'name', 0, 2, { adults: false });
     expect(titles(table, az.rows)).toEqual(['Amélie', 'Dune']);
-    const next = listPage(table, { bucket: null, tagBit: 0 }, 'name', 2, 2);
+    const next = listPage(table, { bucket: null, tagBit: 0 }, 'name', 2, 2, { adults: false });
     expect(titles(table, next.rows)).toEqual(['Dune', 'Dune: Parte Dos']);
+    const withAdults = listPage(table, { bucket: null, tagBit: 0 }, 'name', 0, 3);
+    expect(titles(table, withAdults.rows)).toEqual(['Amélie', 'Dunas adultas', 'Dune']);
     const vose = listPage(table, { bucket: null, tagBit: tagBit('vose') }, 'added', 0, 10);
     expect(titles(table, vose.rows)).toEqual(['Amélie']);
     /* Los chips cuentan sin el filtro de distintivo. */

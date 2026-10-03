@@ -47,9 +47,11 @@ import type { IptvKeys } from '../../../config/keys.js';
 import type { IptvFetchPolicy, NetClient } from '../../net/types.js';
 import { categoryId, decodeCursor, encodeCursor } from '../browse.js';
 import type { XtreamCredentials } from '../xtream.js';
+import { VOD_ADULT_POLICY } from './adultos.js';
 import { VodArtCache, type ArtReply } from './art.js';
 import {
   loadVodCatalog,
+  removeVodCatalogFile,
   saveVodCatalog,
   syncVodCatalog,
   VOD_AT_START_MS,
@@ -86,15 +88,10 @@ import {
   type EpisodeRef,
   type ProgressTarget,
 } from './progress.js';
-import {
-  listPage,
-  parseVodQuery,
-  searchCached,
-  searchPage,
-  type VodFilter,
-} from './search.js';
-import type { VodTable } from './table.js';
-import { tagBit, tagsOf } from './titles.js';
+import { listPage, parseVodQuery, searchCached, searchPage, type VodFilter } from './search.js';
+import { foldKeepLength, type VodTable } from './table.js';
+import type { VodSyncMode } from './table-codec.js';
+import { cleanVodTitle, tagBit, tagsOf } from './titles.js';
 import { xtreamVodInfo } from './xtream-vod.js';
 
 /** Lo que `VodService` necesita del proveedor configurado. */
@@ -138,8 +135,25 @@ export interface VodHost {
 
 type TimerName = 'sync';
 
+/** Por qué se sincroniza (para el registro). */
+export type VodSyncReason = 'periodic' | 'manual' | 'vista';
+
+/**
+ * Motivo del aborto de una sincronización VOD que cede el cerrojo a la del
+ * directo o a la guía (fallo 8): no es un fallo del proveedor ni una
+ * cancelación, y la sincronización se vuelve a pedir sola, detrás.
+ */
+export class VodPreemptedError extends Error {
+  constructor() {
+    super('el VOD cede el sitio al directo o a la guía');
+    this.name = 'VodPreemptedError';
+  }
+}
+
 const HOME_ROWS = 20;
 const CATEGORY_MAX = 2_000;
+/** Tras un fallo, la vista no vuelve a lanzar una sincronización antes de esto. */
+export const VOD_VIEW_RETRY_MS = 30_000;
 
 /** Etiquetas de lengua (§9.9). */
 const LANGUAGE_LABEL: Readonly<Record<string, string>> = {
@@ -228,6 +242,30 @@ export class VodService {
   private catalog: VodCatalog | null = null;
   private loading: Promise<VodCatalog | null> | null = null;
   private syncPromise: Promise<void> | null = null;
+  /** La sincronización en curso ha cedido el sitio: al soltar el cerrojo se vuelve a pedir. */
+  private requeue = false;
+  /**
+   * La sincronización en curso ya tiene su resultado (la descarga acabó):
+   * ceder el sitio al directo ya no la deja a medias, así que no se repite.
+   */
+  private landed = false;
+  /** Modo de la última sincronización con éxito (para empezar por él, §4.7). */
+  private lastMode: VodSyncMode = 'completo';
+  /**
+   * Modo por categorías cortado por su tope de tiempo: por qué categoría
+   * empezar la próxima vez, por tipo (rotación, §4.7). Solo en memoria: tras
+   * un reinicio se empieza por la primera, y lo que no quepa sigue estando
+   * (se queda como estaba en el catálogo anterior).
+   */
+  private resumeFrom: Partial<Record<VodKind, string>> = {};
+  /** Cuándo acabó la última sincronización (bien o mal). */
+  private lastSyncEndAt = Number.NEGATIVE_INFINITY;
+  /**
+   * Tipos para los que el panel ya dijo «sin VOD» una vez con títulos
+   * guardados (y se siguió con los de antes): la siguiente lo confirma. Por
+   * tipo: un `[]` pasajero en `get_series` vaciaba las series al momento.
+   */
+  private readonly noneOnce = new Set<VodKind>();
   private failures = 0;
   private delayedOnce = false;
   private readonly timers = new Map<TimerName, TimerHandle>();
@@ -246,7 +284,11 @@ export class VodService {
   readonly art: VodArtCache;
 
   constructor(private readonly host: VodHost) {
-    this.doc = new VodDocStore({ file: host.paths.vodFile, clock: host.clock, logger: host.logger });
+    this.doc = new VodDocStore({
+      file: host.paths.vodFile,
+      clock: host.clock,
+      logger: host.logger,
+    });
     this.details = new VodDetailsQueue(host.clock, (kind, source, signal) =>
       this.fetchInfo(kind, source, signal),
     );
@@ -343,6 +385,10 @@ export class VodService {
     const now = this.host.clock.now();
     if (vodDueAtStart(builtAt, now) || summary?.state === 'error') {
       this.schedule('sync', VOD_AT_START_MS, () => this.due());
+    } else if (this.failures > 0 || this.noneOnce.size > 0) {
+      /* Un reintento o una confirmación de «sin VOD» pendientes (pausar y
+         reanudar quita los temporizadores): no se dejan para dentro de 24 h. */
+      this.schedule('sync', vodRetryDelay(Math.max(1, this.failures)), () => this.due());
     } else if (builtAt !== null) {
       this.schedule('sync', vodPeriodicDelay(builtAt, now), () => this.due());
     }
@@ -377,12 +423,18 @@ export class VodService {
     this.schedule('sync', VOD_FIRST_AFTER_LIVE_MS, () => this.due());
   }
 
-  /** Ajustes → IPTV → «Actualizar»: también el VOD si tiene más de 1 h (§4.7). */
+  /**
+   * Ajustes → IPTV → «Actualizar» (y «Comprobar de nuevo» de Pelis y series,
+   * que llama a la misma ruta): también el VOD si tiene más de 1 h (§4.7).
+   * Con el catálogo en `none` o `error` (o sin sincronizar nunca), SIEMPRE:
+   * es justo lo que pide «Comprobar de nuevo» (docs/vod-estado.md §4.1).
+   */
   refreshIfOlder(minAgeMs: number = VOD_MANUAL_MIN_AGE_MS): void {
     if (!this.xtream()) return;
     const summary = this.summary();
+    const forced = !summary || summary.state === 'none' || summary.state === 'error';
     const builtAt = summary?.builtAt ? Date.parse(summary.builtAt) : null;
-    if (builtAt !== null && this.host.clock.now() - builtAt < minAgeMs) return;
+    if (!forced && builtAt !== null && this.host.clock.now() - builtAt < minAgeMs) return;
     void this.requestSync('manual');
   }
 
@@ -405,6 +457,10 @@ export class VodService {
     this.homeCache = null;
     this.failures = 0;
     this.delayedOnce = false;
+    this.lastMode = 'completo';
+    this.resumeFrom = {};
+    this.noneOnce.clear();
+    this.requeue = false;
     this.details.clear();
     this.art.reset();
     this.docFp = null;
@@ -414,18 +470,25 @@ export class VodService {
   // --- Sincronización ---
 
   /** Sincroniza el catálogo (se engancha a la que esté en marcha). */
-  requestSync(reason: 'periodic' | 'manual' | 'vista'): Promise<void> {
+  requestSync(reason: VodSyncReason): Promise<void> {
     const provider = this.xtream();
     const credentials = this.host.credentials();
     if (!provider || !credentials) return Promise.resolve();
     if (this.syncPromise) return this.syncPromise;
     const fp = this.syncDoc() as string;
     const snapshot = { id: provider.id, revision: provider.revision, fp };
+    this.landed = false;
     const promise = this.host
       .runHeavy((signal) => this.doSync(signal, snapshot, credentials, reason))
       .catch(() => undefined)
       .finally(() => {
         if (this.syncPromise === promise) this.syncPromise = null;
+        this.lastSyncEndAt = this.host.clock.now();
+        /* Ha cedido el sitio al directo o a la guía (fallo 8): se vuelve a
+           pedir, y `runHeavy` la pone detrás de lo que la ha echado. */
+        const again = this.requeue && !this.stopped;
+        this.requeue = false;
+        if (again) void this.requestSync(reason);
         this.host.emitStatus();
       });
     this.syncPromise = promise;
@@ -433,10 +496,31 @@ export class VodService {
     return promise;
   }
 
+  /**
+   * La sincronización VOD en marcha o en cola se ha abortado para que pase
+   * delante el directo o la guía (`runHeavy` en service.ts): al soltar el
+   * cerrojo se vuelve a pedir sola.
+   */
+  onPreempted(): void {
+    /* Si la descarga ya acabó (está guardando), se aplica igual
+       (`stillCurrent`): repetirla serían minutos más contra el panel. */
+    if (this.syncPromise && !this.landed) this.requeue = true;
+  }
+
+  /**
+   * ¿Sigue valiendo lo que se está sincronizando? Mismo proveedor y revisión,
+   * y nadie lo ha cancelado (guardar, pausar o eliminar la IPTV). Ceder el
+   * sitio al directo NO cancela lo ya descargado (`VodPreemptedError`): solo
+   * queda guardarlo, que es cosa de un momento.
+   */
   private stillCurrent(snapshot: { id: string; revision: number }, signal: AbortSignal): boolean {
     const provider = this.xtream();
+    const cancelled = signal.aborted && !(signal.reason instanceof VodPreemptedError);
     return Boolean(
-      provider && provider.id === snapshot.id && provider.revision === snapshot.revision && !signal.aborted,
+      provider &&
+      provider.id === snapshot.id &&
+      provider.revision === snapshot.revision &&
+      !cancelled,
     );
   }
 
@@ -447,19 +531,60 @@ export class VodService {
     reason: string,
   ): Promise<void> {
     const { clock, logger } = this.host;
-    if (!this.stillCurrent(snapshot, signal)) return;
+    if (signal.aborted || !this.stillCurrent(snapshot, signal)) return;
     const startedAt = clock.now();
-    const mode = this.catalog?.meta.mode ?? 'completo';
+    /* El modo de la última vez (§4.7): el del catálogo en memoria o el de la última sincronización. */
+    const mode = this.catalog?.meta.mode ?? this.lastMode;
+    /* Los tipos con títulos guardados cuyo «sin VOD» no se ha visto aún:
+       si su lista lo dice, se siguen los de antes y se confirma en 15 min. */
+    const summary = this.summary();
+    const holdIfNone: Partial<Record<VodKind, boolean>> = {};
+    if (summary?.state === 'ready') {
+      holdIfNone.movie = summary.movies > 0 && !this.noneOnce.has('movie');
+      holdIfNone.series = summary.series > 0 && !this.noneOnce.has('series');
+    }
     try {
       const result = await syncVodCatalog(
         { net: this.host.net, clock, logger, credentials, policy: this.host.policy(), signal },
-        { providerId: snapshot.id, providerFp: snapshot.fp, revision: snapshot.revision, mode },
+        {
+          providerId: snapshot.id,
+          providerFp: snapshot.fp,
+          revision: snapshot.revision,
+          mode,
+          resumeFrom: this.resumeFrom,
+          previous: () => this.storedCatalog(snapshot),
+          holdIfNone,
+        },
       );
       if (!this.stillCurrent(snapshot, signal)) return;
+      /* La descarga ha acabado: lo que queda (guardar y aplicar) no se
+         repite aunque el directo pida paso ahora o lo haya pedido justo al
+         final (el resultado se aplica igual). */
+      this.landed = true;
+      this.requeue = false;
+      if (result.state === 'held') {
+        /* Había catálogo y ahora el panel dice «sin VOD» (`[]` o `{}` en las
+           dos listas): puede ser un mal momento del panel. Una sola vez no
+           basta para borrar 150 000 títulos (y la siguiente sería en 24 h):
+           se sigue con el que hay, como un fallo, y se confirma en 15 min. */
+        for (const kind of result.held) this.noneOnce.add(kind);
+        this.failures += 1;
+        logger.warn(
+          { reason, failures: this.failures, kinds: result.held },
+          'VOD: el proveedor dice que no tiene películas ni series; se confirma más tarde',
+        );
+        this.schedule('sync', vodRetryDelay(this.failures), () => this.due());
+        return;
+      }
       this.failures = 0;
+      /* La siguiente, en 24 h; o en 15 min si un tipo sigue con lo de antes (para confirmarlo). */
+      let nextInMs = vodPeriodicDelay(clock.now(), clock.now());
       if (result.state === 'none') {
+        this.noneOnce.clear();
         this.catalog = null;
         this.homeCache = null;
+        /* Un `vod.enc` de cuando sí tenía VOD ya no sirve. */
+        await removeVodCatalogFile(this.host.paths.vodCatalogFile);
         await this.doc.setCatalog({
           state: 'none',
           movies: 0,
@@ -468,13 +593,30 @@ export class VodService {
           truncated: false,
           skipped: result.skipped,
         });
-        logger.info({ reason, ms: clock.now() - startedAt }, 'VOD: el proveedor no ofrece películas ni series');
+        logger.info(
+          { reason, ms: clock.now() - startedAt },
+          'VOD: el proveedor no ofrece películas ni series',
+        );
       } else {
         const { catalog } = result;
-        await saveVodCatalog(this.host.paths.vodCatalogFile, this.host.keys(), catalog).catch(
-          (error: unknown) => logger.warn({ err: error }, 'VOD: no se pudo guardar vod.enc'),
+        const file = this.host.paths.vodCatalogFile;
+        await saveVodCatalog(file, this.host.keys(), catalog).catch((error: unknown) =>
+          logger.warn({ err: error }, 'VOD: no se pudo guardar vod.enc'),
         );
-        if (!this.stillCurrent(snapshot, signal)) return;
+        if (!this.stillCurrent(snapshot, signal)) {
+          /* Quitada la IPTV (u otro proveedor) MIENTRAS se guardaba (fallo 4):
+             `removeAll` ya pasó, así que el fichero recién escrito se borra
+             aquí (§10.5 y §14.6). Con el mismo proveedor (pausa, otra
+             revisión) se queda: es un catálogo válido de ese proveedor. */
+          if (this.host.provider()?.id !== snapshot.id) await removeVodCatalogFile(file);
+          return;
+        }
+        this.lastMode = catalog.meta.mode;
+        this.resumeFrom = { ...result.resumeFrom };
+        /* Un tipo que dijo «sin VOD» y sigue con lo de antes: se confirma en 15 min. */
+        this.noneOnce.clear();
+        for (const kind of result.held) this.noneOnce.add(kind);
+        if (result.held.length) nextInMs = vodRetryDelay(1);
         this.catalog = catalog;
         this.homeCache = null;
         this.details.clear();
@@ -502,9 +644,11 @@ export class VodService {
           logger.warn({ skipped: catalog.meta.skipped }, 'VOD: títulos que no se han podido leer');
         }
       }
-      this.schedule('sync', vodPeriodicDelay(clock.now(), clock.now()), () => this.due());
+      this.schedule('sync', nextInMs, () => this.due());
     } catch (error) {
-      if (!this.stillCurrent(snapshot, signal)) return;
+      /* Abortada (cede el sitio al directo, o se ha guardado, pausado o
+         quitado la IPTV): no es un fallo del proveedor. */
+      if (signal.aborted || !this.stillCurrent(snapshot, signal)) return;
       this.failures += 1;
       logger.warn(
         { reason, errorCode: errorCodeOf(error) ?? 'desconocido', failures: this.failures },
@@ -530,6 +674,34 @@ export class VodService {
     return this.summary()?.state === 'ready';
   }
 
+  /** ¿Hay un catálogo guardado con algún título? */
+  private hadTitles(): boolean {
+    const summary = this.summary();
+    return Boolean(summary && summary.state === 'ready' && summary.movies + summary.series > 0);
+  }
+
+  /**
+   * El catálogo guardado de ese proveedor (el de memoria, o `vod.enc`), para
+   * el modo por categorías: lo que no se ha podido leer se queda como estaba
+   * en él (§4.7). Solo se pide si hace falta; lo cargado aquí no pasa a
+   * memoria (lo sustituye enseguida el nuevo).
+   */
+  private async storedCatalog(snapshot: { id: string; fp: string }): Promise<VodCatalog | null> {
+    if (this.catalog?.providerId === snapshot.id) return this.catalog;
+    if (this.loading) {
+      const loaded = await this.loading.catch(() => null);
+      if (loaded?.providerId === snapshot.id) return loaded;
+    }
+    if (!this.hadTitles()) return null;
+    return loadVodCatalog(
+      this.host.paths.vodCatalogFile,
+      this.host.keys(),
+      snapshot.id,
+      snapshot.fp,
+      this.host.logger,
+    );
+  }
+
   /** El catálogo en memoria, cargando `vod.enc` la primera vez (perezoso, §4.6). */
   private async ensureCatalog(): Promise<VodCatalog | null> {
     const provider = this.xtream();
@@ -539,8 +711,12 @@ export class VodService {
     this.catalog = null;
     const summary = this.summary();
     if (summary?.state !== 'ready') {
-      /* Nunca sincronizado (o falló): la primera petición a la vista la lanza. */
-      if (!summary || summary.state === 'error') void this.requestSync('vista');
+      /* Nunca sincronizado (o falló): la primera petición a la vista la lanza.
+         Tras un fallo, como mucho una cada 30 s: si no, con la vista abierta
+         sería un bucle (error → `iptv.status` → la web vuelve a pedir la
+         portada → otra sincronización → error…) contra el panel. */
+      const calm = this.host.clock.now() - this.lastSyncEndAt >= VOD_VIEW_RETRY_MS;
+      if (!summary || (summary.state === 'error' && calm)) void this.requestSync('vista');
       return null;
     }
     this.loading ??= (async () => {
@@ -572,7 +748,11 @@ export class VodService {
   /** Estado del catálogo (§4.8). */
   state(): VodCatalogState {
     const provider = this.host.provider();
-    if (!provider || !provider.enabled || !this.host.credentials() && provider.kind === 'xtream') {
+    if (
+      !provider ||
+      !provider.enabled ||
+      (!this.host.credentials() && provider.kind === 'xtream')
+    ) {
       return 'off';
     }
     if (provider.kind !== 'xtream') return 'unsupported';
@@ -586,7 +766,15 @@ export class VodService {
     return 'preparing';
   }
 
-  /** `IptvStatus.vod` (§11.4), o undefined sin IPTV. */
+  /**
+   * `IptvStatus.vod` (§11.4), o undefined sin IPTV.
+   *
+   * `stale` (la última sincronización falló y se sigue con la copia) vive
+   * solo en memoria, a propósito (fallo 10): tras un reinicio sale `false`
+   * hasta el siguiente fallo. Guardarlo pediría un campo nuevo en el resumen
+   * de `v2/vod.json`, que es `strictObject` y lo apartaría una versión
+   * anterior; y como mucho se pierde el aviso durante 24 h.
+   */
   status(): IptvVodStatus | undefined {
     const provider = this.host.provider();
     if (!provider) return undefined;
@@ -725,13 +913,19 @@ export class VodService {
         order: none ? Number.MAX_SAFE_INTEGER - 1 : bucket,
       });
     }
-    /* Las de adultos al final (D-VOD7); «Sin categoría», antes de ellas. */
-    out.sort((a, b) => Number(a.adult) - Number(b.adult) || a.order - b.order);
+    /* En el orden del panel y «Sin categoría» al final; las de adultos, donde
+       diga `VOD_ADULT_POLICY` (D-VOD7: hoy, como las demás). */
+    const adultRank = (category: VodCategory): number =>
+      VOD_ADULT_POLICY.categoriesLast && category.adult ? 1 : 0;
+    out.sort((a, b) => adultRank(a) - adultRank(b) || a.order - b.order);
     return out.slice(0, CATEGORY_MAX).map(({ order: _order, ...category }) => category);
   }
 
+  /** Distintivos de «Todas» (los chips de la portada), con los adultos según `VOD_ADULT_POLICY`. */
   private tagCountsOf(table: VodTable): VodTagCount[] {
-    return listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, 0).tagCounts.map((item) => ({
+    return listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, 0, {
+      adults: VOD_ADULT_POLICY.all,
+    }).tagCounts.map((item) => ({
       tag: item.tag,
       count: item.count,
     }));
@@ -739,8 +933,11 @@ export class VodService {
 
   private homeParts(catalog: VodCatalog): NonNullable<VodService['homeCache']> {
     if (this.homeCache?.catalog === catalog) return this.homeCache;
+    /* «Novedades en películas» y «Series actualizadas»: los adultos, según `VOD_ADULT_POLICY`. */
     const newest = (table: VodTable): number[] =>
-      listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, HOME_ROWS).rows.slice();
+      listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, HOME_ROWS, {
+        adults: VOD_ADULT_POLICY.home,
+      }).rows.slice();
     this.homeCache = {
       catalog,
       rows: { movie: newest(catalog.tables.movie), series: newest(catalog.tables.series) },
@@ -773,7 +970,8 @@ export class VodService {
         return stamp ? { id, art: 'poster', v: stamp } : null;
       };
       if (ref.kind === 'movie') art = posterOf('movie', ref.source, entry.id);
-      else if (ref.kind === 'episode' && entry.seriesId) art = posterOf('series', ref.parent, entry.seriesId);
+      else if (ref.kind === 'episode' && entry.seriesId)
+        art = posterOf('series', ref.parent, entry.seriesId);
       const next = item.isNext ? entry.next : null;
       out.push({
         id: next ? next.id : entry.id,
@@ -878,7 +1076,7 @@ export class VodService {
     const filter: VodFilter = { bucket, tagBit: query.tag ? tagBit(query.tag) : 0 };
     const page = parsed
       ? searchPage(searchCached(table, parsed, bucket), table, filter, offset, query.limit)
-      : listPage(table, filter, query.sort, offset, query.limit);
+      : listPage(table, filter, query.sort, offset, query.limit, { adults: VOD_ADULT_POLICY.all });
     const other = VOD_KINDS.find((kind) => kind !== query.kind) as VodKind;
     const progress = this.progressMap();
     return {
@@ -895,7 +1093,10 @@ export class VodService {
   }
 
   /** Película o serie de un id (con su fila), o `vod_not_found`. */
-  private async locate(id: string, kinds: readonly VodRef['kind'][]): Promise<{
+  private async locate(
+    id: string,
+    kinds: readonly VodRef['kind'][],
+  ): Promise<{
     readonly catalog: VodCatalog;
     readonly ref: VodRef;
     readonly table: VodTable;
@@ -932,7 +1133,11 @@ export class VodService {
     for (const season of info.seasons) {
       for (const episode of season.episodes) {
         out.push({
-          id: vodId(keys, providerId, { kind: 'episode', parent: seriesSource, source: episode.source }),
+          id: vodId(keys, providerId, {
+            kind: 'episode',
+            parent: seriesSource,
+            source: episode.source,
+          }),
           season: season.number,
           number: episode.number,
           title: this.text(episode.title, 200),
@@ -957,8 +1162,14 @@ export class VodService {
       title: this.text(table.title(row), 200) || 'Sin título',
       year: table.yearOf(row) ?? info?.year ?? null,
       plot: this.textOrNull(info?.plot ?? null, 2_000),
-      genres: (info?.genres ?? []).map((genre) => this.text(genre, 40)).filter(Boolean).slice(0, 8),
-      cast: (info?.cast ?? []).map((name) => this.text(name, 80)).filter(Boolean).slice(0, 12),
+      genres: (info?.genres ?? [])
+        .map((genre) => this.text(genre, 40))
+        .filter(Boolean)
+        .slice(0, 8),
+      cast: (info?.cast ?? [])
+        .map((name) => this.text(name, 80))
+        .filter(Boolean)
+        .slice(0, 12),
       director: this.textOrNull(info?.director ?? null, 200),
       country: this.textOrNull(info?.country ?? null, 80),
       rating: table.ratingOf(row) ?? info?.rating ?? null,
@@ -967,7 +1178,12 @@ export class VodService {
       tags: tagsOf(table.tags[row] as number),
       adult: table.isAdult(row),
       category: this.categoryIdOf(kind, table, row),
+      /* Lo demás que da Xtream (punto 3 de la 0.9.0): estreno y tráiler. */
+      releaseDate: info?.releaseDate ?? null,
+      trailer: info?.trailer ?? null,
     };
+    const originalTitle = this.originalTitleOf(info?.originalTitle ?? null, listPart.title);
+    const ageRating = this.textOrNull(info?.ageRating ?? null, 16);
     const progress = this.progressMap();
     if (kind === 'movie') {
       const movie = info && info.kind === 'movie' ? info : null;
@@ -976,8 +1192,8 @@ export class VodService {
       const title: VodMovie = {
         kind: 'movie',
         ...listPart,
-        originalTitle: this.textOrNull(movie?.originalTitle ?? null, 200),
-        ageRating: this.textOrNull(movie?.ageRating ?? null, 16),
+        originalTitle,
+        ageRating,
         durationS: movie?.durationS ?? null,
         tech: {
           container: extName(ext),
@@ -992,15 +1208,21 @@ export class VodService {
     const series = info && info.kind === 'series' ? info : null;
     const episodes = series ? this.episodesOf(ref.source, series) : [];
     const byId = new Map(episodes.map((episode) => [episode.id, episode] as const));
+    /* Un panel que repite un episodio (el mismo id dos veces) lo enseña una vez. */
+    const shown = new Set<string>();
     let index = 0;
     const seasons: VodSeries['seasons'] = (series?.seasons ?? []).map((season) => ({
       n: season.number,
       name: this.text(season.name, 80),
+      plot: this.textOrNull(season.plot, 600),
+      airDate: season.airDate,
       episodes: season.episodes.flatMap((episode): VodEpisode[] => {
         const refEpisode = episodes[index];
         index += 1;
-        if (!refEpisode || !byId.has(refEpisode.id)) return [];
+        if (!refEpisode || !byId.has(refEpisode.id) || shown.has(refEpisode.id)) return [];
+        shown.add(refEpisode.id);
         const entry = progress.get(refEpisode.id);
+        const container = extName(episode.ext);
         return [
           {
             id: refEpisode.id,
@@ -1011,6 +1233,9 @@ export class VodService {
             still: episode.still ? this.art.stamp(episode.still) : null,
             playable: playableHint(episode.codec, episode.bitDepth, episode.ext),
             progress: entry ? { posS: entry.posS, durS: entry.durS, watched: entry.watched } : null,
+            ...(container ? { container } : {}),
+            airDate: episode.airDate,
+            rating: episode.rating,
           },
         ];
       }),
@@ -1021,8 +1246,23 @@ export class VodService {
       seasons,
       main: episodes.length ? seriesMain(episodes, progress) : null,
       truncated: series?.truncated ?? false,
+      originalTitle,
+      ageRating,
+      episodeDurationS: series?.episodeDurationS ?? null,
     };
     return title;
+  }
+
+  /**
+   * Título original para la ficha: limpio como los de la lista (sin «ES| »
+   * ni «(2023)») y null si es el mismo que el título (muchos paneles ponen
+   * en `o_name` el nombre con su prefijo: repetirlo no dice nada).
+   */
+  private originalTitleOf(raw: string | null, title: string): string | null {
+    const text = this.textOrNull(raw, 200);
+    if (!text) return null;
+    const clean = cleanVodTitle(text).title;
+    return foldKeepLength(clean) === foldKeepLength(title) ? null : clean;
   }
 
   /** La ficha (de la caché o por la cola, sin `pre`), o null si falla. */
@@ -1044,7 +1284,11 @@ export class VodService {
     if (art === 'poster') {
       url = table.posterUrl(row);
       if (!url && ref.kind !== 'episode') {
-        const info = this.details.peek(ref.kind, ref.source);
+        /* Sin cartel en la lista: el de la ficha (el que dio `title()`). De
+           la caché o por la cola: con solo mirar la caché, daba 404 pasadas
+           las 6 h de su TTL (fallo 10). La web solo lo pide si la ficha le
+           dio un sello. */
+        const info = await this.infoOf(ref.kind, ref.source);
         url = info?.cover ?? null;
       }
     } else if (art === 'backdrop') {
@@ -1109,13 +1353,24 @@ export class VodService {
         throw new AppError('validation_error', { detail: 'event' });
       }
       const event = body.event;
-      await this.doc.write((doc) => ({ ...doc, progress: applySeriesEvent(doc.progress, id, event) }));
+      await this.doc.write((doc) => ({
+        ...doc,
+        progress: applySeriesEvent(doc.progress, id, event),
+      }));
       return;
     }
     let target: ProgressTarget;
     let episodes: EpisodeRef[] = [];
     if (ref.kind === 'movie') {
-      target = { id, kind: 'movie', seriesId: null, title, subtitle: null, season: null, episode: null };
+      target = {
+        id,
+        kind: 'movie',
+        seriesId: null,
+        title,
+        subtitle: null,
+        season: null,
+        episode: null,
+      };
     } else {
       ({ target, episodes } = await this.episodeTarget(id, ref, title));
     }
@@ -1132,15 +1387,17 @@ export class VodService {
     if (body.event === 'mark-through' && ref.kind === 'episode') {
       const index = episodes.findIndex((episode) => episode.id === id);
       const upTo = index >= 0 ? episodes.slice(0, index + 1) : [];
-      context.through = (upTo.length ? upTo : []).slice(-VOD_PROGRESS.markThroughMax).map((episode) => ({
-        id: episode.id,
-        kind: 'episode' as const,
-        seriesId: target.seriesId,
-        title,
-        subtitle: episodeSubtitle(episode),
-        season: episode.season,
-        episode: episode.number,
-      }));
+      context.through = (upTo.length ? upTo : [])
+        .slice(-VOD_PROGRESS.markThroughMax)
+        .map((episode) => ({
+          id: episode.id,
+          kind: 'episode' as const,
+          seriesId: target.seriesId,
+          title,
+          subtitle: episodeSubtitle(episode),
+          season: episode.season,
+          episode: episode.number,
+        }));
       if (!context.through.length) context.through = [target];
     }
     const prefId = target.seriesId ?? id;
@@ -1160,7 +1417,10 @@ export class VodService {
 
   /** Espera a la sincronización en marcha (tests). */
   async idle(): Promise<void> {
-    await this.syncPromise;
-    await this.loading;
+    /* Varias vueltas: una sincronización que cede el sitio se vuelve a pedir sola. */
+    for (let round = 0; round < 10 && (this.syncPromise || this.loading); round += 1) {
+      await this.syncPromise;
+      await this.loading;
+    }
   }
 }

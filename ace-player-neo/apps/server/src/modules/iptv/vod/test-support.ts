@@ -5,7 +5,11 @@ import { RATING_NONE, type VodListRow } from './parse.js';
 import { VodTableBuilder, type VodTable } from './table.js';
 
 /** Una fila de lista con valores por defecto. */
-export function listRow(source: number, title: string, extra: Partial<VodListRow> = {}): VodListRow {
+export function listRow(
+  source: number,
+  title: string,
+  extra: Partial<VodListRow> = {},
+): VodListRow {
   return {
     source,
     title,
@@ -22,9 +26,11 @@ export function listRow(source: number, title: string, extra: Partial<VodListRow
 }
 
 /** Una tabla montada con esas filas (para los tests de la búsqueda y el códec). */
-export async function tableOf(rows: readonly VodListRow[], categories: readonly string[] = []): Promise<VodTable> {
+export async function tableOf(
+  rows: readonly VodListRow[],
+  categories: readonly string[] = [],
+): Promise<VodTable> {
   const builder = new VodTableBuilder(1_000_000, categories);
   for (const row of rows) builder.add(row);
   return builder.build();
 }
-

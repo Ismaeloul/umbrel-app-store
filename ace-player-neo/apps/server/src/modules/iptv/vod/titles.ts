@@ -4,8 +4,11 @@
    `cleanVodTitle(raw, categoryName)` NO reutiliza nada de la limpieza de
    canales (T8: `cleanIptvTitle` borra «Reserva», «Multi» o «España», cambia
    «M+» y tira los títulos no latinos). Es conservadora a propósito:
-   - quita prefijos de lengua o calidad SOLO al principio («ES - »,
-     «|ES| », «LAT: », «[4K] », «4K - »);
+   - quita prefijos de lengua, país o calidad SOLO al principio y de una
+     LISTA CERRADA («ES - », «|ES| », «LAT: », «[4K] », «4K - », «UK - »),
+     salvo entre barras, donde vale cualquier código («|NL| »): «CSI:
+     Miami», «CSI - Miami», «UP: Una aventura de altura», «TED - 2» o
+     «[REC] 2» se quedan como están;
    - quita etiquetas SOLO al final («[4K]», «(MULTI)», «(VOSE)», «1080p»,
      «HEVC»…), entre corchetes o paréntesis o sueltas en mayúsculas;
    - el año sale de «(2023)» al final, o de «- 2023» al final;
@@ -51,14 +54,20 @@ export function tagsOf(bits: number): VodTag[] {
 export function detectTags(text: string): number {
   if (!text) return 0;
   let bits = 0;
+  /* «MX» (México) también: «MX - Coco», «MX | PELÍCULAS». «AR» no: en los
+     paneles multipaís suele ser árabe. */
   const latino =
-    /(?:^|[^A-Za-z])(?:LAT|LATAM)(?![A-Za-z])/.test(text) ||
+    /(?:^|[^A-Za-z])(?:LAT|LATAM|MX)(?![A-Za-z])/.test(text) ||
     /latino|latinoam[eé]rica|es-419/i.test(text);
   if (latino) bits |= TAG_BIT.latino;
   const castellano =
-    /(?:^|[^A-Za-z])(?:ES|ESP|SPA)(?![A-Za-z])/.test(text) || /castellano|español|españa/i.test(text);
+    /(?:^|[^A-Za-z])(?:ES|ESP|SPA)(?![A-Za-z])/.test(text) ||
+    /castellano|español|españa/i.test(text);
   if (castellano && !latino) bits |= TAG_BIT.castellano;
-  if (/(?:^|[^A-Za-z])(?:VOSE|VOS|SUB)(?![A-Za-z])/.test(text) || /vose|subtitulad[ao]/i.test(text)) {
+  if (
+    /(?:^|[^A-Za-z])(?:VOSE|VOS|SUB)(?![A-Za-z])/.test(text) ||
+    /vose|subtitulad[ao]/i.test(text)
+  ) {
     bits |= TAG_BIT.vose;
   }
   if (/(?:^|[^A-Za-z])(?:multi|dual)(?![A-Za-z])/i.test(text) || /multi[\s-]?audio/i.test(text)) {
@@ -68,11 +77,47 @@ export function detectTags(text: string): number {
   return bits;
 }
 
-/* Prefijos al principio: códigos de 2-3 mayúsculas con separador («ES - »,
-   «|ES| », «LAT: »), códigos entre corchetes y calidades. */
-const PREFIX_CODE = /^(?:\|?[A-Z]{2,3}\|?\s*[-:|]\s*)+/;
-const PREFIX_BRACKET = /^\[[A-Z0-9 ]{2,8}\]\s*/;
-const PREFIX_QUALITY = /^(?:4K|UHD|FHD|HD|SD)[\s\-|:]+/;
+/* Prefijos al principio, con una LISTA CERRADA de códigos de lengua, país y
+   calidad, con dos puntos, barra o guion: «CSI: Miami», «UP: Una aventura
+   de altura», «ET: El extraterrestre» o «SOS: Rescate» empiezan por
+   mayúsculas y dos puntos y son títulos, no prefijos. Y con el guion entre
+   espacios, igual: muchos paneles cambian «:» por « - » (los nombres salen
+   de nombres de fichero), así que «CSI - Miami», «TED - 2» o «FBI - Most
+   Wanted» también son títulos. Por eso el guion NUNCA vale con cualquier
+   código de 2-3 mayúsculas, solo con los de la lista (que lleva los
+   países de los paneles multipaís: «UK - The Crown», «MX - Coco», «TR -
+   …»). Entre barras («|XX|») vale cualquier código: un título nunca
+   empieza así. «IT» (Italia) es la película «IT»: con barra o corchetes
+   siempre («|IT| », «IT| », «[IT] »), con guion solo si la categoría es
+   italiana («IT - Il padrino» en «IT | FILM»), y con dos puntos nunca
+   («IT: Capítulo 2»). Corchetes, con la lista: «[ES]» y «[4K]» sí, «[REC]
+   2» no. */
+const PREFIX_CODES =
+  'ES|ESP|SPA|CAST|LAT|LATAM|EN|ENG|VOSE|VOS|SUB|MULTI|DUAL|FR|DE|PT|' +
+  'UK|US|MX|AR|CO|CL|PE|VE|EC|UY|NL|BE|CH|AT|SE|DK|FI|HU|CZ|BG|HR|RS|UA|EXYU|' +
+  'TR|PL|BR|RU|GR|RO|4K|UHD|FHD|HD|SD';
+const PREFIX_PIPED = /^\|[A-Z0-9]{2,5}\|\s*(?:[-:|]\s*)?/;
+/* El guion, solo con espacio detrás («ES - Dune»): «DE-LOVELY» es un título. */
+const PREFIX_CODE = new RegExp(`^(?:${PREFIX_CODES})\\s*(?:[:|]|[-–](?=\\s))\\s*`);
+const PREFIX_ITALIAN = /^IT\s*\|\s*/;
+const PREFIX_ITALIAN_DASHED = /^IT\s*[-–](?=\s)\s*/;
+/* Categoría italiana: «IT | FILM», «|IT| CINEMA», «ITALIA», «Film italiani». */
+function italianCategory(name: string): boolean {
+  return /^\s*[|[(]?\s*IT\s*[|\])\-–:]/.test(name) || /\bital(?:ia|y|ian)/i.test(name);
+}
+const PREFIX_BRACKET = new RegExp(`^\\[\\s*(?:${PREFIX_CODES}|IT)\\s*\\]\\s*`);
+/* La calidad, también con su separador: «ES - 4K - Dune» se quedaba en
+   «- Dune» (`PREFIX_CODE` quitaba «ES - » y esta solo «4K »). */
+const PREFIX_QUALITY = /^(?:4K|UHD|FHD)(?:\s*(?:[:|]|[-–](?=\s))|\s)\s*/;
+const PREFIXES: readonly RegExp[] = [
+  PREFIX_BRACKET,
+  PREFIX_PIPED,
+  PREFIX_CODE,
+  PREFIX_ITALIAN,
+  PREFIX_QUALITY,
+];
+/* Un separador que se queda delante tras quitar un prefijo («- Dune»). */
+const LEADING_SEPARATOR = /^[-–|:]\s+/;
 
 /* Palabras de etiqueta al final. Entre corchetes o paréntesis, en cualquier
    caja; sueltas, solo en mayúsculas (o `1080p`), para no comerse palabras
@@ -102,15 +147,21 @@ export function cleanVodTitle(raw: string, categoryName = ''): CleanVodTitle {
   let removed = '';
   let year: number | null = null;
 
-  /* Prefijos: cada forma una vez, solo al principio (dos vueltas para «[ES] 4K - …»). */
-  for (let round = 0; round < 2; round += 1) {
-    for (const pattern of [PREFIX_BRACKET, PREFIX_CODE, PREFIX_QUALITY]) {
+  /* Prefijos, solo al principio y encadenados («[ES] 4K - …», «ES - LAT: …»),
+     con tope de vueltas. Nunca se come el título entero. */
+  const prefixes = italianCategory(categoryName) ? [...PREFIXES, PREFIX_ITALIAN_DASHED] : PREFIXES;
+  for (let round = 0; round < 4; round += 1) {
+    const before = title;
+    for (const pattern of prefixes) {
       const match = pattern.exec(title);
       if (match && match[0].length < title.length) {
         removed += ` ${match[0]}`;
         title = title.slice(match[0].length).trimStart();
       }
     }
+    if (title === before) break;
+    const orphan = LEADING_SEPARATOR.exec(title);
+    if (orphan && orphan[0].length < title.length) title = title.slice(orphan[0].length);
   }
 
   /* Final: etiquetas y año, hasta que no cambie nada (con tope). */

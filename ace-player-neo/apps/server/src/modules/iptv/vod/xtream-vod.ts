@@ -13,21 +13,25 @@
 
    Los parámetros van en lista cerrada: la acción es una unión y `extra` solo
    admite `category_id`, `vod_id` y `series_id` con `/^\d{1,12}$/`. No hay
-   forma de inyectar parámetros. «Sin VOD» (lo que no es un array, `[]`, `{}`
-   o un objeto con `user_info`) NO es un error: `state: 'none'`. */
+   forma de inyectar parámetros. «Sin VOD» (`[]`, `{}`, un objeto con solo
+   `user_info`/`server_info`, `null` o `false`) NO es un error: `state:
+   'none'`. Un objeto de error (`{"error":"Too many requests"}` con HTTP
+   200), una página HTML, texto o un cuerpo cortado SÍ lo es: no puede
+   vaciar el catálogo que ya había. */
 
 import { IPTV_USER_AGENT, VOD_LIMITS, type VodKind } from '@ace/shared';
 import { AppError, errorCodeOf } from '../../../core/errors.js';
 import { NetBadResponseError } from '../../net/client.js';
 import type { NetClient } from '../../net/types.js';
 import { toIptvError } from '../errors.js';
-import { parseJsonArrayStream } from '../json-array.js';
+import { NOT_AN_ARRAY_OBJECT, parseJsonArrayStream } from '../json-array.js';
 import {
   xtreamApiUrl,
   xtreamCategories,
   type XtreamCallOptions,
   type XtreamCredentials,
 } from '../xtream.js';
+import { cleanText } from './parse.js';
 
 export type XtreamVodAction =
   | 'get_vod_categories'
@@ -58,19 +62,34 @@ export function xtreamVodApiUrl(
   return xtreamApiUrl(credentials, action, safe);
 }
 
-/** Categorías de películas o de series (id → nombre, en el orden del panel). */
-export function xtreamVodCategories(
+/** Largo máximo del nombre de una categoría VOD (el de `VodCategorySchema`). */
+const CATEGORY_NAME_MAX = 120;
+
+/**
+ * Categorías de películas o de series (id → nombre, en el orden del panel),
+ * con el nombre LIMPIO (fallo 9): sin HTML, entidades ni caracteres de
+ * control, como los títulos (§7.2). Una que se queda sin nombre se tira (sus
+ * títulos van a «Sin categoría»). Las del directo no se tocan aquí: sus ids
+ * salen del nombre y cambiarían.
+ */
+export async function xtreamVodCategories(
   net: NetClient,
   credentials: XtreamCredentials,
   kind: VodKind,
   options: XtreamCallOptions,
 ): Promise<Map<string, string>> {
-  return xtreamCategories(
+  const raw = await xtreamCategories(
     net,
     credentials,
     { ...options, limits: VOD_LIMITS.categories },
     kind === 'movie' ? 'get_vod_categories' : 'get_series_categories',
   );
+  const out = new Map<string, string>();
+  for (const [id, name] of raw) {
+    const clean = cleanText(name, CATEGORY_NAME_MAX);
+    if (clean) out.set(id, clean);
+  }
+  return out;
 }
 
 export interface VodListOutcome {
@@ -90,11 +109,17 @@ class StopList extends Error {
   }
 }
 
+/**
+ * ¿«Sin VOD»? `{}`, un objeto con solo `user_info`/`server_info`, o
+ * `null`/`false` en vez del array. Un objeto de error, una página HTML,
+ * texto o un cuerpo cortado NO: eso es un fallo del panel y no debe vaciar
+ * el catálogo que ya había (0.9.0).
+ */
 function notAnArray(error: unknown): boolean {
   return (
     error instanceof NetBadResponseError &&
     error.cause instanceof Error &&
-    error.cause.message === 'no es un array'
+    error.cause.message === NOT_AN_ARRAY_OBJECT
   );
 }
 
@@ -108,7 +133,11 @@ export async function xtreamVodList(
   credentials: XtreamCredentials,
   kind: VodKind,
   onItem: (item: Record<string, unknown>) => boolean,
-  options: XtreamCallOptions & { readonly categoryId?: string },
+  options: XtreamCallOptions & {
+    readonly categoryId?: string;
+    /** Cada objeto que salta el troceador, al momento (también si se corta por el tope). */
+    readonly onSkip?: () => void;
+  },
 ): Promise<VodListOutcome> {
   const byCategory = options.categoryId !== undefined;
   const limits = kind === 'movie' ? VOD_LIMITS.movies : VOD_LIMITS.series;
@@ -120,6 +149,8 @@ export async function xtreamVodList(
     byCategory ? { category_id: options.categoryId as string } : {},
   );
   let stopped = false;
+  let objects = 0;
+  let skipped = 0;
   try {
     const opened = await net.openStream(url, {
       maxBytes,
@@ -133,6 +164,7 @@ export async function xtreamVodList(
     const result = await parseJsonArrayStream(
       opened.body,
       (item) => {
+        objects += 1;
         if (!onItem(item)) {
           stopped = true;
           throw new StopList();
@@ -140,14 +172,19 @@ export async function xtreamVodList(
       },
       {
         maxObjectBytes: limits.maxObjectBytes,
+        onSkip: () => {
+          skipped += 1;
+          options.onSkip?.();
+        },
         ...(options.signal ? { signal: options.signal } : {}),
       },
     );
     const state = result.objects === 0 && result.skipped === 0 ? 'none' : 'ok';
     return { state, objects: result.objects, skipped: result.skipped, stopped: false };
   } catch (error) {
+    /* Cortada por el tope de títulos: no es un error, y lo saltado hasta ahí cuenta (fallo 10). */
     if (error instanceof StopList || stopped) {
-      return { state: 'ok', objects: 0, skipped: 0, stopped: true };
+      return { state: 'ok', objects, skipped, stopped: true };
     }
     if (notAnArray(error)) return { state: 'none', objects: 0, skipped: 0, stopped: false };
     throw toIptvError(error, 'list');
@@ -183,7 +220,9 @@ export async function xtreamVodInfo(
       maxBytes: limits.maxBytes,
       totalTimeoutMs: limits.totalMs,
       headers: HEADERS,
-      iptv: { ...options.policy, maxDecompressedBytes: limits.maxBytes * 3 },
+      /* El tope de la ficha vale DESCOMPRIMIDA (fallo 7): con gzip, `* 3`
+         dejaba llegar 24 MiB a `JSON.parse`. */
+      iptv: { ...options.policy, maxDecompressedBytes: limits.maxBytes },
       ...(options.signal ? { signal: options.signal } : {}),
     });
     return response.body;
