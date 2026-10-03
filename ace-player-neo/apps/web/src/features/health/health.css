@@ -101,6 +101,31 @@
 .salud-top__btn {
   flex: none;
 }
+/* «Volver a comprobar» y «Descargar fallos»: juntos a la derecha del resumen;
+   en el móvil bajan debajo y se reparten el ancho. */
+.salud-top__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  flex: none;
+  min-width: 0;
+}
+.salud-top__error {
+  flex-basis: 100%;
+  color: var(--fail-ink);
+  font-size: var(--fs-13);
+  line-height: var(--lh-text);
+}
+@media (max-width: 767px) {
+  .salud-top__acts {
+    flex: 1 1 100%;
+  }
+  .salud-top__acts > .salud-top__btn {
+    flex: 1 1 0;
+    min-width: max-content;
+  }
+}
 
 /* ---- Avisos del backend ------------------------------------------------------- */
 .salud-warn {

@@ -87,6 +87,8 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'vodBrowse',
   'vodTitle',
   'vodStream',
+  /* «Descargar fallos» de Salud (0.9.0): solo web, lleva el registro del servidor. */
+  'diagnosticsExport',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 /** Rutas con ejemplo en `v1/`. */
@@ -1165,6 +1167,107 @@ export const WEB_V1_FIXTURES = {
   },
   iptvSync: iptvSyncing,
   iptvDelete: { provider: null, refreshHours: 6 },
+  /* Un fichero de «Descargar fallos» ya redactado: un corte del relé (nuestro)
+     y una fuente sin pares (de fuera), con lo que vio la web. */
+  diagnosticsExport: {
+    format: 'ace-player-neo-fallos',
+    formatVersion: 1,
+    createdAt: AT,
+    appVersion: '0.9.0',
+    summary: {
+      nuestro: 1,
+      deFuera: 1,
+      sinClasificar: 0,
+      byPiece: [
+        { piece: 'fuente', side: 'de_fuera', count: 1 },
+        { piece: 'rele', side: 'nuestro', count: 1 },
+      ],
+      lines: ['Nuestro: 1 fallo (relé de la IPTV 1).', 'De fuera: 1 fallo (fuentes que no van 1).'],
+    },
+    environment: {
+      node: 'v24.15.0',
+      platform: 'linux',
+      arch: 'x64',
+      uptimeSeconds: 5400,
+      memoryMb: 182,
+      logLevel: 'info',
+      scanner: true,
+      autoSync: true,
+      allowPrivateUrls: false,
+      footballDemoOnly: false,
+      teams: true,
+      ai: false,
+      seedSource: 'ACE_SEED',
+      serverLog: true,
+    },
+    status: {
+      health: V1_FIXTURES.health,
+      iptv: { kind: 'xtream', enabled: true, ...iptvStatusOk, connections: 1 },
+      remux: { sessions: 1, max: 4, ffmpegMissing: false },
+    },
+    faults: [
+      {
+        at: AT,
+        side: 'nuestro',
+        piece: 'rele',
+        from: 'servidor',
+        level: 'warn',
+        code: 'iptv_dropped',
+        message: 'IPTV: la salida no avanza; se reconecta el relé',
+      },
+      {
+        at: AT,
+        side: 'de_fuera',
+        piece: 'fuente',
+        from: 'servidor',
+        level: 'error',
+        code: 'source_no_peers',
+        message: 'La fuente no tiene pares.',
+        channel: 'DAZN 1',
+        source: HASH_A,
+      },
+    ],
+    serverLog: [
+      {
+        time: AT,
+        level: 'warn',
+        module: 'playback',
+        sessionId: SID,
+        msg: 'IPTV: la salida no avanza; se reconecta el relé',
+      },
+      {
+        time: AT,
+        level: 'info',
+        module: 'iptv',
+        url: 'http://proveedor.example:8080/live/•••/•••/1234.ts',
+        msg: 'IPTV: abierta',
+      },
+    ],
+    web: {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36',
+      viewport: '1440x900@1',
+      layout: 'wide',
+      mode: 'live',
+      view: 'partido/fltv-2026-09-23-3',
+      online: true,
+      installed: false,
+      uptimeSeconds: 1800,
+      log: [
+        {
+          at: AT,
+          kind: 'player',
+          level: 'warn',
+          code: 'source_no_peers',
+          message: 'La fuente no tiene pares.',
+          view: 'partido/fltv-2026-09-23-3',
+        },
+      ],
+    },
+    redaction: {
+      note: 'Sin contraseñas, usuarios, tokens, cookies, URLs con credenciales ni IPs públicas.',
+      replaced: 1,
+    },
+  },
 } satisfies { [K in WebFixtureRouteId]: V1ResponseInput<K> };
 
 // --- Variantes (variantes/<ruta>.<caso>.json) ---

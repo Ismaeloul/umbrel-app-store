@@ -55,6 +55,7 @@ import {
   isAnyErrorCode,
   liveBufferSafety,
   PLAYBACK_PROFILES,
+  playerFailureCode,
   readSeekWindow,
   reconnectDelayMs,
   RECONNECT_POLICY,
@@ -75,6 +76,7 @@ import { routeKey, queryClient } from '../api/query.ts';
 import { onSseEvent } from '../api/sse.ts';
 import { setPlayerPresence } from '../app/player-presence.ts';
 import { shallowEqual } from '../lib/store.ts';
+import { recordWebLog } from '../lib/web-log.ts';
 import { notify as defaultNotify, type NotifyOptions } from '../notices/notify.ts';
 import { toast } from '../notices/toasts.ts';
 import {
@@ -291,6 +293,25 @@ const SYSTEM_ERRORS = new Set([
 /** Una IPTV que falla sin alternativa (§8.3). */
 export const IPTV_IDLE_MESSAGE = 'Tu IPTV no da señal ahora mismo.';
 
+/** Segundos cargados por delante a partir de los que una imagen parada es del reproductor. */
+export const STALLED_WITH_BUFFER_S = 2;
+
+/** Nombre del error del <video> (MediaError.code) para el detalle de un fallo. */
+const MEDIA_ERROR_NAMES: Readonly<Record<number, string>> = {
+  1: 'MEDIA_ERR_ABORTED',
+  2: 'MEDIA_ERR_NETWORK',
+  3: 'MEDIA_ERR_DECODE',
+  4: 'MEDIA_ERR_SRC_NOT_SUPPORTED',
+};
+
+/** Causa del registro de fallos para el código con el que se da una fuente por perdida. */
+function exhaustCause(code: string): 'source' | 'engine' | 'codec' | 'client' {
+  if (code === 'player_decode_failed') return 'codec';
+  if (code === 'player_stalled') return 'client';
+  if (code.startsWith('engine_')) return 'engine';
+  return 'source';
+}
+
 /** ¿Es un fallo de la IPTV que agota la fuente sin reintentos? (`iptv_*` siempre; `remux_*` y ffmpeg con fuente IPTV). */
 export function isIptvSourceError(code: string | undefined, iptvSource: boolean): boolean {
   if (!code) return false;
@@ -442,6 +463,14 @@ export class PlayerRuntime {
       deps.log ??
       ((message, data) => {
         if (import.meta.env.DEV) console.info(`[reproductor] ${message}`, data ?? '');
+        // Las notas del reproductor (huecos, primera imagen, cada reconexión
+        // con su detalle técnico) van al anillo.
+        recordWebLog({
+          kind: 'player',
+          level: 'info',
+          message,
+          ...(typeof data === 'string' ? { detail: data } : {}),
+        });
       });
 
     this.controller = new PlayerController(this.video, {
@@ -1273,7 +1302,17 @@ export class PlayerRuntime {
     }
     if (native && connection.stuckTicks === FROZEN_LIVE_PUSH_TICKS) this.pushToLive();
     const limit = native ? FROZEN_RECONNECT_TICKS.native : FROZEN_RECONNECT_TICKS.normal;
-    if (connection.stuckTicks >= limit) this.fail('La imagen se ha quedado parada: reconectando');
+    if (connection.stuckTicks >= limit) {
+      /* Con vídeo de sobra cargado por delante y la imagen quieta, lo que se
+         ha atascado es el reproductor (decodificador, MSE), no la fuente: si
+         acaba agotando los reintentos, «Descargar fallos» lo cuenta como
+         nuestro (`player_stalled`). Sin búfer, es que no llega señal. */
+      const ahead = bufferAhead(media);
+      this.fail('La imagen se ha quedado parada: reconectando', {
+        detail: `${ahead.toFixed(1)} s de búfer por delante`,
+        ...(ahead >= STALLED_WITH_BUFFER_S ? { faultCode: 'player_stalled' } : {}),
+      });
+    }
   }
 
   /**
@@ -1425,6 +1464,10 @@ export class PlayerRuntime {
   /**
    * La conexión se ha roto. Si queda presupuesto en la ventana, se reconecta
    * tras la espera exponencial; si no, la fuente se da por fallida.
+   * `code` es el del servidor (cambia qué se hace con la fuente);
+   * `faultCode`, solo para el registro de fallos si este es el último (la
+   * imagen parada con búfer de sobra). Sin ninguno de los dos, el registro
+   * lo saca de la frase y el detalle (playerFailureCode).
    */
   fail(
     reason: string,
@@ -1432,7 +1475,8 @@ export class PlayerRuntime {
       retryable = true,
       code,
       detail,
-    }: { retryable?: boolean; code?: string; detail?: string } = {},
+      faultCode,
+    }: { retryable?: boolean; code?: string; detail?: string; faultCode?: string } = {},
   ): void {
     const source = this.source;
     if (!source || this.conn === 'idle' || this.conn === 'error' || this.conn === 'reconectando')
@@ -1446,7 +1490,7 @@ export class PlayerRuntime {
         : RECONNECT_POLICY.maxAttempts;
     if (detail) this.log(`Fallo: ${reason}`, detail);
     if (!retryable || source.reconnects.length >= max) {
-      this.exhaust(reason, code);
+      this.exhaust(reason, code, { detail, faultCode });
       return;
     }
     source.reconnects.push(now);
@@ -1465,15 +1509,29 @@ export class PlayerRuntime {
     }, delay);
   }
 
-  /** Reconexiones agotadas (index.html:4947-4974). */
-  private exhaust(reason: string, code?: string): void {
+  /**
+   * Reconexiones agotadas (index.html:4947-4974). En el registro de fallos va
+   * el código del servidor si lo hubo; si no, el del ÚLTIMO fallo: la
+   * decodificación o la imagen parada con búfer son nuestras (Descargar
+   * fallos, 0.9.0) y no «una fuente que no va». Quien escucha
+   * (`sourceFailed`) sigue recibiendo solo el código del servidor.
+   */
+  private exhaust(
+    reason: string,
+    code?: string,
+    last: { detail?: string | undefined; faultCode?: string | undefined } = {},
+  ): void {
     const source = this.source;
     if (!source) return;
     source.failed = true;
     const seconds = source.startedAt ? Math.round((Date.now() - source.startedAt) / 1000) : 0;
     const outcome: 'fallo' | 'cayo' = source.startedAt ? 'cayo' : 'fallo';
     this.sendOutcome(outcome, seconds);
-    this.report('source', code ?? 'player_source_failed', reason);
+    if (code) this.report('source', code, reason, { detail: last.detail });
+    else {
+      const faultCode = last.faultCode ?? playerFailureCode(reason, last.detail);
+      this.report(exhaustCause(faultCode), faultCode, reason, { detail: last.detail });
+    }
     this.releaseSession('error');
     this.controller.reset();
     this.resetVideo();
@@ -1811,7 +1869,11 @@ export class PlayerRuntime {
     /* Sin reenganche posible (un estado sin motor enganchado) hls.js ya ha
        dejado de cargar: se reconecta ya en vez de esperar al vigilante, y el
        SSE que llegue detrás no se descarta. */
-    this.fail('La señal se ha cortado: reconectando', { detail: reason });
+    // El remux se reinició y no hay cómo reengancharse: es nuestro (remux), no de la fuente.
+    this.fail('La señal se ha cortado: reconectando', {
+      detail: reason,
+      faultCode: 'remux_list_reset',
+    });
     this.carry = null;
   }
 
@@ -1899,7 +1961,7 @@ export class PlayerRuntime {
       if (connection?.waitingTimer) clearTimeout(connection.waitingTimer);
       if (connection) connection.waitingTimer = null;
     });
-    const broken = () => {
+    const broken = (detail: string) => {
       if (!this.connection) return;
       if (
         this.conn === 'conectando' ||
@@ -1907,12 +1969,17 @@ export class PlayerRuntime {
         this.conn === 'arrancando' ||
         this.conn === 'activa'
       )
-        this.fail('La señal se ha cortado: reconectando', { detail: 'evento del vídeo' });
+        this.fail('La señal se ha cortado: reconectando', { detail });
     };
     on('error', () => {
-      if (!this.recoverMediaInPlace()) broken();
+      if (this.recoverMediaInPlace()) return;
+      // Qué error da el <video> (MEDIA_ERR_DECODE es nuestro: Descargar fallos).
+      const error = (media as { error?: { code?: number; message?: string } | null }).error;
+      const name = error?.code ? (MEDIA_ERROR_NAMES[error.code] ?? `código ${error.code}`) : '';
+      const extra = [name, error?.message?.slice(0, 200)].filter(Boolean).join(': ');
+      broken(extra ? `evento del vídeo (${extra})` : 'evento del vídeo');
     });
-    on('ended', broken);
+    on('ended', () => broken('evento del vídeo (ended)'));
     on('timeupdate', () => {
       const session = this.session;
       if (session && Date.now() - session.lastBeatAt >= session.heartbeatMs) this.beat();
@@ -1963,7 +2030,12 @@ export class PlayerRuntime {
       recovered = engine.recoverInPlace();
     } catch {}
     if (!recovered) return false;
-    this.log('Vídeo que no se puede decodificar: hls.js sigue en el segmento siguiente');
+    /* Para «Descargar fallos»: un trozo que no se decodifica cuenta como
+       decodificación (nuestro) aunque la imagen siga; la nota de detrás no
+       se apunta dos veces (web-log.ts). */
+    const note = 'Vídeo que no se puede decodificar: hls.js sigue en el segmento siguiente';
+    recordWebLog({ kind: 'player', level: 'warn', code: 'player_decode_skipped', message: note });
+    this.log(`player_decode_skipped: ${note}`);
     connection.stuckTicks = 0;
     connection.graceTicks = GRACE_TICKS;
     this.notify('La imagen llegó dañada: saltando ese trozo…', {
@@ -2143,13 +2215,22 @@ export class PlayerRuntime {
 
   /** Registro de fallos por causa (arquitectura §5.14), con las métricas de la fuente (P23). */
   private report(
-    cause: 'client' | 'source' | 'engine',
+    cause: 'client' | 'source' | 'engine' | 'codec',
     code: string,
     message: string,
-    { keepalive = false }: { keepalive?: boolean } = {},
+    { keepalive = false, detail }: { keepalive?: boolean; detail?: string | undefined } = {},
   ): void {
     const source = this.source;
     const metrics = source ? this.metrics(source) : undefined;
+    // Para «Descargar fallos» (src/lib/web-log.ts): también sin red y en la demo.
+    const informative = code === 'player_session' || code === 'autoplay_blocked';
+    recordWebLog({
+      kind: 'player',
+      level: informative ? 'info' : 'warn',
+      code,
+      message,
+      ...(detail ? { detail } : {}),
+    });
     this.log(`${code}: ${message}`, metrics);
     if (this.demo()) return;
     void this.request('diagnosticsReport', {

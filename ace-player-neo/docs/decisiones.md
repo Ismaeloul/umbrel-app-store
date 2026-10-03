@@ -658,3 +658,59 @@ Detalle y pruebas en docs/buscador.md §9.
 - **D29.6 · Los apodos de España («Tele 5» = Telecinco, «A3» = Antena 3, «A3 Series» =
   Atreseries) solo juntan canales que se sabe que son de España** (por su nombre o su categoría); lo escrito
   los busca como alias. El TELE 5 alemán o el polaco siempre son otro canal.
+
+## D30. «Descargar fallos» en Salud y la web sin elementos compartidos (0.9.0, equipo/pulido)
+
+- **Para qué**: Isma pulsa «Descargar fallos» (Ajustes → Salud) y pasa el
+  fichero; de un vistazo se ve qué es nuestro (motor, decodificación, relé de
+  la IPTV, remux, reproductor de la web, errores de la web, servidor, datos)
+  y qué no (una fuente que no va, el proveedor IPTV, la red, futbolenlatv o
+  los escudos).
+- **Ruta**: `POST /api/v1/diagnostics/export` (`module: 'diagnostics'`,
+  `access: 'web'`, anti-CSRF). POST porque la web manda lo suyo: el anillo
+  de sus últimos 200 errores (`src/lib/web-log.ts`, solo en memoria) y cómo
+  se está viendo. Responde el fichero
+  `ace-player-neo-fallos-AAAA-MM-DD-HHMM.json` (hora de Madrid) como
+  descarga, `no-store`; nunca se guarda en el NAS.
+- **Qué lleva**: versión, entorno (interruptores y de dónde salen las
+  claves, nunca las claves), la salud de siempre, la IPTV sin servidor ni
+  usuario, el remux, los fallos (registro de fallos + líneas `warn`/`error`
+  del servidor + lo de la web, sin contar dos veces el mismo código en el
+  mismo segundo) con `side` (`nuestro` / `de_fuera` / `sin_clasificar`),
+  `piece` y un resumen en frases, y el registro del servidor (anillo de 2000
+  líneas / 1 MiB en `core/logger.ts`) y el de la web.
+- **Clasificación** (`@ace/shared`, `domain/faults.ts`): por código (catálogo
+  y registro de fallos), después por la causa y, en el log, por módulo y
+  frase. Los cortes del relé (`iptv_dropped`, «se reconecta el relé») cuentan
+  como nuestros, como los ve Isma; un ffmpeg que muere por el códec es
+  decodificación. Las métricas de fin de reproducción y el autoplay
+  bloqueado no cuentan como fallo. Lo que no encaja queda «sin clasificar».
+  Cuando el reproductor agota una fuente sin código del servidor, apunta el
+  del ÚLTIMO fallo (`playerFailureCode`): `player_decode_failed` (hls.js,
+  mpegts.js o el `<video>` que no decodifican: nuestro, causa `codec`),
+  `player_stalled` (imagen parada con 2 s o más de búfer: el reproductor) o,
+  si no, `player_source_failed` (la fuente). Un `player_source_failed` de
+  antes (o de la app de iPhone) mira la frase: si delata la decodificación o
+  el relé, es nuestro.
+- **Redacción** (sobre TODO el fichero, dos capas): el redactor de la IPTV
+  (conoce usuario, contraseña y URLs guardadas) y `redactReportText`
+  (credenciales en URLs y en texto, tramos Xtream con y sin esquema,
+  `?username=&password=`, `t=`, tickets del relé, `Authorization`, cookies,
+  JSON con secretos, JWT, correos, el usuario del sistema en las pilas e IPs
+  públicas). Se quedan los hashes AceStream, los ids IPTV y las IPs privadas
+  y de Tailscale (dicen qué contenedor falla).
+- **Transiciones de la web** (punto 4 de Isma): abrir un partido es el mismo
+  fundido que cambiar de pestaña, a la ida y a la vuelta (también con el
+  botón atrás: donde las vistas van con View Transitions, el router lanza la
+  vuelta justo después del `popstate`, que React pinta sin View Transition;
+  tras el gesto de volver del móvil, `hasUAVisualTransition`, en el acto y
+  sin fundido, porque ya lo animó el navegador). Fuera la transición
+  compartida de los escudos (`partido-<id>`); el reproductor lleva un
+  nombre por presentación (`ace-reproductor-mini`/`-stage`) para fundirse
+  en vez de viajar, salvo en
+  WebKit, donde no lleva `<ViewTransition>` (con fix/transicion-safari, abrir
+  un partido allí es solo el fundido CSS de las vistas; probado con WebKit de
+  Playwright: sin transiciones del documento y sin vistas superpuestas). La
+  animación de los escudos queda para la app de iPhone.
+- **Vuelta atrás**: no cambia ningún fichero de `data/`; volver a la 0.8.4 es
+  seguro (se pierde la ruta nueva).

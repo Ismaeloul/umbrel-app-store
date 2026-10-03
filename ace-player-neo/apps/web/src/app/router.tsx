@@ -37,6 +37,7 @@ import {
   type Route,
   type Vista,
 } from './routes.ts';
+import { viewsUseViewTransitions } from './transitions.ts';
 
 /* ---- Parámetros de cada vista ------------------------------------------------
    Al cambiar de vista, la URL se queda con los globales y los de la vista nueva
@@ -189,11 +190,32 @@ export function RouterProvider({ children, onBeforeChange, initialSearch }: Rout
         history.replaceState({ ...(history.state as object | null), aceDepth: 0 }, '');
       }
     } catch {}
-    const onPop = () => {
+    const onPop = (event: PopStateEvent) => {
       noteViewParams(location.search);
       const next = parseRoute(location.search);
       targetRef.current = next;
-      startTransition(() => commit(next, 'atras'));
+      /* El gesto de volver del móvil (deslizar desde el borde en el iPhone)
+         ya ha animado él la vuelta (`hasUAVisualTransition`): otro fundido
+         encima, o esperar un turno, enseñaría un instante la vista vieja.
+         Se cambia en el acto, sin transición. */
+      if ((event as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition) {
+        commit(next, null);
+        return;
+      }
+      // React pinta en el acto (y SIN View Transition) lo que se lanza dentro
+      // de un `popstate`, para que el navegador restaure el scroll. Aquí el
+      // scroll lo restaura el armazón, así que, donde las vistas van con
+      // View Transitions (Chrome, Edge, Firefox), la vuelta atrás se lanza
+      // justo después del evento: así lleva el mismo fundido que cualquier
+      // cambio de pestaña (salir de un partido, Isma, 0.9.0). En WebKit el
+      // fundido es CSS y no depende de eso, y sin la API (jsdom, navegadores
+      // viejos) no hay fundido que esperar: en el acto. Si en ese instante ya
+      // se ha ido a otra parte (otro popstate, un clic), manda eso.
+      const go = () => {
+        if (targetRef.current === next) startTransition(() => commit(next, 'atras'));
+      };
+      if (viewsUseViewTransitions()) setTimeout(go, 0);
+      else go();
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);

@@ -56,8 +56,6 @@ export interface HeroViewProps {
   /** Segundo toque en la cápsula: vuelve a tapar. */
   onHide?(): void;
   onOpen(match: FootballMatch): void;
-  /** Nombre de la View Transition del bloque de escudos (único en la página). */
-  transitionName?: string | null;
 }
 
 export function HeroView({
@@ -73,7 +71,6 @@ export function HeroView({
   onReveal,
   onHide,
   onOpen,
-  transitionName = null,
 }: HeroViewProps) {
   const titleId = useId();
   const status = matchStatus(match, now, rawScore);
@@ -144,7 +141,6 @@ export function HeroView({
           when={when}
           mine={mine}
           watching={watching}
-          transitionName={transitionName ?? undefined}
           className="agenda-hero__versus"
         >
           {signal ? <SignalCapsule signal={signal} size="md" /> : null}

@@ -397,3 +397,37 @@ también los tests nuevos del otro verificador), ninguno saltado; `tsc
 - **Entrada**: tope de 2 MiB (el de nginx), JSON validado con zod estricto
   (claves desconocidas, topes de state.json y formas de cada campo); la web
   comprueba tamaño y formato antes de subir nada.
+
+## 9. Cambio de la 0.9.0: «Descargar fallos» (Salud)
+
+- `POST /api/v1/diagnostics/export` es `access: 'web'` (desde `/native`, 403
+  `origin_forbidden`; lo fija `test/security.test.ts`) y pasa la regla
+  anti-CSRF: el fichero lleva el registro del servidor.
+- **Todo redactado antes de salir**, en dos capas: el redactor de la IPTV
+  (secretos guardados) y `redactReportText` / `redactReportValue` de
+  `@ace/shared` (lo que se reconoce sin conocer el secreto, más las claves
+  `password`, `token`, `authorization`, `cookie`, `username`… de cualquier
+  objeto). Las IPs públicas se tapan; las privadas y de Tailscale no. La
+  IPTV va sin servidor, origen, nombre ni usuario; el entorno, sin claves,
+  tokens, rutas de datos ni la clave de la API de fútbol.
+- La capa genérica también ve lo codificado (`%2Flive%2F…`, `%3Fusername%3D…`,
+  dos veces) y las barras escapadas de JSON, la forma corta sin esquema o con
+  ruta detrás, `password:`/`clave='…'` en texto suelto, `X-Api-Key`,
+  `X-Auth-Token`, `x-engine-token`, campos JSON con número y la clave de
+  TheSportsDB en la ruta: lo que el redactor de la IPTV ya no conoce (el
+  proveedor de antes, lo escrito en el formulario) no sale en claro.
+- **Falla cerrado y sin ReDoS**: un objeto a más de 32 niveles sale como
+  `[redactado: demasiado anidado]`, nunca tal cual; ninguna expresión es
+  ambigua (el fichero se monta en el hilo que sirve el vídeo: 55 barras
+  invertidas detrás de `"password":"` lo dejaban parado minutos).
+- **Anillos en memoria**: el del servidor (2000 líneas / 1 MiB, las mismas
+  líneas que van a stdout, ya con la redacción de pino y, al guardarlas, con
+  el redactor de la IPTV de ese momento: cambiar o borrar el proveedor no
+  destapa lo escrito antes) y el de la web (200 entradas). Ninguno se
+  escribe en disco ni en el navegador; el fichero sale como descarga con
+  `no-store` y no se guarda en el NAS.
+- Pruebas: `packages/shared/test/faults.test.ts` (los casos difíciles de
+  redacción, lo que no se toca y los tiempos con textos con mala suerte),
+  `apps/server/src/core/logger.test.ts` (el anillo redactado al escribir) y
+  `apps/server/src/modules/diagnostics/export.test.ts` (de punta a punta: el
+  fichero no contiene ninguno de los secretos sembrados).

@@ -55,7 +55,15 @@ import { useBack, useNavigate, useRoute } from './router.tsx';
 import { formatVista, type Route, type Vista } from './routes.ts';
 import { restoreScroll } from './scroll-memory.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
-import { finishEntranceAnimations, VISTA_CAMBIA, VISTA_ENTRA, VISTA_SALE } from './transitions.ts';
+import {
+  finishEntranceAnimations,
+  playerSwapsByName,
+  REPRODUCTOR_CAMBIA,
+  reproductorTransitionName,
+  VISTA_CAMBIA,
+  VISTA_ENTRA,
+  VISTA_SALE,
+} from './transitions.ts';
 import { playPendingCrossfade } from './viewCrossfade.ts';
 import { installViewTransitionGuard, viewMotion } from './viewTransitionGuard.ts';
 import { useShortcut } from './shortcuts.ts';
@@ -144,6 +152,30 @@ function asideInitiallyOpen(): boolean {
   return readItem(STORAGE_KEYS.aside) !== 'plegado';
 }
 
+/**
+ * La <ViewTransition> del reproductor (transitions.ts): con un nombre por
+ * presentación, al pasar de mini a grande (o al revés) uno se funde y el otro
+ * aparece como las vistas, sin viajar de una esquina a otra. En WebKit no
+ * hay ninguna (playerSwapsByName): allí abrir un partido es solo el fundido
+ * de las vistas, sin transiciones del documento que se queden pegadas.
+ */
+function PlayerTransition({
+  animate,
+  presentation,
+  children,
+}: {
+  animate: boolean;
+  presentation: PlayerPresentation;
+  children: ReactNode;
+}) {
+  if (!animate) return children;
+  return (
+    <ViewTransition name={reproductorTransitionName(presentation)} default={REPRODUCTOR_CAMBIA}>
+      {children}
+    </ViewTransition>
+  );
+}
+
 export function Shell() {
   const route = useRoute();
   const navigate = useNavigate();
@@ -153,6 +185,8 @@ export function Shell() {
   const presence = usePlayerPresence();
   const [helpOpen, setHelpOpen] = useState(false);
   const [asideOpen, setAsideOpenState] = useState(asideInitiallyOpen);
+  // El reproductor cambia de nombre con la presentación salvo en WebKit (transitions.ts).
+  const [playerSwap] = useState(() => playerSwapsByName());
 
   // Cambio de vista con View Transitions o, en WebKit, con un fundido CSS
   // (viewTransitionGuard.ts explica por qué). Ninguna View Transition se
@@ -293,7 +327,7 @@ export function Shell() {
           {dockMounted || inPartido ? (
             <div className="stage" data-presentation={presentation}>
               {dockMounted && PlayerDock ? (
-                <ViewTransition name="ace-reproductor">
+                <PlayerTransition animate={playerSwap} presentation={presentation}>
                   <div className="dock" data-presentation={presentation}>
                     <ErrorBoundary what="el reproductor">
                       <Suspense fallback={<StagePlaceholder loading />}>
@@ -306,7 +340,7 @@ export function Shell() {
                       </Suspense>
                     </ErrorBoundary>
                   </div>
-                </ViewTransition>
+                </PlayerTransition>
               ) : (
                 <StagePlaceholder />
               )}

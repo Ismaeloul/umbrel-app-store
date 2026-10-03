@@ -54,6 +54,17 @@ export const DIAGNOSTICS_TOTAL_REPORTS_PER_MINUTE = 120;
 /** Registro de fallos: entradas que devuelve GET /api/v1/diagnostics sin `limit`. */
 export const DIAGNOSTICS_DEFAULT_LIST_LIMIT = 100;
 
+/**
+ * «Descargar fallos» (Salud, 0.9.0): lo que guarda cada anillo en memoria y
+ * lo que entra en el fichero. La web apunta sus últimos errores (sin disco);
+ * el servidor, sus últimas líneas de registro (y su tamaño total).
+ */
+export const WEB_LOG_MAX_ENTRIES = 200;
+export const SERVER_LOG_RING_LINES = 2000;
+export const SERVER_LOG_RING_BYTES = 1024 * 1024;
+/** Fallos (servidor + web) como mucho en el fichero, de los más nuevos. */
+export const DIAGNOSTICS_EXPORT_MAX_FAULTS = 1000;
+
 /** Emparejamiento: intentos por código y por minuto en total (arquitectura §5.12). */
 export const PAIRING_ATTEMPTS_PER_CODE = 5;
 export const PAIRING_ATTEMPTS_PER_MINUTE = 10;

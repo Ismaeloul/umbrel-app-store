@@ -17,8 +17,11 @@ import { App } from './app/App.tsx';
 import { installShortcutListener } from './app/shortcuts.ts';
 import { installThemeWatcher } from './app/theme.ts';
 import { installViewportWatcher } from './lib/viewport.ts';
+import { installWebLog } from './lib/web-log.ts';
 import { toast } from './notices/toasts.ts';
 
+// Los últimos errores de la página, en memoria, para «Descargar fallos» (Salud).
+installWebLog();
 installThemeWatcher();
 installViewportWatcher();
 installShortcutListener();
