@@ -112,3 +112,11 @@ export const SEEK_TIMEOUT_MS = 2200;
 /** Demo: la «señal» aparece a los 1,8 s y las estadísticas cambian cada 1,5 s. */
 export const DEMO_SIGNAL_MS = 1800;
 export const DEMO_STATS_MS = 1500;
+
+/**
+ * Recorrido mínimo de un deslizamiento sobre el vídeo (px). Además tiene que
+ * ser claramente horizontal o vertical (classifySwipe: un eje 1,4 veces el
+ * otro); uno corto solo cuenta si es rápido (≥ 0,45 px/ms y ≥ 24 px), así que
+ * un toque o un arrastre leve no cambian de canal.
+ */
+export const ZAP_SWIPE_MIN_PX = 50;

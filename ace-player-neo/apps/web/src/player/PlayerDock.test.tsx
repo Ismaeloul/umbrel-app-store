@@ -537,25 +537,92 @@ describe('reproductor en grande', () => {
       expect(playerStore.get().channel?.hash).toBe('d'.repeat(40));
     });
 
-    it('con el dedo: hacia arriba, el favorito siguiente; hacia abajo sigue minimizando (móvil en vertical)', () => {
+    /** Un dedo sobre la capa del vídeo (o sobre `target`) de (200, 300) a (200 + dx, 300 + dy). */
+    function swipeOn(target: Element, dx: number, dy: number) {
+      const finger = { pointerId: 4, pointerType: 'touch' };
+      fireEvent.pointerDown(target, { ...finger, clientX: 200, clientY: 300 });
+      fireEvent.pointerMove(target, { ...finger, clientX: 200 + dx / 2, clientY: 300 + dy / 2 });
+      fireEvent.pointerUp(target, { ...finger, clientX: 200 + dx, clientY: 300 + dy });
+    }
+
+    it('con el dedo (móvil en vertical): a la izquierda el siguiente, a la derecha el anterior; abajo sigue minimizando y arriba no hace nada', () => {
       const { container, handlers } = renderDock('stage', undefined, withFavorites());
       setPlayer(playing());
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       const hit = container.querySelector<HTMLElement>('.player-hit')!;
-      const swipe = (dy: number) => {
-        const finger = { pointerId: 4, pointerType: 'touch' };
-        fireEvent.pointerDown(hit, { ...finger, clientX: 200, clientY: 300 });
-        fireEvent.pointerMove(hit, { ...finger, clientX: 200, clientY: 300 + dy / 2 });
-        fireEvent.pointerUp(hit, { ...finger, clientX: 200, clientY: 300 + dy });
-      };
-      swipe(-120);
+      swipeOn(hit, -120, 0);
       expect(document.querySelector('.player-zap')).toHaveTextContent('DAZN 2');
       expect(document.querySelector('.player-zap')).toHaveTextContent('2/4');
       expect(handlers.onMinimize).not.toHaveBeenCalled();
       act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
       expect(playerStore.get().channel?.hash).toBe('b'.repeat(40));
-      swipe(120);
+      // A la derecha, el anterior (vuelve a DAZN 1).
+      swipeOn(hit, 120, 10);
+      expect(document.querySelector('.player-zap')).toHaveTextContent('DAZN 1');
+      expect(document.querySelector('.player-zap')).toHaveTextContent('1/4');
+      act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+      expect(playerStore.get().channel?.hash).toBe(HASH);
+      act(() => zapBannerStore.set(null));
+      // Hacia arriba: nada nuevo.
+      swipeOn(hit, 0, -120);
+      expect(document.querySelector('.player-zap')).toBeNull();
+      expect(handlers.onMinimize).not.toHaveBeenCalled();
+      // Hacia abajo: solo minimiza.
+      swipeOn(hit, 0, 120);
       expect(handlers.onMinimize).toHaveBeenCalledTimes(1);
+      expect(document.querySelector('.player-zap')).toBeNull();
+    });
+
+    it('un toque, un arrastre leve, uno en diagonal o uno que empieza en un control no cambian de canal', () => {
+      const { container, handlers } = renderDock('stage', undefined, withFavorites());
+      setPlayer(playing());
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const hit = container.querySelector<HTMLElement>('.player-hit')!;
+      swipeOn(hit, 0, 0);
+      swipeOn(hit, -20, 0);
+      swipeOn(hit, -80, 70);
+      // La barra de controles es hermana de la capa del vídeo: un gesto que
+      // empieza en el volumen o en un botón nunca llega a ella.
+      const control = container.querySelector<HTMLElement>('.player-chrome button')!;
+      expect(control).not.toBeNull();
+      swipeOn(control, -150, 0);
+      act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+      expect(document.querySelector('.player-zap')).toBeNull();
+      expect(playerStore.get().channel?.hash).toBe(HASH);
+      expect(handlers.onMinimize).not.toHaveBeenCalled();
+    });
+
+    it('en la tableta también a los lados; abajo no hace nada y el scroll vertical de la página sigue (pan-y)', () => {
+      const realMatchMedia = window.matchMedia;
+      window.matchMedia = ((query: string) =>
+        ({
+          matches: query === '(min-width: 768px)',
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as unknown as MediaQueryList) as typeof window.matchMedia;
+      try {
+        const { container, handlers } = renderDock('stage', undefined, withFavorites());
+        setPlayer(playing());
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const hit = container.querySelector<HTMLElement>('.player-hit')!;
+        expect(hit.style.touchAction).toBe('pan-y');
+        swipeOn(hit, 0, 120);
+        swipeOn(hit, 0, -120);
+        expect(document.querySelector('.player-zap')).toBeNull();
+        expect(handlers.onMinimize).not.toHaveBeenCalled();
+        swipeOn(hit, 120, 0);
+        expect(document.querySelector('.player-zap')).toHaveTextContent('Eurosport 1');
+        expect(document.querySelector('.player-zap')).toHaveTextContent('4/4');
+        act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+        expect(playerStore.get().channel?.hash).toBe('d'.repeat(40));
+      } finally {
+        window.matchMedia = realMatchMedia;
+      }
     });
   });
 

@@ -193,8 +193,14 @@ Reglas que cumple (inventario §8, §9, §11, §17, §18 y §26):
   deslizadores y controles del reproductor, regla 9).
 - **Cambiar de canal rápido entre favoritos** (0.8.4, `favorite-zap.ts`): ↑ o
   Re Pág = favorito anterior, ↓ o Av Pág = siguiente; con el dedo, deslizar
-  hacia arriba sobre el vídeo = siguiente y hacia abajo = anterior (en el
-  móvil en vertical, abajo sigue minimizando). Lista = favoritos de Canales
+  a los lados sobre el vídeo, como pasar páginas: a la izquierda = siguiente
+  y a la derecha = anterior, en todos los modos (vertical, horizontal,
+  pantalla completa, tableta). Cuenta si es claramente horizontal (1,4 veces
+  el vertical) y de 50 px o más (o rápido), y solo sobre la capa del vídeo:
+  lo que empieza en la barra, el volumen o un botón no. Hacia abajo sigue
+  siendo solo minimizar (móvil en vertical) y hacia arriba no hace nada; en
+  la tableta y en horizontal el scroll vertical de la página no se toca
+  (`touch-action: pan-y`). Con ratón no hay deslizamientos. Lista = favoritos de Canales
   (AceStream e IPTV) en su orden guardado, con vuelta en los extremos; si lo
   que suena no es favorito, ↓ va al primero y ↑ al último. Las pulsaciones
   seguidas se acumulan y solo se abre el último canal a los 650 ms (la IPTV

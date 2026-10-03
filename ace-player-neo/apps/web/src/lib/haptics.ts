@@ -40,7 +40,7 @@ export const HAPTIC_MAP: Record<HapticKind, readonly string[]> = {
     'chips de gustos',
     'interruptores y radios de Ajustes',
     'cambio de día en la tira de días',
-    'cada paso por los favoritos al cambiar de canal rápido (↑ ↓, deslizar en vertical)',
+    'cada paso por los favoritos al cambiar de canal rápido (↑ ↓, deslizar a los lados sobre el vídeo)',
   ],
   light: [
     'destapar el marcador',

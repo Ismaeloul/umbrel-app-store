@@ -25,7 +25,7 @@ export interface PlayerActions {
   toggleNerd(): void;
   toggleFavorite(): void;
   zap(direction: 1 | -1): void;
-  /** Cambiar de canal rápido entre favoritos (↑ ↓, deslizar en vertical; favorite-zap.ts). */
+  /** Cambiar de canal rápido entre favoritos (↑ ↓, deslizar a los lados; favorite-zap.ts). */
   zapFavorite(direction: 1 | -1): void;
   minimize(): void;
   expand(): void;
