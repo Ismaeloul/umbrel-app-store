@@ -75,6 +75,8 @@ export interface AppConfig {
     readonly iptvDir: string;
     readonly iptvCatalogFile: string;
     readonly iptvGuideFile: string;
+    /** Guía TV completa (docs/iptv.md §20.2): SQLite sin cifrar, 0600. */
+    readonly iptvGuideDbFile: string;
     readonly iptvKeyFile: string;
     /** Películas y series (docs/vod.md §4.1): progreso, catálogo binario y caché de carteles. */
     readonly vodFile: string;
@@ -292,6 +294,7 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
       iptvDir: path.join(dataDir, V2_FILES.iptvDir),
       iptvCatalogFile: path.join(dataDir, V2_FILES.iptvCatalog),
       iptvGuideFile: path.join(dataDir, V2_FILES.iptvGuide),
+      iptvGuideDbFile: path.join(dataDir, V2_FILES.iptvGuideDb),
       iptvKeyFile: path.join(dataDir, V2_FILES.iptvKey),
       vodFile: path.join(dataDir, V2_FILES.vod),
       vodCatalogFile: path.join(dataDir, V2_FILES.vodCatalog),
