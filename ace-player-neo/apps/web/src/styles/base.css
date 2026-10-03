@@ -106,6 +106,13 @@ video {
   outline: 2px solid var(--accent-edge);
   outline-offset: 2px;
 }
+/* Los titulares que reciben el foco al cambiar de vista (Shell.tsx) no son
+   controles: no se llega a ellos con Tab y el anillo no ayuda. WebKit lo
+   pintaba al tocar la barra de pestañas (auditoría web 0.9.0). */
+:is(h1, h2)[tabindex='-1']:focus,
+:is(h1, h2)[tabindex='-1']:focus-visible {
+  outline: none;
+}
 
 .sr-only {
   position: absolute !important;
