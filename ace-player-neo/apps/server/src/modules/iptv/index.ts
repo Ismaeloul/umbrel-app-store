@@ -9,7 +9,7 @@ import { IptvServiceImpl } from './service.js';
 import type { IptvDeps, IptvService } from './types.js';
 
 export type * from './types.js';
-export { isIptvId } from './ids.js';
+export { adoptedIptvId, isIptvId } from './ids.js';
 export { searchRelevance, searchRelevanceFor } from './search.js';
 
 export function createIptvService(deps: IptvDeps): IptvService {

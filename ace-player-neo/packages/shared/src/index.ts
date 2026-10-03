@@ -27,6 +27,7 @@ export * from './state/v2.js';
 export * from './api/common.js';
 export * from './api/legacy.js';
 export * from './api/v1/auth.js';
+export * from './api/v1/backup.js';
 export * from './api/v1/diagnostics.js';
 export * from './api/v1/engine.js';
 export * from './api/v1/football.js';

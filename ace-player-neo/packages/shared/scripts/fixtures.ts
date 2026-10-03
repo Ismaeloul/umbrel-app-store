@@ -25,6 +25,8 @@ import { fileURLToPath } from 'node:url';
 import { format, resolveConfig } from 'prettier';
 import type {
   ApiError,
+  BackupCounts,
+  BackupFile,
   Device,
   EngineStatus,
   FootballMatch,
@@ -69,6 +71,10 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'iptvDelete',
   'iptvChannels',
   'iptvBrowse',
+  /* La copia de seguridad (decisiones.md D24): solo web, la app no la usa. */
+  'backupExport',
+  'backupExportSecret',
+  'backupImport',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 /** Rutas con ejemplo en `v1/`. */
@@ -682,7 +688,100 @@ const iptvBrowseRoot: V1ResponseInput<'iptvBrowse'> = {
   stale: false,
 };
 
+/* Copia de seguridad (decisiones.md D24): datos inventados, sin secretos.
+   La IPTV de la copia normal va sin contraseña; la protegida lleva el bloque
+   cifrado (aquí de forma, no se puede abrir con ninguna clave). */
+const backupFile: BackupFile = {
+  format: 'ace-player-neo-copia',
+  schemaVersion: 1,
+  appVersion: '0.8.4',
+  createdAt: AT,
+  library: {
+    favorites: [item(HASH_A, 'DAZN 1', 'fav'), { ...item(IPTV_ID_LA1, 'La 1', 'fav'), iptv: true }],
+    history: [item(HASH_C, 'Canal de prueba', 'recent')],
+  },
+  directories: {
+    sources: [
+      {
+        id: 'principal',
+        name: 'Principal',
+        url: 'https://example.com/lista.m3u',
+        type: 'm3u',
+        streams: [item(HASH_A, 'DAZN 1', 'web'), item(HASH_B, 'M+ LaLiga', 'web')],
+        renames: {},
+        hidden: [],
+        syncedAt: AT,
+        lastErrorAt: null,
+        lastError: null,
+      },
+    ],
+    activeId: 'principal',
+  },
+  preferences,
+  channelBindings: [],
+  channelFeedback: [],
+  settings: { sameChannelPolicy: 'share' },
+  iptv: {
+    kind: 'xtream',
+    name: 'Casa',
+    enabled: true,
+    host: 'proveedor.example:8080',
+    server: 'http://proveedor.example:8080',
+    username: 'usuario',
+    secret: null,
+  },
+  browser: { theme: 'oscuro', transparency: 'normal', playbackMode: 'balanced' },
+};
+
+const backupCounts = (favorites: number, history: number): BackupCounts => ({
+  favorites,
+  history,
+  directories: 1,
+  channels: 2,
+  channelBindings: 0,
+  channelFeedback: 0,
+});
+
 export const WEB_V1_FIXTURES = {
+  backupExport: backupFile,
+  backupExportSecret: {
+    ...backupFile,
+    iptv: {
+      ...backupFile.iptv!,
+      secret: {
+        kdf: 'scrypt',
+        n: 32768,
+        r: 8,
+        p: 1,
+        salt: 'AAECAwQFBgcICQoLDA0ODw',
+        alg: 'A256GCM',
+        iv: 'AAECAwQFBgcICQoL',
+        tag: 'AAECAwQFBgcICQoLDA0ODw',
+        data: 'ZWplbXBsby1zaW4tc2VudGlkbw',
+      },
+    },
+  },
+  backupImport: {
+    applied: false,
+    mode: 'replace',
+    source: { appVersion: '0.8.4', createdAt: AT, schemaVersion: 1 },
+    current: backupCounts(1, 1),
+    incoming: backupCounts(2, 1),
+    result: backupCounts(2, 1),
+    preferences: true,
+    settings: false,
+    iptv: {
+      action: 'needs_secret',
+      protected: false,
+      kind: 'xtream',
+      name: 'Casa',
+      host: 'proveedor.example:8080',
+      server: 'http://proveedor.example:8080',
+      username: 'usuario',
+      relinkItems: 1,
+    },
+    browser: { theme: 'oscuro', transparency: 'normal', playbackMode: 'balanced' },
+  },
   iptvBrowse: iptvBrowseRoot,
   iptvChannels: {
     query: 'la',

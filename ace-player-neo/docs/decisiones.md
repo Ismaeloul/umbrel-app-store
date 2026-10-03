@@ -377,3 +377,54 @@ conservador). Todas se pueden revertir.
   tandas de 4 competiciones, a la vez que `eventstv.php` y con 10 s por
   petición, para que una competición lenta no agote el plazo global de 60 s;
   una competición caída solo marca la agenda `partial`.
+
+## D24. Copia de seguridad de tus ajustes (0.8.4, feat/copia-seguridad)
+
+- **Para qué**: si Isma reinstala o formatea el Umbrel, recuperar listas,
+  favoritos, recientes, «Tu fútbol», vínculos y correcciones de canal, la
+  política de mismo canal, la IPTV y, en la web, el tema, la transparencia y
+  el modo de reproducción. Ajustes → «Copia de seguridad» (solo web).
+- **Rutas** (`module: 'state'`, `access: 'web'`, todas con anti-CSRF):
+  `GET /api/v1/backup` (descarga sin la contraseña de la IPTV),
+  `POST /api/v1/backup/export` (con la contraseña, protegida con una clave) y
+  `POST /api/v1/backup/import` (`dryRun` por defecto: vista previa con
+  recuentos; luego `replace` o `merge`). Fichero
+  `ace-player-neo-copia-AAAA-MM-DD.json` con `format`, `schemaVersion: 1` y
+  `appVersion`; una versión más nueva da 422 `backup_version_unsupported`,
+  algo que no es una copia 400 `backup_invalid`, más de 2 MiB (nginx) 413
+  `backup_too_large`.
+- **Otra semilla**: la instalación nueva tiene otro `APP_SEED`, así que nada
+  de la copia depende de las claves de este Umbrel. La contraseña Xtream (o
+  la URL M3U entera, que la lleva dentro) va solo si se pide, cifrada con
+  una clave de Isma: scrypt (N 2^15, r 8, p 1, sal de 16 bytes) y
+  AES-256-GCM con AAD `ace-copia|<versión>|<tipo>`; al abrir solo se admiten
+  N hasta 2^17. Sin ella, la IPTV queda «pendiente» y la web pide la
+  contraseña (o la URL) y la guarda con «Guardar IPTV» (con su prueba
+  rápida). Con ella, se restaura sin prueba rápida (`iptv.restore`), cifrada
+  con las claves de aquí, y sincroniza de fondo.
+- **Ids IPTV**: en otra instalación no se reconocen (etiqueta HMAC con otra
+  clave). Los favoritos y recientes IPTV van marcados `iptv: true` y al
+  restaurar se re-etiquetan con las claves de aquí (`adoptedIptvId`, HMAC
+  estable del id viejo): así el re-emparejado por nombre (docs/iptv.md
+  §14.6) los lleva a su canal tras la primera sincronización, y sin IPTV
+  dan `iptv_removed` como los de una IPTV eliminada. Los vínculos
+  partido-canal no se re-etiquetan.
+- **Nunca va**: dispositivos emparejados (sus tokens no valdrían), sesiones,
+  «quién tiene el mando», la semilla, el token de control del motor,
+  informes de fuentes y estadísticas (caducan solos), catálogo y guía.
+- **Reemplazar** (por defecto, con aviso y confirmación en la página):
+  sustituye biblioteca, listas, gustos, vínculos, correcciones y la política.
+  **Combinar**: añade lo que falte (por id; listas por id o URL, hasta 8;
+  vínculos por canal; correcciones por id y canal) y no toca lo configurado
+  («Tu fútbol» solo si aún no se había configurado). Una copia sin IPTV, o
+  con la IPTV sin contraseña, nunca quita ni cambia la IPTV de ahora.
+- **Atómico**: todo se valida (y la clave se comprueba) antes de escribir
+  nada. state.json se escribe en UNA mutación de la cola del estado (tmp +
+  fsync + .bak + rename), con el plan rehecho dentro de la cola; luego
+  settings.json y iptv.json, cada uno en su cola. Si falla un paso posterior
+  el error llega a la web y repetir es seguro (idempotente). Un cerrojo
+  propio evita dos restauraciones a la vez. Emite `state.changed`
+  (biblioteca, listas, preferencias, vínculos, aprendizaje), `settings` e
+  `iptv.status`.
+- **Vuelta atrás**: no cambia el formato de ningún fichero de `data/`;
+  volver a la 0.8.3 es seguro (solo se pierden las rutas nuevas).

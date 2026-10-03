@@ -988,3 +988,18 @@ Ejemplo (`fixtures/variantes/iptvBrowse.categoria.json`, recortado):
 ### 7.8 Estado (26-sep-2026)
 
 Implementado en la rama `rediseno/iptv` (servidor y web), para la 0.8.1 sin publicar. Pruebas: unitarias del contrato, del servidor y de la web; integración del servidor con el proveedor falso (`apps/server/test/fake-iptv`); E2E `apps/web/e2e/iptv.spec.ts` contra la pila entera con ffmpeg de verdad (configurar M3U y Xtream, la IPTV primero en un partido y en un canal suelto, el puente en los dos sentidos, volver con un toque y la búsqueda de la contraseña y el usuario en todas las respuestas, el SSE, la página y los ficheros de datos y logs).
+
+## 8. Copia de seguridad de tus ajustes (0.8.4, solo `/api/v1`, D24)
+
+Todas `access: 'web'`, módulo `state`, con la regla anti-CSRF.
+
+| Ruta | Qué hace |
+| ---- | -------- |
+| `GET /api/v1/backup` | La copia (`BackupFileSchema`) como descarga: `Content-Disposition: attachment; filename="ace-player-neo-copia-AAAA-MM-DD.json"`. Sin la contraseña de la IPTV. |
+| `POST /api/v1/backup/export` | `{ passphrase }` (8-256): la misma copia con `iptv.secret` cifrado con esa clave. Sin IPTV, igual que el GET. `409 iptv_secret_unreadable` si los secretos de ahora no se pueden leer. |
+| `POST /api/v1/backup/import` | `{ backup, mode?: 'replace' \| 'merge', dryRun?: true, passphrase? }` → `BackupImportResponse` (recuentos de ahora, de la copia y de después; si cambian «Tu fútbol» y los ajustes; qué pasa con la IPTV: `none`, `restore`, `keep` o `needs_secret`; y `browser` para que la web lo aplique). |
+
+- **El fichero**: `format: "ace-player-neo-copia"`, `schemaVersion: 1`, `appVersion`, `createdAt`, `library` (favoritos y recientes; los de la IPTV con `iptv: true`), `directories` (`sources` con canales, renombres y ocultos, y `activeId`), `preferences`, `channelBindings`, `channelFeedback`, `settings.sameChannelPolicy`, `iptv` (`kind`, `name`, `enabled`, `host`, `server` y `username` solo en Xtream, `secret` o null) y, opcional, `browser` (`theme`, `transparency`, `playbackMode`; lo añade la web).
+- **Errores**: `400 backup_invalid` (no es una copia, o no cumple el esquema), `422 backup_version_unsupported` (`schemaVersion` mayor que la que sabe leer), `413 backup_too_large` (más de 2 MiB), `422 backup_passphrase_wrong`.
+- **Eventos**: al aplicar, `state.changed` con `library`, `directories`, `preferences`, `bindings` y `learning`; `settings` si cambia la política; `iptv.status` si se restaura la IPTV.
+- Ejemplos: `packages/shared/fixtures/web/v1/backup*.json` (rutas solo web: la app iOS no las usa).

@@ -54,3 +54,23 @@ export function xtreamKey(streamId: string | number): string {
 export function m3uKey(tvgId: string, normalizedTitle: string, n: number): string {
   return `m:${tvgId}:${normalizedTitle}:${n}`;
 }
+
+/**
+ * Id IPTV de ESTE Umbrel para un id IPTV de otro (copia de seguridad,
+ * decisiones.md D24). Con otro APP_SEED los ids de la copia no llevan una
+ * etiqueta válida aquí y nadie los reconocería como IPTV: se les pone una
+ * cabeza nueva (HMAC del id viejo, estable: restaurar dos veces da lo mismo)
+ * con la etiqueta de aquí. No es de ningún catálogo, así que el re-emparejado
+ * (§14.6) lo lleva por nombre a su canal tras la primera sincronización; si
+ * no hay IPTV, da `iptv_removed` como un id de una IPTV eliminada. Un id que
+ * ya es de aquí se queda igual.
+ */
+export function adoptedIptvId(keys: IptvKeys, foreignId: string): string {
+  const id = foreignId.toLowerCase();
+  if (isIptvId(keys, id)) return id;
+  const head = createHmac('sha256', keys.ids)
+    .update(`copia\n${id}`)
+    .digest('hex')
+    .slice(0, HEAD_HEX);
+  return head + tagOf(keys, head);
+}

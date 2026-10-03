@@ -23,6 +23,9 @@
      que lo ven, en tiempo real (`playback.sessions` por SSE). El
      mini-reproductor lleva aquí (`ajustes/donde`).
    - Apariencia: tema (sistema, claro, oscuro) y «Reducir transparencia».
+   - Copia de seguridad (backup/, decisiones.md D24): descargar tus ajustes
+     en un fichero y restaurarlos (vista previa, Reemplazar o Combinar). Solo
+     en la web; su propio trozo de JS, como la IPTV.
    - Dispositivos y Salud: las aportan otras vistas (external.tsx); si aún no
      existen, no salen y `ajustes/salud` lleva a la sección del motor.
    - Motor AceStream: estado y reinicio con segundo toque (6 s).
@@ -80,6 +83,7 @@ type SectionId =
   | 'reproduccion'
   | 'donde'
   | 'apariencia'
+  | 'copia'
   | 'dispositivos'
   | 'salud'
   | 'motor'
@@ -105,6 +109,12 @@ const SECTIONS: readonly SectionDef[] = [
     hint: 'Qué suena y en qué pantalla',
   },
   { id: 'apariencia', title: 'Apariencia', icon: 'sol', hint: 'Tema y transparencia' },
+  {
+    id: 'copia',
+    title: 'Copia de seguridad',
+    icon: 'copia',
+    hint: 'Guardar y restaurar tus ajustes',
+  },
   {
     id: 'dispositivos',
     title: 'Dispositivos',
@@ -207,6 +217,13 @@ const PreferencesSheet = lazy(() => import('../preferences/PreferencesSheet.tsx'
 
 /* Ajustes → IPTV (docs/iptv.md §1.1): su propio trozo de JS, solo al abrirla. */
 const IptvSection = lazy(() => import('../iptv/IptvSection.tsx'));
+
+/* Ajustes → Copia de seguridad (decisiones.md D24): ídem. */
+const BackupSection = lazy(() => import('../backup/BackupSection.tsx'));
+
+/** Descripción de Ajustes → Copia de seguridad (el mismo texto que features/backup/model.ts). */
+export const BACKUP_SECTION_DESCRIPTION =
+  'Guarda en un fichero tus listas, favoritos, recientes, «Tu fútbol», la IPTV y tus ajustes, por si reinstalas o formateas el Umbrel.';
 
 function FootballSection() {
   const prefs = useApiQuery('preferencesGet');
@@ -615,6 +632,18 @@ export default function SettingsView({ route, active }: ViewProps) {
         return (
           <Section key={def.id} def={def}>
             <AppearanceSection />
+          </Section>
+        );
+      case 'copia':
+        return (
+          <Section key={def.id} def={def} description={BACKUP_SECTION_DESCRIPTION}>
+            <ErrorBoundary what="la copia de seguridad">
+              <Suspense
+                fallback={<SkeletonRows rows={2} label="Cargando la copia de seguridad…" />}
+              >
+                <BackupSection />
+              </Suspense>
+            </ErrorBoundary>
           </Section>
         );
       case 'dispositivos':
