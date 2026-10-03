@@ -267,6 +267,32 @@ pruebas y push.
 | 6. Ejecución y productor | `remux/vod/{run,producer}.ts`, `remux/process.ts` (`stdout: 'pipe'`) | `producer.test.ts` con ffmpeg falso (§15.1) | **P4**: asignar fragmentos por PTS (`tfdt` + `cto` de la primera muestra) o por el fotograma clave más cercano con margen ≥ 0,2 s; «Non-monotonic DTS» en stderr no es un fallo | 1-1,25 d |
 | 7. Relé VOD | `iptv/relay-vod.ts` (clase suelta) | `relay-vod.test.ts` (§15.1), contra el `server.mjs` rescatado | **P7** va en VOD-5 (es `relay.ts`) | 0,75 d |
 
+**Hecho (3-oct, rama `equipo/vod-reproduccion`, en el PC de Isma con ffmpeg 9.0.2):** las 8 piezas, cada una con sus
+pruebas, y un laboratorio de punta a punta (`apps/server/scripts/vod-lab.ts`; el banco y cómo lanzarlo, en
+`apps/server/test/fake-vod/README.md`). Con ffmpeg de verdad: el índice da exactamente los fotogramas clave de ffprobe
+(MKV y MP4, también con la entrada vacía de P1), `-noaccurate_seek -ss K+0,2` cae justo en K y, en Chrome con hls.js,
+los saltos caen a ±0,07 s con la imagen en 0,04-1,6 s y nunca dos conexiones con el proveedor.
+
+**Lo que VOD-5 tiene que enganchar:**
+- `VodSession` (`iptv/relay-vod.ts`): `handle(req, res)` desde `route()` de `relay.ts` cuando el ticket es de una;
+  `connections()` para `connections()`; `onDropped()`; `close()`. Su `open({url, start, end, signal})` es
+  `relay.connect` con `Range` e `identity` (**P7**); `accountGate`, `lastClosedAt` y `onUpstreamClosed` son los de
+  `openInput`. En las pruebas, `test/fake-vod/vod-host.ts` hace de `relay.ts`.
+- `readVodIndex(createHttpRangeReader(session.inputUrl))` con `VodIndexCache` (por id de título) y `assertPlayable`.
+- `VodProducer.open(deps, {sessionId, dir: remuxDir/vod-<sid>, inputUrl, index, audio, hevc, startS})`;
+  `playlist(startS)` para `index.m3u8`; `file(name, signal)` → `file` (servir con `sendFile`), `not_yet` (503 con
+  `Retry-After: 1`) o `missing` (404); `onIdle` suelta el relé; `onDropped` cierra con el código; `close()`.
+  `sweepVodDirs(remuxDir, vivas)` al arrancar. El lanzador, `createSpawnLauncher({ stdout: 'pipe' })`.
+
+**Cambios sobre el diseño (encontrados con ffmpeg de verdad o con carga):**
+- Contrapresión contada desde el **final** del último segmento pedido y nunca con ese segmento a medias (docs/vod.md
+  §9.7): si no, se bloqueaba para siempre.
+- La pausa por disco se suelta con `drain`, `finish` o `close` (tras `end()` Node no emite `drain`).
+- El relé espera un respiro (25 ms) tras el cierre del socket antes de abrir, adelanta hasta 512 KiB en su cola y la
+  continuación tras la caché espera 100 ms (para que el salto de ffmpeg la corte antes de abrir de más).
+- Caída tardía: tras 2 reinicios se acepta lo que haya y, si sigue sin caer 3 veces más, `vod_dropped`.
+- Un fallo de ffmpeg deja de contar tras 2 segmentos buenos (dos cortes del proveedor a una hora no cierran la sesión).
+
 ### 4.4 VOD-5: enganches del servidor (1,5-2 días; necesita el Paso 0, VOD-2 y VOD-4 unidos)
 
 | Fichero | Qué |
