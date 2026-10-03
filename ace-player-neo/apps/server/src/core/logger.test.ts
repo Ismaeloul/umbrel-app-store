@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { AppError } from './errors.js';
 import {
   REDACTED_PART,
+  RING_UNSCRUBBED_LINE,
   createLogRing,
   createLogger,
   createSilentLogger,
@@ -108,6 +109,33 @@ describe('anillo del registro («Descargar fallos», 0.9.0)', () => {
     expect(second).toMatchObject({ msg: 'dos', module: 'iptv' });
     expect(ring.lines().join('\n')).not.toContain(P);
     expect(ring.lines().join('\n')).not.toContain(U);
+  });
+
+  it('guarda cada línea ya pasada por el redactor de ese momento (el del proveedor anterior sigue tapado)', () => {
+    const ring = createLogRing();
+    const written: string[] = [];
+    const logger = createLogger({
+      destination: { write: (line: string) => void written.push(line) },
+      ring,
+    });
+    // Como main.ts con el redactor de la IPTV: conoce la clave del proveedor de ahora.
+    let known = ['Pa55word'];
+    ring.setScrubber((line) => known.reduce((out, secret) => out.split(secret).join('•••'), line));
+    logger.warn('el proveedor dijo Pa55word');
+    // Se cambia de proveedor: el redactor olvida la clave vieja…
+    known = [];
+    logger.warn('otra línea');
+    // …pero lo que ya estaba en el anillo se guardó tapado.
+    expect(ring.lines().join('\n')).not.toContain('Pa55word');
+    expect(JSON.parse(ring.lines()[0]!)).toMatchObject({ msg: 'el proveedor dijo •••' });
+    // Un redactor que falla: la línea no se guarda en claro.
+    ring.setScrubber(() => {
+      throw new Error('roto');
+    });
+    logger.warn('con la clave Pa55word');
+    expect(ring.lines().at(-1)).toBe(RING_UNSCRUBBED_LINE);
+    // stdout no cambia: el anillo es una copia.
+    expect(written).toHaveLength(3);
   });
 
   it('acotado por número de líneas, por bytes y por línea; sin anillo, null', () => {

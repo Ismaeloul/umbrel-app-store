@@ -30,7 +30,7 @@ import { buildApp } from './app.js';
 import { loadConfig, type Env } from './config/index.js';
 import { createDomainBus } from './core/bus.js';
 import { createSystemClock, type Clock } from './core/clock.js';
-import { createLogger, createLogRing, type Logger } from './core/logger.js';
+import { createLogger, createLogRing, logRingOf, type Logger } from './core/logger.js';
 import type { StateLoadReport } from './modules/state/types.js';
 import { SERVICE_ORDER, createServices, type Services } from './services.js';
 
@@ -109,6 +109,9 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const clock = options.clock ?? createSystemClock();
   const bus = createDomainBus({ logger });
   const services = createServices({ config, clock, logger, bus });
+  /* El anillo guarda cada línea ya tapada con los secretos de la IPTV de ese
+     momento: si luego se cambia o se borra el proveedor, sigue tapada. */
+  logRingOf(logger)?.setScrubber((line) => services.iptv.redact(line));
   await startServices(services);
 
   const app = await buildApp({ services });

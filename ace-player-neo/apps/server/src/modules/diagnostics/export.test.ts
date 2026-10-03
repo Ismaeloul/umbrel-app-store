@@ -215,6 +215,51 @@ describe('POST /api/v1/diagnostics/export («Descargar fallos»)', () => {
     expect(file.web?.log).toHaveLength(log.length);
   });
 
+  it('lo que el redactor de la IPTV no conoce, lo muy anidado y los textos con mala suerte', async () => {
+    const { app, core, logger } = await setup();
+    const at = new Date(core.clock.now()).toISOString();
+    // Una clave que el redactor de la IPTV no conoce (el proveedor de antes, el formulario).
+    const OLD = 'Pa55word_viejo';
+    let deep: Record<string, unknown> = { password: OLD, url: `http://h/live/u77/${OLD}/1.ts` };
+    for (let i = 0; i < 40; i += 1) deep = { nested: deep };
+    logger.warn({ data: deep }, 'una línea muy anidada');
+    logger.warn(`reintento con password: ${OLD} en prov.example.com:8080/u77/${OLD}/12345.ts`);
+    const started = performance.now();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/diagnostics/export',
+      headers: web(),
+      payload: {
+        web: {
+          userAgent: 'x',
+          viewport: '390x844@3',
+          log: [
+            {
+              at,
+              kind: 'console',
+              level: 'error',
+              message: 'X-Api-Key: Pa55word_viejo',
+              // Antes, esto dejaba el servidor parado minutos (retroceso exponencial).
+              detail: `"password":"${'\\'.repeat(55)}`,
+            },
+            {
+              at,
+              kind: 'api',
+              level: 'error',
+              code: 'network',
+              message: `GET %2Flive%2Fu77%2F${OLD}%2F1.ts`,
+            },
+          ],
+        },
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(performance.now() - started).toBeLessThan(5_000);
+    expect(response.body).not.toContain(OLD);
+    expect(response.body).not.toContain('u77');
+    DiagnosticsExportSchema.parse(response.json());
+  });
+
   it('sin anillo (logger mudo) sale igual, sin registro del servidor', async () => {
     const { app } = await createTestApp();
     const response = await app.inject({

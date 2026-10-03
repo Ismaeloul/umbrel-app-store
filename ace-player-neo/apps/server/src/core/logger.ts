@@ -202,7 +202,18 @@ export function redactedErrSerializer(error: unknown): unknown {
    Las últimas líneas que se escriben, en memoria y acotadas (por número y por
    bytes), para el fichero de fallos (modules/diagnostics/export.ts). Cada
    línea es la MISMA que sale a stdout, ya con la redacción de pino; el
-   informe la vuelve a pasar por su redactor. Nada va a disco. */
+   informe la vuelve a pasar por su redactor. Nada va a disco.
+
+   Además, cada línea se guarda ya pasada por el redactor de la IPTV de ESE
+   momento (`setScrubber`, main.ts): al cambiar o borrar el proveedor, el
+   redactor olvida sus secretos (IptvRedactor.reset) y el anillo sigue
+   guardando lo escrito desde el arranque; así, lo de antes sigue tapado. */
+
+/** Lo que se guarda si el redactor falla con una línea (mejor perderla que guardarla en claro). */
+export const RING_UNSCRUBBED_LINE = JSON.stringify({
+  level: 'warn',
+  msg: 'anillo: una línea que no se pudo redactar no se guarda',
+});
 
 export interface LogRing {
   /** Apunta una línea tal cual la escribe pino (JSON + salto de línea). */
@@ -210,6 +221,8 @@ export interface LogRing {
   /** Las líneas guardadas, de la más vieja a la más nueva. */
   lines(): string[];
   readonly size: number;
+  /** Pasa por aquí cada línea antes de guardarla (null: tal cual). */
+  setScrubber(scrub: ((line: string) => string) | null): void;
 }
 
 export function createLogRing(
@@ -219,9 +232,17 @@ export function createLogRing(
 ): LogRing {
   const buffer: string[] = [];
   let bytes = 0;
+  let scrubber: ((line: string) => string) | null = null;
   return {
     push(raw) {
       let line = raw.endsWith('\n') ? raw.slice(0, -1) : raw;
+      if (scrubber) {
+        try {
+          line = scrubber(line);
+        } catch {
+          line = RING_UNSCRUBBED_LINE;
+        }
+      }
       if (line.length > maxLineChars) line = `${line.slice(0, maxLineChars)}…`;
       buffer.push(line);
       bytes += line.length;
@@ -232,6 +253,9 @@ export function createLogRing(
     lines: () => [...buffer],
     get size() {
       return buffer.length;
+    },
+    setScrubber(scrub) {
+      scrubber = scrub;
     },
   };
 }
