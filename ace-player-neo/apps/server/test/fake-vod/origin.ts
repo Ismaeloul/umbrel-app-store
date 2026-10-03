@@ -35,6 +35,8 @@ export interface FakeVodOriginOptions {
   readonly busyAfterCloseMs?: number;
   readonly noRange?: boolean;
   readonly redirect?: boolean;
+  /** Token del balanceador al que redirige (cambiarlo deja los /lb/ viejos en 410). */
+  readonly lbToken?: string;
   readonly firstByteMs?: number;
   readonly rateMbps?: number;
   readonly dropAtBytes?: number;
@@ -136,11 +138,11 @@ export function createFakeVodHandler(
       }
       if (options.redirect) {
         note(302);
-        res.writeHead(302, { location: `/lb/${LB_TOKEN}/${xtream[4]}` }).end();
+        res.writeHead(302, { location: `/lb/${options.lbToken ?? LB_TOKEN}/${xtream[4]}` }).end();
         return;
       }
       name = xtream[4] ?? null;
-    } else if (balanced && balanced[1] === LB_TOKEN) {
+    } else if (balanced && balanced[1] === (options.lbToken ?? LB_TOKEN)) {
       name = balanced[2] ?? null;
     }
     const entry = name ? sizes.get(name) : undefined;
@@ -231,8 +233,10 @@ function pump(
       const out = piece.subarray(0, Math.max(0, options.dropAtBytes - sent));
       stats.bytesSent += out.length;
       stream.destroy();
-      /* Lo que ya se escribió llega entero; después, el corte. */
-      res.write(out, () => res.socket?.destroy());
+      /* Lo que ya se escribió llega entero y después se cierra (FIN, no RST: en
+         Windows un RST tira lo que aún iba de camino y el corte caería en otro
+         sitio cada vez). */
+      res.write(out, () => res.socket?.end());
       return;
     }
     sent += piece.length;
