@@ -6,7 +6,11 @@
      monograma, que se queda debajo como respaldo: se ve mientras la imagen
      carga y vuelve a verse si falla (`onError`). Nunca se enlaza a terceros.
    - Sin `crest`: círculo con el color principal, aro con el secundario y, a
-     partir de 40 px, una placa con las siglas.
+     partir de 40 px, una placa con las siglas. Con `plate` por debajo de
+     40 px (las líneas de texto de Canales, «Girona 1–1 Sevilla»), una
+     placa pequeña del color del club con las siglas en vez del círculo liso:
+     dos círculos rojos no decían de quién eran (Isma, 0.9.0). Con escudo de
+     imagen, el escudo como siempre.
    - Colores: `colors.primary`/`secondary` (hex, con o sin «#»). Sin datos,
      un tono sacado del nombre fuera de los tonos de estado.
    - «Los escudos se encienden» solo en directo (`lit`): un halo con el color
@@ -36,6 +40,8 @@ export interface TeamMarkProps {
   crest?: string | null;
   /** Lado en px. */
   size?: number;
+  /** Siglas también por debajo de 40 px (placa pequeña) cuando no hay escudo de imagen. */
+  plate?: boolean;
   /** En directo: el escudo se enciende. */
   lit?: boolean;
   /** Dibujo del círculo (el dato no lo da ninguna API: por defecto, liso). */
@@ -49,6 +55,7 @@ export function TeamMark({
   colors,
   crest,
   size = 28,
+  plate = false,
   lit = false,
   pattern = 'liso',
   className,
@@ -80,12 +87,20 @@ export function TeamMark({
     '--glow-l': oklchCss(glowLight),
     '--glow-d': oklchCss(glowDark),
   } as CSSProperties;
-  const withPlate = size >= 40;
   const image = crest && crest.startsWith('/') && failed !== crest ? crest : null;
+  // Placa pequeña: siglas pedidas por debajo de 40 px y sin escudo que pintar.
+  const tag = plate && size < 40 && !image;
+  const withPlate = size >= 40 || tag;
   const crestState = !image ? 'mono' : loaded === image ? 'image' : 'loading';
   return (
     <span
-      className={cx('team', `team--${pattern}`, withPlate && 'team--plate', className)}
+      className={cx(
+        'team',
+        `team--${pattern}`,
+        withPlate && 'team--plate',
+        tag && 'team--tag',
+        className,
+      )}
       style={style}
       data-lit={lit ? 'true' : 'false'}
       data-crest={crestState}
