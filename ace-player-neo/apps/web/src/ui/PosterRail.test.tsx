@@ -90,23 +90,54 @@ describe('PosterRail', () => {
       expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
     });
 
+    const off = (name: string) =>
+      screen.getByRole('button', { name }).getAttribute('aria-disabled') === 'true';
+
     it('al principio, «Anteriores» está apagada; al final, «Siguientes»', () => {
       setup(0);
-      expect(screen.getByRole('button', { name: 'Anteriores' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Siguientes' })).toBeEnabled();
+      expect(off('Anteriores')).toBe(true);
+      expect(off('Siguientes')).toBe(false);
       cleanup();
       setup(600);
-      expect(screen.getByRole('button', { name: 'Anteriores' })).toBeEnabled();
-      expect(screen.getByRole('button', { name: 'Siguientes' })).toBeDisabled();
+      expect(off('Anteriores')).toBe(false);
+      expect(off('Siguientes')).toBe(true);
+    });
+
+    it('apagada, la flecha sigue ahí y se traga el clic de más (no cae en el cartel de debajo)', () => {
+      const { scrollBy } = setup(600);
+      const next = screen.getByRole('button', { name: 'Siguientes' });
+      // No es `disabled`: un botón deshabilitado no recoge el clic y, con
+      // pointer-events: none, el clic lo recibía la tarjeta que hay debajo.
+      expect(next).not.toBeDisabled();
+      const behind = vi.fn();
+      document.addEventListener('click', behind);
+      fireEvent.click(next);
+      document.removeEventListener('click', behind);
+      expect(scrollBy).not.toHaveBeenCalled();
+      // El clic lo recibe la flecha (burbujea desde ella, no desde un cartel).
+      expect(behind).toHaveBeenCalledTimes(1);
+      expect((behind.mock.calls[0]?.[0] as MouseEvent).target).toBe(next);
+    });
+
+    it('con teclado, al llegar al final el foco se queda en la flecha', () => {
+      const left = { value: 200 };
+      const { track } = setup(() => left.value);
+      const next = screen.getByRole('button', { name: 'Siguientes' });
+      next.focus();
+      fireEvent.click(next);
+      left.value = 600;
+      fireEvent.scroll(track);
+      expect(off('Siguientes')).toBe(true);
+      expect(document.activeElement).toBe(next);
     });
 
     it('al desplazarse, se vuelven a mirar los extremos', () => {
       const left = { value: 0 };
       const { track } = setup(() => left.value);
-      expect(screen.getByRole('button', { name: 'Anteriores' })).toBeDisabled();
+      expect(off('Anteriores')).toBe(true);
       left.value = 250;
       fireEvent.scroll(track);
-      expect(screen.getByRole('button', { name: 'Anteriores' })).toBeEnabled();
+      expect(off('Anteriores')).toBe(false);
     });
 
     it('la rueda vertical encima de la fila no se la queda: baja la página', () => {

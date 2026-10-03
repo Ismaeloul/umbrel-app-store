@@ -51,4 +51,14 @@ describe('base.css: el apretón de .press (0.9.0)', () => {
     expect(rule).toMatch(/translate:\s*0\s+-50%/);
     expect(rule).not.toMatch(/transform:/);
   });
+
+  it('la flecha apagada no deja pasar el clic al cartel de debajo', () => {
+    const rail = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '../ui/PosterRail.css'),
+      'utf8',
+    );
+    // Ni `pointer-events: none` en ninguna flecha ni reglas para `:disabled`.
+    expect(rail).not.toMatch(/pointer-events:\s*none/);
+    expect(rail).not.toMatch(/prail__arrow[^{]*:disabled/);
+  });
 });

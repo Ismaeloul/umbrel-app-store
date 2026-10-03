@@ -522,8 +522,12 @@ ahora» de Canales, Sistema) y a la tira de días.
   altura al pulsarla; también «Toca para reproducir». Regla para lo nuevo:
   quien centre algo con `.press` encima, con `translate`/`transform`, no
   tiene que hacer nada; quien quiera quitar el apretón, `scale: none`.
-- **Las flechas se apagan en su extremo** (deshabilitadas y ocultas):
-  «Anteriores» salía con la fila al principio y no hacía nada. Desplazan
+- **Las flechas se apagan en su extremo** (tenues, con `aria-disabled`,
+  NO con `disabled` ni `pointer-events: none`): «Anteriores» salía con la
+  fila al principio y no hacía nada. Siguen en su sitio recogiendo el clic
+  y el foco: ocultas y sin recoger clics, el clic de más al pulsar varias
+  veces caía en el cartel de debajo y lo abría, y con teclado el foco se
+  iba al body. Desplazan
   solo en horizontal (`scrollBy`, nunca `scrollIntoView`) y respetan
   «reducir movimiento».
 - **Halo en vez de velo en las tarjetas de cine**: al pasar el ratón o

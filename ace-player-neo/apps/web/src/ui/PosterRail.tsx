@@ -7,7 +7,11 @@
      (0.9.0, lo pidió Isma); a los lados se va con el touchpad, con Mayús +
      rueda (lib/scroll.ts) o con las flechas;
    - flechas solo con puntero fino y cuando hay desbordamiento; la de un
-     extremo se apaga al llegar a él (no hay nada más por ese lado). Al
+     extremo se apaga al llegar a él (no hay nada más por ese lado) con
+     `aria-disabled`, no con `disabled`: sigue en su sitio, tenue, recogiendo
+     el clic y el foco. Si se quitara (disabled + pointer-events: none), el
+     clic de más al pulsar varias veces caería en el cartel de debajo y lo
+     abriría, y con teclado el foco se iría al body. Al
      pulsarlas, el carrusel se desliza SOLO en horizontal (scrollBy, nunca
      scrollIntoView, que movería también la página) y la flecha se queda en
      su sitio: se centra con `translate` y el «apretón» de `.press` es `scale`,
@@ -131,6 +135,9 @@ export function PosterRail({
   const move = (direction: -1 | 1) => {
     const track = trackRef.current;
     if (!track) return;
+    // En su extremo la flecha sigue ahí (apagada) y se traga el clic: si
+    // desapareciera, el clic de más caería en el cartel de debajo y lo abriría.
+    if (direction === 1 ? edges.end : edges.start) return;
     track.scrollBy({
       left: direction * track.clientWidth * step,
       behavior: prefersReducedMotion() ? 'auto' : 'smooth',
@@ -159,7 +166,7 @@ export function PosterRail({
           label="Anteriores"
           variant="glass"
           className="prail__arrow prail__arrow--prev"
-          disabled={edges.start}
+          aria-disabled={edges.start || undefined}
           onClick={() => move(-1)}
         />
       ) : null}
@@ -178,7 +185,7 @@ export function PosterRail({
           label="Siguientes"
           variant="glass"
           className="prail__arrow prail__arrow--next"
-          disabled={edges.end}
+          aria-disabled={edges.end || undefined}
           onClick={() => move(1)}
         />
       ) : null}

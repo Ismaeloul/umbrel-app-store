@@ -58,10 +58,12 @@
     opacity var(--dur-rapido) var(--ease-out),
     scale var(--dur-rapido) var(--ease-rapido);
 }
-/* En su extremo (nada más por ese lado), apagada y sin estorbar al clic. */
-.prail .prail__arrow:disabled {
-  opacity: 0;
-  pointer-events: none;
+/* Apagada en su extremo: se ve tenue y no se aprieta, pero sigue recogiendo
+   el clic (si no, caería en el cartel de debajo) y el foco. */
+.prail .prail__arrow[aria-disabled='true'],
+.prail .prail__arrow[aria-disabled='true']:active {
+  cursor: default;
+  scale: none;
 }
 .prail__arrow--prev {
   left: calc(var(--prail-pad) + 6px);
@@ -70,9 +72,13 @@
   right: calc(var(--prail-pad) + 6px);
 }
 @media (hover: hover) and (pointer: fine) {
-  .prail--arrows:hover .prail__arrow:not(:disabled),
+  .prail--arrows:hover .prail__arrow,
   .prail__arrow:focus-visible {
     opacity: 1;
+  }
+  .prail--arrows:hover .prail__arrow[aria-disabled='true'],
+  .prail .prail__arrow[aria-disabled='true']:focus-visible {
+    opacity: 0.35;
   }
 }
 @media (min-width: 768px) {
