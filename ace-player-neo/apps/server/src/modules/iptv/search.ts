@@ -5,7 +5,7 @@
    1. Qué casa. Lo escrito y los nombres pasan por el módulo común de buscar
       por nombre (`@ace/shared`, name-search.ts): las mismas palabras (sin
       país, calidad ni adornos; «m+ la liga» = «movistar laliga»; «tele 5»
-      = «telecinco»; «la uno» = «la 1»), el mismo nivel de parecido
+      busca también «telecinco»; «la uno» = «la 1»), el mismo nivel de parecido
       (`nameTier`: igual, familia, empieza por, palabras enteras, en otro
       orden, por dentro, sin la marca) y el mismo orden
       (`compareNameRank`). Un grupo del catálogo casa por su NOMBRE (su clave
