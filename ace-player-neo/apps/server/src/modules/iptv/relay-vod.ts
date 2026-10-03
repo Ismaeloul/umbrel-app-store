@@ -759,17 +759,50 @@ export class VodSession {
       leg.backoffMs = 0;
       return;
     }
-    this.reopenTimes = this.reopenTimes.filter((at) => now - at < this.limits.reopenWindowMs);
-    if (this.reopenTimes.length >= this.limits.reopenMax) {
+    const backoff = this.takeReopen();
+    if (backoff === null) {
       throw new AppError('vod_dropped', { detail: 'el proveedor corta una y otra vez' });
     }
-    leg.backoffMs = this.limits.reopenBackoffMs[this.reopenTimes.length] ?? 4_000;
-    this.reopenTimes.push(now);
-    this.reopens += 1;
+    leg.backoffMs = backoff;
     this.deps.logger.debug(
       { ticket: '•••', pos: leg.pos, backoffMs: leg.backoffMs },
       'relé VOD: el proveedor cortó, se reabre desde lo recibido',
     );
+  }
+
+  /**
+   * Una reapertura del presupuesto (`reopenMax` en `reopenWindowMs`): su
+   * espera, o null si ya está agotado (y entonces la película se corta).
+   */
+  private takeReopen(): number | null {
+    const now = this.deps.clock.now();
+    this.reopenTimes = this.reopenTimes.filter((at) => now - at < this.limits.reopenWindowMs);
+    if (this.reopenTimes.length >= this.limits.reopenMax) return null;
+    const backoff = this.limits.reopenBackoffMs[this.reopenTimes.length] ?? 4_000;
+    this.reopenTimes.push(now);
+    this.reopens += 1;
+    return backoff;
+  }
+
+  /**
+   * Un fallo al abrir que no es plazo, ocupado ni de la cuenta (ECONNRESET,
+   * 5xx, un Content-Range que no casa…) gasta una reapertura del presupuesto
+   * con su espera; agotado, `vod_dropped` (M2).
+   */
+  private async retryDropped(error: AppError, signal: AbortSignal): Promise<void> {
+    const backoff = this.takeReopen();
+    if (backoff === null) {
+      throw new AppError('vod_dropped', {
+        cause: error,
+        detail: `el proveedor falla una y otra vez al abrir (${error.detail ?? error.code})`,
+      });
+    }
+    this.noteClosed();
+    this.deps.logger.debug(
+      { ticket: '•••', backoffMs: backoff, detail: error.detail ?? null },
+      'relé VOD: el proveedor falló al abrir, se reintenta',
+    );
+    await this.deps.clock.sleep(backoff, signal);
   }
 
   /** La conexión para seguir esta petición: la abierta si vale (o con un salto corto), o una nueva. */
@@ -896,9 +929,18 @@ export class VodSession {
           url = this.options.url;
           continue;
         }
-        throw toVodError(error);
+        const vod = toVodError(error);
+        if (vod.code !== 'vod_dropped') throw vod;
+        await this.retryDropped(vod, signal);
+        continue;
       }
-      this.checkResponse(opened, start);
+      try {
+        this.checkResponse(opened, start);
+      } catch (error) {
+        if (!(error instanceof AppError) || error.code !== 'vod_dropped') throw error;
+        await this.retryDropped(error, signal);
+        continue;
+      }
       if (this.options.reuseRedirect ?? VOD_PLAY.reuseRedirect) this.reuse = opened.finalUrl;
       return opened;
     }
