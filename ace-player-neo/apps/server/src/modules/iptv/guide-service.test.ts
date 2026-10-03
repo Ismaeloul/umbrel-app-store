@@ -7,13 +7,26 @@
 
 import { existsSync, statSync } from 'node:fs';
 import http from 'node:http';
+import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FAKE_IPTV_PASSWORD, FAKE_IPTV_USER } from '../../../test/fake-iptv/provider.js';
+import { IPTV_REFRESH } from '@ace/shared';
+import {
+  FAKE_IPTV_PASSWORD,
+  FAKE_IPTV_USER,
+  fakeGuideXml,
+} from '../../../test/fake-iptv/provider.js';
 import { FAKE_IPTV_HOST } from '../../../test/fake-iptv/net.js';
+import { xmltvDateOf } from '../../../test/fake-iptv/guia.js';
+import { AppError } from '../../core/errors.js';
 import { scoreResolutionCandidate } from '../football/resolution.js';
 import type { NetClient } from '../net/types.js';
 import { IptvServiceImpl } from './service.js';
-import { createIptvTestRig, waitFor, type IptvTestRig } from './test-support.js';
+import {
+  createIptvTestRig,
+  IPTV_TEST_MATCH_OFFSET_MS,
+  waitFor,
+  type IptvTestRig,
+} from './test-support.js';
 
 const rigs: IptvTestRig[] = [];
 const extra: IptvServiceImpl[] = [];
@@ -59,6 +72,110 @@ async function downloadGuide(r: IptvTestRig): Promise<void> {
 
 function netOf(service: IptvServiceImpl): NetClient {
   return (service as unknown as { deps: { net: NetClient } }).deps.net;
+}
+
+const HOUR = 3_600_000;
+
+/** Lo que contesta la red de la guía (cambiable a mitad de prueba). */
+interface GuideNet {
+  /** XMLTV: el del proveedor falso, un plazo agotado o lo que dé la función (texto o un cuerpo). */
+  xmltv: 'falso' | 'falla' | ((url: string) => string | Readable);
+  /** get_short_epg: el del proveedor falso (vacío) o un partido de ahora − 10 min a + 1 h. */
+  shortEpg: 'falso' | 'uno';
+  readonly calls: { xmltv: number; shortEpg: number };
+}
+
+const SHORT_TITLE = 'Partido del respaldo: Betis - Sevilla';
+
+function patchGuideNet(r: IptvTestRig): GuideNet {
+  const net = netOf(r.service);
+  const openStream = net.openStream.bind(net);
+  const fetchJson = net.fetchJson.bind(net);
+  const control: GuideNet = { xmltv: 'falso', shortEpg: 'falso', calls: { xmltv: 0, shortEpg: 0 } };
+  net.openStream = async (url, options) => {
+    if (/xmltv\.php|guia\.xml|\/epg-/.test(url)) {
+      control.calls.xmltv += 1;
+      const mode = control.xmltv;
+      if (mode === 'falla') throw new AppError('fetch_timeout');
+      if (typeof mode === 'function') {
+        const made = mode(url);
+        return {
+          status: 200,
+          headers: {},
+          contentType: 'application/xml',
+          finalUrl: url,
+          body: typeof made === 'string' ? Readable.from([Buffer.from(made)]) : made,
+        };
+      }
+    }
+    return openStream(url, options);
+  };
+  net.fetchJson = async (url, options) => {
+    if (url.includes('get_short_epg')) {
+      control.calls.shortEpg += 1;
+      if (control.shortEpg === 'uno') {
+        const start = Math.floor(r.core.clock.now() / 1000) - 600;
+        const b64 = (text: string) => Buffer.from(text).toString('base64');
+        return {
+          status: 200,
+          url,
+          contentType: 'application/json',
+          body: {
+            epg_listings: [
+              {
+                title: b64(SHORT_TITLE),
+                description: b64('Del respaldo de Xtream.'),
+                start_timestamp: String(start),
+                stop_timestamp: String(start + 4200),
+              },
+            ],
+          },
+        };
+      }
+    }
+    return fetchJson(url, options);
+  };
+  return control;
+}
+
+/** Una guía XMLTV pequeña: por cada canal, programas seguidos de `[desde, hasta)` de 1 h. */
+function smallGuide(
+  channels: Readonly<Record<string, string>>,
+  from: number,
+  to: number,
+  options: { readonly open?: boolean; readonly close?: boolean } = {},
+): string {
+  let out =
+    options.open === false
+      ? ''
+      : '<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="prueba">\n';
+  for (const [channel, title] of Object.entries(channels)) {
+    for (let at = from; at < to; at += HOUR) {
+      out += `  <programme start="${xmltvDateOf(at)}" stop="${xmltvDateOf(at + HOUR)}" channel="${channel}"><title lang="es">${title}</title></programme>\n`;
+    }
+  }
+  return options.close === false ? out : `${out}</tv>\n`;
+}
+
+function windowTitles(service: IptvServiceImpl): string[] {
+  return [...(service.guideForTests()?.byChannel.values() ?? [])].flat().map((p) => p.title);
+}
+
+async function rowTitles(r: IptvTestRig, name: string): Promise<string[]> {
+  const all = await r.service.tvGuide.channels({ scope: 'all', limit: 1000 });
+  const row = all.channels.find((item) => item.name === name);
+  if (!row?.guide) return [];
+  const now = r.core.clock.now();
+  return (
+    r.service.tvGuide
+      .programmes({
+        v: all.version,
+        ch: String(row.guide),
+        from: now - 2 * HOUR,
+        to: now + 6 * HOUR,
+      })
+      .channels[0]?.programmes.map((p) => p.title) ?? []
+  );
 }
 
 describe('Guía TV en el servicio (§20.5)', () => {
@@ -159,6 +276,165 @@ describe('Guía TV en el servicio (§20.5)', () => {
     await r.service.remove();
     expect(existsSync(file)).toBe(false);
     expect((await r.service.tvGuide.channels({})).state).toBe('inactive');
+  });
+
+  it('un fallo pasajero del XMLTV no cambia la guía completa por la parcial de get_short_epg: partidos del respaldo, la Guía TV de antes, queda dicho y se reintenta a los 30 min', async () => {
+    const r = await rig({ fake: { guiaCompleta: true } });
+    const net = patchGuideNet(r);
+    await saveXtream(r);
+    await downloadGuide(r);
+    const before = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(before).toMatchObject({ state: 'ready', partial: false, failedAt: null });
+    expect(before.all).toBeGreaterThan(10);
+    /* El panel no contesta (como el de Isma a veces) y get_short_epg sí. */
+    net.xmltv = 'falla';
+    net.shortEpg = 'uno';
+    r.core.clock.advance(60_000);
+    await downloadGuide(r);
+    const after = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(after).toMatchObject({
+      state: 'ready',
+      version: before.version,
+      all: before.all,
+      partial: false,
+      updatedAt: before.updatedAt,
+    });
+    expect(after.failedAt).not.toBe(null);
+    /* Los partidos salen del respaldo (como antes de la Guía TV). */
+    expect(windowTitles(r.service)).toContain(SHORT_TITLE);
+    /* Ajustes: «no se pudo actualizar; se usa la del…» con los canales de la completa. */
+    const guide = (await r.service.view()).provider?.guide;
+    expect(guide).toMatchObject({
+      available: true,
+      channelsWithGuide: before.all,
+      updatedAt: before.updatedAt,
+    });
+    expect(Date.parse(guide?.failedAt ?? '')).toBeGreaterThan(Date.parse(guide?.updatedAt ?? ''));
+    /* Se reintenta a los 30 min (no a las 8 h) y, si va bien, se quita el aviso. */
+    net.xmltv = 'falso';
+    const calls = net.calls.xmltv;
+    r.core.clock.advance(IPTV_REFRESH.guideBackoffMinMs - 60_000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(net.calls.xmltv).toBe(calls);
+    r.core.clock.advance(61_000);
+    await waitFor('reintento de la guía', () => net.calls.xmltv > calls);
+    await r.service.idle();
+    const again = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(again.version).not.toBe(before.version);
+    expect(again).toMatchObject({ failedAt: null, partial: false, all: before.all });
+  });
+
+  it('sin guía completa que sirva (la primera vez, o la de antes ya se acabó), el respaldo sí va a la Guía TV (partial) y el XMLTV se reintenta antes de 8 h', async () => {
+    const r = await rig({ fake: { guiaCompleta: true } });
+    const net = patchGuideNet(r);
+    net.xmltv = 'falla';
+    net.shortEpg = 'uno';
+    await saveXtream(r);
+    await downloadGuide(r);
+    const first = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(first).toMatchObject({ state: 'ready', partial: true, failedAt: null });
+    expect(first.all).toBeGreaterThan(0);
+    /* Reintento con espera creciente: a los 30 min ya llega la completa. */
+    net.xmltv = 'falso';
+    const calls = net.calls.xmltv;
+    r.core.clock.advance(IPTV_REFRESH.guideBackoffMinMs + 1000);
+    await waitFor('reintento de la guía', () => net.calls.xmltv > calls);
+    await r.service.idle();
+    const full = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(full).toMatchObject({ partial: false, failedAt: null });
+    expect(full.all).toBeGreaterThan(first.all);
+    /* Una completa que solo cubre la próxima hora: pasada esa hora ya no sirve y el respaldo la cambia. */
+    const now = r.core.clock.now();
+    net.xmltv = () =>
+      smallGuide({ 'La1.es': 'Telediario', 'Antena3.es': 'Noticias' }, now - HOUR, now + HOUR);
+    await downloadGuide(r);
+    expect(await rowTitles(r, 'La 1')).toEqual(['Telediario', 'Telediario']);
+    r.core.clock.advance(2 * HOUR);
+    net.xmltv = 'falla';
+    await downloadGuide(r);
+    const replaced = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(replaced).toMatchObject({ partial: true, failedAt: null });
+  });
+
+  it('una guía sin un solo partido (y sin respaldo) no borra los partidos de antes; la Guía TV sí se actualiza', async () => {
+    const r = await rig({ fake: { guiaCompleta: true } });
+    const net = patchGuideNet(r);
+    await saveXtream(r);
+    await downloadGuide(r);
+    const before = r.service.guideForTests();
+    expect(before?.programmes).toBeGreaterThan(0);
+    const version = (await r.service.tvGuide.channels({ limit: 0 })).version;
+    const now = r.core.clock.now();
+    net.xmltv = () =>
+      smallGuide({ 'La1.es': 'Telediario', 'Antena3.es': 'Serie de tarde' }, now, now + 6 * HOUR);
+    r.core.clock.advance(60_000);
+    await downloadGuide(r);
+    /* get_short_epg del proveedor falso no da nada: la ventana de antes se queda. */
+    expect(net.calls.shortEpg).toBeGreaterThan(0);
+    expect(r.service.guideForTests()).toBe(before);
+    expect(windowTitles(r.service)).toContain(
+      'LaLiga EA Sports. Jornada 7: Real Sociedad - Villarreal',
+    );
+    const after = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(after.version).not.toBe(version);
+    expect(after).toMatchObject({ state: 'ready', failedAt: null, all: 2 });
+    expect(await rowTitles(r, 'La 1')).toContain('Telediario');
+  });
+
+  it('M3U con dos url-tvg: los partidos de la que los trae y la Guía TV con las dos (una fuente por canal); una que se corta a medias no deja nada suyo', async () => {
+    const r = await rig();
+    const net = patchGuideNet(r);
+    await r.service.save({ kind: 'm3u', url: `${SERVER}/lista.m3u` }, new AbortController().signal);
+    await r.service.idle();
+    const catalog = r.service.catalogForTests();
+    Object.defineProperty(catalog, 'guideUrls', {
+      value: [`${SERVER}/epg-a.xml`, `${SERVER}/epg-b.xml`],
+    });
+    const now = r.core.clock.now();
+    const matchStart = now + IPTV_TEST_MATCH_OFFSET_MS;
+    /* A: programación general, sin un solo partido. B: la guía de siempre (partidos y La 1). */
+    net.xmltv = (url) =>
+      url.endsWith('epg-a.xml')
+        ? smallGuide(
+            { 'La1.es': 'Programa de la guía A', 'Antena3.es': 'Serie de la guía A' },
+            now - HOUR,
+            now + 5 * HOUR,
+          )
+        : fakeGuideXml(matchStart);
+    await downloadGuide(r);
+    expect(windowTitles(r.service)).toContain(
+      'LaLiga EA Sports. Jornada 7: Real Sociedad - Villarreal',
+    );
+    const both = await r.service.tvGuide.channels({ scope: 'all', limit: 1000 });
+    expect(both).toMatchObject({ state: 'ready', failedAt: null });
+    expect(both.channels.map((row) => row.name)).toEqual(
+      expect.arrayContaining(['La 1', 'Antena 3', 'M+ LaLiga TV 2', 'M+ Liga de Campeones']),
+    );
+    /* La 1 viene en las dos: se queda la de A, sin mezclar el «Telediario» de B. */
+    expect(new Set(await rowTitles(r, 'La 1'))).toEqual(new Set(['Programa de la guía A']));
+    expect(await rowTitles(r, 'M+ LaLiga TV 2')).toContain(
+      'LaLiga EA Sports. Jornada 7: Real Sociedad - Villarreal',
+    );
+    /* B se corta a mitad (tras escribir Telecinco): lo suyo se deshace; lo de A vale. */
+    net.xmltv = (url) =>
+      url.endsWith('epg-a.xml')
+        ? smallGuide({ 'La1.es': 'Programa de la guía A' }, now - HOUR, now + 5 * HOUR)
+        : Readable.from(
+            (async function* () {
+              yield Buffer.from(
+                smallGuide({ 'Telecinco.es': 'Programa a medias' }, now - HOUR, now + 5 * HOUR, {
+                  close: false,
+                }),
+              );
+              throw new AppError('fetch_timeout');
+            })(),
+          );
+    r.core.clock.advance(60_000);
+    await downloadGuide(r);
+    const cut = await r.service.tvGuide.channels({ scope: 'all', limit: 1000 });
+    expect(cut.version).not.toBe(both.version);
+    expect(cut.channels.map((row) => row.name)).toEqual(['La 1']);
+    expect(cut.failedAt).toBe(null);
   });
 
   it('el directo no espera: con un canal sonando, se construye una guía grande y el relé sigue mandando; la API responde con la de antes', async () => {
