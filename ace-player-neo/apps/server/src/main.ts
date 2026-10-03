@@ -25,12 +25,19 @@
    apagado. En el NAS no hay canal IPC y esto no hace nada. */
 
 import type { FastifyInstance } from 'fastify';
-import { SHUTDOWN_TIMINGS } from '@ace/shared';
+import { LOG_CLEAN_STOP_MSG, SHUTDOWN_TIMINGS } from '@ace/shared';
 import { buildApp } from './app.js';
 import { loadConfig, type Env } from './config/index.js';
 import { createDomainBus } from './core/bus.js';
 import { createSystemClock, type Clock } from './core/clock.js';
-import { createLogger, createLogRing, logRingOf, type Logger } from './core/logger.js';
+import { createLogger, createLogRing, logRingOf, logStoreOf, type Logger } from './core/logger.js';
+import {
+  HEARTBEAT_MS,
+  attachLogStore,
+  logBootLines,
+  logHeartbeat,
+  openLogStore,
+} from './modules/diagnostics/logs.js';
 import type { StateLoadReport } from './modules/state/types.js';
 import { SERVICE_ORDER, createServices, type Services } from './services.js';
 
@@ -96,6 +103,11 @@ export interface StartServerOptions {
 export async function startServer(options: StartServerOptions = {}): Promise<RunningServer> {
   const startedAt = performance.now();
   const { config, warnings } = loadConfig(options.env ?? process.env);
+  const clock = options.clock ?? createSystemClock();
+  /* «Descargar logs» (0.9.0): el registro en disco de unos 45 días, en
+     <DATA_DIR>/v2/registro/ (core/log-store.ts). Sobrevive a reinicios y
+     actualizaciones; lo que llega antes de start() se escribe al arrancar. */
+  const store = options.logger ? null : openLogStore(config, clock);
   /* Con anillo: las últimas líneas van también al fichero de «Descargar fallos». */
   const logger =
     options.logger ??
@@ -103,15 +115,21 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       level: config.logLevel,
       base: { version: config.appVersion },
       ring: createLogRing(),
+      ...(store ? { store } : {}),
     });
+  const boot = store ? await store.start() : null;
   for (const warning of warnings) logger.warn(warning);
+  /* «arranque»: versión, entorno y cómo terminó el anterior (y si cambió la versión). */
+  logBootLines(logger, config, boot);
 
-  const clock = options.clock ?? createSystemClock();
   const bus = createDomainBus({ logger });
   const services = createServices({ config, clock, logger, bus });
   /* El anillo guarda cada línea ya tapada con los secretos de la IPTV de ese
-     momento: si luego se cambia o se borra el proveedor, sigue tapada. */
+     momento: si luego se cambia o se borra el proveedor, sigue tapada. El
+     registro en disco, igual, y además apunta cada fallo del registro de
+     fallos con su canal (modules/diagnostics/logs.ts). */
   logRingOf(logger)?.setScrubber((line) => services.iptv.redact(line));
+  const detachLog = store ? attachLogStore(services, store) : null;
   await startServices(services);
 
   const app = await buildApp({ services });
@@ -119,6 +137,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   else await app.listen({ host: config.host, port: config.port });
   const startupMs = Math.round(performance.now() - startedAt);
   logger.info({ port: config.port, startupMs }, 'escuchando');
+  /* Cada 6 h, memoria y sesiones: dentro de un mes se ve si algo fue a más. */
+  const heartbeat = clock.setInterval(() => logHeartbeat(services), HEARTBEAT_MS, { unref: true });
 
   let stopping: Promise<void> | null = null;
   return {
@@ -126,7 +146,14 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     services,
     startupMs,
     stop() {
-      stopping ??= stopServices(services, app);
+      stopping ??= (async () => {
+        await stopServices(services, app);
+        clock.clearInterval(heartbeat);
+        detachLog?.();
+        /* La última línea: el próximo arranque sabe que este terminó bien. */
+        logger.info({ uptimeSeconds: Math.round(process.uptime()) }, LOG_CLEAN_STOP_MSG);
+        await store?.close();
+      })();
       return stopping;
     },
   };
@@ -148,6 +175,8 @@ export interface ProcessHandlerDeps {
   readonly clock: Clock;
   /** Apagado limpio (el `stop` de `startServer`). */
   readonly stop: () => Promise<void>;
+  /** Escribe ya en el disco lo pendiente del registro (un proceso que se cae o sale a la fuerza). */
+  readonly flushLogs?: () => void;
 }
 
 /**
@@ -166,6 +195,18 @@ export function installProcessHandlers(proc: ProcessHooks, deps: ProcessHandlerD
     logger.error({ err: reason }, 'promesa rechazada sin capturar');
   });
 
+  /* Una excepción sin capturar sí tumba el proceso (Docker lo levanta otra
+     vez): antes de irse, la causa queda en el registro en disco («Descargar
+     logs»). `uncaughtExceptionMonitor` no cambia lo que hace Node después. */
+  proc.on('uncaughtExceptionMonitor', (error: unknown, origin: unknown) => {
+    try {
+      logger.fatal({ err: error, origin }, 'el servidor se cae: excepción sin capturar');
+      deps.flushLogs?.();
+    } catch {
+      // Lo que sea antes que tapar la caída de verdad.
+    }
+  });
+
   let stopping = false;
   const shutdown = (signal: string): void => {
     if (stopping) return;
@@ -174,6 +215,7 @@ export function installProcessHandlers(proc: ProcessHooks, deps: ProcessHandlerD
     clock.setTimeout(
       () => {
         logger.error('el apagado no terminó a tiempo: salida forzada');
+        deps.flushLogs?.();
         proc.exit(1);
       },
       SHUTDOWN_TIMINGS.forceExitMs,
@@ -208,7 +250,12 @@ export async function main(): Promise<void> {
   }
   const server = await startServer();
   const { logger, clock } = server.services;
-  installProcessHandlers(process, { logger, clock, stop: () => server.stop() });
+  installProcessHandlers(process, {
+    logger,
+    clock,
+    stop: () => server.stop(),
+    flushLogs: () => logStoreOf(logger)?.flushSync(),
+  });
 }
 
 /* Solo si se ejecuta como programa (el bundle de build.mjs o `tsx src/main.ts`),

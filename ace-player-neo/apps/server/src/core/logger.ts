@@ -1,6 +1,9 @@
 /* Logs del backend: pino a stdout en JSON, sin transports (arquitectura
    §5.15 y empaquetado §7.2: en el NAS no hay node_modules y un transport
-   levanta hilos de más). Docker recoge stdout.
+   levanta hilos de más). Docker recoge stdout. Desde la 0.9.0, cada línea
+   de nivel info o peor va también al registro en disco de unos 45 días
+   (`store`, core/log-store.ts; «Descargar logs» de Ajustes → Registro), por
+   el mismo enganche que el anillo de «Descargar fallos».
 
    Redacción (arquitectura §5.12): nunca sale al log la cabecera
    `Authorization`, el token de un dispositivo, el `?t=` de una URL de vídeo
@@ -20,6 +23,7 @@
      por `redactText` (cada URL que aparezca, por `redactUrl`). */
 
 import { SERVER_LOG_RING_BYTES, SERVER_LOG_RING_LINES } from '@ace/shared';
+import type { LogStore } from './log-store.js';
 import pino, {
   type DestinationStream,
   type Level,
@@ -268,6 +272,14 @@ export function logRingOf(logger: Logger): LogRing | null {
   return rings.get(logger) ?? null;
 }
 
+/* El registro en disco de cada logger creado con uno («Descargar logs», core/log-store.ts). */
+const stores = new WeakMap<object, LogStore>();
+
+/** El registro en disco del logger raíz, o null si se creó sin él (tests, pila local). */
+export function logStoreOf(logger: Logger): LogStore | null {
+  return stores.get(logger) ?? null;
+}
+
 export interface LoggerOptions {
   readonly level?: LogLevel;
   /** Por defecto, stdout. Los tests pasan un flujo en memoria para leer lo escrito. */
@@ -276,10 +288,12 @@ export interface LoggerOptions {
   readonly base?: Record<string, unknown>;
   /** Copia en memoria de las últimas líneas («Descargar fallos»). */
   readonly ring?: LogRing;
+  /** Registro en disco de unos 45 días («Descargar logs», core/log-store.ts): info o peor. */
+  readonly store?: LogStore;
 }
 
 export function createLogger(options: LoggerOptions = {}): Logger {
-  const ring = options.ring;
+  const { ring, store } = options;
   const logger = pino(
     {
       level: options.level ?? 'info',
@@ -291,12 +305,13 @@ export function createLogger(options: LoggerOptions = {}): Logger {
         /* `"level":"info"` en vez del número: se lee mejor con `docker logs`. */
         level: (label) => ({ level: label }),
       },
-      ...(ring
+      ...(ring || store
         ? {
             hooks: {
               /* La línea ya serializada y redactada, justo antes de escribirla. */
               streamWrite: (line: string) => {
-                ring.push(line);
+                ring?.push(line);
+                store?.push(line);
                 return line;
               },
             },
@@ -306,6 +321,7 @@ export function createLogger(options: LoggerOptions = {}): Logger {
     options.destination ?? pino.destination({ dest: 1, sync: false }),
   );
   if (ring) rings.set(logger, ring);
+  if (store) stores.set(logger, store);
   return logger;
 }
 
