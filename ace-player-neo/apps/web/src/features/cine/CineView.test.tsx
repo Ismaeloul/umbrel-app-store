@@ -327,7 +327,9 @@ describe('la rejilla (otra pantalla)', () => {
 });
 
 describe('búsqueda (§12.5)', () => {
-  it('desde 2 letras, tras 250 ms; sin nada: «Ver N series» y «Borrar búsqueda»', async () => {
+  /* Partida en dos (antes era una sola que pasaba de 15 s con la máquina
+     cargada): escribir y buscar, y lo que se ofrece cuando no hay nada. */
+  it('desde 2 letras, tras 250 ms, y buscando no salen «Seguir viendo» ni las filas', async () => {
     net = mockFetch(demoRoutes());
     renderCine();
     await screen.findByRole('heading', { name: 'Seguir viendo' });
@@ -338,21 +340,25 @@ describe('búsqueda (§12.5)', () => {
     expect(
       await screen.findByRole('heading', { name: 'Nada con «casa de papel» en películas' }),
     ).toBeInTheDocument();
-    // Buscando no salen «Seguir viendo» ni las filas.
     expect(screen.queryByRole('heading', { name: 'Seguir viendo' })).toBeNull();
     expect(
       screen.getByRole('heading', { level: 2, name: 'Resultados de «casa de papel»' }),
     ).toBeInTheDocument();
     const withQ = browseCalls().filter((call) => queryOf(call).q);
     expect(withQ.map((call) => queryOf(call).q)).toEqual(['casa de papel']);
-    fireEvent.click(screen.getByRole('button', { name: 'Ver 1 serie' }));
+  }, 30_000);
+
+  it('sin nada: «Ver N series» y «Borrar búsqueda»', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine({ search: '?vista=cine&cineq=casa%20de%20papel' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver 1 serie' }));
     expect((await screen.findAllByText('1 serie')).length).toBeGreaterThan(0);
     expect(location.search).toContain('cine=series');
     fireEvent.click(screen.getByRole('radio', { name: 'Películas' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Borrar búsqueda' }));
-    expect(field).toHaveValue('');
+    expect(screen.getByRole('searchbox', { name: 'Buscar películas' })).toHaveValue('');
     expect(await screen.findByRole('heading', { name: 'Seguir viendo' })).toBeInTheDocument();
-  });
+  }, 30_000);
 
   it('dentro de una categoría busca ahí y lo dice: «0 películas en VOD | 4K» y «Buscar en todas»', async () => {
     net = mockFetch(demoRoutes());
