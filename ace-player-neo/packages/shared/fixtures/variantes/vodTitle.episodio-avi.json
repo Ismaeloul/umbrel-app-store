@@ -29,9 +29,12 @@
           "still": "6a1f0c38",
           "playable": "yes",
           "progress": { "posS": 1380, "durS": 1380, "watched": true },
-          "container": "mkv"
+          "container": "mkv",
+          "airDate": "2005-03-24",
+          "rating": 7.4
         }
-      ]
+      ],
+      "plot": "Michael Scott dirige la sucursal de Scranton mientras le graba un equipo de documentales."
     },
     {
       "n": 2,
@@ -69,7 +72,9 @@
     "posS": 0
   },
   "truncated": false,
+  "originalTitle": "The Office (US)",
+  "ageRating": "12",
+  "releaseDate": "2005-03-24",
   "trailer": null,
-  "released": "2005-03-24",
-  "episodeRunTimeS": 1320
+  "episodeDurationS": 1320
 }

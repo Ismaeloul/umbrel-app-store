@@ -6592,15 +6592,15 @@ paths:
                               - name
                             additionalProperties: false
                           - type: "null"
-                      trailer:
-                        anyOf:
-                          - type: string
-                            pattern: ^[\w-]{11}$
-                          - type: "null"
-                      released:
+                      releaseDate:
                         anyOf:
                           - type: string
                             pattern: ^\d{4}-\d{2}-\d{2}$
+                          - type: "null"
+                      trailer:
+                        anyOf:
+                          - type: string
+                            pattern: ^[A-Za-z0-9_-]{11}$
                           - type: "null"
                     required:
                       - kind
@@ -6791,6 +6791,17 @@ paths:
                                   container:
                                     type: string
                                     maxLength: 8
+                                  airDate:
+                                    anyOf:
+                                      - type: string
+                                        pattern: ^\d{4}-\d{2}-\d{2}$
+                                      - type: "null"
+                                  rating:
+                                    anyOf:
+                                      - type: number
+                                        minimum: 0
+                                        maximum: 10
+                                      - type: "null"
                                 required:
                                   - id
                                   - n
@@ -6801,6 +6812,11 @@ paths:
                                   - playable
                                   - progress
                                 additionalProperties: false
+                            plot:
+                              anyOf:
+                                - type: string
+                                  maxLength: 600
+                                - type: "null"
                           required:
                             - n
                             - name
@@ -6835,17 +6851,27 @@ paths:
                           - type: "null"
                       truncated:
                         type: boolean
-                      trailer:
+                      originalTitle:
                         anyOf:
                           - type: string
-                            pattern: ^[\w-]{11}$
+                            maxLength: 200
                           - type: "null"
-                      released:
+                      ageRating:
+                        anyOf:
+                          - type: string
+                            maxLength: 16
+                          - type: "null"
+                      releaseDate:
                         anyOf:
                           - type: string
                             pattern: ^\d{4}-\d{2}-\d{2}$
                           - type: "null"
-                      episodeRunTimeS:
+                      trailer:
+                        anyOf:
+                          - type: string
+                            pattern: ^[A-Za-z0-9_-]{11}$
+                          - type: "null"
+                      episodeDurationS:
                         anyOf:
                           - type: integer
                             exclusiveMinimum: 0

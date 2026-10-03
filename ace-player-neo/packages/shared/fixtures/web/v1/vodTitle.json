@@ -25,6 +25,6 @@
   "playable": "yes",
   "progress": { "posS": 2592, "durS": 9360, "watched": false },
   "category": { "id": "a1b2c3d4e5f6", "name": "VOD | 4K" },
-  "trailer": "abcDEF12345",
-  "released": "2021-09-16"
+  "releaseDate": "2021-09-15",
+  "trailer": "Dune2021Tra"
 }
