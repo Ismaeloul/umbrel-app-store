@@ -94,6 +94,19 @@ function optionalMatch<T>(
   return parsed.success ? parsed.data : undefined;
 }
 
+/** Fallos que mandó un cliente (`report`): el registro en disco les da su propio tope (H-1). */
+const fromClient = new WeakSet<DiagnosticEntry>();
+
+function markFromClient(entry: DiagnosticEntry): DiagnosticEntry {
+  fromClient.add(entry);
+  return entry;
+}
+
+/** ¿Lo mandó un cliente (y no lo apuntó el propio servidor)? */
+export function isClientReport(entry: DiagnosticEntry): boolean {
+  return fromClient.has(entry);
+}
+
 function emptyCounts(): Record<DiagnosticCause, number> {
   return { engine: 0, source: 0, network: 0, codec: 0, client: 0, state: 0 };
 }
@@ -346,17 +359,19 @@ export function createDiagnostics(
       const key = context.device ? `device:${context.device.deviceId}` : 'web';
       checkClientLimit(key, clock.now());
       const entry = add(
-        buildEntry({
-          cause: body.cause ?? 'client',
-          code: body.code,
-          message: body.message ?? '',
-          hash: body.hash,
-          channel: body.channel,
-          sessionId: body.sessionId,
-          metrics: body.metrics,
-          deviceId: context.device?.deviceId,
-          requestId: context.requestId,
-        }),
+        markFromClient(
+          buildEntry({
+            cause: body.cause ?? 'client',
+            code: body.code,
+            message: body.message ?? '',
+            hash: body.hash,
+            channel: body.channel,
+            sessionId: body.sessionId,
+            metrics: body.metrics,
+            deviceId: context.device?.deviceId,
+            requestId: context.requestId,
+          }),
+        ),
       );
       return { accepted: true, id: entry.id };
     },

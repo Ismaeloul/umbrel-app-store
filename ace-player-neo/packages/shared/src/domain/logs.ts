@@ -41,6 +41,10 @@ export const LOG_CLEAN_STOP_MSG = 'apagado limpio';
 export const LOG_MODULE_FAULTS = 'fallos';
 /** `module` de los errores que manda la web. */
 export const LOG_MODULE_WEB = 'web';
+/** `module` del emparejamiento y los dispositivos (tiene sitio reservado en el registro). */
+export const LOG_MODULE_AUTH = 'auth';
+/** Valor de `origen` en la línea de un fallo que mandó un cliente (`POST /diagnostics/report`). */
+export const LOG_ORIGIN_CLIENT = 'cliente';
 
 /** Ficheros del zip, en este orden. */
 export const LOGS_FILES = {

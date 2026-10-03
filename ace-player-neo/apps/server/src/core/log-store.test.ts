@@ -262,8 +262,13 @@ describe('días y topes', () => {
     expect((await store.info()).bytes).toBeGreaterThan(3000);
   });
 
-  it('un día muy cargado: pasado el tope suave solo avisos y errores; pasado el duro, nada', async () => {
-    const { store, logger, lines } = setup({ daySoftBytes: 2000, dayHardBytes: 4000, burst: 1000 });
+  it('un día muy cargado: pasado el tope suave solo avisos y errores; pasado el duro, solo el sitio reservado', async () => {
+    const { store, logger, lines } = setup({
+      daySoftBytes: 2000,
+      dayHardBytes: 4000,
+      burst: 1000,
+      reserveBytes: 600,
+    });
     await store.start();
     for (let i = 0; i < 15; i += 1) logger.info({ i }, `info ${i} ${'x'.repeat(60)}`);
     await store.flush();
@@ -278,13 +283,85 @@ describe('días y topes', () => {
     ).toBe(true);
     for (let i = 0; i < 60; i += 1) logger.warn({ i }, `aviso ${i} ${'y'.repeat(60)}`);
     await store.flush();
+    logger.info('info después del tope duro');
     logger.error('error después del tope duro');
     await store.flush();
     saved = lines();
     expect(saved.some((line) => String(line.msg).includes('tope del día alcanzado'))).toBe(true);
-    expect(saved.some((line) => line.msg === 'error después del tope duro')).toBe(false);
+    /* El error del servidor entra en su sitio reservado; la info, no. */
+    expect(saved.some((line) => line.msg === 'error después del tope duro')).toBe(true);
+    expect(saved.some((line) => line.msg === 'info después del tope duro')).toBe(false);
+    /* Gastado el sitio reservado, ya nada. */
+    for (let i = 0; i < 20; i += 1) logger.error({ i }, `error ${i} ${'z'.repeat(60)}`);
+    logger.error('error con la reserva gastada');
+    await store.flush();
+    saved = lines();
+    expect(saved.some((line) => line.msg === 'error con la reserva gastada')).toBe(false);
     expect(store.stats().capped).toBeGreaterThan(0);
-    expect(saved.length).toBeLessThan(80);
+    expect(saved.length).toBeLessThan(90);
+  });
+
+  it('inundación desde un cliente con textos distintos: tiene su tope aparte; el error del servidor y el emparejamiento se guardan (H-1)', async () => {
+    const { store, logger, lines, read } = setup({
+      daySoftBytes: 20_000,
+      dayHardBytes: 30_000,
+      clientDayBytes: 3_000,
+      reserveBytes: 2_000,
+    });
+    await store.start();
+    /* Un cliente autenticado manda errores de la web y fallos con un texto distinto cada vez. */
+    for (let i = 0; i < 400; i += 1) {
+      store.record({
+        level: 'error',
+        module: 'web',
+        kind: 'error',
+        errorCode: 'js_error',
+        msg: `fallo distinto ${i} ${'w'.repeat(80)}`,
+      });
+      store.record({
+        level: 'error',
+        module: 'fallos',
+        errorCode: 'playback_failed',
+        cause: 'engine',
+        deviceId: 'd_atacante01',
+        origen: 'cliente',
+        msg: `reporte distinto ${i} ${'r'.repeat(80)}`,
+      });
+    }
+    await store.flush();
+    /* Lo del servidor sigue entrando con normalidad. */
+    logger
+      .child({ module: 'playback' })
+      .error({ errorCode: 'engine_unavailable' }, 'error real del servidor');
+    logger.child({ module: 'auth' }).info({ deviceId: 'd_movil0001' }, 'dispositivo emparejado');
+    await store.flush();
+    const saved = lines();
+    expect(saved.some((line) => line.msg === 'error real del servidor')).toBe(true);
+    expect(saved.some((line) => line.msg === 'dispositivo emparejado')).toBe(true);
+    const web = saved.filter((line) => line.module === 'web');
+    const reports = saved.filter((line) => line.origen === 'cliente');
+    /* Agrupados sin la frase: la ráfaga de repetidos (60) como mucho, y dentro de su tope. */
+    expect(web.length).toBeLessThanOrEqual(60);
+    expect(reports.length).toBeLessThanOrEqual(60);
+    const bytesOf = (list: Record<string, unknown>[]) =>
+      list.reduce((sum, line) => sum + JSON.stringify(line).length + 1, 0);
+    expect(bytesOf(web)).toBeLessThanOrEqual(3_000);
+    expect(bytesOf(reports)).toBeLessThanOrEqual(3_000);
+    expect(saved.some((line) => String(line.msg).includes('la web ha mandado demasiados'))).toBe(
+      true,
+    );
+    expect(read().length).toBeLessThan(20_000);
+
+    /* Aunque el día común se llene (tope duro), el error del servidor y el emparejamiento siguen. */
+    for (let i = 0; i < 400; i += 1) logger.info({ i }, `info ${i} ${'x'.repeat(100)}`);
+    await store.flush();
+    logger.child({ module: 'playback' }).error('otro error real del servidor');
+    logger.child({ module: 'auth' }).info('dispositivo emparejado otra vez');
+    await store.flush();
+    const after = lines();
+    expect(after.some((line) => String(line.msg).includes('tope del día alcanzado'))).toBe(true);
+    expect(after.some((line) => line.msg === 'otro error real del servidor')).toBe(true);
+    expect(after.some((line) => line.msg === 'dispositivo emparejado otra vez')).toBe(true);
   });
 
   it('lo que se repite sin parar no llena el disco: se cuenta y se resume', async () => {

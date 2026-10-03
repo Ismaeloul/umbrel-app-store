@@ -77,6 +77,18 @@ export const LOG_STORE_MAX_DAYS = 45;
 export const LOG_STORE_MAX_BYTES = 40 * 1024 * 1024;
 export const LOG_STORE_DAY_SOFT_BYTES = 8 * 1024 * 1024;
 export const LOG_STORE_DAY_HARD_BYTES = 12 * 1024 * 1024;
+/**
+ * Lo que mandan los clientes (errores de la web y fallos que reporta un
+ * aparato) tiene su propio tope por día y clase, aparte del de arriba: un
+ * cliente autenticado que manda textos distintos sin parar no puede llenar el
+ * día y dejar sin sitio a los errores del servidor.
+ */
+export const LOG_STORE_CLIENT_DAY_BYTES = 2 * 1024 * 1024;
+/**
+ * Sitio reservado por día, pasado el tope duro, para los avisos y errores del
+ * servidor y lo del emparejamiento (module `auth`): nunca lo gasta nadie más.
+ */
+export const LOG_STORE_RESERVE_BYTES = 2 * 1024 * 1024;
 /** Una línea más larga se guarda con sus textos recortados (pilas, mensajes). */
 export const LOG_STORE_LINE_MAX_CHARS = 16 * 1024;
 /** Registro sin comprimir que entra como mucho en el zip de «Descargar logs» (lo más nuevo). */
