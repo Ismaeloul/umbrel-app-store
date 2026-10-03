@@ -8,6 +8,7 @@ import seriesFixture from '@fixtures/variantes/vodTitle.series.json';
 import movieFixture from '@fixtures/web/v1/vodTitle.json';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { resetScrollMemory, saveScroll, savedScroll } from '../../app/scroll-memory.ts';
+import { installShortcutListener } from '../../app/shortcuts.ts';
 import { resetToasts } from '../../notices/toasts.ts';
 import { playerStore, resetPlayerApi } from '../../player/api.ts';
 import { json, mockFetch, type MockCall } from '../../test/fetch.ts';
@@ -201,6 +202,18 @@ describe('película', () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Volver a películas' }));
     await waitFor(() => expect(location.search).toBe('?vista=cine'));
+  });
+
+  it('Esc vuelve de la ficha a la portada', async () => {
+    const uninstall = installShortcutListener();
+    try {
+      serveTitle(MOVIE);
+      await screen.findByRole('heading', { level: 1, name: 'Dune' });
+      fireEvent.keyDown(window, { key: 'Escape' });
+      await waitFor(() => expect(location.search).toBe('?vista=cine'));
+    } finally {
+      uninstall();
+    }
   });
 });
 

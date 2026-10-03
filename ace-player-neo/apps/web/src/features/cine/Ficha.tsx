@@ -28,6 +28,7 @@ import type { VodMovie, VodSeries, VodTitle } from '@ace/shared';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { ApiError, describeFailure, isDemo } from '../../api/index.ts';
 import { useBack, useNavigate } from '../../app/router.tsx';
+import { useShortcut } from '../../app/shortcuts.ts';
 import { notify } from '../../notices/index.ts';
 import {
   Button,
@@ -547,6 +548,16 @@ export function Ficha({ id, active }: { id: string; active: boolean }) {
   const kindHint = title?.kind ?? card?.kind ?? 'movie';
   const now = useNow();
   const goBack = () => back({ vista: 'cine', id: null });
+  // Esc vuelve de la ficha (como su botón «Volver»); con una hoja abierta, la cierra la hoja.
+  useShortcut({
+    id: 'cine.ficha.volver',
+    keys: ['Escape'],
+    display: ['Esc'],
+    label: 'Vuelve de la ficha',
+    group: 'Películas y series',
+    when: () => active,
+    handler: goBack,
+  });
 
   if (!title) {
     if (query.isError) {
