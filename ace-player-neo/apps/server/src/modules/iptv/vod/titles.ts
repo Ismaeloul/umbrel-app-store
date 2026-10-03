@@ -16,10 +16,22 @@
      latinos como vienen. Si la limpieza deja el título vacío, vale el
      original.
 
-   Los distintivos (castellano, latino, VOSE, multi, 4K) salen de lo que se
-   ha quitado y del nombre de la categoría («VOD | 4K», «PELIS LATINO»). */
+   Los IDIOMAS (castellano, latino, VOSE, inglés, francés…, §4.10) salen de
+   lo que se ha quitado y, si eso no dice nada, del nombre de la categoría,
+   con la tabla compartida de `@ace/shared` (`detectVodLangs`, la misma de
+   la demo). Los distintivos de lengua (castellano, latino, VOSE) salen de
+   esos idiomas, así que chips e idiomas nunca se contradicen; multi y 4K,
+   de lo quitado y de la categoría («VOD | 4K»). */
 
-import { VOD_TAGS, type VodTag } from '@ace/shared';
+import {
+  combineVodLangs,
+  detectVodLangs,
+  VOD_LANG_BIT,
+  VOD_TAGS,
+  type VodLang,
+  type VodLangDetection,
+  type VodTag,
+} from '@ace/shared';
 
 export interface CleanVodTitle {
   readonly title: string;
@@ -27,6 +39,8 @@ export interface CleanVodTitle {
   readonly year: number | null;
   /** Bits de `VOD_TAGS` (bit i = `VOD_TAGS[i]`). */
   readonly tags: number;
+  /** Bits de `VOD_LANGS` (0 = no lo indica). */
+  readonly langs: number;
 }
 
 const TAG_BIT: Readonly<Record<VodTag, number>> = Object.fromEntries(
@@ -46,35 +60,38 @@ export function tagsOf(bits: number): VodTag[] {
   return VOD_TAGS.filter((tag) => (bits & TAG_BIT[tag]) !== 0);
 }
 
-/**
- * Distintivos de un texto (un trozo quitado del título o el nombre de la
- * categoría). Los códigos cortos (`ES`, `LAT`, `VOS`, `SUB`) solo en
- * mayúsculas y como palabra; las palabras largas, en cualquier caja.
- */
-export function detectTags(text: string): number {
-  if (!text) return 0;
+/* Los distintivos de lengua y su idioma (el resto de idiomas no tiene chip). */
+const LANG_TAGS: ReadonlyArray<readonly [VodLang, VodTag]> = [
+  ['castellano', 'castellano'],
+  ['latino', 'latino'],
+  ['vose', 'vose'],
+];
+
+/** Distintivos de lengua de unos idiomas (bits de `VOD_LANGS` → bits de `VOD_TAGS`). */
+export function langTags(langs: number): number {
   let bits = 0;
-  /* «MX» (México) también: «MX - Coco», «MX | PELÍCULAS». «AR» no: en los
-     paneles multipaís suele ser árabe. */
-  const latino =
-    /(?:^|[^A-Za-z])(?:LAT|LATAM|MX)(?![A-Za-z])/.test(text) ||
-    /latino|latinoam[eé]rica|es-419/i.test(text);
-  if (latino) bits |= TAG_BIT.latino;
-  const castellano =
-    /(?:^|[^A-Za-z])(?:ES|ESP|SPA)(?![A-Za-z])/.test(text) ||
-    /castellano|español|españa/i.test(text);
-  if (castellano && !latino) bits |= TAG_BIT.castellano;
-  if (
-    /(?:^|[^A-Za-z])(?:VOSE|VOS|SUB)(?![A-Za-z])/.test(text) ||
-    /vose|subtitulad[ao]/i.test(text)
-  ) {
-    bits |= TAG_BIT.vose;
-  }
+  for (const [lang, tag] of LANG_TAGS) if (langs & VOD_LANG_BIT[lang]) bits |= TAG_BIT[tag];
+  return bits;
+}
+
+/** Multi y 4K de un texto (un trozo quitado del título o el nombre de la categoría). */
+function qualityTags(text: string): number {
+  let bits = 0;
   if (/(?:^|[^A-Za-z])(?:multi|dual)(?![A-Za-z])/i.test(text) || /multi[\s-]?audio/i.test(text)) {
     bits |= TAG_BIT.multi;
   }
   if (/(?:^|[^A-Za-z0-9])(?:4K|UHD|2160p)(?![A-Za-z0-9])/i.test(text)) bits |= TAG_BIT['4k'];
   return bits;
+}
+
+/**
+ * Distintivos de un nombre de categoría (o de cualquier texto suelto): los
+ * de lengua con la tabla de idiomas (§4.10; los códigos cortos, solo en
+ * mayúsculas y como marca), y multi y 4K.
+ */
+export function detectTags(text: string): number {
+  if (!text) return 0;
+  return langTags(detectVodLangs(text, 'categoria').bits) | qualityTags(text);
 }
 
 /* Prefijos al principio, con una LISTA CERRADA de códigos de lengua, país y
@@ -93,7 +110,8 @@ export function detectTags(text: string): number {
    («IT: Capítulo 2»). Corchetes, con la lista: «[ES]» y «[4K]» sí, «[REC]
    2» no. */
 const PREFIX_CODES =
-  'ES|ESP|SPA|CAST|LAT|LATAM|EN|ENG|VOSE|VOS|SUB|MULTI|DUAL|FR|DE|PT|' +
+  'ES|ESP|SPA|CAST|CASTELLANO|LAT|LATAM|LATINO|EN|ENG|ENGLISH|VOSE|VOS|SUB|VO|VOSTFR|' +
+  'MULTI|DUAL|FR|FRA|VF|FRENCH|DE|GER|DEU|ITA|PT|POR|CAT|' +
   'UK|US|MX|AR|CO|CL|PE|VE|EC|UY|NL|BE|CH|AT|SE|DK|FI|HU|CZ|BG|HR|RS|UA|EXYU|' +
   'TR|PL|BR|RU|GR|RO|4K|UHD|FHD|HD|SD';
 const PREFIX_PIPED = /^\|[A-Z0-9]{2,5}\|\s*(?:[-:|]\s*)?/;
@@ -123,12 +141,23 @@ const LEADING_SEPARATOR = /^[-–|:]\s+/;
    caja; sueltas, solo en mayúsculas (o `1080p`), para no comerse palabras
    del título. */
 const TAIL_WORDS =
-  '4K|UHD|FHD|HD|SD|MULTI|MULTI[ -]?AUDIO|MULTIAUDIO|DUAL|VOSE|VOS|SUB|SUBS|SUBTITULAD[AO]|LATINO|LAT|LATAM|' +
-  'CASTELLANO|ESPAÑOL|ESP|ES|SPA|HEVC|H265|H\\.265|X265|HDR|HDR10|DV|1080P|720P|2160P|3D';
+  '4K|UHD|FHD|HD|SD|MULTI|MULTI[ -]?AUDIO|MULTIAUDIO|DUAL|VOSE|V\\.O\\.S\\.E\\.?|VOS|SUB|SUBS|SUBTITULAD[AO]|LATINO|LAT|LATAM|MX|' +
+  'CASTELLANO|ESPAÑOL|ESP|ES|SPA|CAST|EN|ENG|ENGLISH|INGL[EÉ]S|VO|V\\.O\\.?|VOST|VOSTFR|' +
+  'FR|FRA|VF|VFF|FRENCH|TRUEFRENCH|FRANC[EÉ]S|IT|ITA|ITALIANO|DE|GER|DEU|ALEM[AÁ]N|' +
+  'PT|POR|PORTUGU[EÉ]S|CAT|CATAL[AÁÀ]N?|' +
+  'HEVC|H265|H\\.265|X265|HDR|HDR10|DV|1080P|720P|2160P|3D';
 const TAIL_BRACKETED = new RegExp(`\\s*[\\[(]\\s*(?:${TAIL_WORDS})\\s*[\\])]\\s*$`, 'i');
 /* Sueltas: sin los códigos de 2 letras que pueden ser palabras de verdad. */
 const TAIL_LOOSE =
   /(?:^|[\s\-|:])(4K|UHD|FHD|MULTI|DUAL|VOSE|LATINO|CASTELLANO|HEVC|H265|X265|HDR|HDR10|1080p|720p|2160p)\s*$/;
+/* Un código de idioma suelto al final («Coco ES», «Coco 4K ES», «Dune - VO»),
+   solo en mayúsculas y si el título no es todo mayúsculas, si va tras un
+   separador o tras otra marca: «COCO ES» a secas se queda. Ni «IT» ni «DE»
+   (palabras y una película), ni «BR» (en los nombres de fichero es Blu-ray). */
+const TAIL_LANG =
+  /\s(ES|ESP|SPA|CAST|LAT|LATAM|MX|EN|ENG|VO|VOS|VOST|VOSTFR|SUB|FR|FRA|VF|ITA|GER|DEU|PT|POR|CAT)\s*$/;
+const TAIL_LANG_AFTER =
+  /[-–|:]\s*$|(?:^|\s)(?:4K|UHD|FHD|HD|1080P|720P|2160P|MULTI|DUAL|HDR|HEVC)\s*$/i;
 const TAIL_SEPARATOR = /\s*[-|:–]\s*$/;
 const YEAR_PAREN = /\s*\(((?:18|19|20)\d{2})\)\s*$/;
 const YEAR_DASH = /\s+[-|–]\s+((?:18|19|20)\d{2})\s*$/;
@@ -177,6 +206,14 @@ export function cleanVodTitle(raw: string, categoryName = ''): CleanVodTitle {
       removed += ` ${loose[1] ?? ''}`;
       title = title.slice(0, loose.index);
     }
+    const lang = TAIL_LANG.exec(title);
+    if (lang && lang.index > 0) {
+      const rest = title.slice(0, lang.index);
+      if (/\p{Ll}/u.test(rest) || TAIL_LANG_AFTER.test(rest)) {
+        removed += ` ${lang[1] ?? ''}`;
+        title = rest;
+      }
+    }
     if (year === null) {
       const paren = YEAR_PAREN.exec(title) ?? YEAR_DASH.exec(title);
       if (paren && paren.index > 0) {
@@ -190,8 +227,24 @@ export function cleanVodTitle(raw: string, categoryName = ''): CleanVodTitle {
 
   title = title.trim();
   if (!title) title = original;
-  const tags = detectTags(removed) | detectTags(categoryName);
-  /* Latino manda sobre castellano aunque vengan de sitios distintos. */
-  const fixed = tags & TAG_BIT.latino ? tags & ~TAG_BIT.castellano : tags;
-  return { title, year, tags: fixed };
+  /* El idioma: el de las marcas del título si tiene; si no, el de la
+     categoría (con «ES - Coco» en «PELIS LATINO», latino). */
+  const category = categoryInfo(categoryName);
+  const langs = combineVodLangs(detectVodLangs(removed, 'titulo'), category.langs);
+  const tags = langTags(langs) | qualityTags(removed) | category.quality;
+  return { title, year, tags, langs };
+}
+
+/* Lo que dice cada nombre de categoría, calculado una vez: 181 000 títulos
+   comparten 444 categorías en el panel de Isma. */
+const CATEGORY_CACHE_MAX = 4_096;
+const categoryCache = new Map<string, { langs: VodLangDetection; quality: number }>();
+
+function categoryInfo(name: string): { langs: VodLangDetection; quality: number } {
+  const known = categoryCache.get(name);
+  if (known) return known;
+  const info = { langs: detectVodLangs(name, 'categoria'), quality: qualityTags(name) };
+  if (categoryCache.size >= CATEGORY_CACHE_MAX) categoryCache.clear();
+  categoryCache.set(name, info);
+  return info;
 }

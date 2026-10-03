@@ -5,11 +5,17 @@
    (model.test.ts) con los mismos vectores que usarán el servidor y la app. */
 
 import {
+  VOD_LANGS,
   VOD_PROGRESS,
   VOD_SEARCH,
   VOD_TAGS,
+  vodLangsParam,
   type VodBrowseQuery,
+  type VodHome,
   type VodKind,
+  type VodLang,
+  type VodLangQuery,
+  type VodLanguages,
   type VodPlayable,
   type VodSeriesMain,
   type VodTag,
@@ -32,9 +38,21 @@ export interface CineUrlState {
   /** Lo escrito en el buscador, tal cual. */
   q: string;
   order: CineOrder;
+  /**
+   * «3 en latino · Ver» (§4.10): la rejilla enseña SOLO ese idioma, sin
+   * tocar los elegidos. null = los idiomas elegidos.
+   */
+  lang: VodLang | null;
 }
 
-export const CINE_PARAMS = ['cine', 'cinecat', 'cinetag', 'cineq', 'cineorden'] as const;
+export const CINE_PARAMS = [
+  'cine',
+  'cinecat',
+  'cinetag',
+  'cineq',
+  'cineorden',
+  'cineidioma',
+] as const;
 const CAT_RE = /^(?:[a-f0-9]{12}|none|all)$/;
 
 export function readCineState(search: string): CineUrlState {
@@ -46,12 +64,14 @@ export function readCineState(search: string): CineUrlState {
   }
   const cat = params.get('cinecat');
   const tag = params.get('cinetag');
+  const lang = params.get('cineidioma');
   return {
     kind: params.get('cine') === KIND_PARAM.series ? 'series' : 'movie',
     cat: cat !== null && CAT_RE.test(cat) ? cat : null,
     tag: tag && (VOD_TAGS as readonly string[]).includes(tag) ? (tag as VodTag) : null,
     q: (params.get('cineq') ?? '').slice(0, 200),
     order: params.get('cineorden') === 'az' ? 'az' : 'novedades',
+    lang: lang && (VOD_LANGS as readonly string[]).includes(lang) ? (lang as VodLang) : null,
   };
 }
 
@@ -67,13 +87,19 @@ export function writeCineState(search: string, state: CineUrlState): string {
   set('cinetag', state.tag);
   set('cineq', state.q);
   set('cineorden', state.order === 'az' ? 'az' : null);
+  set('cineidioma', state.lang);
   const text = params.toString().replace(/%2F/gi, '/');
   return text ? `?${text}` : '';
 }
 
 export function sameCineState(a: CineUrlState, b: CineUrlState): boolean {
   return (
-    a.kind === b.kind && a.cat === b.cat && a.tag === b.tag && a.q === b.q && a.order === b.order
+    a.kind === b.kind &&
+    a.cat === b.cat &&
+    a.tag === b.tag &&
+    a.q === b.q &&
+    a.order === b.order &&
+    a.lang === b.lang
   );
 }
 
@@ -101,10 +127,11 @@ export function showsGrid(state: Pick<CineUrlState, 'cat' | 'tag'>, q: string): 
   return q !== '' || state.cat !== null || state.tag !== null;
 }
 
-/** La consulta a `vodBrowse` de una pantalla (sin cursor ni límite). */
+/** La consulta a `vodBrowse` de una pantalla (sin cursor ni límite), con su filtro de idiomas. */
 export function browseQuery(
   state: Pick<CineUrlState, 'kind' | 'cat' | 'tag' | 'order'>,
   q: string,
+  lang: VodLangQuery = {},
 ): Omit<VodBrowseQuery, 'cursor' | 'limit'> {
   const text = canSearchCine(q) ? cleanCineQuery(q) : '';
   return {
@@ -113,7 +140,81 @@ export function browseQuery(
     ...(state.tag ? { tag: state.tag } : {}),
     ...(text ? { q: text } : {}),
     sort: state.order === 'az' ? 'name' : 'added',
+    ...lang,
   };
+}
+
+// ---- Idiomas (§4.10) ---------------------------------------------------------------------
+
+/**
+ * El filtro de idiomas de las consultas: el de «Ver» de una búsqueda
+ * (`override`, solo ese idioma) o el elegido. Sin elegir todavía, con
+ * «todos los idiomas» o si el servidor no los sabe: sin filtro.
+ */
+export function langQuery(
+  prefs: Pick<VodLanguages, 'chosen' | 'langs' | 'unknown'> | null | undefined,
+  override: VodLang | null = null,
+): VodLangQuery {
+  if (override) return { langs: override, unknown: '0' };
+  if (!prefs?.chosen || prefs.langs.length === 0) return {};
+  return { langs: vodLangsParam(prefs.langs), unknown: prefs.unknown ? '1' : '0' };
+}
+
+/** ¿Filtra algo la elección? (con «todos los idiomas», no). */
+export function filtersLangs(prefs: Pick<VodLanguages, 'chosen' | 'langs'> | null | undefined) {
+  return Boolean(prefs?.chosen && prefs.langs.length > 0);
+}
+
+/** Un idioma del selector con cuántos títulos tiene en todo el catálogo. */
+export interface LangOption {
+  lang: VodLang;
+  movies: number;
+  series: number;
+}
+
+/**
+ * Las opciones del selector, en su orden fijo: las que tienen algo en el
+ * catálogo y las ya elegidas aunque se queden a 0 (para poder quitarlas).
+ * Sin recuentos (un servidor anterior), todas.
+ */
+export function langOptions(
+  langs: VodHome['langs'] | undefined,
+  selected: readonly VodLang[] = [],
+): LangOption[] {
+  const count = (
+    list: ReadonlyArray<{ lang: VodLang; count: number }> | undefined,
+    lang: VodLang,
+  ) => list?.find((item) => item.lang === lang)?.count ?? 0;
+  return VOD_LANGS.flatMap((lang) => {
+    const movies = count(langs?.movie, lang);
+    const series = count(langs?.series, lang);
+    return !langs || movies + series > 0 || selected.includes(lang)
+      ? [{ lang, movies, series }]
+      : [];
+  });
+}
+
+/** Cambia un idioma en la elección (y la deja en su orden fijo). */
+export function toggleLang(selected: readonly VodLang[], lang: VodLang): VodLang[] {
+  const next = new Set(selected);
+  if (next.has(lang)) next.delete(lang);
+  else next.add(lang);
+  return VOD_LANGS.filter((item) => next.has(item));
+}
+
+/**
+ * El idioma que dice la cápsula de una tarjeta: el primero de los suyos que
+ * está entre los elegidos (o el primero, si no hay elección). Con UN solo
+ * idioma elegido no se dice (todas dirían lo mismo).
+ */
+export function cardLang(
+  langs: readonly VodLang[] | undefined,
+  selected: readonly VodLang[],
+): VodLang | null {
+  if (!langs?.length) return null;
+  if (selected.length === 1)
+    return langs.includes(selected[0] as VodLang) ? null : (langs[0] ?? null);
+  return langs.find((lang) => selected.includes(lang)) ?? langs[0] ?? null;
 }
 
 export const PAGE_SIZE = VOD_SEARCH.pageDefault;

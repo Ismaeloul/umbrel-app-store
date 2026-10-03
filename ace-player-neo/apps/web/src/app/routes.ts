@@ -199,7 +199,7 @@ export const VISTA_PARAMS: Record<Vista, readonly string[]> = {
   guia: ['ambito'],
   // Tipo, categoría, distintivo, búsqueda y orden (features/cine/model.ts,
   // CINE_PARAMS) y la temporada abierta de una serie (features/cine/Seasons.tsx).
-  cine: ['cine', 'cinecat', 'cinetag', 'cineq', 'cineorden', 'temporada'],
+  cine: ['cine', 'cinecat', 'cinetag', 'cineq', 'cineorden', 'cineidioma', 'temporada'],
   // El texto buscado (features/search/navigation.ts, SEARCH_PARAM).
   buscar: ['q'],
   ajustes: [],

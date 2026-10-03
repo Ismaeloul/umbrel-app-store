@@ -124,12 +124,22 @@ describe('VodService contra el proveedor falso', () => {
       ['VOD | 4K', 1, false],
       ['XXX ADULTOS', 1, true],
     ]);
+    /* «Amélie (2001) VOSE» en «ES | PELÍCULAS» es VOSE y no castellano: la
+       marca del título manda sobre la categoría (docs/vod.md §4.10). */
     expect(home.tags.movie).toEqual([
-      { tag: 'castellano', count: 7 },
+      { tag: 'castellano', count: 6 },
       { tag: 'latino', count: 1 },
       { tag: 'vose', count: 1 },
       { tag: '4k', count: 2 },
     ]);
+    /* Los idiomas de todo el catálogo, para el selector (§4.10). */
+    expect(home.langs?.movie).toEqual([
+      { lang: 'castellano', count: 6 },
+      { lang: 'latino', count: 1 },
+      { lang: 'vose', count: 1 },
+    ]);
+    expect(home.noLang).toEqual({ movies: 1, series: 1 });
+    expect(home.shown).toEqual({ movies: 9, series: 3 });
     /* Estado en `iptv.status` (§11.4). */
     const view = await rig.service.view();
     expect(view.provider?.vod).toMatchObject({
@@ -222,6 +232,127 @@ describe('VodService contra el proveedor falso', () => {
       limit: 60,
     });
     expect(vose.items.map((card) => card.title)).toEqual(['Amélie']);
+  });
+
+  it('idiomas (§4.10): portada y rejilla filtran, las categorías sin nada en esos idiomas no salen y lo de fuera se cuenta', async () => {
+    const rig = await ready();
+    const { vod } = await synced(rig);
+    const all = VodHomeSchema.parse(await vod.home());
+    expect(all.newMovies[0]).toMatchObject({ title: 'Oppenheimer', langs: ['castellano'] });
+    /* «|LAT| Dune 4K» es latino; «Dune (2021)» en «ES | PELÍCULAS», castellano. */
+    expect(all.newMovies.filter((card) => card.title === 'Dune').map((card) => card.langs)).toEqual(
+      [['latino'], ['castellano']],
+    );
+    /* Solo latino y sin «los que no lo indican». */
+    const latino = VodHomeSchema.parse(await vod.home({ langs: 'latino', unknown: '0' }));
+    expect(latino.newMovies.map((card) => card.title)).toEqual(['Dune']);
+    expect(latino.newMovies[0]?.langs).toEqual(['latino']);
+    expect(latino.updatedSeries).toEqual([]);
+    expect(latino.categories.movie.map((category) => [category.name, category.count])).toEqual([
+      ['LATINO | PELIS', 1],
+    ]);
+    expect(latino.categories.series).toEqual([]);
+    expect(latino.shown).toEqual({ movies: 1, series: 0 });
+    /* `counts` y los recuentos por idioma son siempre los del catálogo entero. */
+    expect(latino.counts).toEqual(all.counts);
+    expect(latino.langs).toEqual(all.langs);
+    expect(latino.tags.movie).toEqual([
+      { tag: 'latino', count: 1 },
+      { tag: '4k', count: 1 },
+    ]);
+    /* Castellano y, por defecto, también los que no lo indican (la de adultos y el anime). */
+    const castellano = VodHomeSchema.parse(await vod.home({ langs: 'castellano' }));
+    expect(castellano.newMovies.map((card) => card.title)).toEqual([
+      'Oppenheimer',
+      'Spider-Man: No Way Home',
+      'Dune',
+      'Mission: Impossible – Dead Reckoning',
+      'Reserva',
+      'Паразиты',
+      'Película adulta de prueba',
+    ]);
+    expect(castellano.updatedSeries.map((card) => card.title)).toEqual([
+      'The Office (US)',
+      'Paquita Salas',
+      '東京物語',
+    ]);
+    expect(castellano.shown).toEqual({ movies: 7, series: 3 });
+    /* Búsqueda: en tus idiomas, y lo de fuera por idioma («1 en latino · Ver»). */
+    const dune = VodBrowseResponseSchema.parse(
+      await vod.browse({
+        kind: 'movie',
+        cat: 'all',
+        q: 'dune',
+        sort: 'added',
+        limit: 60,
+        langs: 'castellano',
+        unknown: '0',
+      }),
+    );
+    expect(dune.items.map((card) => [card.title, card.langs])).toEqual([['Dune', ['castellano']]]);
+    expect(dune.otherLangs).toEqual({
+      total: 1,
+      langs: [{ lang: 'latino', count: 1 }],
+      unknown: 0,
+    });
+    const amelie = await vod.browse({
+      kind: 'movie',
+      cat: 'all',
+      q: 'amelie',
+      sort: 'added',
+      limit: 60,
+      langs: 'castellano,latino',
+    });
+    expect(amelie).toMatchObject({
+      total: 0,
+      otherLangs: { total: 1, langs: [{ lang: 'vose', count: 1 }], unknown: 0 },
+    });
+    /* Sin filtro, `otherLangs` es null; en el otro tipo, también en tus idiomas. */
+    const plain = await vod.browse({
+      kind: 'movie',
+      cat: 'all',
+      q: 'dune',
+      sort: 'added',
+      limit: 60,
+    });
+    expect(plain.otherLangs).toBeNull();
+    const office = await vod.browse({
+      kind: 'movie',
+      cat: 'all',
+      q: 'office',
+      sort: 'added',
+      limit: 60,
+      langs: 'latino',
+      unknown: '0',
+    });
+    expect(office.otherKindTotal).toBe(0);
+    /* Una categoría abierta también filtra y dice lo de fuera. */
+    const es = all.categories.movie.find((category) => category.name === 'ES | PELÍCULAS');
+    const inEs = await vod.browse({
+      kind: 'movie',
+      cat: es?.id ?? 'all',
+      sort: 'added',
+      limit: 60,
+      langs: 'vose',
+      unknown: '0',
+    });
+    expect(inEs.items.map((card) => card.title)).toEqual(['Amélie']);
+    expect(inEs.otherLangs?.langs).toEqual([{ lang: 'castellano', count: 5 }]);
+  });
+
+  it('idiomas elegidos (§4.10): sin elegir la primera vez, se guardan y sobreviven a eliminar la IPTV', async () => {
+    const rig = await ready();
+    const vod = rig.service.vod;
+    expect(vod.languagesOf()).toEqual({ chosen: false, langs: [], unknown: true, updatedAt: null });
+    const saved = await vod.saveLanguages({ langs: ['frances', 'castellano'], unknown: false });
+    expect(saved).toMatchObject({ chosen: true, langs: ['castellano', 'frances'], unknown: false });
+    const file = rig.core.config.paths.vodFile.replace(/vod\.json$/, 'vod-idiomas.json');
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toMatchObject({
+      langs: ['castellano', 'frances'],
+    });
+    await rig.service.remove();
+    expect(existsSync(file)).toBe(true);
+    expect(vod.languagesOf()).toMatchObject({ chosen: true, langs: ['castellano', 'frances'] });
   });
 
   it('fichas: película con datos técnicos; serie con temporadas, «Especiales» y botón principal; coalescencia', async () => {

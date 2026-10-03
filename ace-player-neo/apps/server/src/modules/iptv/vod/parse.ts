@@ -42,6 +42,8 @@ export interface VodListRow {
   readonly poster: string | null;
   /** Bits de `VOD_TAGS`. */
   readonly tags: number;
+  /** Bits de `VOD_LANGS` (§4.10; 0 o sin él = no lo indica). */
+  readonly langs?: number;
   /** Nombre de la categoría del proveedor ('' = «Sin categoría»). */
   readonly category: string;
 }
@@ -324,6 +326,7 @@ export function parseListItem(
     adult: isAdultFlag(item.is_adult) || isAdultCategory(category),
     poster: imageUrl(kind === 'movie' ? item.stream_icon : item.cover),
     tags: clean.tags,
+    langs: clean.langs,
     category,
   };
 }

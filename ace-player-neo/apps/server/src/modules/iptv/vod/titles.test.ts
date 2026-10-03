@@ -2,6 +2,7 @@
    conservadora, año y distintivos. */
 
 import { describe, expect, it } from 'vitest';
+import { vodLangsOf } from '@ace/shared';
 import { cleanVodTitle, detectTags, tagBit, tagsOf } from './titles.js';
 
 const clean = (raw: string, category = '') => {
@@ -187,6 +188,77 @@ describe('cleanVodTitle', () => {
     expect(clean('4K').title).toBe('4K');
     expect(clean('ES - ').title).toBe('ES');
     expect(clean('(2020)').title).toBe('(2020)');
+  });
+});
+
+describe('idiomas del título y de la categoría (docs/vod.md §4.10)', () => {
+  const langs = (raw: string, category = '') => {
+    const out = cleanVodTitle(raw, category);
+    return { title: out.title, langs: vodLangsOf(out.langs), tags: tagsOf(out.tags) };
+  };
+
+  it('las marcas del título: se quitan y dicen el idioma', () => {
+    expect(langs('ES - Coco')).toMatchObject({ title: 'Coco', langs: ['castellano'] });
+    expect(langs('Coco (LAT)')).toMatchObject({ title: 'Coco', langs: ['latino'] });
+    expect(langs('Coco (lat)')).toMatchObject({ title: 'Coco', langs: ['latino'] });
+    expect(langs('Coco [VOSE]')).toMatchObject({ title: 'Coco', langs: ['vose'] });
+    expect(langs('Coco 4K ES')).toMatchObject({ title: 'Coco', langs: ['castellano'] });
+    expect(langs('COCO 4K ES')).toMatchObject({ title: 'COCO', langs: ['castellano'] });
+    expect(langs('Coco (2017) ES')).toMatchObject({ title: 'Coco', langs: ['castellano'] });
+    expect(langs('Dune - VO')).toMatchObject({ title: 'Dune', langs: ['ingles'] });
+    expect(langs('FR - Amélie')).toMatchObject({ title: 'Amélie', langs: ['frances'] });
+    expect(langs('Amélie [FR]')).toMatchObject({ title: 'Amélie', langs: ['frances'] });
+    expect(langs('Amélie VF')).toMatchObject({ title: 'Amélie', langs: ['frances'] });
+    expect(langs('ITA - Il padrino')).toMatchObject({ title: 'Il padrino', langs: ['italiano'] });
+    expect(langs('DE - Das Boot')).toMatchObject({ title: 'Das Boot', langs: ['aleman'] });
+    expect(langs('Cidade de Deus (PT)')).toMatchObject({
+      title: 'Cidade de Deus',
+      langs: ['portugues'],
+    });
+    expect(langs('CAT - Pa negre')).toMatchObject({ title: 'Pa negre', langs: ['catalan'] });
+    expect(langs('|NL| De Tweeling')).toMatchObject({ title: 'De Tweeling', langs: ['otros'] });
+    expect(langs('LATINO - Coco')).toMatchObject({ title: 'Coco', langs: ['latino'] });
+    expect(langs('Coco [Castellano]')).toMatchObject({ title: 'Coco', langs: ['castellano'] });
+  });
+
+  it('castellano y latino nunca se juntan por error; los distintivos siguen a los idiomas', () => {
+    expect(langs('ES - LAT: Coco')).toEqual({ title: 'Coco', langs: ['latino'], tags: ['latino'] });
+    expect(langs('ES| Coco', 'PELIS LATINO').langs).toEqual(['latino']);
+    expect(langs('Coco (LAT)', 'ES | ANIMACIÓN')).toEqual({
+      title: 'Coco',
+      langs: ['latino'],
+      tags: ['latino'],
+    });
+    expect(langs('Coco', 'CASTELLANO | ANIMACIÓN').langs).toEqual(['castellano']);
+    expect(langs('Coco', '|LAT| ANIMACION').langs).toEqual(['latino']);
+  });
+
+  it('el título manda: «Coco (FR)» en una categoría española es francés', () => {
+    expect(langs('Coco (FR)', 'ES | ANIMACIÓN').langs).toEqual(['frances']);
+    expect(langs('Amélie (2001) VOSE', 'ES | PELÍCULAS').langs).toEqual(['vose']);
+    /* Sin marcas, el de la categoría. */
+    expect(langs('Coco', 'FR | FILMS').langs).toEqual(['frances']);
+    expect(langs('Coco', 'ESTRENOS').langs).toEqual([]);
+  });
+
+  it('falsos amigos: ni se quitan ni dan idioma', () => {
+    for (const [raw, category] of [
+      ['La casa de papel', 'SERIES'],
+      ['En busca de la felicidad', ''],
+      ['EN BUSCA DEL ARCA PERDIDA', ''],
+      ['Frozen', ''],
+      ['IT', ''],
+      ['IT: Capítulo 2', ''],
+      ['De Niro', ''],
+      ['COCO ES', ''],
+      ['Mamma Mia! US', ''],
+      ['Kill Bill BR', ''],
+    ] as const) {
+      const out = langs(raw, category);
+      expect(out.title, raw).toBe(raw);
+      expect(out.langs, raw).toEqual([]);
+    }
+    expect(langs('La casa de papel', 'ES | SERIES').langs).toEqual(['castellano']);
   });
 });
 

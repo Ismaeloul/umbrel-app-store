@@ -50,6 +50,12 @@ export const V2_FILES = {
   vodCatalog: 'v2/iptv/vod.enc',
   /** Caché en disco de los carteles (§8): `arte/<ab>/<HMAC 32 hex>`. */
   vodArt: 'v2/iptv/arte',
+  /**
+   * Idiomas de Películas y series (docs/vod.md §4.10). Aparte de `vod.json`
+   * a propósito: ese se vacía al cambiar de proveedor y se borra al eliminar
+   * la IPTV, y los idiomas son de Isma, no del proveedor.
+   */
+  vodLanguages: 'v2/vod-idiomas.json',
 } as const;
 
 /** state.json tal y como lo escribe la 0.7.0: las 12 claves v1 más la versión. */
@@ -347,3 +353,19 @@ export const VodDocSchema = z.strictObject({
   prefs: z.array(VodPrefSchema).max(VOD_PROGRESS.prefsMax),
 });
 export type VodDoc = z.infer<typeof VodDocSchema>;
+
+// --- v2/vod-idiomas.json (docs/vod.md §4.10) ---
+
+/**
+ * Los idiomas elegidos para Películas y series. `z.object` (no estricto) a
+ * propósito, como `arranque-instantaneo.json`: un campo de una versión
+ * futura se ignora y no aparta el fichero. Los idiomas que no conozca esta
+ * versión se descartan al leer. El fichero solo existe si Isma ya eligió.
+ */
+export const VodLanguagesFileSchema = z.object({
+  version: z.literal(1),
+  langs: z.array(z.string().max(20)).max(20),
+  unknown: z.boolean(),
+  updatedAt: IsoDateTimeSchema.nullable(),
+});
+export type VodLanguagesFile = z.infer<typeof VodLanguagesFileSchema>;

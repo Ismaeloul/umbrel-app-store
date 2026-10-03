@@ -1,0 +1,283 @@
+/* ==========================================================================
+   Idiomas de Películas y series (docs/vod.md §4.10): la pantalla de la
+   primera vez, el selector (también en la hoja), el botón «Idiomas» de la
+   cabecera, «3 en latino · Ver» y la fila de Ajustes. Piel «Palco»: oro
+   para lo elegido (como los chips de «Tu agenda»), solo tokens, nada por
+   debajo de 11 px, objetivos de 44 px y el hover solo con ratón de verdad.
+   Va aparte de cine.css: Ajustes lo usa sin cargar toda la vista.
+   ========================================================================== */
+
+/* ---- El selector: teselas grandes ------------------------------------------------- */
+.cine-langs {
+  display: grid;
+  gap: var(--s-5);
+  min-width: 0;
+}
+.cine-langs__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 248px), 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.cine-langs__grid--wide {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+}
+.cine-lang {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  min-height: 80px;
+  margin: 0;
+  padding: 12px 14px 12px 12px;
+  border: 0;
+  border-radius: var(--r-l);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+/* La marca del idioma: «ES», «LAT», «VOSE», «EN»… en una losa. */
+.cine-lang__code {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r-m);
+  background: var(--bg-sunk);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-size: var(--fs-15);
+  font-weight: 820;
+  font-stretch: var(--w-head);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.cine-lang[data-lang='vose'] .cine-lang__code {
+  font-size: var(--fs-12);
+}
+.cine-lang[data-lang='otros'] .cine-lang__code {
+  font-size: var(--fs-22);
+  font-weight: 700;
+}
+.cine-lang__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.cine-lang__name {
+  font-size: var(--fs-17);
+  font-weight: 720;
+  font-stretch: var(--w-tight);
+  line-height: var(--lh-snug);
+}
+.cine-lang__hint {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: 1.3;
+}
+.cine-lang__count {
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+/* El ✓: hueco sin elegir, oro macizo elegido (forma y color, nunca solo color). */
+.cine-lang__check {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  color: transparent;
+}
+.cine-lang[aria-pressed='true'] {
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 2px var(--accent-edge);
+}
+.cine-lang[aria-pressed='true'] .cine-lang__code,
+.cine-lang[aria-pressed='true'] .cine-lang__check {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cine-lang:hover {
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+  }
+  .cine-lang[aria-pressed='true']:hover {
+    box-shadow: inset 0 0 0 2px var(--accent-edge);
+  }
+}
+.cine-langs__unknown {
+  max-width: 720px;
+}
+
+/* ---- La primera vez: un panel en la propia vista ------------------------------------ */
+.cine-welcome {
+  display: grid;
+  gap: var(--s-6);
+  min-width: 0;
+  padding: clamp(var(--s-4), 3vw, var(--s-8));
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
+}
+.cine-welcome__head {
+  display: grid;
+  gap: var(--s-2);
+  max-width: 64ch;
+}
+.cine-welcome__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-ink);
+  font-size: var(--fs-kicker);
+  font-weight: 760;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+.cine-welcome__title {
+  font-size: clamp(var(--fs-22), 2.6vw, var(--fs-30));
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  line-height: var(--lh-tight);
+  text-wrap: balance;
+}
+.cine-welcome__title:focus {
+  outline: none;
+}
+.cine-welcome__text {
+  color: var(--text-2);
+  font-size: var(--fs-15);
+  line-height: var(--lh-text);
+  text-wrap: pretty;
+}
+.cine-welcome__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.cine-welcome__anytime {
+  flex: 1 1 100%;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+@media (max-width: 479.98px) {
+  .cine-welcome__foot .btn {
+    flex: 1 1 100%;
+  }
+}
+
+/* ---- El botón «Idiomas» de la cabecera ------------------------------------------------ */
+.cine-lang-button {
+  flex: none;
+  max-width: 100%;
+  min-width: 0;
+}
+.cine-lang-button__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- «Viendo solo en latino» y «3 en latino · Ver» ------------------------------------- */
+.cine-only-lang {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  min-width: 0;
+  padding: 10px 12px 10px 14px;
+  border-radius: var(--r-m);
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px var(--accent-edge);
+  color: var(--text);
+  font-size: var(--fs-15);
+  font-weight: 600;
+}
+.cine-only-lang .icon {
+  color: var(--accent-ink);
+}
+.cine-only-lang__text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cine-other-langs {
+  display: grid;
+  gap: var(--s-2);
+  justify-items: center;
+  min-width: 0;
+}
+.cine-other-langs__lead {
+  color: var(--text-2);
+  font-size: var(--fs-15);
+}
+.cine-other-langs__list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+/* En la rejilla con resultados: «También en otros idiomas», a la izquierda. */
+.cine-other-langs--inline {
+  justify-items: start;
+}
+.cine-other-langs--inline .cine-other-langs__list {
+  justify-content: flex-start;
+}
+
+/* ---- Ajustes → IPTV: la fila de los idiomas ------------------------------------------------ */
+.cine-langs-setting {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.cine-langs-setting__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-s);
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+.cine-langs-setting__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.cine-langs-setting__title {
+  font-size: var(--fs-15);
+  font-weight: 680;
+}
+.cine-langs-setting__value {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

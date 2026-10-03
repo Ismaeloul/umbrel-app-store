@@ -11,7 +11,7 @@ import { resetScrollMemory, saveScroll, savedScroll } from '../../app/scroll-mem
 import { resetToasts } from '../../notices/toasts.ts';
 import { playerStore, resetPlayerApi } from '../../player/api.ts';
 import { json, mockFetch, type MockCall } from '../../test/fetch.ts';
-import { DEMO_VOD_IDS, resetDemoVod } from './demo-data.ts';
+import { DEMO_VOD_IDS, demoSaveLanguages, resetDemoVod } from './demo-data.ts';
 import { episodeName } from './EpisodeList.tsx';
 import { setHevcSupport } from './play.ts';
 import './demo.ts';
@@ -318,6 +318,8 @@ describe('serie', () => {
   it('una categoría desde una serie: la serie siguiente abre en SU temporada (arreglo 3)', async () => {
     resetMode();
     setMode('demo', 'param');
+    // Idiomas ya elegidos (todos): si no, la demo enseña antes el selector (§4.10).
+    demoSaveLanguages({ langs: [], unknown: true });
     net = mockFetch({});
     renderCine({ search: `?vista=cine/${DEMO_VOD_IDS.series}&temporada=1` });
     await screen.findByRole('heading', { level: 1, name: 'The Office' });

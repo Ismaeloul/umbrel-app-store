@@ -32,10 +32,14 @@ import {
   VodDocSchema,
   VodEpisodeSchema,
   VodGrantSchema,
+  VodHomeQuerySchema,
   VodHomeSchema,
+  VodLanguagesBodySchema,
+  VodLanguagesSchema,
   VodProgressBodySchema,
   VodStreamQuerySchema,
   VodTitleSchema,
+  VOD_LANGS,
   isIptvErrorCode,
   isVodErrorCode,
   listV1Routes,
@@ -67,7 +71,7 @@ function keysOf(node: unknown, found = new Set<string>()): Set<string> {
 }
 
 describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
-  it('las 6, en su orden, solo web con bearer; ninguna módulo nuevo', () => {
+  it('las 8, en su orden, solo web con bearer; ninguna módulo nuevo', () => {
     const vod = listV1Routes().filter((route) => route.id.startsWith('vod'));
     expect(vod.map((route) => `${route.id} ${route.method} ${route.path} ${route.module}`)).toEqual(
       [
@@ -77,6 +81,9 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
         'vodArt GET /api/v1/vod/titles/:id/art/:art iptv',
         'vodStream GET /api/v1/vod/titles/:id/stream playback',
         'vodProgress POST /api/v1/vod/titles/:id/progress iptv',
+        /* Los idiomas (§4.10). */
+        'vodLanguagesGet GET /api/v1/vod/languages iptv',
+        'vodLanguagesUpdate PUT /api/v1/vod/languages iptv',
       ],
     );
     for (const route of vod) {
@@ -86,10 +93,11 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
     }
   });
 
-  it('solo abrir y guardar progreso tienen efectos (anti-CSRF); leer, no', () => {
+  it('solo abrir, guardar progreso y elegir idiomas tienen efectos (anti-CSRF); leer, no', () => {
     expect(V1_ROUTES.vodStream.sideEffects).toBe(true);
     expect(V1_ROUTES.vodProgress.sideEffects).toBe(true);
-    for (const id of ['vodHome', 'vodBrowse', 'vodTitle', 'vodArt'] as const) {
+    expect(V1_ROUTES.vodLanguagesUpdate.sideEffects).toBe(true);
+    for (const id of ['vodHome', 'vodBrowse', 'vodTitle', 'vodArt', 'vodLanguagesGet'] as const) {
       expect(V1_ROUTES[id].sideEffects, id).toBe(false);
     }
   });
@@ -414,5 +422,63 @@ describe('constantes (docs/vod.md §11.5)', () => {
     expect(new Set(VOD_EXTENSIONS).size).toBe(VOD_EXTENSIONS.length);
     expect(VOD_EXTENSIONS).toEqual(['mp4', 'mkv', 'm4v', 'mov', 'avi', 'ts', 'webm']);
     expect(VOD_UNSUPPORTED_REASONS).toEqual(['formato', 'video', 'hevc', 'indice', 'sin_saltos']);
+  });
+});
+
+describe('idiomas (docs/vod.md §4.10)', () => {
+  it('castellano y latino son idiomas distintos, y el orden del selector está fijado', () => {
+    expect(VOD_LANGS).toEqual([
+      'castellano',
+      'latino',
+      'vose',
+      'ingles',
+      'frances',
+      'italiano',
+      'aleman',
+      'portugues',
+      'catalan',
+      'otros',
+    ]);
+  });
+
+  it('la tarjeta lleva sus idiomas (opcionales: un servidor anterior no los manda)', () => {
+    const card = WEB_V1_FIXTURES.vodHome.newMovies[0];
+    expect(VodCardSchema.safeParse(card).success).toBe(true);
+    const { langs: _langs, ...old } = card as z.infer<typeof VodCardSchema>;
+    expect(VodCardSchema.safeParse(old).success).toBe(true);
+    expect(VodCardSchema.safeParse({ ...card, langs: ['klingon'] }).success).toBe(false);
+  });
+
+  it('el filtro va en la URL: `langs` solo con idiomas conocidos y `unknown` 0/1', () => {
+    expect(VodHomeQuerySchema.parse({})).toEqual({});
+    expect(VodHomeQuerySchema.parse({ langs: 'castellano,frances', unknown: '0' })).toEqual({
+      langs: 'castellano,frances',
+      unknown: '0',
+    });
+    expect(VodHomeQuerySchema.safeParse({ langs: 'es' }).success).toBe(false);
+    expect(VodHomeQuerySchema.safeParse({ unknown: 'si' }).success).toBe(false);
+    const browse = VodBrowseQuerySchema.parse({ kind: 'series', langs: 'latino', q: 'coco' });
+    expect(browse.langs).toBe('latino');
+    expect(browse.unknown).toBeUndefined();
+  });
+
+  it('la elección: sin elegir, elegida y el cuerpo de PUT', () => {
+    expect(
+      VodLanguagesSchema.safeParse(VARIANT_FIXTURES['vodLanguagesGet.sin-elegir']).success,
+    ).toBe(true);
+    expect(VodLanguagesSchema.safeParse(WEB_V1_FIXTURES.vodLanguagesGet).success).toBe(true);
+    expect(VodLanguagesBodySchema.safeParse({ langs: [], unknown: true }).success).toBe(true);
+    expect(
+      VodLanguagesBodySchema.safeParse({ langs: ['castellano', 'latino'], unknown: false }).success,
+    ).toBe(true);
+    expect(VodLanguagesBodySchema.safeParse({ langs: ['es'], unknown: true }).success).toBe(false);
+    expect(VodLanguagesBodySchema.safeParse({ langs: [] }).success).toBe(false);
+    expect(V2_FILES.vodLanguages).toBe('v2/vod-idiomas.json');
+  });
+
+  it('«3 en latino · Ver»: lo que queda fuera por idioma valida', () => {
+    const hidden = VARIANT_FIXTURES['vodBrowse.otros-idiomas'];
+    expect(VodBrowseResponseSchema.safeParse(hidden).success).toBe(true);
+    expect(hidden.otherLangs?.langs[0]).toEqual({ lang: 'latino', count: 3 });
   });
 });

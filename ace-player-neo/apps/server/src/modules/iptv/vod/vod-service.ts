@@ -16,11 +16,21 @@
    Estados (§4.8): `off` sin IPTV o en pausa; `unsupported` con M3U;
    `preparing` en la primera sincronización o cargando `vod.enc`; `ready`
    (con `stale` si la última falló); `none` si el proveedor no tiene VOD;
-   `error` si falló y no hay nada guardado. */
+   `error` si falló y no hay nada guardado.
 
+   Idiomas (§4.10): la portada y la rejilla filtran por `langs`/`unknown`
+   (la web manda los que eligió Isma, guardados en `languages.ts`); los
+   recuentos por idioma de todo el catálogo van siempre en la portada. */
+
+import path from 'node:path';
 import {
+  parseVodLangsParam,
   VOD_KINDS,
+  VOD_LANG_ALL,
+  VOD_LANGS,
   VOD_PROGRESS,
+  vodLangBits,
+  vodLangsOf,
   type IptvVodStatus,
   type VodArtKind,
   type VodBrowseQuery,
@@ -32,7 +42,12 @@ import {
   type VodContinue,
   type VodEpisode,
   type VodHome,
+  type VodHomeQuery,
   type VodKind,
+  type VodLangCount,
+  type VodLangQuery,
+  type VodLanguages,
+  type VodLanguagesBody,
   type VodMovie,
   type VodProgressBody,
   type VodProgressEntry,
@@ -89,7 +104,19 @@ import {
   type EpisodeRef,
   type ProgressTarget,
 } from './progress.js';
-import { listPage, parseVodQuery, searchCached, searchPage, type VodFilter } from './search.js';
+import { VodLanguageStore } from './languages.js';
+import {
+  hiddenLangs,
+  langFilterKey,
+  langPasses,
+  listPage,
+  parseVodQuery,
+  searchCached,
+  searchPage,
+  type VodFilter,
+  type VodLangFilter,
+  type VodLangHiddenCounts,
+} from './search.js';
 import { foldKeepLength, type VodTable } from './table.js';
 import type { VodSyncMode } from './table-codec.js';
 import { cleanVodTitle, tagBit, tagsOf } from './titles.js';
@@ -114,6 +141,8 @@ export interface VodHost {
     readonly vodFile: string;
     readonly vodCatalogFile: string;
     readonly vodArtDir: string;
+    /** Los idiomas elegidos (§4.10). Sin él, `vod-idiomas.json` junto a `vodFile`. */
+    readonly vodLanguagesFile?: string;
   };
   keys(): IptvKeys;
   /** El proveedor, o null (sin IPTV o con secretos ilegibles). */
@@ -173,6 +202,34 @@ export class VodPreemptedError extends Error {
 
 const HOME_ROWS = 20;
 const CATEGORY_MAX = 2_000;
+/** Portadas guardadas por catálogo (una por filtro de idiomas, §4.10). */
+const HOME_FILTERS_MAX = 4;
+
+/** Lo de la portada que no depende del progreso, para un filtro de idiomas. */
+interface HomeParts {
+  readonly rows: Readonly<Record<VodKind, readonly number[]>>;
+  readonly categories: VodHome['categories'];
+  readonly tags: VodHome['tags'];
+  readonly shown: { readonly movies: number; readonly series: number };
+}
+
+/**
+ * El filtro de idiomas de una consulta (§4.10): sin `langs`, ninguno; con
+ * todos los idiomas y también los que no lo dicen, ninguno tampoco.
+ */
+export function langFilterOf(query: VodLangQuery | undefined): VodLangFilter | null {
+  if (!query?.langs) return null;
+  const mask = vodLangBits(parseVodLangsParam(query.langs));
+  const unknown = query.unknown !== '0';
+  if (mask === VOD_LANG_ALL && unknown) return null;
+  return { mask, unknown };
+}
+
+/** Lo que queda fuera por idioma, como lo manda la API. */
+function otherLangsOf(hidden: VodLangHiddenCounts | null): VodBrowseResponse['otherLangs'] {
+  if (!hidden) return null;
+  return { total: hidden.total, langs: hiddenLangs(hidden), unknown: hidden.unknown };
+}
 /** Tras un fallo, la vista no vuelve a lanzar una sincronización antes de esto. */
 export const VOD_VIEW_RETRY_MS = 30_000;
 
@@ -296,11 +353,15 @@ export class VodService {
   private readonly bucketIds = new WeakMap<VodTable, Map<string, number>>();
   private homeCache: {
     readonly catalog: VodCatalog;
-    readonly rows: Readonly<Record<VodKind, readonly number[]>>;
-    readonly categories: VodHome['categories'];
-    readonly tags: VodHome['tags'];
+    /** Por filtro de idiomas (`langFilterKey`), LRU de `HOME_FILTERS_MAX`. */
+    readonly parts: Map<string, HomeParts>;
+    /** Recuentos por idioma de todo el catálogo (sin filtro), por tipo. */
+    readonly langs: NonNullable<VodHome['langs']>;
+    readonly noLang: NonNullable<VodHome['noLang']>;
   } | null = null;
   readonly doc: VodDocStore;
+  /** Los idiomas elegidos (§4.10). */
+  readonly languages: VodLanguageStore;
   readonly details: VodDetailsQueue;
   readonly art: VodArtCache;
 
@@ -313,6 +374,13 @@ export class VodService {
     this.details = new VodDetailsQueue(host.clock, (kind, source, signal) =>
       this.fetchInfo(kind, source, signal),
     );
+    this.languages = new VodLanguageStore({
+      file:
+        host.paths.vodLanguagesFile ??
+        path.join(path.dirname(host.paths.vodFile), 'vod-idiomas.json'),
+      clock: host.clock,
+      logger: host.logger,
+    });
     this.art = new VodArtCache({
       net: host.net,
       clock: host.clock,
@@ -340,6 +408,7 @@ export class VodService {
     this.details.stop();
     this.art.stop();
     await this.doc.flush();
+    await this.languages.flush();
   }
 
   private clearTimers(): void {
@@ -876,6 +945,7 @@ export class VodService {
       poster: this.posterStamp(table, row),
       tags: tagsOf(table.tags[row] as number),
       adult: table.isAdult(row),
+      langs: vodLangsOf(table.langs[row] as number),
       progress:
         entry && entry.durS > 0
           ? entry.watched
@@ -909,20 +979,34 @@ export class VodService {
     };
   }
 
-  private categoriesOf(kind: VodKind, table: VodTable): VodCategory[] {
+  /**
+   * Las categorías de un tipo con su número. Con filtro de idiomas, el
+   * número es el de esos idiomas y las que se quedan a 0 no salen (§4.10).
+   */
+  private categoriesOf(kind: VodKind, table: VodTable, lang: VodLangFilter | null): VodCategory[] {
     const out: Array<VodCategory & { order: number }> = [];
     const providerId = this.providerId();
     for (let bucket = 0; bucket <= table.cats.length; bucket += 1) {
-      const count = (table.byCatStart[bucket + 1] as number) - (table.byCatStart[bucket] as number);
+      let count = (table.byCatStart[bucket + 1] as number) - (table.byCatStart[bucket] as number);
       if (!count) continue;
       const none = bucket === table.cats.length;
       const name = none ? 'Sin categoría' : (table.cats[bucket] ?? '');
       const rows = table.categoryRows(bucket);
       let adult = true;
-      for (const row of rows) {
-        if (!table.isAdult(row)) {
-          adult = false;
-          break;
+      if (lang) {
+        count = 0;
+        for (const row of rows) {
+          if (!langPasses(lang, table.langs[row] as number)) continue;
+          count += 1;
+          if (!table.isAdult(row)) adult = false;
+        }
+        if (!count) continue;
+      } else {
+        for (const row of rows) {
+          if (!table.isAdult(row)) {
+            adult = false;
+            break;
+          }
         }
       }
       out.push({
@@ -942,36 +1026,93 @@ export class VodService {
     return out.slice(0, CATEGORY_MAX).map(({ order: _order, ...category }) => category);
   }
 
-  /** Distintivos de «Todas» (los chips de la portada), con los adultos según `VOD_ADULT_POLICY`. */
-  private tagCountsOf(table: VodTable): VodTagCount[] {
-    return listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, 0, {
+  /**
+   * Distintivos de «Todas» (los chips de la portada), con los adultos según
+   * `VOD_ADULT_POLICY` y en los idiomas del filtro; y cuántos títulos se ven.
+   */
+  private tagCountsOf(
+    table: VodTable,
+    lang: VodLangFilter | null,
+  ): { tags: VodTagCount[]; total: number } {
+    const page = listPage(table, { bucket: null, tagBit: 0, lang }, 'added', 0, 0, {
       adults: VOD_ADULT_POLICY.all,
-    }).tagCounts.map((item) => ({
-      tag: item.tag,
-      count: item.count,
-    }));
+    });
+    return {
+      tags: page.tagCounts.map((item) => ({ tag: item.tag, count: item.count })),
+      total: page.total,
+    };
   }
 
-  private homeParts(catalog: VodCatalog): NonNullable<VodService['homeCache']> {
-    if (this.homeCache?.catalog === catalog) return this.homeCache;
+  /** Cuántos títulos hay de cada idioma (y sin idioma) en una tabla entera. */
+  private static langCountsOf(table: VodTable): { langs: VodLangCount[]; none: number } {
+    const counts = new Array<number>(VOD_LANGS.length).fill(0);
+    let none = 0;
+    for (let row = 0; row < table.n; row += 1) {
+      const bits = table.langs[row] as number;
+      if (!bits) {
+        none += 1;
+        continue;
+      }
+      for (let index = 0; index < VOD_LANGS.length; index += 1) {
+        if (bits & (1 << index)) counts[index] = (counts[index] as number) + 1;
+      }
+    }
+    return {
+      langs: VOD_LANGS.map((lang, index) => ({ lang, count: counts[index] as number })).filter(
+        (item) => item.count > 0,
+      ),
+      none,
+    };
+  }
+
+  private homeParts(
+    catalog: VodCatalog,
+    lang: VodLangFilter | null,
+  ): { parts: HomeParts; cache: NonNullable<VodService['homeCache']> } {
+    if (this.homeCache?.catalog !== catalog) {
+      const movie = VodService.langCountsOf(catalog.tables.movie);
+      const series = VodService.langCountsOf(catalog.tables.series);
+      this.homeCache = {
+        catalog,
+        parts: new Map(),
+        langs: { movie: movie.langs, series: series.langs },
+        noLang: { movies: movie.none, series: series.none },
+      };
+    }
+    const cache = this.homeCache;
+    const key = langFilterKey(lang);
+    const hit = cache.parts.get(key);
+    if (hit) {
+      cache.parts.delete(key);
+      cache.parts.set(key, hit);
+      return { parts: hit, cache };
+    }
     /* «Novedades en películas» y «Series actualizadas»: los adultos, según `VOD_ADULT_POLICY`. */
     const newest = (table: VodTable): number[] =>
-      listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, HOME_ROWS, {
+      listPage(table, { bucket: null, tagBit: 0, lang }, 'added', 0, HOME_ROWS, {
         adults: VOD_ADULT_POLICY.home,
       }).rows.slice();
-    this.homeCache = {
-      catalog,
+    const movieTags = this.tagCountsOf(catalog.tables.movie, lang);
+    const seriesTags = this.tagCountsOf(catalog.tables.series, lang);
+    const parts: HomeParts = {
       rows: { movie: newest(catalog.tables.movie), series: newest(catalog.tables.series) },
       categories: {
-        movie: this.categoriesOf('movie', catalog.tables.movie),
-        series: this.categoriesOf('series', catalog.tables.series),
+        movie: this.categoriesOf('movie', catalog.tables.movie, lang),
+        series: this.categoriesOf('series', catalog.tables.series, lang),
       },
-      tags: {
-        movie: this.tagCountsOf(catalog.tables.movie),
-        series: this.tagCountsOf(catalog.tables.series),
-      },
+      tags: { movie: movieTags.tags, series: seriesTags.tags },
+      /* Sin filtro, el catálogo entero (con los adultos, que «Todas» enseña). */
+      shown: lang
+        ? { movies: movieTags.total, series: seriesTags.total }
+        : { movies: catalog.tables.movie.n, series: catalog.tables.series.n },
     };
-    return this.homeCache;
+    cache.parts.set(key, parts);
+    while (cache.parts.size > HOME_FILTERS_MAX) {
+      const oldest = cache.parts.keys().next().value;
+      if (oldest === undefined) break;
+      cache.parts.delete(oldest);
+    }
+    return { parts, cache };
   }
 
   private continueRow(catalog: VodCatalog): VodContinue[] {
@@ -1028,6 +1169,9 @@ export class VodService {
       updatedSeries: [],
       categories: { movie: [], series: [] },
       tags: { movie: [], series: [] },
+      langs: { movie: [], series: [] },
+      noLang: { movies: 0, series: 0 },
+      shown: { movies: 0, series: 0 },
     };
   }
 
@@ -1038,12 +1182,12 @@ export class VodService {
 
   // --- Rutas ---
 
-  /** GET /api/v1/vod (§6.4, D-VOD28). */
-  async home(): Promise<VodHome> {
+  /** GET /api/v1/vod (§6.4, D-VOD28), con el filtro de idiomas de la consulta (§4.10). */
+  async home(query?: VodHomeQuery): Promise<VodHome> {
     const catalog = await this.ensureCatalog();
     const state = this.state();
     if (!catalog || state !== 'ready') return this.emptyHome(state, this.active());
-    const parts = this.homeParts(catalog);
+    const { parts, cache } = this.homeParts(catalog, langFilterOf(query));
     const progress = this.progressMap();
     const cards = (kind: VodKind): VodCard[] =>
       parts.rows[kind].map((row) => this.card(kind, catalog.tables[kind], row, progress));
@@ -1059,6 +1203,9 @@ export class VodService {
       updatedSeries: cards('series'),
       categories: parts.categories,
       tags: parts.tags,
+      langs: cache.langs,
+      noLang: cache.noLang,
+      shown: parts.shown,
     };
   }
 
@@ -1073,6 +1220,7 @@ export class VodService {
     }
     const catalog = await this.ensureCatalog();
     const state = this.state();
+    const lang = langFilterOf(query);
     const empty: VodBrowseResponse = {
       active: this.active(),
       state,
@@ -1083,6 +1231,7 @@ export class VodService {
       tags: [],
       nextCursor: null,
       stale: false,
+      otherLangs: null,
     };
     if (!catalog || state !== 'ready') return empty;
     const table = catalog.tables[query.kind];
@@ -1094,9 +1243,9 @@ export class VodService {
     }
     const stale = Boolean(cursor && cursor.stamp !== catalog.stamp);
     const offset = cursor && !stale ? cursor.offset : 0;
-    const filter: VodFilter = { bucket, tagBit: query.tag ? tagBit(query.tag) : 0 };
+    const filter: VodFilter = { bucket, tagBit: query.tag ? tagBit(query.tag) : 0, lang };
     const page = parsed
-      ? searchPage(searchCached(table, parsed, bucket), table, filter, offset, query.limit)
+      ? searchPage(searchCached(table, parsed, bucket, lang), table, filter, offset, query.limit)
       : listPage(table, filter, query.sort, offset, query.limit, { adults: VOD_ADULT_POLICY.all });
     const other = VOD_KINDS.find((kind) => kind !== query.kind) as VodKind;
     const progress = this.progressMap();
@@ -1106,11 +1255,22 @@ export class VodService {
       items: page.rows.map((row) => this.card(query.kind, table, row, progress)),
       total: page.total,
       capped: page.capped,
-      otherKindTotal: parsed ? searchCached(catalog.tables[other], parsed, null).total : null,
+      otherKindTotal: parsed ? searchCached(catalog.tables[other], parsed, null, lang).total : null,
       tags: page.tagCounts.map((item) => ({ tag: item.tag, count: item.count })),
       nextCursor: page.more ? encodeCursor(catalog.stamp, offset + page.rows.length) : null,
       stale,
+      otherLangs: otherLangsOf(page.hidden),
     };
+  }
+
+  /** GET /api/v1/vod/languages (§4.10): no necesita el catálogo ni la IPTV. */
+  languagesOf(): VodLanguages {
+    return this.languages.read();
+  }
+
+  /** PUT /api/v1/vod/languages (§4.10). También lo usa la copia de seguridad al restaurar. */
+  saveLanguages(body: VodLanguagesBody): Promise<VodLanguages> {
+    return this.languages.save(body);
   }
 
   /** Película o serie de un id (con su fila), o `vod_not_found`. */
@@ -1198,6 +1358,7 @@ export class VodService {
       backdrop: info?.backdrop ? this.art.stamp(info.backdrop) : null,
       tags: tagsOf(table.tags[row] as number),
       adult: table.isAdult(row),
+      langs: vodLangsOf(table.langs[row] as number),
       category: this.categoryIdOf(kind, table, row),
       /* Lo demás que da Xtream (punto 3 de la 0.9.0): estreno y tráiler. */
       releaseDate: info?.releaseDate ?? null,

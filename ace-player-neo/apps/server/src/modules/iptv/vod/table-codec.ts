@@ -29,7 +29,12 @@ import {
 } from './table.js';
 
 const MAGIC = Buffer.from('ACEVOD01', 'ascii');
-export const VOD_CODEC_VERSION = 1;
+/**
+ * 2 desde los idiomas (§4.10, columna `langs`): un `vod.enc` de la versión 1
+ * no se puede leer (no sabe los idiomas), se descarta y se vuelve a
+ * descargar el catálogo, como con cualquier fichero que no cuadra.
+ */
+export const VOD_CODEC_VERSION = 2;
 /** Tope de la cabecera (categorías y carpetas): nunca debería pasar de unos cientos de KiB. */
 const HEADER_MAX = 8 * 1024 * 1024;
 
@@ -56,6 +61,7 @@ type ArrayName =
   | 'ext'
   | 'flags'
   | 'tags'
+  | 'langs'
   | 'offsets'
   | 'posterDir'
   | 'posterOffsets'
@@ -74,6 +80,7 @@ const ARRAYS: Readonly<Record<ArrayName, 'f64' | 'u32' | 'u16' | 'u8'>> = {
   ext: 'u8',
   flags: 'u8',
   tags: 'u8',
+  langs: 'u16',
   offsets: 'u32',
   posterDir: 'u16',
   posterOffsets: 'u32',
@@ -212,7 +219,15 @@ function decodeTable(body: Buffer, header: TableHeader): RawVodTable {
   }
   const { n } = header;
   const perRow: ArrayName[] = ['source', 'bySource', 'cat', 'year', 'rating', 'added', 'ext'];
-  for (const name of [...perRow, 'flags', 'tags', 'posterDir', 'byAdded', 'byCatRows'] as const) {
+  for (const name of [
+    ...perRow,
+    'flags',
+    'tags',
+    'langs',
+    'posterDir',
+    'byAdded',
+    'byCatRows',
+  ] as const) {
     if (arrays[name].length !== n) fail(`${name} no mide n`);
   }
   for (const name of ['offsets', 'posterOffsets'] as const) {
@@ -233,6 +248,7 @@ function decodeTable(body: Buffer, header: TableHeader): RawVodTable {
     ext: arrays.ext as Uint8Array,
     flags: arrays.flags as Uint8Array,
     tags: arrays.tags as Uint8Array,
+    langs: arrays.langs as Uint16Array,
     offsets,
     posterDir: arrays.posterDir as Uint16Array,
     posterOffsets: arrays.posterOffsets as Uint32Array,

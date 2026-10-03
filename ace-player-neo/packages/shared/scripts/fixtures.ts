@@ -100,6 +100,8 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'iptvGuideProgrammes',
   'iptvGuideProgramme',
   'iptvGuideNow',
+  'vodLanguagesGet',
+  'vodLanguagesUpdate',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 /** Rutas con ejemplo en `v1/`. */
@@ -764,26 +766,32 @@ const vodDune = vodCard(VOD_ID_DUNE, 'movie', 'Dune', 2021, {
   poster: '3fa9c210',
   tags: ['castellano', '4k'],
   progress: 0.28,
+  langs: ['castellano'],
 });
 const vodOppenheimer = vodCard(VOD_ID_OPPENHEIMER, 'movie', 'Oppenheimer', 2023, {
   rating: 8.3,
   poster: '5d0e7b44',
   tags: ['castellano', '4k'],
+  langs: ['castellano'],
 });
 const vodAmelie = vodCard(VOD_ID_AMELIE, 'movie', 'Amélie', 2001, {
   rating: 7.9,
   poster: null,
   tags: ['vose'],
+  langs: ['vose'],
 });
 const vodOffice = vodCard(VOD_ID_OFFICE, 'series', 'The Office', 2005, {
   rating: 8.6,
   poster: '71bc0a93',
   tags: ['castellano', 'multi'],
+  /* MULTI con las dos lenguas nombradas («ES/EN | MULTI»). */
+  langs: ['castellano', 'ingles'],
 });
 const vodDark = vodCard(VOD_ID_DARK, 'series', 'Dark', 2017, {
   rating: 8.7,
   poster: '0e9d2a61',
   tags: ['castellano'],
+  langs: ['castellano'],
 });
 
 const vodCategories: VodHome['categories'] = {
@@ -851,6 +859,26 @@ const vodHomeReady: VodHome = {
       { tag: 'multi', count: 244 },
     ],
   },
+  /* Todo el catálogo por idioma (§4.10), para el selector. */
+  langs: {
+    movie: [
+      { lang: 'castellano', count: 21_480 },
+      { lang: 'latino', count: 9_310 },
+      { lang: 'vose', count: 3_025 },
+      { lang: 'ingles', count: 5_102 },
+      { lang: 'frances', count: 1_204 },
+      { lang: 'otros', count: 388 },
+    ],
+    series: [
+      { lang: 'castellano', count: 3_402 },
+      { lang: 'latino', count: 870 },
+      { lang: 'vose', count: 1_190 },
+      { lang: 'ingles', count: 412 },
+    ],
+  },
+  noLang: { movies: 7_704, series: 1_030 },
+  /* Sin filtro de idiomas (`langs` en la consulta), igual que `counts`. */
+  shown: { movies: 48_213, series: 6_904 },
 };
 
 /** Portada sin nada: el proveedor no tiene VOD, y la base de las demás variantes de estado. */
@@ -1066,6 +1094,7 @@ const backupFile: BackupFile = {
     secret: null,
   },
   browser: { theme: 'oscuro', transparency: 'normal', playbackMode: 'balanced' },
+  vod: { langs: ['castellano', 'frances'], unknown: true },
 };
 
 const backupCounts = (favorites: number, history: number): BackupCounts => ({
@@ -1141,6 +1170,7 @@ export const WEB_V1_FIXTURES = {
     result: backupCounts(2, 1),
     preferences: true,
     settings: false,
+    vodLanguages: true,
     iptv: {
       action: 'needs_secret',
       protected: false,
@@ -1167,9 +1197,23 @@ export const WEB_V1_FIXTURES = {
     ],
     nextCursor: 'djEuMTc1ODU5OS42MA',
     stale: false,
+    otherLangs: null,
   },
   vodTitle: vodDuneTitle,
   vodStream: vodDuneGrant,
+  /* Elegidos: castellano y francés, y también los que no lo dicen. */
+  vodLanguagesGet: {
+    chosen: true,
+    langs: ['castellano', 'frances'],
+    unknown: true,
+    updatedAt: '2026-10-03T17:20:00.000Z',
+  },
+  vodLanguagesUpdate: {
+    chosen: true,
+    langs: ['castellano', 'frances'],
+    unknown: true,
+    updatedAt: '2026-10-03T17:20:00.000Z',
+  },
   iptvBrowse: iptvBrowseRoot,
   iptvChannels: {
     query: 'la',
@@ -1423,6 +1467,34 @@ export const VARIANT_FIXTURES = {
     ],
     nextCursor: null,
     stale: false,
+    otherLangs: null,
+  },
+  /* «coco» con castellano elegido: nada en castellano, pero 3 en latino y 1 en VOSE («3 en latino · Ver»). */
+  'vodBrowse.otros-idiomas': {
+    active: true,
+    state: 'ready',
+    items: [],
+    total: 0,
+    capped: false,
+    otherKindTotal: 0,
+    tags: [],
+    nextCursor: null,
+    stale: false,
+    otherLangs: {
+      total: 4,
+      langs: [
+        { lang: 'latino', count: 3 },
+        { lang: 'vose', count: 1 },
+      ],
+      unknown: 0,
+    },
+  },
+  /* La primera vez: aún sin elegir (la web enseña el selector). */
+  'vodLanguagesGet.sin-elegir': {
+    chosen: false,
+    langs: [],
+    unknown: true,
+    updatedAt: null,
   },
   'vodBrowse.vacio': {
     active: true,
@@ -1726,6 +1798,8 @@ export const VARIANT_FIXTURES = {
   'vodHome.none': V1ResponseInput<'vodHome'>;
   'vodHome.unsupported': V1ResponseInput<'vodHome'>;
   'vodBrowse.search': V1ResponseInput<'vodBrowse'>;
+  'vodBrowse.otros-idiomas': V1ResponseInput<'vodBrowse'>;
+  'vodLanguagesGet.sin-elegir': V1ResponseInput<'vodLanguagesGet'>;
   'vodBrowse.vacio': V1ResponseInput<'vodBrowse'>;
   'vodTitle.series': V1ResponseInput<'vodTitle'>;
   'vodTitle.episodio-avi': V1ResponseInput<'vodTitle'>;

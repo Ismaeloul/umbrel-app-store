@@ -26,7 +26,7 @@
      (`backup*`, decisiones.md D25: la copia lleva datos personales y la
      IPTV solo se configura en la web) y `diagnosticsExport` («Descargar
      fallos» de Salud, 0.9.0: lleva el registro del servidor, aunque
-     redactado). Las 6 de Películas y series (`vod*`, docs/vod.md §11.1)
+     redactado). Las 8 de Películas y series (`vod*`, docs/vod.md §11.1)
      nacen `web` (D-VOD19) y pasan a `any` cuando la app copie la pantalla.
      `video` es `any` desde la IPTV (docs/iptv.md §5.4): la web entra sin
      token (el login de Umbrel basta) y el iPhone con `video-token`.
@@ -133,7 +133,10 @@ import {
   VodBrowseQuerySchema,
   VodBrowseResponseSchema,
   VodGrantSchema,
+  VodHomeQuerySchema,
   VodHomeSchema,
+  VodLanguagesBodySchema,
+  VodLanguagesSchema,
   VodProgressBodySchema,
   VodStreamQuerySchema,
   VodTitleParamsSchema,
@@ -850,7 +853,9 @@ export const V1_ROUTES = {
       'Portada de Películas y series en una petición: «Seguir viendo», novedades, series actualizadas, categorías y distintivos',
     description:
       'Estado del catálogo VOD (docs/vod.md §4.8 y §6.4, D-VOD28). «Novedades en películas» y «Series actualizadas» van sin adultos (D-VOD7). ' +
-      'Sin IPTV activa, en pausa, con M3U o sin VOD responde 200 con `active: false` o su `state`: no es un error. Nunca lleva URL, `stream_id` ni credenciales.',
+      'Sin IPTV activa, en pausa, con M3U o sin VOD responde 200 con `active: false` o su `state`: no es un error. Nunca lleva URL, `stream_id` ni credenciales. ' +
+      'Con `langs` (y `unknown`), novedades, categorías y distintivos van filtrados por idioma (§4.10); `langs` y `noLang` cuentan siempre el catálogo entero.',
+    query: VodHomeQuerySchema,
     response: VodHomeSchema,
     status: 200,
     content: 'json',
@@ -952,6 +957,40 @@ export const V1_ROUTES = {
     content: 'empty',
     sideEffects: true,
     errors: ['vod_not_found'],
+    legacyTwin: null,
+  }),
+  vodLanguagesGet: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod/languages',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Los idiomas elegidos para Películas y series (castellano y latino, aparte)',
+    description:
+      'Por casa, en `v2/vod-idiomas.json` (docs/vod.md §4.10): valen en el PC y en el iPhone y no dependen del proveedor. ' +
+      '`chosen: false` hasta la primera elección (la web enseña el selector). `langs` vacía = todos los idiomas.',
+    response: VodLanguagesSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  vodLanguagesUpdate: defineRoute({
+    method: 'PUT',
+    path: '/api/v1/vod/languages',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Elegir los idiomas de Películas y series (sustituye la elección)',
+    description:
+      'Guarda la elección (`chosen` pasa a `true`) y la devuelve. Los idiomas repetidos se juntan. Entra en la copia de seguridad.',
+    body: VodLanguagesBodySchema,
+    response: VodLanguagesSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [],
     legacyTwin: null,
   }),
 

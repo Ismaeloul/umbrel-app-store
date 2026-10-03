@@ -74,9 +74,11 @@ describe('portada en filas, como la agenda', () => {
       'ANIMACIÓN',
       'CLÁSICOS',
       'VOSE',
+      'EN | MOVIES',
+      'FR | FILMS',
       'XXX | ADULTOS',
     ]);
-    await waitFor(() => expect(rowCalls()).toHaveLength(8));
+    await waitFor(() => expect(rowCalls()).toHaveLength(10));
     expect(rowCalls().every((call) => queryOf(call).sort === 'added')).toBe(true);
     const k4 = await screen.findByRole('list', { name: 'VOD | 4K' });
     expect(within(k4).getAllByRole('link').length).toBe(9);
@@ -88,7 +90,7 @@ describe('portada en filas, como la agenda', () => {
       screen.getByRole('button', { name: /^The Office\. Siguiente: T2 · E6/ }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Dune\. Quedan 1 h 53 min$/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Ver las 63 películas' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ver las 73 películas' })).toBeInTheDocument();
   });
 
   it('las filas se piden al acercarse a la pantalla, no todas de golpe', async () => {
@@ -236,22 +238,18 @@ describe('la rejilla (otra pantalla)', () => {
       'aria-pressed',
       'true',
     );
-    const tags = screen.getByRole('group', { name: 'Lengua y calidad' });
+    /* Solo la calidad: el idioma se elige con su botón de la cabecera (§4.10). */
+    const tags = screen.getByRole('group', { name: 'Calidad' });
     expect(
       within(tags)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(
-      expect.arrayContaining([
-        expect.stringMatching(/^Castellano/),
-        expect.stringMatching(/^VOSE/),
-      ]),
-    );
+    ).toEqual([expect.stringMatching(/^Multi/), expect.stringMatching(/^4K/)]);
     const grid = await screen.findByRole('list', { name: 'Todas las películas' });
     const cells = within(grid).getAllByRole('listitem');
-    expect(cells[0]).toHaveAttribute('aria-setsize', '63');
+    expect(cells[0]).toHaveAttribute('aria-setsize', '73');
     expect(cells[0]).toHaveAttribute('aria-posinset', '1');
-    expect((await screen.findAllByText('63 películas')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('73 películas')).length).toBeGreaterThan(0);
     // La rejilla no pide las filas de la portada.
     expect(rowCalls()).toHaveLength(0);
     // Otra categoría desde los chips: misma pantalla.
@@ -262,13 +260,13 @@ describe('la rejilla (otra pantalla)', () => {
   it('un distintivo filtra la rejilla y viaja en la URL; tocarlo otra vez lo quita', async () => {
     net = mockFetch(demoRoutes());
     renderCine({ search: '?vista=cine&cinecat=all' });
-    const tags = await screen.findByRole('group', { name: 'Lengua y calidad' });
-    fireEvent.click(within(tags).getByRole('button', { name: /^VOSE/ }));
-    await waitFor(() => expect(queryOf(gridCalls().at(-1)!).tag).toBe('vose'));
-    expect(location.search).toContain('cinetag=vose');
-    fireEvent.click(within(tags).getByRole('button', { name: /^VOSE/ }));
+    const tags = await screen.findByRole('group', { name: 'Calidad' });
+    fireEvent.click(within(tags).getByRole('button', { name: /^4K/ }));
+    await waitFor(() => expect(queryOf(gridCalls().at(-1)!).tag).toBe('4k'));
+    expect(location.search).toContain('cinetag=4k');
+    fireEvent.click(within(tags).getByRole('button', { name: /^4K/ }));
     await waitFor(() => expect(location.search).not.toContain('cinetag'));
-    expect(within(tags).getByRole('button', { name: /^VOSE/ })).toHaveAttribute(
+    expect(within(tags).getByRole('button', { name: /^4K/ })).toHaveAttribute(
       'aria-pressed',
       'false',
     );

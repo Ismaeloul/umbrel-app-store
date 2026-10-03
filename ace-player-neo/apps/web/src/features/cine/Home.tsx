@@ -19,9 +19,22 @@
    del «Ver todo» al título de la rejilla y vuelve (nunca a <body>).
 
    Cada estado vacío tiene su salida (EmptyState con acciones), y la región
-   viva dice cuántos títulos hay tras cada cambio. */
+   viva dice cuántos títulos hay tras cada cambio.
 
-import type { VodBrowseResponse, VodCard, VodHome as VodHomeData, VodKind } from '@ace/shared';
+   Idiomas (§4.10): la primera vez, antes de la portada, «¿En qué idiomas las
+   quieres ver?» (Languages.tsx); luego el botón con lo elegido en la cabecera
+   («Castellano y Francés») cambia los idiomas al vuelo. Todo lo de abajo va
+   filtrado; si una búsqueda no da nada en tus idiomas pero sí en otros, «3 en
+   latino · Ver» enseña esos (`cineidioma`, sin tocar lo elegido). */
+
+import type {
+  VodBrowseResponse,
+  VodCard,
+  VodHome as VodHomeData,
+  VodKind,
+  VodLang,
+  VodLanguages,
+} from '@ace/shared';
 import { VOD_LIMITS } from '@ace/shared';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, describeFailure, useApiQuery } from '../../api/index.ts';
@@ -53,15 +66,26 @@ import {
   savedHomeScroll,
   setCineState,
   useCineState,
+  useLangScope,
   useSettled,
   useVodHome,
   useVodPages,
 } from './data.ts';
 import { PosterGrid } from './Grid.tsx';
+import { CineLangs } from './lang-context.ts';
+import {
+  LanguageButton,
+  LanguageSheet,
+  LanguageWelcome,
+  OnlyLangNote,
+  OtherLangs,
+} from './Languages.tsx';
 import {
   browseQuery,
   canSearchCine,
   cleanCineQuery,
+  filtersLangs,
+  langQuery,
   showsGrid,
   type CineOrder,
   type CineUrlState,
@@ -70,6 +94,9 @@ import { CardRow, CategoryRail } from './Rows.tsx';
 import { TagChips } from './TagChips.tsx';
 import {
   CINE_TEXT,
+  elsewhereText,
+  LANG_TEXT,
+  noneInLangs,
   nothingFound,
   nothingFoundIn,
   resultsTitle,
@@ -266,7 +293,9 @@ export interface HomeProps {
 export function Home({ active }: HomeProps) {
   const state = useCineState();
   const layout = useLayout();
+  const lang = useLangScope(active);
   const home = useVodHome(active);
+  const [langsOpen, setLangsOpen] = useState(false);
   const [text, setText] = useState(state.q);
   const [sheetOpen, setSheetOpen] = useState(false);
   /* Atrás/Adelante o un enlace con `cineq`: el campo sigue a la URL. */
@@ -280,8 +309,16 @@ export function Home({ active }: HomeProps) {
   const searching = q !== '';
   const grid = showsGrid(state, q);
   const ready = home.data?.active === true && home.data.state === 'ready';
-  const scope = browseQuery(state, q);
-  const pages = useVodPages(scope, active && ready && grid);
+  /* La primera vez (aún sin elegir idiomas), el selector antes que nada. */
+  const welcome = ready && lang.prefs !== null && !lang.prefs.chosen;
+  const scope = browseQuery(state, q, langQuery(lang.prefs, state.lang));
+  const pages = useVodPages(scope, active && ready && grid && lang.ready && !welcome);
+  /* Lo que se está viendo: el idioma de «Ver» o los elegidos (para la cápsula de las tarjetas). */
+  const seen: readonly VodLang[] = state.lang
+    ? [state.lang]
+    : lang.prefs?.chosen
+      ? lang.prefs.langs
+      : [];
 
   /* La portada apunta dónde está mientras se ve, para volver ahí al cerrar
      una rejilla, una búsqueda o al llegar desde una ficha. Efecto de
@@ -345,7 +382,8 @@ export function Home({ active }: HomeProps) {
 
   const onText = (value: string) => {
     setText(value);
-    setCineState({ q: value });
+    /* Sin búsqueda, tampoco el idioma de «3 en latino · Ver». */
+    setCineState(value ? { q: value } : { q: value, lang: null });
   };
   const setKind = (kind: VodKind) => {
     if (kind === state.kind) return;
@@ -355,9 +393,13 @@ export function Home({ active }: HomeProps) {
   };
 
   const categories = home.data?.categories[state.kind] ?? [];
-  const showSheetButton = !layout.asideVisible && ready && categories.length > 0;
+  const showSheetButton = !layout.asideVisible && ready && !welcome && categories.length > 0;
+  /* El botón de idiomas, si el servidor los sabe y ya se eligieron. */
+  const showLangButton = ready && !welcome && lang.prefs !== null;
 
-  const header = (
+  const header = welcome ? (
+    <ViewHeader title={CINE_TEXT.title} />
+  ) : (
     <ViewHeader title={CINE_TEXT.title}>
       <div className="cine-head">
         <div className="cine-head__row">
@@ -379,6 +421,13 @@ export function Home({ active }: HomeProps) {
             </Button>
           ) : null}
         </div>
+        {showLangButton ? (
+          <LanguageButton
+            prefs={lang.prefs}
+            className="cine-head__langs"
+            onClick={() => setLangsOpen(true)}
+          />
+        ) : null}
         <TextField
           label={state.kind === 'movie' ? CINE_TEXT.searchMovies : CINE_TEXT.searchSeries}
           hideLabel
@@ -421,6 +470,7 @@ export function Home({ active }: HomeProps) {
       />
     );
   else if (!ready) body = <CatalogState home={home.data} onRetry={() => void home.refetch()} />;
+  else if (welcome) body = <LanguageWelcome home={home.data} />;
   else {
     const data = home.data;
     body = (
@@ -430,7 +480,13 @@ export function Home({ active }: HomeProps) {
           <p className="cine-note">{truncatedText(data.counts, VOD_LIMITS)}</p>
         ) : null}
         <div className="cine-portada" hidden={grid}>
-          <Portada data={data} kind={state.kind} active={active && !grid} />
+          <Portada
+            data={data}
+            kind={state.kind}
+            active={active && !grid}
+            prefs={lang.prefs}
+            onChangeLangs={() => setLangsOpen(true)}
+          />
         </div>
         {grid ? (
           <GridScreen
@@ -442,6 +498,7 @@ export function Home({ active }: HomeProps) {
             pages={pages}
             asideVisible={layout.asideVisible}
             onClearSearch={() => onText('')}
+            onChangeLangs={() => setLangsOpen(true)}
           />
         ) : null}
         {showSheetButton ? (
@@ -450,7 +507,7 @@ export function Home({ active }: HomeProps) {
             onClose={() => setSheetOpen(false)}
             categories={categories}
             value={state.cat}
-            total={data.counts[state.kind === 'movie' ? 'movies' : 'series']}
+            total={(data.shown ?? data.counts)[state.kind === 'movie' ? 'movies' : 'series']}
             onChange={(cat) => {
               if (state.q) onText('');
               openCineGrid({ cat, tag: null });
@@ -462,9 +519,16 @@ export function Home({ active }: HomeProps) {
   }
 
   return (
-    <div className="cine" data-kind={state.kind} data-screen={grid ? 'rejilla' : 'portada'}>
+    <div
+      className="cine"
+      data-kind={state.kind}
+      data-screen={welcome ? 'idiomas' : grid ? 'rejilla' : 'portada'}
+    >
       {header}
-      {body}
+      <CineLangs value={seen}>{body}</CineLangs>
+      {showLangButton ? (
+        <LanguageSheet open={langsOpen} onClose={() => setLangsOpen(false)} home={home.data} />
+      ) : null}
     </div>
   );
 }
@@ -473,13 +537,34 @@ interface PortadaProps {
   data: VodHomeData;
   kind: VodKind;
   active: boolean;
+  prefs: VodLanguages | null;
+  onChangeLangs(): void;
 }
 
 /** La portada en filas: «Seguir viendo», novedades y una fila por categoría. */
-function Portada({ data, kind, active }: PortadaProps) {
+function Portada({ data, kind, active, prefs, onChangeLangs }: PortadaProps) {
   const [shown, setShown] = useState(HOME_ROWS_STEP);
   const categories = data.categories[kind].filter((category) => category.count > 0);
-  const total = data.counts[kind === 'movie' ? 'movies' : 'series'];
+  const key = kind === 'movie' ? 'movies' : 'series';
+  /* Con idiomas elegidos, lo que se ve en ellos («Ver las 1.234 películas»). */
+  const total = (data.shown ?? data.counts)[key];
+  /* Nada de este tipo en los idiomas elegidos: lo dice y deja cambiarlos. */
+  if (filtersLangs(prefs) && total === 0 && data.counts[key] > 0)
+    return (
+      <>
+        <ContinueRail entries={data.continue} />
+        <EmptyState
+          title={noneInLangs(kind, prefs?.langs ?? [])}
+          actions={
+            <Button variant="primary" icon="idioma" onClick={onChangeLangs}>
+              {LANG_TEXT.change}
+            </Button>
+          }
+        >
+          {elsewhereText(data.counts[key], kind)}
+        </EmptyState>
+      </>
+    );
   return (
     <>
       <ContinueRail entries={data.continue} />
@@ -539,6 +624,7 @@ interface GridScreenProps {
   pages: ReturnType<typeof useVodPages>;
   asideVisible: boolean;
   onClearSearch(): void;
+  onChangeLangs(): void;
 }
 
 /** La rejilla: su cabecera, chips de categorías y distintivos, orden y carteles. */
@@ -551,6 +637,7 @@ function GridScreen({
   pages,
   asideVisible,
   onClearSearch,
+  onChangeLangs,
 }: GridScreenProps) {
   const searching = q !== '';
   const categories = data.categories[state.kind];
@@ -565,6 +652,11 @@ function GridScreen({
   const subtitle = total !== null ? count(total) : state.tag ? TAG_LABEL[state.tag] : '';
   const live = first && !pages.isFetching ? count(first.total) : '';
   const searchAll = () => setCineState({ cat: 'all' });
+  /* Con resultados, una búsqueda dice también lo que hay en otros idiomas. */
+  const alsoOther =
+    searching && !state.lang && first && first.total > 0 && first.otherLangs?.total
+      ? first.otherLangs
+      : null;
   return (
     <section className="cine-browse" aria-labelledby={GRID_TITLE_ID}>
       <div className="cine-browse__head">
@@ -617,7 +709,15 @@ function GridScreen({
         )}
         <TagChips counts={tagCounts} value={state.tag} onChange={(tag) => setCineState({ tag })} />
       </div>
+      {state.lang ? (
+        <OnlyLangNote lang={state.lang} onBack={() => setCineState({ lang: null })} />
+      ) : null}
       {first?.capped ? <p className="cine-note">{CINE_TEXT.capped}</p> : null}
+      {alsoOther ? (
+        <div className="cine-other-langs cine-other-langs--inline">
+          <OtherLangs hidden={alsoOther} onPick={(lang) => setCineState({ lang })} />
+        </div>
+      ) : null}
       <p className="sr-only" role="status" aria-live="polite">
         {live}
       </p>
@@ -629,6 +729,7 @@ function GridScreen({
         scope={scope}
         first={first}
         cards={cards}
+        onChangeLangs={onChangeLangs}
         label={
           searching
             ? `${state.kind === 'movie' ? CINE_TEXT.movies : CINE_TEXT.series}: «${q}»`
@@ -655,6 +756,7 @@ interface GridAreaProps {
   pages: ReturnType<typeof useVodPages>;
   onClearSearch(): void;
   onSearchAll(): void;
+  onChangeLangs(): void;
 }
 
 function GridArea({
@@ -669,6 +771,7 @@ function GridArea({
   pages,
   onClearSearch,
   onSearchAll,
+  onChangeLangs,
 }: GridAreaProps) {
   if (pages.isError && !pages.data)
     return (
@@ -684,6 +787,47 @@ function GridArea({
     );
   if (!first) return <SkeletonRows rows={4} label={CINE_TEXT.loading} />;
   if (first.total === 0) {
+    /* Nada en tus idiomas, pero sí en otros: «3 en latino · Ver» (§4.10). */
+    const elsewhere = first.otherLangs?.total ? first.otherLangs : null;
+    if (elsewhere && !tag) {
+      const other = q ? (first.otherKindTotal ?? 0) : 0;
+      return (
+        <EmptyState
+          title={
+            q ? (scope ? nothingFoundIn(q, scope) : nothingFound(q, kind)) : CINE_TEXT.noneInMyLangs
+          }
+          actions={
+            <>
+              {other > 0 ? (
+                <Button
+                  variant="quiet"
+                  icon={kind === 'movie' ? 'tv' : 'cine'}
+                  onClick={() =>
+                    setCineState({
+                      kind: otherKind(kind),
+                      cat: category === 'all' ? null : 'all',
+                      tag: null,
+                    })
+                  }
+                >
+                  {seeOtherKind(other, otherKind(kind))}
+                </Button>
+              ) : null}
+              <Button variant="quiet" icon="idioma" onClick={onChangeLangs}>
+                {LANG_TEXT.change}
+              </Button>
+              {q ? (
+                <Button variant="quiet" icon="x" onClick={onClearSearch}>
+                  {CINE_TEXT.clearSearch}
+                </Button>
+              ) : null}
+            </>
+          }
+        >
+          <OtherLangs hidden={elsewhere} onPick={(lang) => setCineState({ lang })} />
+        </EmptyState>
+      );
+    }
     if (q) {
       const other = first.otherKindTotal ?? 0;
       /* Dentro de una categoría: puede estar en otra («Wonka» no está en

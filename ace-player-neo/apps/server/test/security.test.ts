@@ -214,6 +214,8 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'vodProgress',
       /* «Descargar fallos» (0.9.0): lleva el registro del servidor, aunque redactado. */
       'diagnosticsExport',
+      'vodLanguagesGet',
+      'vodLanguagesUpdate',
     ]);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {

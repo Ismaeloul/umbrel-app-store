@@ -794,3 +794,22 @@ ahora» de Canales, Sistema) y a la tira de días.
   (anclado abajo, crece hacia arriba, 4 líneas como mucho), igual en el
   cartel de respaldo (CSS) y en los carteles de la demo (SVG), con la misma
   geometría comprobada por una prueba.
+
+## D33. Idiomas de Pelis y series (0.9.0, equipo/idiomas)
+
+Detalle en docs/vod.md §4.10.
+
+- **El idioma sale de la categoría y de las marcas del título** con una tabla
+  única en `@ace/shared` (servidor y demo la comparten); castellano y latino
+  siempre separados. Las pistas de audio no sirven (casi todas «und»).
+- **El título manda sobre la categoría**, y los distintivos de lengua salen de
+  los idiomas (cambia el detalle de D-VOD6: antes se unían).
+- **Los títulos sin idioma se ven por defecto**, con un interruptor para
+  esconderlos: en un panel con categorías sin marca, esconderlos vaciaría el
+  catálogo.
+- **La elección es por casa y aparte de `vod.json`** (`v2/vod-idiomas.json`):
+  sobrevive a cambiar de proveedor. Va en la copia de seguridad.
+- **Un solo mando de idioma en la web:** el botón del globo; los chips de
+  lengua de la rejilla desaparecen (quedan «Multi» y «4K»). «3 en latino ·
+  Ver» enseña ese idioma solo en esa rejilla (`cineidioma`), sin cambiar lo
+  elegido.

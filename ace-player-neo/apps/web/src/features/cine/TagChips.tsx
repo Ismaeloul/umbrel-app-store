@@ -1,12 +1,19 @@
-/* Chips de distintivos (docs/vod.md §4.4 y §12.4): «Castellano», «Latino»,
-   «VOSE», «Multi» y «4K», solo los que tienen algo (su número sale de la
-   portada o de la última página de la rejilla). Uno a la vez: tocar el
-   elegido lo quita. El elegido se enseña aunque se quede a 0, para poder
-   quitarlo. */
+/* Chips de distintivos (docs/vod.md §4.4 y §12.4): «Multi» y «4K», solo los
+   que tienen algo (su número sale de la portada o de la última página de la
+   rejilla). Uno a la vez: tocar el elegido lo quita. El elegido se enseña
+   aunque se quede a 0, para poder quitarlo.
+
+   Los de lengua («Castellano», «Latino», «VOSE») ya no salen aquí desde los
+   idiomas (§4.10): el idioma se elige con el botón de la cabecera, y dos
+   mandos para lo mismo confundían. Un enlace viejo con `cinetag=latino`
+   sigue funcionando y enseña su chip para poder quitarlo. */
 
 import { VOD_TAGS, type VodTag, type VodTagCount } from '@ace/shared';
 import { Chip } from '../../ui/index.ts';
 import { CINE_TEXT, formatCount, TAG_LABEL } from './texts.ts';
+
+/** Los distintivos de calidad: los únicos que se ofrecen como chip. */
+export const QUALITY_TAGS: readonly VodTag[] = ['multi', '4k'];
 
 export interface TagChipsProps {
   counts: readonly VodTagCount[];
@@ -18,7 +25,8 @@ export interface TagChipsProps {
 export function visibleTags(counts: readonly VodTagCount[], value: VodTag | null): VodTagCount[] {
   return VOD_TAGS.flatMap((tag) => {
     const count = counts.find((entry) => entry.tag === tag)?.count ?? 0;
-    return count > 0 || tag === value ? [{ tag, count }] : [];
+    const offered = QUALITY_TAGS.includes(tag) && count > 0;
+    return offered || tag === value ? [{ tag, count }] : [];
   });
 }
 

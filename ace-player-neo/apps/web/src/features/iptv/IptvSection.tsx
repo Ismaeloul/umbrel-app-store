@@ -36,6 +36,7 @@ import {
   Switch,
   TextField,
 } from '../../ui/index.ts';
+import { CineLanguagesSetting } from '../cine/Languages.tsx';
 import { CONFIRM_DELETE_MS, looksPrivateUrl } from '../directories/model.ts';
 import { useSecondTap } from '../settings/second-tap.ts';
 import {
@@ -568,6 +569,8 @@ function IptvCard({
           ))}
         </div>
       </div>
+      {/* Idiomas de Pelis y series (docs/vod.md §4.10): con catálogo, se cambian también aquí. */}
+      {cineFlagOn() && provider.vod?.state === 'ready' ? <CineLanguagesSetting /> : null}
       <Switch
         className="iptv-switch"
         label="Usar la IPTV"

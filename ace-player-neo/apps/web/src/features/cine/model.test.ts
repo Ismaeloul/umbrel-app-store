@@ -1,3 +1,4 @@
+import type { VodLang } from '@ace/shared';
 import { describe, expect, it } from 'vitest';
 import {
   browseQuery,
@@ -27,6 +28,11 @@ import {
   showsGrid,
   spanishCountry,
   spanishGenres,
+  cardLang,
+  filtersLangs,
+  langOptions,
+  langQuery,
+  toggleLang,
   type EpisodeProgressRef,
 } from './model.ts';
 import { formatBlocked, formatCount, titlesText } from './texts.ts';
@@ -42,6 +48,7 @@ describe('estado de la URL (docs/vod.md §12.2)', () => {
       tag: 'vose',
       q: 'dune',
       order: 'az',
+      lang: null,
     });
     expect(writeCineState('?vista=cine&demo=1&flag=cine', state)).toBe(
       '?vista=cine&demo=1&flag=cine&cine=series&cinecat=a1b2c3d4e5f6&cinetag=vose&cineq=dune&cineorden=az',
@@ -54,12 +61,27 @@ describe('estado de la URL (docs/vod.md §12.2)', () => {
         tag: null,
         q: '',
         order: 'novedades',
+        lang: null,
       }),
     ).toBe('?vista=cine');
     // «Todas» SÍ se escribe: es la rejilla de todo, otra pantalla que la portada.
     expect(
-      writeCineState('?vista=cine', { kind: 'movie', cat: 'all', tag: null, q: '', order: 'az' }),
+      writeCineState('?vista=cine', {
+        kind: 'movie',
+        cat: 'all',
+        tag: null,
+        q: '',
+        order: 'az',
+        lang: null,
+      }),
     ).toBe('?vista=cine&cinecat=all&cineorden=az');
+    // «3 en latino · Ver» (§4.10): `cineidioma`, solo con un idioma conocido.
+    const latino = readCineState('?vista=cine&cineq=coco&cineidioma=latino');
+    expect(latino.lang).toBe('latino');
+    expect(writeCineState('?vista=cine', { ...latino })).toBe(
+      '?vista=cine&cineq=coco&cineidioma=latino',
+    );
+    expect(readCineState('?cineidioma=klingon').lang).toBeNull();
   });
 
   it('lo que no se entiende vale por defecto (sin categoría: la portada)', () => {
@@ -69,6 +91,7 @@ describe('estado de la URL (docs/vod.md §12.2)', () => {
       tag: null,
       q: '',
       order: 'novedades',
+      lang: null,
     });
     expect(readCineState('?cinecat=all').cat).toBe('all');
   });
@@ -334,5 +357,70 @@ describe('números (§12.4 y §12.10)', () => {
     expect(formatCount(12_345)).toBe('12.345');
     expect(formatCount(999)).toBe('999');
     expect(titlesText(1234, 'movie')).toBe('1.234 películas');
+  });
+});
+
+describe('idiomas (docs/vod.md §4.10)', () => {
+  const prefs = (langs: VodLang[], unknown = true, chosen = true) => ({ chosen, langs, unknown });
+
+  it('la consulta: sin elegir o con «todos», sin filtro; «Ver» de una búsqueda, solo ese idioma', () => {
+    expect(langQuery(null)).toEqual({});
+    expect(langQuery(prefs(['castellano'], true, false))).toEqual({});
+    expect(langQuery(prefs([]))).toEqual({});
+    expect(langQuery(prefs(['frances', 'castellano']))).toEqual({
+      langs: 'castellano,frances',
+      unknown: '1',
+    });
+    expect(langQuery(prefs(['castellano'], false))).toEqual({ langs: 'castellano', unknown: '0' });
+    expect(langQuery(prefs(['castellano']), 'latino')).toEqual({ langs: 'latino', unknown: '0' });
+    expect(filtersLangs(prefs(['castellano']))).toBe(true);
+    expect(filtersLangs(prefs([]))).toBe(false);
+    expect(
+      browseQuery({ kind: 'movie', cat: null, tag: null, order: 'novedades' }, 'coco', {
+        langs: 'latino',
+        unknown: '0',
+      }),
+    ).toEqual({
+      kind: 'movie',
+      cat: 'all',
+      q: 'coco',
+      sort: 'added',
+      langs: 'latino',
+      unknown: '0',
+    });
+  });
+
+  it('las opciones: las que tienen algo y las elegidas, en su orden; sin recuentos, todas', () => {
+    const langs = {
+      movie: [
+        { lang: 'frances' as const, count: 5 },
+        { lang: 'castellano' as const, count: 40 },
+      ],
+      series: [{ lang: 'latino' as const, count: 2 }],
+    };
+    expect(langOptions(langs).map((option) => option.lang)).toEqual([
+      'castellano',
+      'latino',
+      'frances',
+    ]);
+    expect(langOptions(langs, ['catalan']).at(-1)).toEqual({
+      lang: 'catalan',
+      movies: 0,
+      series: 0,
+    });
+    expect(langOptions(undefined)).toHaveLength(10);
+    expect(toggleLang(['frances'], 'castellano')).toEqual(['castellano', 'frances']);
+    expect(toggleLang(['castellano', 'frances'], 'castellano')).toEqual(['frances']);
+  });
+
+  it('la cápsula de una tarjeta: con un idioma elegido no se dice; con varios, el suyo', () => {
+    expect(cardLang(['castellano'], ['castellano'])).toBeNull();
+    expect(cardLang(['castellano'], ['castellano', 'frances'])).toBe('castellano');
+    expect(cardLang(['castellano', 'ingles'], ['ingles', 'frances'])).toBe('ingles');
+    expect(cardLang(['latino'], [])).toBe('latino');
+    expect(cardLang([], ['castellano'])).toBeNull();
+    expect(cardLang(undefined, [])).toBeNull();
+    /* Uno elegido y una tarjeta sin él (un MULTI): se dice el suyo. */
+    expect(cardLang(['frances'], ['castellano'])).toBe('frances');
   });
 });
