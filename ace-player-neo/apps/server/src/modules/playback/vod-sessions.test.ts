@@ -245,7 +245,7 @@ describe('vodStream (docs/vod.md §9.8)', () => {
       web('visor-a'),
       live(),
     );
-    await setup.runtime.service.stopAll();
+    await setup.runtime.service.stopAll(5_000);
     expect(producer.closed).toContain(grant.session.id);
     expect(iptv.vodInputs[0]?.closed).toBe(true);
   });
