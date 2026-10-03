@@ -636,3 +636,25 @@ punto 12); diseño completo en docs/iptv.md §4.7.
   Sevilla» (el texto que citó Isma), sin escudo de imagen va una placa
   pequeña del color del club con las siglas (`TeamMark plate`) en vez de los
   dos círculos lisos; con escudo, el escudo.
+
+## D29. Buscador IPTV: el orden y las filas tras la revisión (0.9.0, equipo/buscador-iptv)
+
+Detalle y pruebas en docs/buscador.md §9.
+
+- **D29.1 · Lo flojo detrás de lo bueno de cualquier país.** Cambia la regla de docs/iptv.md
+  §19 («España o sin país delante en cualquier nivel») solo para las coincidencias flojas (en otro orden, por
+  dentro, sin la marca, por la categoría): «tv3» da los TV3 de Suecia, Dinamarca… antes que «M+ LaLiga TV 3»;
+  «sport 1» da el SPORT 1 alemán antes que «Eurosport 1». Entre lo bueno, España sigue primero («dazn 1» →
+  DAZN 1 y DAZN 1 BAR de aquí antes que el alemán).
+- **D29.2 · En la pestaña IPTV, España y sin país son una fila** (cambia docs/iptv.md §16.3,
+  que las separaba): como en Buscar (§17). Antes salían dos filas iguales.
+- **D29.3 · Tus favoritos IPTV desempatan delante, nunca delante de lo igual** (Buscar y
+  pestaña).
+- **D29.4 · A igualdad de todo, la mejor calidad antes que el orden del proveedor.**
+- **D29.5 · «#N» es el número del canal, nunca una copia** (como en la 0.8.4): «LALIGA+ PPV
+  #2» es otro evento que el #1. Una copia es «(N)» o «[N]» (docs/iptv.md §17). Si la lista real de Isma
+  usara «#2» para copias de un mismo canal, saldrían como filas aparte (molesta, pero no se pierde nada);
+  juntarlas por error escondía canales y el relé saltaba a otro evento.
+- **D29.6 · Los apodos de España («Tele 5» = Telecinco, «A3» = Antena 3, «A3 Series» =
+  Atreseries) solo juntan canales que se sabe que son de España** (por su nombre o su categoría); lo escrito
+  los busca como alias. El TELE 5 alemán o el polaco siempre son otro canal.
