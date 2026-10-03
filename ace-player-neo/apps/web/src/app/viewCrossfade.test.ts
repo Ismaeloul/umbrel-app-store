@@ -10,6 +10,8 @@ import {
   parseDuration,
   playPendingCrossfade,
   removeGhosts,
+  WAIT_ATTR,
+  WAIT_MAX_MS,
 } from './viewCrossfade.ts';
 
 /* Las vistas como las pone el armazón: .views > .view[data-vista], la oculta
@@ -229,6 +231,45 @@ describe('fundido cruzado sin View Transitions', () => {
     // Lo preparado se usa una vez.
     expect(playPendingCrossfade('biblioteca', document, opts)).toBeNull();
     expect(removeGhosts()).toBe(0);
+  });
+});
+
+describe('la vista nueva aún con su esqueleto', () => {
+  it('la vieja se queda quieta encima, la nueva escondida, y funden cuando llega', async () => {
+    const { view, switchTo } = mountViews();
+    const timers = manualTimers();
+    captureLeavingView('buscar', 'adelante');
+    switchTo('biblioteca');
+    const entering = view('biblioteca');
+    entering.innerHTML = '<div class="view-skeleton" aria-busy="true"></div>';
+    const ghost = playPendingCrossfade('biblioteca', document, {
+      durationMs: 200,
+      setTimer: timers.setTimer,
+    });
+    expect(ghost?.hasAttribute(WAIT_ATTR)).toBe(true);
+    expect(entering.hasAttribute(WAIT_ATTR)).toBe(true);
+    expect(entering.hasAttribute(ENTER_ATTR)).toBe(false);
+    // Llega la vista: ahora sí, el fundido.
+    entering.innerHTML = '<h1 tabindex="-1">Canales</h1>';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(entering.hasAttribute(WAIT_ATTR)).toBe(false);
+    expect(entering.getAttribute(ENTER_ATTR)).toBe('adelante');
+    const ghosts = document.querySelectorAll(`.${GHOST_CLASS}`);
+    expect(ghosts).toHaveLength(1);
+    expect(ghosts[0]!.hasAttribute(WAIT_ATTR)).toBe(false);
+  });
+
+  it('si no llega a tiempo, funde igualmente (y otro cambio de vista corta la espera)', () => {
+    const { view, switchTo } = mountViews();
+    const timers = manualTimers();
+    captureLeavingView('buscar', null);
+    switchTo('biblioteca');
+    view('biblioteca').innerHTML = '<div class="view-skeleton"></div>';
+    playPendingCrossfade('biblioteca', document, { durationMs: 200, setTimer: timers.setTimer });
+    expect(timers.pending.some((t) => t.ms === WAIT_MAX_MS)).toBe(true);
+    timers.runAll();
+    expect(view('biblioteca').getAttribute(ENTER_ATTR)).toBe('fundido');
+    expect(view('biblioteca').hasAttribute(WAIT_ATTR)).toBe(false);
   });
 });
 

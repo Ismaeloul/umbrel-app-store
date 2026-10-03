@@ -57,6 +57,14 @@
 .view-fantasma * {
   animation: none !important;
 }
+/* Mientras la vista nueva aún se descarga (enseña su esqueleto), la vieja se
+   queda quieta encima y la nueva, escondida: nunca las dos a la vez. */
+.view-fantasma[data-espera] {
+  animation: none;
+}
+.view[data-espera] {
+  visibility: hidden;
+}
 .app[data-motion='css'] .app-aside {
   animation: ace-funde var(--dur-rapido) var(--ease-out);
 }

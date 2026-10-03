@@ -161,7 +161,14 @@ export function RouterProvider({ children, onBeforeChange, initialSearch }: Rout
           history.replaceState({ aceDepth: readDepth() } satisfies HistoryState, '', url);
         else history.pushState({ aceDepth: readDepth() + 1 } satisfies HistoryState, '', url);
       } catch {}
-      const direction = routeDepth(next) >= routeDepth(current) ? 'adelante' : 'atras';
+      // Sustituir la ruta sin salir de la vista (el siguiente episodio en la
+      // sala) no es navegar: sin sentido, la vista no se funde consigo misma.
+      const direction =
+        options.replace && next.vista === current.vista
+          ? null
+          : routeDepth(next) >= routeDepth(current)
+            ? 'adelante'
+            : 'atras';
       if (options.instant) {
         commit(next, null);
         return;
