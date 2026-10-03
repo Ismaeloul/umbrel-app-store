@@ -16,7 +16,7 @@ tamaños en `docs/capturas/fase2/agenda/`.
 | `DayStrip.tsx`             | Tira de días (pastillas Palco; teselas en escritorio) que no se recoloca al repintar                                                                                                                                                                 |
 | `Stage.tsx`                | Panel del partido elegido en escritorio y `LiveStrip` (B1: «RSO 1–0 VIL · 33'», tapado solo el que estás viendo)                                                                                                                                     |
 | `day-swipe.ts`             | Deslizar entre días en el móvil (`useDaySwipe`): Touch Events pasivos; una fila de tarjetas solo se queda el gesto si aún puede desplazarse hacia ese lado                                                                                         |
-| `score-reveal.ts`          | Marcador TAPADO del partido que suena (regla 29): `useScoreHidden(id)`, `revealScore(id)`, `resetScoreReveal()`                                                                                                                                      |
+| `score-reveal.ts`          | Marcador TAPADO del partido que suena (regla 29): `useScoreHidden(id)`, `revealScore(id)`, `resetScoreReveal()`; lo tapado a mano en la agenda: `hideScore(id)`, `useScoreCovered(id)`                                                              |
 | `demo.ts` / `demo-data.ts` | Agenda, marcadores y precalentado del modo demo (los datos solo se descargan en demo)                                                                                                                                                                |
 
 Para otras vistas:
@@ -51,7 +51,16 @@ Para otras vistas:
   la lista y en «Luego»; solo equipos, no ligas. Oro no: se confundía con el
   aro oro (por dentro) de la tarjeta elegida.
 - **Deslizar entre días (móvil):** también sobre las filas cuando no tienen
-  más que enseñar hacia ese lado; el scroll vertical siempre gana.
+  más que enseñar hacia ese lado; el scroll vertical siempre gana. Dedo a la
+  izquierda = día siguiente; hacia un lado sin día (Hoy, a la derecha) la
+  lista apenas se mueve. Solo anula el gesto un scroll que SIGUE al dedo (no
+  el salto de la barra del navegador al final de la página), y el cuerpo de
+  la agenda recorta lo que se sale por los lados para que la página nunca se
+  ensanche (eso reajustaba la ventana en mitad del gesto).
+- **«En directo» (≥ 1280):** dos cápsulas por línea y como mucho dos líneas a
+  la vista; con más de cuatro se desplaza (a mano) y el título dice cuántas
+  hay. Enseña el marcador salvo el del partido que ves (regla 29) y los que
+  tapes a mano (`useScoreCovered`).
 - **Flechas ‹ › de la tira**, solo con ratón (en táctil se desliza la tira).
   La tira no va pegada arriba; al cambiar de día con la lista bajada, la página
   vuelve a ella.

@@ -491,18 +491,40 @@ conservador). Todas se pueden revertir.
   alrededor de la tarjeta entera, no un indicador pequeño junto a un estado,
   y la estrella oro «Tu equipo» sigue diciendo lo mismo.
 - **«En directo» con marcador**: «RSO 1–0 VIL · 33'» (vuelve al injerto B1 de
-  `diseno/eleccion.md`, que la corrección 1 había tapado). Solo se tapa el
-  partido que estás viendo (regla 29) hasta destaparlo; las tarjetas, el
-  escenario y el héroe siguen tapados.
+  `diseno/eleccion.md`, que la corrección 1 había tapado). Se tapa el partido
+  que estás viendo (regla 29) hasta destaparlo y el que tapes a mano en el
+  panel o el menú (`useScoreCovered`); las tarjetas, el escenario y el héroe
+  siguen tapados. Dos cápsulas por línea y como mucho dos líneas a la vista:
+  con más de cuatro directos la tira se desplaza (a mano) y el título dice
+  cuántos hay, para que el panel y «Ver canal» no bajen fuera de la pantalla.
 - **Deslizar entre días (móvil, web)**: Touch Events pasivos
   (`features/agenda/day-swipe.ts`) en vez de Pointer Events. Una fila de
   tarjetas solo se queda el gesto si aún puede desplazarse hacia ese lado (si
   cabe entera o está en su final, cambia de día, como las vistas paginadas
   nativas); el eje se fija a 10 px con el criterio de Chrome con `pan-y` y,
-  si la página se desplaza durante el gesto, no cambia de día. Dedo a la
-  izquierda = día siguiente. Probado con dedo de verdad en Chrome
-  (`e2e/agenda-deslizar.spec.ts`); en Safari de iOS falta probarlo en el
-  iPhone de Isma (sin Safari de verdad en este PC).
+  si la página se desplaza SIGUIENDO al dedo, no cambia de día (un salto de
+  scroll de la barra del navegador al final de la página no cuenta). El
+  cuerpo de la agenda del móvil recorta lo que se sale por los lados: la
+  entrada del día nuevo y el arrastre ensanchaban la página (414 px en un
+  iPhone de 390) y el navegador reajustaba la ventana en mitad del gesto, que
+  era el «a veces no» que quedaba. Probado con dedo de verdad en Chrome
+  (`e2e/agenda-deslizar.spec.ts`, también con la página abajo del todo); en
+  Safari de iOS falta probarlo en el iPhone de Isma (sin Safari de verdad en
+  este PC).
+- **Dirección del gesto, A CONFIRMAR CON ISMA**: dedo a la IZQUIERDA = día
+  siguiente, como en la 0.8.4 y en las vistas paginadas del iPhone (el día
+  nuevo entra por la derecha, como en la tira de días). En pendiente.md Isma
+  escribió «derecha = día siguiente»; se lee como «el día siguiente está a la
+  derecha», pero si quería decir el dedo hacia la derecha, es cambiar una
+  línea (`directionOf`). Al revés chocaría con las filas de tarjetas: el
+  mismo dedo a la izquierda las desplaza hacia delante y, en su final, sigue
+  al día siguiente. Hacia un lado sin día (Hoy, el primero, dedo a la
+  derecha) la lista apenas se mueve (16 px) para que no parezca un gesto que
+  falla.
 - **Canales**: en «Ahora» de la ficha (columna derecha) los escudos van a
   40 px como en las tarjetas pequeñas de la agenda: el del servidor o el
-  monograma con siglas (a 22 px eran dos círculos del color del club).
+  monograma con siglas (a 22 px eran dos círculos del color del club). En el
+  cartel de «Emitiendo ahora» y en la fila del canal, junto a «Girona 1–1
+  Sevilla» (el texto que citó Isma), sin escudo de imagen va una placa
+  pequeña del color del club con las siglas (`TeamMark plate`) en vez de los
+  dos círculos lisos; con escudo, el escudo.
