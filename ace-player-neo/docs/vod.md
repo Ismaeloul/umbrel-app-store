@@ -268,15 +268,19 @@ Los paneles Xtream son PHP y mandan de todo. Se reutilizan `looseNumber`, `loose
 `cleanVodTitle(raw, categoryName) → { title, year, tags }`. **No reutiliza nada de la limpieza de canales** (T8).
 
 - **Prefijos al principio** (solo al principio, encadenados como mucho 4 veces), con una **lista cerrada** de códigos:
-  `ES ESP SPA CAST LAT LATAM EN ENG VOSE VOS SUB MULTI DUAL FR DE PT UK US MX AR CO CL PE NL TR PL BR RU GR RO 4K UHD
-  FHD HD SD` seguidos de `:`, `|` o `-` con espacio detrás («ES - », «LAT: », «ES| »); entre barras, cualquier código
-  («|ES| », «|NL| »); con el guion **entre espacios**, cualquier código de 2-3 mayúsculas («UK - The Crown», «AMZ -
-  …»: así no empieza un título); entre corchetes, los de la lista («[ES] », «[4K] »); `IT` solo con `-` o `|` («IT:
-  Capítulo 2» es la película); y `4K`/`UHD`/`FHD` con un espacio o su separador («4K Dune», «ES - 4K - Dune»). Un
-  separador que se queda delante al quitar un prefijo («- Dune») se quita también. Se quitan y **pasan a distintivo**
-  si dicen lengua o calidad (`MX` cuenta como latino; `AR` no, que en los paneles multipaís suele ser árabe).
-  **Corregido en la 0.9.0:** la regla de antes (`^(?:\|?[A-Z]{2,3}\|?\s*[-:|]\s*)+`) dejaba «CSI: Miami» en «Miami» y
-  se comía «UP:», «ET:», «SOS:» y «[REC]».
+  `ES ESP SPA CAST LAT LATAM EN ENG VOSE VOS SUB MULTI DUAL FR DE PT UK US MX AR CO CL PE VE EC UY NL BE CH AT SE DK
+  FI HU CZ BG HR RS UA EXYU TR PL BR RU GR RO 4K UHD FHD HD SD` seguidos de `:`, `|` o `-`/`–` con espacio detrás
+  («ES - », «LAT: », «ES| », «UK - The Crown»); entre barras, cualquier código («|ES| », «|NL| »); entre corchetes,
+  los de la lista («[ES] », «[4K] »); `IT` con `|` o corchetes siempre, con guion **solo si la categoría es
+  italiana** («IT - Il padrino» en «IT | FILM» o «ITALIA») y con dos puntos nunca («IT: Capítulo 2» e «IT - Capítulo
+  2» son la película); y `4K`/`UHD`/`FHD` con un espacio o su separador («4K Dune», «ES - 4K - Dune»). Un separador
+  que se queda delante al quitar un prefijo («- Dune») se quita también. Se quitan y **pasan a distintivo** si dicen
+  lengua o calidad (`MX` cuenta como latino; `AR` no, que en los paneles multipaís suele ser árabe). El guion
+  **nunca** vale con cualquier código de 2-3 mayúsculas: muchos paneles cambian «:» por « - » (los nombres salen de
+  nombres de fichero), y «CSI - Miami», «TED - 2», «FBI - Most Wanted» o «UFC - 300» son títulos (en una ronda de la
+  0.9.0 se quitaba y las tres CSI salían «Miami», «NY» y «Vegas», y buscar «CSI» no las encontraba). Un código que
+  falte se añade a la lista. **Corregido en la 0.9.0:** la regla de antes (`^(?:\|?[A-Z]{2,3}\|?\s*[-:|]\s*)+`)
+  dejaba «CSI: Miami» en «Miami» y se comía «UP:», «ET:», «SOS:» y «[REC]».
 - **Etiquetas al final**, entre corchetes o paréntesis o sueltas: `[4K]`, `(MULTI)`, `(VOSE)`, `(LATINO)`,
   `CASTELLANO`, `UHD`, `FHD`, `1080p`, `HEVC`, `HDR`, `DUAL`. Se quitan y pasan a distintivo.
 - **Año:** `\((18|19|20)\d{2}\)` al final, o `\b(19|20)\d{2}$`. Pasa a `year` si la lista no lo trae.

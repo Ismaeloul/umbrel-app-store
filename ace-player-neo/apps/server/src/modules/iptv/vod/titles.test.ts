@@ -89,8 +89,9 @@ describe('cleanVodTitle', () => {
   it('los prefijos de la lista sí se van, también encadenados y con «|XX|» de cualquier código', () => {
     expect(clean('EN - The Batman').title).toBe('The Batman');
     expect(clean('VOSE: Parásitos').title).toBe('Parásitos');
-    expect(clean('IT - Il padrino').title).toBe('Il padrino');
     expect(clean('|IT| Il padrino').title).toBe('Il padrino');
+    expect(clean('IT| Il padrino').title).toBe('Il padrino');
+    expect(clean('[IT] Il padrino').title).toBe('Il padrino');
     expect(clean('|NL| De Tweeling').title).toBe('De Tweeling');
     expect(clean('ES - LAT: Coco')).toEqual({ title: 'Coco', year: null, tags: ['latino'] });
     expect(clean('[LAT] Coco').tags).toEqual(['latino']);
@@ -115,20 +116,71 @@ describe('cleanVodTitle', () => {
     expect(clean('ES - 4K-Dune').title).toBe('4K-Dune');
   });
 
-  it('con el guion entre espacios vale cualquier código de país («UK - », «MX - »)', () => {
+  it('con el guion entre espacios, los países de la lista («UK - », «MX - »)', () => {
     expect(clean('UK - The Crown').title).toBe('The Crown');
+    expect(clean('UK – The Crown').title).toBe('The Crown');
     expect(clean('MX - Coco')).toEqual({ title: 'Coco', year: null, tags: ['latino'] });
     expect(clean('AR - Batman').title).toBe('Batman');
     expect(clean('NL - De Tweeling').title).toBe('De Tweeling');
     expect(clean('TR - Kış Uykusu').title).toBe('Kış Uykusu');
-    expect(clean('AMZ - The Boys').title).toBe('The Boys');
-    /* Con dos puntos o barra, solo los de la lista (ahí estaban los falsos positivos). */
+    expect(clean('SE - Millennium').title).toBe('Millennium');
+    expect(clean('EXYU - Maratonci').title).toBe('Maratonci');
+    /* Con dos puntos o barra, igual. */
     expect(clean('US: Dune').title).toBe('Dune');
     expect(clean('UK| The Crown').title).toBe('The Crown');
-    expect(clean('JFK: Caso abierto').title).toBe('JFK: Caso abierto');
     /* Sin espacios alrededor del guion, no: «AC-DC», «X-MEN». */
     expect(clean('AC-DC Live').title).toBe('AC-DC Live');
     expect(clean('X-MEN').title).toBe('X-MEN');
+  });
+
+  it('con el guion, NUNCA cualquier código de 2-3 mayúsculas: muchos paneles cambian «:» por « - »', () => {
+    /* 1525a17 quitaba aquí cualquier código: «CSI - Miami» salía «Miami»,
+       «TED - 2» salía «2», y buscar «CSI» no encontraba ninguna CSI. */
+    for (const title of [
+      'CSI - Miami',
+      'CSI - NY',
+      'FBI - Most Wanted',
+      'JFK - Caso abierto',
+      'JFK: Caso abierto',
+      'TED - 2',
+      'UFC - 300',
+      'ET - El extraterrestre',
+      'UP - Una aventura de altura',
+      'SOS - Rescate',
+      'MIB - Hombres de negro',
+      'DC - Liga de la Justicia',
+      'BBC - Planeta Tierra',
+      'WWE - Raw',
+      'JAG - Alerta roja',
+      'AMZ - The Boys',
+      'IT - Capítulo 2',
+      'IT – Capítulo 2',
+    ]) {
+      expect(clean(title).title, title).toBe(title);
+    }
+    /* Tras un prefijo de verdad, el título se queda entero. */
+    expect(clean('ES - FBI - Most Wanted')).toEqual({
+      title: 'FBI - Most Wanted',
+      year: null,
+      tags: ['castellano'],
+    });
+    expect(clean('|ES| CSI - Miami (2002)')).toEqual({
+      title: 'CSI - Miami',
+      year: 2002,
+      tags: ['castellano'],
+    });
+    expect(clean('CSI - Vegas', 'ES | SERIES').title).toBe('CSI - Vegas');
+  });
+
+  it('«IT - » solo es Italia si la categoría es italiana («IT - Capítulo 2» es la película)', () => {
+    expect(clean('IT - Il padrino', 'IT | FILM').title).toBe('Il padrino');
+    expect(clean('IT - Il padrino', '|IT| CINEMA').title).toBe('Il padrino');
+    expect(clean('IT - Il padrino', 'Film italiani').title).toBe('Il padrino');
+    expect(clean('IT - Il padrino', 'ITALIA 4K').title).toBe('Il padrino');
+    expect(clean('IT - Capítulo 2', 'ES | TERROR').title).toBe('IT - Capítulo 2');
+    expect(clean('IT - Capítulo 2', 'ITV DRAMA').title).toBe('IT - Capítulo 2');
+    /* Con dos puntos, nunca: ni en una categoría italiana. */
+    expect(clean('IT: Capítulo 2', 'IT | FILM').title).toBe('IT: Capítulo 2');
   });
 
   it('la limpieza nunca deja un título vacío', () => {

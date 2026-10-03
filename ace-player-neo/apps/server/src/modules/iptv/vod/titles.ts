@@ -5,9 +5,9 @@
    canales (T8: `cleanIptvTitle` borra «Reserva», «Multi» o «España», cambia
    «M+» y tira los títulos no latinos). Es conservadora a propósito:
    - quita prefijos de lengua, país o calidad SOLO al principio y de una
-     LISTA CERRADA («ES - », «|ES| », «LAT: », «[4K] », «4K - »), salvo
-     entre barras o con el guion entre espacios, donde vale cualquier código
-     («|NL| », «UK - »): «CSI: Miami», «UP: Una aventura de altura» o
+     LISTA CERRADA («ES - », «|ES| », «LAT: », «[4K] », «4K - », «UK - »),
+     salvo entre barras, donde vale cualquier código («|NL| »): «CSI:
+     Miami», «CSI - Miami», «UP: Una aventura de altura», «TED - 2» o
      «[REC] 2» se quedan como están;
    - quita etiquetas SOLO al final («[4K]», «(MULTI)», «(VOSE)», «1080p»,
      «HEVC»…), entre corchetes o paréntesis o sueltas en mayúsculas;
@@ -78,33 +78,41 @@ export function detectTags(text: string): number {
 }
 
 /* Prefijos al principio, con una LISTA CERRADA de códigos de lengua, país y
-   calidad para los dos puntos y la barra: «CSI: Miami», «UP: Una aventura
+   calidad, con dos puntos, barra o guion: «CSI: Miami», «UP: Una aventura
    de altura», «ET: El extraterrestre» o «SOS: Rescate» empiezan por
-   mayúsculas y dos puntos y son títulos, no prefijos. Entre barras
-   («|XX|») vale cualquier código: un título nunca empieza así. Con un
-   guion ENTRE ESPACIOS («UK - The Crown», «MX - Coco», «TR - …»), también
-   cualquier código de 2-3 mayúsculas: así no empieza un título, y los
-   paneles multipaís ponen ahí el suyo. «IT» (Italia) no vale con dos
-   puntos: «IT: Capítulo 2» es la película; «IT - …» e «|IT| …» sí son
-   prefijos. Corchetes, con la lista: «[ES]» y «[4K]» sí, «[REC] 2» no. */
+   mayúsculas y dos puntos y son títulos, no prefijos. Y con el guion entre
+   espacios, igual: muchos paneles cambian «:» por « - » (los nombres salen
+   de nombres de fichero), así que «CSI - Miami», «TED - 2» o «FBI - Most
+   Wanted» también son títulos. Por eso el guion NUNCA vale con cualquier
+   código de 2-3 mayúsculas, solo con los de la lista (que lleva los
+   países de los paneles multipaís: «UK - The Crown», «MX - Coco», «TR -
+   …»). Entre barras («|XX|») vale cualquier código: un título nunca
+   empieza así. «IT» (Italia) es la película «IT»: con barra o corchetes
+   siempre («|IT| », «IT| », «[IT] »), con guion solo si la categoría es
+   italiana («IT - Il padrino» en «IT | FILM»), y con dos puntos nunca
+   («IT: Capítulo 2»). Corchetes, con la lista: «[ES]» y «[4K]» sí, «[REC]
+   2» no. */
 const PREFIX_CODES =
   'ES|ESP|SPA|CAST|LAT|LATAM|EN|ENG|VOSE|VOS|SUB|MULTI|DUAL|FR|DE|PT|' +
-  'UK|US|MX|AR|CO|CL|PE|NL|TR|PL|BR|RU|GR|RO|4K|UHD|FHD|HD|SD';
+  'UK|US|MX|AR|CO|CL|PE|VE|EC|UY|NL|BE|CH|AT|SE|DK|FI|HU|CZ|BG|HR|RS|UA|EXYU|' +
+  'TR|PL|BR|RU|GR|RO|4K|UHD|FHD|HD|SD';
 const PREFIX_PIPED = /^\|[A-Z0-9]{2,5}\|\s*(?:[-:|]\s*)?/;
 /* El guion, solo con espacio detrás («ES - Dune»): «DE-LOVELY» es un título. */
-const PREFIX_CODE = new RegExp(`^(?:${PREFIX_CODES})\\s*(?:[:|]|-(?=\\s))\\s*`);
-/* Cualquier código con el guion entre espacios («UK - », «AMZ - »). */
-const PREFIX_DASHED = /^[A-Z]{2,3}\s+[-–]\s+/;
-const PREFIX_ITALIAN = /^IT\s*(?:\||-(?=\s))\s*/;
+const PREFIX_CODE = new RegExp(`^(?:${PREFIX_CODES})\\s*(?:[:|]|[-–](?=\\s))\\s*`);
+const PREFIX_ITALIAN = /^IT\s*\|\s*/;
+const PREFIX_ITALIAN_DASHED = /^IT\s*[-–](?=\s)\s*/;
+/* Categoría italiana: «IT | FILM», «|IT| CINEMA», «ITALIA», «Film italiani». */
+function italianCategory(name: string): boolean {
+  return /^\s*[|[(]?\s*IT\s*[|\])\-–:]/.test(name) || /\bital(?:ia|y|ian)/i.test(name);
+}
 const PREFIX_BRACKET = new RegExp(`^\\[\\s*(?:${PREFIX_CODES}|IT)\\s*\\]\\s*`);
 /* La calidad, también con su separador: «ES - 4K - Dune» se quedaba en
    «- Dune» (`PREFIX_CODE` quitaba «ES - » y esta solo «4K »). */
-const PREFIX_QUALITY = /^(?:4K|UHD|FHD)(?:\s*(?:[:|]|-(?=\s))|\s)\s*/;
+const PREFIX_QUALITY = /^(?:4K|UHD|FHD)(?:\s*(?:[:|]|[-–](?=\s))|\s)\s*/;
 const PREFIXES: readonly RegExp[] = [
   PREFIX_BRACKET,
   PREFIX_PIPED,
   PREFIX_CODE,
-  PREFIX_DASHED,
   PREFIX_ITALIAN,
   PREFIX_QUALITY,
 ];
@@ -141,9 +149,10 @@ export function cleanVodTitle(raw: string, categoryName = ''): CleanVodTitle {
 
   /* Prefijos, solo al principio y encadenados («[ES] 4K - …», «ES - LAT: …»),
      con tope de vueltas. Nunca se come el título entero. */
+  const prefixes = italianCategory(categoryName) ? [...PREFIXES, PREFIX_ITALIAN_DASHED] : PREFIXES;
   for (let round = 0; round < 4; round += 1) {
     const before = title;
-    for (const pattern of PREFIXES) {
+    for (const pattern of prefixes) {
       const match = pattern.exec(title);
       if (match && match[0].length < title.length) {
         removed += ` ${match[0]}`;
