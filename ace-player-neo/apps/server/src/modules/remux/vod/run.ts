@@ -2,8 +2,13 @@
 
    Lanza ffmpeg con su salida por la tubería, la pasa por el troceador fMP4
    y dice cómo acabó:
-   - `complete`: salió con código 0 y la salida estaba entera. Es el final
-     del fichero, NO una muerte (nunca pasa por el `died` del directo, T10).
+   - `complete`: salió con código 0 y la salida estaba entera. Ojo: ffmpeg
+     toma un error de lectura de la entrada (el relé corta la respuesta, un
+     503 al saltar…) por el final del fichero y TAMBIÉN sale con 0 («Error
+     during demuxing: I/O error» en stderr). Por eso `complete` lleva
+     `inputError` (la línea de stderr que lo delata, o null) y quien decide
+     si de verdad llegó al final es el productor, que sabe dónde acaba el
+     plan. Nunca pasa por el `died` del directo (T10).
    - `killed`: la paró el productor (reinicio, pausa larga o cierre).
    - `failed`: otro código, una salida rota o no hay ffmpeg.
 
@@ -22,7 +27,11 @@ import { Fmp4Splitter, type Fmp4Handlers } from './fmp4.js';
 import type { VodProcess, VodProcessLauncher } from './types.js';
 
 export type VodRunEnd =
-  | { readonly kind: 'complete' }
+  | {
+      readonly kind: 'complete';
+      /** La línea de stderr con un error de la entrada (redactada), o null: con ella, el 0 no es el final. */
+      readonly inputError: string | null;
+    }
   | { readonly kind: 'killed' }
   | {
       readonly kind: 'failed';
@@ -141,6 +150,16 @@ export class VodRun {
     return this.options.redact ? this.options.redact(tail) : tail;
   }
 
+  /** La última línea de stderr que dice que la entrada falló (redactada), o null. */
+  private inputError(): string | null {
+    const lines = this.stderrTail(8_000).split(/\r?\n/);
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const line = (lines[i] as string).trim();
+      if (INPUT_ERROR.test(line)) return line.slice(0, 300);
+    }
+    return null;
+  }
+
   private maybeFinish(): void {
     if (this.done || !this.exit || !this.outputClosed) return;
     if (this.killed) {
@@ -153,7 +172,7 @@ export class VodRun {
       return;
     }
     if (code === 0) {
-      this.finish({ kind: 'complete' });
+      this.finish({ kind: 'complete', inputError: this.inputError() });
       return;
     }
     this.finish({
@@ -179,6 +198,14 @@ export class VodRun {
       : new AppError('vod_dropped', { cause: error, detail: 'no se pudo lanzar ffmpeg' });
   }
 }
+
+/**
+ * Lo que escribe ffmpeg (6.1-9.0) cuando su entrada HTTP falla y aun así sale
+ * con 0: «Error during demuxing: I/O error», «Stream ends prematurely at…»,
+ * «HTTP error 503…», «Read error», «Connection timed out»…
+ */
+const INPUT_ERROR =
+  /Error during demuxing|Error while demuxing|ends prematurely|HTTP error \d|Read error|I\/O error|Connection (?:reset|refused|timed out)|Server returned \d/i;
 
 function toAppError(error: unknown): AppError {
   return error instanceof AppError

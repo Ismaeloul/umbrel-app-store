@@ -31,9 +31,12 @@
    - Pausa larga: sin peticiones de segmentos en 5 min se mata ffmpeg y se
      avisa (`onIdle`) para soltar el proveedor; la siguiente petición
      reinicia donde haga falta.
-   - Fin: código 0 al final del fichero es «completo» (nunca una muerte). Una
-     ejecución que falla se reintenta UNA vez desde el primer segmento que
-     falte; la segunda, `vod_dropped`.
+   - Fin: código 0 con el último segmento del plan abierto es «completo»
+     (nunca una muerte). Código 0 ANTES de llegar ahí es un fallo: ffmpeg toma
+     un error de lectura de la entrada por el final del fichero (el relé cortó
+     o no pudo reabrir), así que el segmento a medias se tira en vez de
+     publicarlo cortado. Una ejecución que falla se reintenta UNA vez desde el
+     primer segmento que falte; la segunda, `vod_dropped`.
 
    Lo que NO hace (VOD-5): servir los ficheros con Range (lo hace
    `files.ts` con la ruta que da `file()`), el registro de sesiones del
@@ -696,12 +699,38 @@ export class VodProducer {
     });
   }
 
-  private onRunEnd(ctx: RunContext, end: VodRunEnd): void {
+  /** ¿Esta ejecución llegó al último segmento del plan? (Solo entonces su código 0 es el final.) */
+  private reachedEnd(ctx: RunContext): boolean {
+    return ctx.opened && ctx.writer?.segment === this.plan.segments.length - 1;
+  }
+
+  private onRunEnd(ctx: RunContext, ended: VodRunEnd): void {
     if (this.current === ctx) this.current = null;
+    let end = ended;
     if (end.kind === 'complete' && !ctx.abandoned) {
-      this.closeWriter(ctx);
-      this.deps.logger.debug({ sessionId: this.options.sessionId }, 'VOD: ffmpeg llegó al final');
-      return;
+      if (this.reachedEnd(ctx)) {
+        if (end.inputError) {
+          this.deps.logger.warn(
+            { sessionId: this.options.sessionId, stderr: end.inputError },
+            'VOD: ffmpeg llegó al último segmento con un error de la entrada',
+          );
+        }
+        this.closeWriter(ctx);
+        this.deps.logger.debug({ sessionId: this.options.sessionId }, 'VOD: ffmpeg llegó al final');
+        return;
+      }
+      /* Código 0 ANTES del final: ffmpeg toma un error de lectura de la entrada
+         (el relé cortó o no pudo reabrir) por el final del fichero. Es un fallo:
+         el segmento a medias se tira (nunca se publica cortado) y cuenta para el
+         reintento. */
+      end = {
+        kind: 'failed',
+        error: new AppError('vod_dropped', {
+          detail: `ffmpeg acabó antes del final (${end.inputError ?? 'sin error en stderr'})`,
+        }),
+        code: 0,
+        signal: null,
+      };
     }
     this.abortWriter(ctx);
     if (end.kind !== 'failed' || ctx.abandoned || this.closed || this.failure) return;
