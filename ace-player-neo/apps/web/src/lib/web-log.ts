@@ -12,10 +12,16 @@
    - `api`: las peticiones que fallan por la red, el plazo, una respuesta rara
      o un 5xx (src/api/client.ts; los 4xx son respuestas normales);
    - `player`: lo que cuenta el reproductor (src/player/runtime.ts): sus
-     fallos con código, como `warn`, y sus notas («Vídeo que no se puede
-     decodificar», huecos del búfer, primera imagen…), como `info`.
+     fallos con código, como `warn`, y sus notas (huecos del búfer, primera
+     imagen, cada reconexión…), como `info`. También van aquí, como notas,
+     los avisos que mpegts.js escribe en la consola («[MP4Remuxer] > …»):
+     son de la librería, no errores de la web, y su fallo de verdad ya llega
+     por el reproductor.
 
-   El mismo aviso seguido no llena el anillo: se cuenta (`repeated`). */
+   El mismo aviso seguido no llena el anillo: se cuenta (`repeated`). Las
+   notas (`info`) ocupan como mucho la mitad y, al llenarse, salen antes que
+   los errores: una sesión larga con una señal que da tirones no echa del
+   anillo el error de la web de hace un rato. */
 
 import {
   WEB_LOG_MAX_ENTRIES,
@@ -26,6 +32,10 @@ import {
 
 const MESSAGE_MAX = 1000;
 const DETAIL_MAX = 4000;
+/** Hueco de las notas (`info`) en el anillo. */
+export const WEB_LOG_MAX_NOTES = Math.floor(WEB_LOG_MAX_ENTRIES / 2);
+/* El formato del registro de mpegts.js (src/utils/logger.js): «[Etiqueta] > texto». */
+const LIBRARY_LINE_RE = /^\[[A-Za-z][\w.-]*\] > /;
 
 const entries: WebLogEntry[] = [];
 const startedAt = Date.now();
@@ -86,7 +96,19 @@ export function recordWebLog(input: WebLogInput): void {
     ...(code ? { code } : {}),
     ...(view ? { view } : {}),
   });
-  if (entries.length > WEB_LOG_MAX_ENTRIES) entries.splice(0, entries.length - WEB_LOG_MAX_ENTRIES);
+  trim();
+}
+
+/* Lleno: sale la nota más vieja; sin notas, lo más viejo. Y las notas, como mucho WEB_LOG_MAX_NOTES. */
+function trim(): void {
+  let notes = entries.reduce((count, entry) => count + (entry.level === 'info' ? 1 : 0), 0);
+  while (entries.length > WEB_LOG_MAX_ENTRIES || notes > WEB_LOG_MAX_NOTES) {
+    const oldestNote = notes > 0 ? entries.findIndex((entry) => entry.level === 'info') : -1;
+    if (oldestNote >= 0) {
+      entries.splice(oldestNote, 1);
+      notes -= 1;
+    } else entries.shift();
+  }
 }
 
 /** Copia de lo apuntado, de lo más viejo a lo más nuevo. */
@@ -191,12 +213,19 @@ export function installWebLog(
 
   const originalError = output.error;
   const originalWarn = output.warn;
+  const fromConsole = (level: 'error' | 'warn', args: readonly unknown[]) => {
+    const described = describeArgs(args);
+    // mpegts.js en el hilo principal: una nota del reproductor, no un error de la web.
+    if (LIBRARY_LINE_RE.test(described.message))
+      recordWebLog({ kind: 'player', level: 'info', ...described });
+    else recordWebLog({ kind: 'console', level, ...described });
+  };
   output.error = (...args: unknown[]) => {
-    recordWebLog({ kind: 'console', level: 'error', ...describeArgs(args) });
+    fromConsole('error', args);
     originalError.apply(output, args);
   };
   output.warn = (...args: unknown[]) => {
-    recordWebLog({ kind: 'console', level: 'warn', ...describeArgs(args) });
+    fromConsole('warn', args);
     originalWarn.apply(output, args);
   };
 

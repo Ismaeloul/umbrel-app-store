@@ -74,5 +74,5 @@ export async function downloadFaults(
 export function faultsNotice(name: string, file: DiagnosticsExport): string {
   const { nuestro, deFuera } = file.summary;
   if (!nuestro && !deFuera) return `Fallos descargados: ${name} (sin fallos que contar)`;
-  return `Fallos descargados: ${name} · ${nuestro} nuestros, ${deFuera} de fuera`;
+  return `Fallos descargados: ${name} · ${nuestro} ${nuestro === 1 ? 'nuestro' : 'nuestros'}, ${deFuera} de fuera`;
 }

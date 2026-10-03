@@ -7,6 +7,7 @@ import {
   describeThrown,
   installWebLog,
   recordWebLog,
+  WEB_LOG_MAX_NOTES,
   webLogSnapshot,
 } from './web-log.ts';
 
@@ -50,6 +51,25 @@ describe('anillo de la web', () => {
       recordWebLog({ kind: 'api', level: 'error', code: 'network', message: 'sin red' });
     expect(webLogSnapshot().at(-1)).toMatchObject({ message: 'sin red', repeated: 4 });
     expect(webLogSnapshot()).toHaveLength(WEB_LOG_MAX_ENTRIES);
+  });
+
+  it('las notas no echan a los errores: salen antes y ocupan como mucho la mitad', () => {
+    recordWebLog({ kind: 'error', level: 'error', message: 'TypeError: el error de hace un rato' });
+    // Una señal que da tirones: cientos de notas distintas del reproductor.
+    for (let i = 0; i < WEB_LOG_MAX_ENTRIES * 3; i += 1)
+      recordWebLog({ kind: 'player', level: 'info', message: `Hueco en el búfer: de ${i} a …` });
+    let all = webLogSnapshot();
+    expect(all[0]?.message).toBe('TypeError: el error de hace un rato');
+    expect(all.filter((entry) => entry.level === 'info')).toHaveLength(WEB_LOG_MAX_NOTES);
+    expect(all.at(-1)?.message).toBe(`Hueco en el búfer: de ${WEB_LOG_MAX_ENTRIES * 3 - 1} a …`);
+
+    // Lleno de errores y notas: cada error nuevo echa la nota más vieja, no el error más viejo.
+    for (let i = 0; i < WEB_LOG_MAX_ENTRIES - 1; i += 1)
+      recordWebLog({ kind: 'console', level: 'warn', message: `aviso ${i}` });
+    all = webLogSnapshot();
+    expect(all).toHaveLength(WEB_LOG_MAX_ENTRIES);
+    expect(all.filter((entry) => entry.level === 'info')).toHaveLength(0);
+    expect(all[0]?.message).toBe('TypeError: el error de hace un rato');
   });
 
   it('la nota del reproductor que repite su fallo no se apunta dos veces', () => {
@@ -109,10 +129,19 @@ describe('installWebLog', () => {
     ]);
     expect(webLogSnapshot()[2]?.detail).toContain('boom');
 
+    // Lo que escribe mpegts.js en la consola es una nota del reproductor, no un error de la web.
+    output.warn('[MP4Remuxer] > Large audio timestamp gap detected, may cause AV sync to drift');
+    output.error('[TransmuxingController] > DemuxException: type = CodecUnsupported');
+    expect(webLogSnapshot().slice(-2)).toEqual([
+      expect.objectContaining({ kind: 'player', level: 'info' }),
+      expect.objectContaining({ kind: 'player', level: 'info' }),
+    ]);
+    clearWebLog();
+
     uninstall();
     expect(output.error).toBe(errorFn);
     expect(output.warn).toBe(warnFn);
     target.dispatchEvent(Object.assign(new Event('error'), { error: new Error('ya no') }));
-    expect(webLogSnapshot()).toHaveLength(4);
+    expect(webLogSnapshot()).toHaveLength(0);
   });
 });

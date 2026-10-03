@@ -389,7 +389,7 @@ describe('Descargar fallos (0.9.0)', () => {
     expect(names[0]).toMatch(/^ace-player-neo-fallos-\d{4}-\d{2}-\d{2}-\d{4}\.json$/);
     await waitFor(() =>
       expect(toastStore.get().at(-1)?.text).toBe(
-        `Fallos descargados: ${names[0]} · ${saved.summary.nuestro} nuestros, ${saved.summary.deFuera} de fuera`,
+        `Fallos descargados: ${names[0]} · ${saved.summary.nuestro} ${saved.summary.nuestro === 1 ? 'nuestro' : 'nuestros'}, ${saved.summary.deFuera} de fuera`,
       ),
     );
   });

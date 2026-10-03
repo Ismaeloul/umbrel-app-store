@@ -54,6 +54,7 @@ describe('el fichero de la demo', () => {
     // Las métricas y el autoplay bloqueado no cuentan como fallos.
     const info = file.faults.filter((fault) => fault.level === 'info').map((fault) => fault.code);
     expect(info).toEqual(expect.arrayContaining(['player_metrics', 'autoplay_blocked']));
+    expect(file.summary.nuestro).toBeGreaterThan(1);
     expect(faultsNotice('f.json', file)).toBe(
       `Fallos descargados: f.json · ${file.summary.nuestro} nuestros, ${file.summary.deFuera} de fuera`,
     );
@@ -64,5 +65,15 @@ describe('el fichero de la demo', () => {
     expect(
       faultsNotice('f.json', { ...file, summary: { ...file.summary, nuestro: 0, deFuera: 0 } }),
     ).toBe('Fallos descargados: f.json (sin fallos que contar)');
+  });
+
+  it('con un solo fallo nuestro, en singular', () => {
+    const file = demoFaultsFile(webDiagnostics());
+    expect(
+      faultsNotice('f.json', { ...file, summary: { ...file.summary, nuestro: 1, deFuera: 0 } }),
+    ).toBe('Fallos descargados: f.json · 1 nuestro, 0 de fuera');
+    expect(
+      faultsNotice('f.json', { ...file, summary: { ...file.summary, nuestro: 2, deFuera: 1 } }),
+    ).toBe('Fallos descargados: f.json · 2 nuestros, 1 de fuera');
   });
 });
