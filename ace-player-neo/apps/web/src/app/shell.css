@@ -354,10 +354,11 @@
     letter-spacing: var(--tracking-head);
     white-space: nowrap;
   }
-  .topbar__brand img {
+  /* La marca (ui/BrandMark.tsx) trae sus esquinas redondeadas en el dibujo. */
+  .topbar__mark {
+    flex: none;
     width: 28px;
     height: 28px;
-    border-radius: 8px;
   }
   .topbar__items {
     position: relative;
