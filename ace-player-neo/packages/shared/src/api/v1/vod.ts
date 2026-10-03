@@ -288,6 +288,8 @@ export const VodSeriesSchema = z.strictObject({
         episodes: z.array(VodEpisodeSchema).max(500),
         /** Sinopsis de la temporada (`overview`). Opcional. */
         plot: z.string().max(600).nullable().optional(),
+        /** Fecha de la temporada (`air_date` de `seasons`), para «Temporada 2 · 2006». Opcional. */
+        airDate: VodDateSchema.nullable().optional(),
       }),
     )
     .max(100),

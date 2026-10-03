@@ -923,6 +923,7 @@ const vodOfficeTitle: VodSeries = {
         },
       ],
       plot: 'Michael Scott dirige la sucursal de Scranton mientras le graba un equipo de documentales.',
+      airDate: '2005-03-24',
     },
     {
       n: 2,
