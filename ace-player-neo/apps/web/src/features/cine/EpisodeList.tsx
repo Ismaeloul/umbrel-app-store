@@ -1,7 +1,7 @@
 /* Los episodios de una temporada (docs/vod.md §12.6).
 
-   - Con fotogramas: el fotograma 16:9 (o, si falta en ese episodio, su
-     NÚMERO grande sobre el color de la serie), «3. Título», la duración o lo
+   - Con fotogramas: el fotograma 16:9 (o, si falta en ese episodio, si aún
+     carga o si falla, su NÚMERO grande sobre el color de la serie), «3. Título», la duración o lo
      que queda, la fecha de emisión y la nota (si el proveedor las da), la
      barra de lo visto, «Visto» (icono y texto, nunca solo color) y la
      sinopsis en 2 líneas.
@@ -120,6 +120,11 @@ function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: 
       : null;
   const aired = shortDateText(episode.airDate);
   const rating = ratingText(episode.rating);
+  const bigNumber = (
+    <span className="cine-episode__big" aria-hidden="true">
+      <Num value={String(episode.n)} condensed={false} />
+    </span>
+  );
   const reason = block
     ? block.reason === 'hevc'
       ? CINE_TEXT.hevcBlocked
@@ -168,16 +173,16 @@ function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: 
         ) : (
           <span className="cine-episode__art">
             {episode.still ? (
+              /* Mientras carga o si falla (las URLs rotas son habituales), su número, no un monograma. */
               <Art
                 id={episode.id}
                 art="still"
                 v={episode.still}
                 title={episode.title || seriesTitle}
+                fallback={bigNumber}
               />
             ) : (
-              <span className="cine-episode__big" aria-hidden="true">
-                <Num value={String(episode.n)} condensed={false} />
-              </span>
+              bigNumber
             )}
             <span className="cine-episode__glyph">
               <Icon name="play" size={20} />

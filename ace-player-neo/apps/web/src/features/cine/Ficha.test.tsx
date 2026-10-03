@@ -56,6 +56,11 @@ describe('película', () => {
     // El cartel también en el móvil (antes se escondía por debajo de 1024 px).
     expect(document.querySelector('.cine-hero__poster .cine-art--poster')).not.toBeNull();
     expect(document.querySelector('.cine-hero')).toHaveAttribute('data-bg', 'backdrop');
+    // «Película · VOD | 4K»: cada parte con su separador (que se recorta si empieza línea).
+    const parts = [...document.querySelectorAll('.cine-hero__kicker-part')];
+    expect(parts.map((part) => part.textContent)).toEqual(['Película', '·VOD | 4K']);
+    for (const sep of document.querySelectorAll('.cine-hero__sep'))
+      expect(sep).toHaveAttribute('aria-hidden', 'true');
     const meta = document.querySelector('.cine-hero__meta');
     expect(meta?.textContent).toContain('2021');
     expect(meta?.textContent).toContain('2 h 36 min');
@@ -279,6 +284,17 @@ describe('serie', () => {
     const numbers = [...document.querySelectorAll('.cine-episode__num')];
     expect(numbers.map((n) => n.textContent)).toEqual(['', '6']);
     expect(numbers[0]?.querySelector('svg')).not.toBeNull();
+  });
+
+  it('un fotograma que carga o falla deja ver el número del episodio, no un monograma', async () => {
+    serveTitle(SERIES);
+    await screen.findByRole('heading', { level: 1, name: 'The Office' });
+    // T2: el 5 sin fotograma (su número) y el 6 con fotograma (su número debajo).
+    const still = document.querySelector('.cine-episode .cine-art--still');
+    expect(still?.querySelector('.cine-episode__big')?.textContent).toBe('6');
+    expect(still?.querySelector('.cine-art__mono')).toBeNull();
+    fireEvent.error(still!.querySelector('img')!);
+    expect(still?.querySelector('.cine-episode__big')?.textContent).toBe('6');
   });
 
   it('una categoría desde una serie: la serie siguiente abre en SU temporada (arreglo 3)', async () => {

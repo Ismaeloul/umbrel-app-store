@@ -9,7 +9,7 @@
    se queda el relleno (la técnica de TeamMark). */
 
 import type { VodArtKind } from '@ace/shared';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { channelTone, oklchCss } from '../../lib/color.ts';
 import { cx } from '../../lib/cx.ts';
 import { artSrc } from './data.ts';
@@ -48,11 +48,25 @@ export interface ArtProps {
   eager?: boolean;
   /** Sin monograma (el fondo desenfocado de la ficha). */
   bare?: boolean;
+  /**
+   * Lo que se ve mientras la imagen carga o si falla, en vez del monograma (el
+   * fotograma de un episodio enseña su número: «P» de «El plan» no dice nada).
+   */
+  fallback?: ReactNode;
 }
 
 type Load = { src: string; attempt: 0 | 1; state: 'loading' | 'image' | 'retry' | 'failed' };
 
-export function Art({ id, art, v, title, className, eager = false, bare = false }: ArtProps) {
+export function Art({
+  id,
+  art,
+  v,
+  title,
+  className,
+  eager = false,
+  bare = false,
+  fallback,
+}: ArtProps) {
   const src = v ? artSrc(id, art, v, title) : null;
   const [load, setLoad] = useState<Load | null>(null);
   const current =
@@ -79,7 +93,9 @@ export function Art({ id, art, v, title, className, eager = false, bare = false 
       data-state={!image ? 'fill' : image.state === 'image' ? 'image' : 'loading'}
       aria-hidden="true"
     >
-      {bare ? null : art === 'poster' ? (
+      {fallback !== undefined ? (
+        fallback
+      ) : bare ? null : art === 'poster' ? (
         /* Un cartel sin imagen se pinta como un cartel: el título en grande. */
         <b className="cine-art__name">{title}</b>
       ) : (

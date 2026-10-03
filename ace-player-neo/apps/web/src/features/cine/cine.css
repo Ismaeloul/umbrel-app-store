@@ -762,20 +762,35 @@
   grid-area: plot;
   min-width: 0;
 }
+/* «PELÍCULA · ESTRENOS 2024». Cada parte empieza con su separador en una
+   franja de 18 px; la fila se mete 18 px a la izquierda y el párrafo recorta:
+   la franja de la parte que empieza línea queda fuera. Así, al partirse, la
+   segunda línea no empieza con «·». */
 .cine-hero__kicker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 6px;
+  --kicker-sep: 18px;
+  overflow: hidden;
   color: var(--text-2);
   font-size: var(--fs-kicker);
   font-weight: 700;
   letter-spacing: var(--tracking-kicker);
   text-transform: uppercase;
 }
-.cine-hero__cat {
+.cine-hero__kicker-row {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  margin-left: calc(var(--kicker-sep) * -1);
+}
+.cine-hero__kicker-part {
   display: inline-flex;
-  gap: 6px;
   min-width: 0;
+}
+.cine-hero__sep {
+  flex: none;
+  width: var(--kicker-sep);
+  text-align: center;
+}
+.cine-hero__cat {
   overflow-wrap: anywhere;
 }
 /* El título siempre entero (es el h1): si es muy largo, más pequeño. */
@@ -1159,6 +1174,12 @@
   color: #fff;
   font-size: var(--fs-44);
   font-weight: 800;
+}
+/* El mismo número debajo de un fotograma que carga o que ha fallado (Art, `fallback`). */
+.cine-art > .cine-episode__big {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: auto;
 }
 .cine-episode__glyph {
   position: absolute;

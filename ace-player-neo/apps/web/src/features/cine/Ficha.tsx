@@ -450,16 +450,23 @@ function Hero({ title, onBack, now }: { title: VodTitle; onBack(): void; now: nu
           <Art id={title.id} art="poster" v={title.poster} title={title.title} eager />
         </div>
         <div className="cine-hero__info">
+          {/* Cada parte lleva su «·» delante, en una franja que se recorta al
+              empezar línea: al partirse no queda «· ESTRENOS 2024» abajo. */}
           <p className="cine-hero__kicker">
-            {title.kind === 'movie' ? CINE_TEXT.movieKicker : CINE_TEXT.seriesKicker}
-            {title.category ? (
-              <span className="cine-hero__cat">
-                <span className="cine-dot" aria-hidden="true">
-                  ·
-                </span>
-                {title.category.name}
+            <span className="cine-hero__kicker-row">
+              <span className="cine-hero__kicker-part">
+                <span className="cine-hero__sep" aria-hidden="true" />
+                {title.kind === 'movie' ? CINE_TEXT.movieKicker : CINE_TEXT.seriesKicker}
               </span>
-            ) : null}
+              {title.category ? (
+                <span className="cine-hero__kicker-part cine-hero__cat">
+                  <span className="cine-hero__sep" aria-hidden="true">
+                    ·
+                  </span>
+                  {title.category.name}
+                </span>
+              ) : null}
+            </span>
           </p>
           <h1
             className="cine-hero__title"

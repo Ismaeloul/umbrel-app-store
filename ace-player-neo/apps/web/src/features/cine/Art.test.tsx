@@ -54,4 +54,23 @@ describe('Art', () => {
     rerender(<Art id={ID} art="backdrop" v={null} title="Dune" bare />);
     expect(container.querySelector('.cine-art__mono, .cine-art__name')).toBeNull();
   });
+
+  it('con `fallback` (el número del episodio), eso en vez del monograma mientras carga o si falla', () => {
+    const { container } = render(
+      <Art id={ID} art="still" v="abcdef01" title="El plan" fallback={<span className="n">3</span>} />,
+    );
+    // Cargando: el número debajo, nunca «P».
+    expect(container.querySelector('.n')?.textContent).toBe('3');
+    expect(container.querySelector('.cine-art__mono')).toBeNull();
+    fireEvent.error(container.querySelector('img')!);
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    fireEvent.error(container.querySelector('img')!);
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(container.querySelector('.n')?.textContent).toBe('3');
+    expect(container.querySelector('.cine-art__mono')).toBeNull();
+  });
 });
