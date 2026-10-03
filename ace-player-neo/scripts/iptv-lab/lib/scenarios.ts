@@ -153,6 +153,60 @@ export const SCENARIOS: readonly Scenario[] = [
     ts: { burstS: 2 },
     minutes: 4,
   },
+  /* Auditoría 0.9.0: costuras seguidas como las de «LA 1 ³» de Isma. */
+  {
+    name: 'ts-costura-4s',
+    description:
+      'Costura cada 4 s (clip de 4 s en bucle, GOP 2 s) y saltos de +3 s del PTS cada 25 s: la puerta TS sin parar de esperar.',
+    clip: { ...BASE, seconds: 4 },
+    kind: 'ts',
+    ts: { burstS: 2 },
+    minutes: 3,
+    actions: [
+      [25, 'salto-pts:3'],
+      [50, 'salto-pts:3'],
+      [75, 'salto-pts:3'],
+      [100, 'salto-pts:3'],
+      [125, 'salto-pts:3'],
+      [150, 'salto-pts:3'],
+    ],
+  },
+  {
+    name: 'ts-costura-3s-gop5',
+    description:
+      'Costura cada 3 s con un GOP de 5 s (clip de 3 s en bucle): casi nunca llega un IDR entre costura y costura.',
+    clip: { ...BASE, seconds: 3, gopS: 5 },
+    kind: 'ts',
+    ts: { burstS: 2 },
+    minutes: 3,
+  },
+  /* Auditoría 0.9.0, medido en crudo en el canal de Isma (10 min): su proveedor Xtream entrega A
+     GOLPES cada ~8-11 s (uno de 15 s), sin perder paquetes y a 8 Mb/s de media. */
+  {
+    name: 'ts-golpes-10s',
+    description:
+      'Proveedor que entrega a golpes (el de Isma): ~1 s mandando lo retenido de golpe y 8-11 s nada, y uno de cada 9 silencios de 15 s (cada ~1,5 min). Sin pérdidas.',
+    clip: BASE,
+    kind: 'ts',
+    ts: {
+      burstS: Number(process.env.IPTV_LAB_GOLPES_COLCHON ?? 2),
+      jitter: { everyS: [1, 1.5], pauseS: [8, 11], long: { everyN: 9, pauseS: 15 } },
+    },
+    minutes: 4,
+  },
+  {
+    name: 'ts-golpes-10s-parones',
+    description:
+      'Como ts-golpes-10s y además 15 s sin nada a los 90 y a los 180 s (se suman al silencio de turno: 20-25 s sin un byte).',
+    clip: BASE,
+    kind: 'ts',
+    ts: { burstS: 2, jitter: { everyS: [1, 1.5], pauseS: [8, 11] } },
+    minutes: 4,
+    actions: [
+      [90, 'parar:15'],
+      [180, 'parar:15'],
+    ],
+  },
   {
     name: 'ts-gop6',
     description: 'TS limpio con GOP de 6 s (segmentos del remux de 6 s en vez de 2).',
