@@ -241,8 +241,9 @@ describe('Guía TV en el servicio (§20.5)', () => {
       `[guía · directo] construcción ${Math.round(took)} ms · peor hueco del relé ${Math.round(worstGap)} ms (sin construir: ${Math.round(baselineGap)} ms) · reloj tarde ${Math.round(lateness)} ms (sin construir: ${Math.round(baselineLateness)} ms) · ${Math.round(bytes / 1024)} KiB por el relé`,
     );
     expect(bytes).toBeGreaterThan(0);
-    /* Holgura para un PC cargado: lo que importa es que el hilo no se queda parado. */
-    expect(lateness).toBeLessThan(baselineLateness + 250);
-    expect(worstGap).toBeLessThan(baselineGap + 500);
+    /* Holgura para un PC cargado (otros ficheros de prueba a la vez): lo que importa es que el hilo
+       no se queda parado segundos, como pasaría construyendo de una tirada. Solo: ~70 ms y ~170 ms. */
+    expect(lateness).toBeLessThan(baselineLateness + 500);
+    expect(worstGap).toBeLessThan(baselineGap + 1000);
   }, 120_000);
 });
