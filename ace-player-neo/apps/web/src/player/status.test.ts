@@ -22,12 +22,49 @@ function playing(patch: Partial<PlayerState> = {}): PlayerState {
 }
 
 describe('línea de estado bajo el vídeo', () => {
-  it('en directo: frase humana con la fuente y el retraso a la derecha (maqueta)', () => {
+  it('en directo: frase humana con la fuente y sin cifra de retraso (no contradice «en directo»)', () => {
     expect(statusFor(playing())).toEqual({
       text: 'Fuente 1 verificada. Vas en directo.',
       signal: 'ok',
-      meta: '6 s de retraso',
     });
+    // IPTV/HLS: el colchón deja siempre 7-8 s hasta lo último que ha llegado;
+    // en el borde útil sigue siendo «en directo», sin «8 s de retraso» al lado.
+    const iptv = statusFor(
+      playing({
+        streamSource: 'iptv',
+        protocol: 'hls',
+        live: { available: true, atLive: true, behindS: 2, delayS: 8 },
+      }),
+    );
+    expect(iptv).toEqual({ text: 'Fuente 1 verificada. Vas en directo.', signal: 'ok' });
+    expect(JSON.stringify(iptv)).not.toMatch(/retraso|detrás/);
+  });
+
+  it('el retraso inherente se queda en «Datos técnicos»', () => {
+    const rows = nerdRows(
+      playing({ live: { available: true, atLive: true, behindS: 2, delayS: 8 } }),
+      'en línea',
+    );
+    expect(rows).toContainEqual(['Retraso', '8 s']);
+  });
+
+  it('en pausa: los segundos por detrás solo si de verdad te has quedado atrás', () => {
+    const atEdge = statusFor(
+      playing({
+        phase: 'pausado',
+        desiredPlaying: false,
+        live: { available: true, atLive: true, behindS: 2, delayS: 8 },
+      }),
+    );
+    expect(atEdge?.meta).toBeUndefined();
+    const behind = statusFor(
+      playing({
+        phase: 'pausado',
+        desiredPlaying: false,
+        live: { available: true, atLive: false, behindS: 12, delayS: 18 },
+      }),
+    );
+    expect(behind?.meta).toBe('−12 s');
   });
 
   it('por detrás del directo: lo dice con los segundos (sin la frase de la fuente, que no cabe en el móvil)', () => {
