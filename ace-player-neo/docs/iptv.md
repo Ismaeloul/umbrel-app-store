@@ -749,7 +749,11 @@ IPTV queda **confirmada por la guía** solo si **todo** esto se cumple:
      - la clave sin prefijos (`real`, `club`, `cd`, `ud`, `sd`, `rcd`, `rc`, `ca`, `fc`, `cf`) si queda con 5 letras o
        más;
      - la tabla curada `EPG_TEAM_ALIASES`: barça/barca → barcelona; atleti/atlético → atletico madrid; athletic →
-       athletic club; betis → real betis; celta; espanyol; rayo → rayo vallecano; osasuna; etc.;
+       athletic club; betis → real betis; celta; espanyol; rayo → rayo vallecano; osasuna; etc. Vale en los **dos
+       sentidos** (0.9.0): cualquier forma de un grupo trae el grupo entero, así «Nápoles», «Oporto», «Brujas»,
+       «Estrella Roja», «Sparta de Praga», «Salzburgo», «Copenhague» u «O. Lyonnais», como escribe futbolenlatv,
+       encuentran «Napoli», «Porto», «Club Brugge», «Crvena Zvezda», «Sparta Praha», «Salzburg», «Copenhagen» o
+       «Olympique de Lyon», y al revés;
      - si `teams` los tiene, `strTeamAlternate` y `strTeamShort`.
    - Las siglas de club pegadas al separador no estorban: «Girona FC - Sevilla FC», «Atalanta BC - ACF Fiorentina»,
      «Sporting CP - SL Benfica» (fc, cf, ud, cd, sd, rcd, rc, ac, afc, acf, bc, sad, ssc, as, ss, sl, cp, sc, sv,
@@ -868,28 +872,52 @@ guía), la guía de la IPTV:
 
 1. **Confirma** el partido y su canal exacto. Es `confirmByGuide` (§4.5) sobre los **mismos candidatos** que la
    resolución (`guideCandidates`, layer.ts): lo que se enseña en la agenda es lo que luego suena primero. Dos canales
-   como mucho y uno por canal («M+ LaLiga TV» y su «Bar» cuentan una vez).
+   como mucho y uno por canal («M+ LaLiga TV» y su «Bar» cuentan una vez). **La descripción no dice de qué partido es
+   un programa** (las guías reales la traen en todos y a menudo anuncia el siguiente partido): si el título o el
+   subtítulo traen **otro** enfrentamiento, lo que diga la descripción no confirma este partido; sin enfrentamiento
+   en el título («El Clásico (Directo)», «Fútbol») sí, como en la resolución. Un programa que confirma otro partido
+   de la agenda con sus dos equipos en el título es de ese partido: no vale para este.
 2. **Mueve la hora** si futbolenlatv se equivoca: a su hora la guía no confirma nada (tampoco un programa que no puede
    ser un partido de esa hora, regla 1 de §4.5), pero ese mismo día tiene el partido **en directo** (marca obligatoria:
-   `<live/>`, «directo», «en vivo», «(L)»). Manda el primer programa así del día; el saque es su inicio redondeado al
-   cuarto de hora siguiente (20:50 → 21:00) si así cubre el partido entero (regla 1), o su inicio tal cual
-   (`kickoffFromProgramme`). Nunca a otro día. El id del partido no cambia. También si a su hora solo está el partido
-   **sin** marca y la guía lo tiene en directo **antes** ese día: lo de la hora de la agenda es la repetición (una
-   repetición va siempre después del directo). Un directo posterior no mueve nada: ahí se fía de la agenda y del
-   programa a su hora.
+   `<live/>`, «directo», «en vivo», «(L)») con los dos equipos **en el título o el subtítulo** (nunca solo en la
+   descripción: «Sevilla - Betis (Directo)» con «Esta noche, Real Madrid - Barcelona» no lleva el Clásico a las 18:30)
+   y en un programa que no es ya de otro partido de la agenda. Manda el primer programa así del día; el saque es su
+   inicio redondeado al cuarto de hora siguiente (20:50 → 21:00) si así cubre el partido entero (regla 1), o su inicio
+   tal cual (`kickoffFromProgramme`). Nunca a otro día. El id del partido no cambia. También si a su hora solo está el
+   partido **sin** marca y la guía lo tiene en directo **antes** ese día (con las mismas condiciones): lo de la hora de
+   la agenda es la repetición (una repetición va siempre después del directo). Un directo posterior no mueve nada:
+   ahí se fía de la agenda y del programa a su hora.
 3. **Añade** un partido que la guía trae y la agenda no, con cuidado: en directo (marca obligatoria), de una
    competición de `COMPETITION_FAMILIES` (la del texto y ninguna otra o, si el texto no nombra ninguna, la del canal),
    en un canal de España, con los dos equipos claros en el título o el subtítulo (`extractGuideMatchup`), sin
    filiales, cantera ni femenino (salvo Liga F), con las reglas 1 a 6 de §4.5, nada de leyendas, benéficos, homenajes,
    despedidas ni exhibiciones, con alguna categoría de deportes si el programa trae categorías, y **solo si no está ya
-   en la agenda escrito de otra forma**:
+   en la agenda escrito de otra forma** (`sameMatch`; mejor no añadir uno que añadirlo dos veces, pero sin perder los
+   que de verdad faltan):
    - ninguno de los dos equipos juega en la agenda ese día, el anterior o el siguiente (clave, alias o nombre sin
      siglas: «Atalanta BC» es «Atalanta»; un equipo no juega dos días seguidos: así «Barça - Atleti» no duplica «FC
      Barcelona - Atlético de Madrid»);
-   - y a esa misma hora (el programa cae a su saque, o ±30 min) no hay en la agenda un partido de la misma
-     competición, anunciado en ese canal (≥ 70) o con un nombre que se parece (una palabra de 4 letras o más en
-     común). Así tampoco cuando la guía escribe los **dos** equipos de otra forma («Brighton - Spurs», «FC Köln -
-     Mainz 05» contra «Colonia - Maguncia»). Mejor no añadir uno que añadirlo dos veces.
+   - los dos nombres no se parecen a los de un partido de la agenda de ese día, a la hora que sea, ni uno solo si es
+     de la misma competición. «Se parece» (`teamsAlike`): cada palabra del nombre más corto se parece a una palabra
+     distinta del otro (la inicial, el principio, la abreviatura o una o dos letras cambiadas en una palabra larga) y
+     alguna pareja pesa (ninguna débil). «Sheffield Wed» y «Sheffield Wednesday», «Leeds Utd» y «Leeds United»,
+     «Qairat» y «Kairat Almaty», «Olympiakos» y «Olympiacos», sí; «Manchester City» y «Manchester United»,
+     «Newcastle United» y «Newcastle Jets» o «Real Madrid» y «Atlético de Madrid», no;
+   - ese canal (≥ 70) no da a esa misma hora (el programa cae a su saque, o ±30 min) un partido de la agenda: un canal
+     da un partido a la vez;
+   - y no es, en el **mismo** canal (≥ 92) y de la misma competición, un partido de la agenda de ese día que la guía no
+     encuentra y cuyo canal, a la hora de la agenda, no da nada que pueda ser un partido (que dure lo de un partido,
+     no sea una repetición y, en un canal sin competición en el nombre, traiga un enfrentamiento o una competición): es
+     él con la hora mal y los dos nombres de otra forma.
+   - La misma competición a la misma hora, sola, **no** basta (cambia tras la segunda revisión): en una noche de
+     Champions con ocho partidos a la vez se añade el noveno que trae la guía, y un Everton - Fulham de DAZN 2 a la hora
+     del Arsenal - Chelsea de DAZN 1, también. Con alias de verdad («Estrella Roja» es «Crvena Zvezda», §4.5), la guía
+     mueve la hora del partido de la agenda en vez de añadirlo otra vez. Lo que sigue sin poder saberse: los dos nombres
+     distintos sin alias, otra hora **y** otro canal.
+   - Los equipos salen de `extractGuideMatchup`, que no saca nada de un título con dos enfrentamientos («Real Madrid -
+     Juventus y Liverpool - Bayern»), de equipos por decidir («Por confirmar», «Ganador A») ni con el mismo nombre a
+     los dos lados; «El Clásico - Real Madrid vs Barcelona» da Real Madrid - Barcelona. Sus canales son los programas
+     en directo con los dos equipos en el título que no son ya un partido de la agenda.
 
    Id `guia-<fecha>-<hash>`, rótulo de competición el que ya use la agenda para esa familia (nunca el de su femenina o
    su cantera, salvo en Liga F) o `COMPETITION_FAMILY_LABELS`, canales los de la guía.

@@ -503,6 +503,13 @@ punto 12); diseño completo en docs/iptv.md §4.7.
   después del directo); manda el primer programa en directo del día; el
   saque es el inicio del programa redondeado al cuarto de hora siguiente
   (20:50 → 21:00) si así el programa cubre el partido entero.
+- **La descripción no dice de qué partido es un programa** (segunda
+  revisión): para mover la hora, los dos equipos tienen que estar en el
+  título o el subtítulo, y un programa que ya es de otro partido de la
+  agenda (sus equipos en el título) no mueve ni confirma este. Si el título
+  trae otro enfrentamiento, la descripción tampoco confirma este a su hora.
+  Así «Sevilla - Betis (Directo)» con «Esta noche, Real Madrid - Barcelona»
+  en la descripción no lleva el Clásico a las 18:30.
 - **Añadir, con cuidado** (mejor no añadir uno que añadirlo dos veces):
   solo de una competición conocida (familia del texto o, si no nombra
   ninguna, del canal), en un canal de España, con los dos equipos claros en
@@ -511,9 +518,19 @@ punto 12); diseño completo en docs/iptv.md §4.7.
   fútbol («EHF Champions League», «Premier League Darts», «eLaLiga»), con
   alguna categoría de deportes si el programa trae categorías, y solo si no
   está ya en la agenda escrito de otra forma: ninguno de los dos equipos
-  juega en la agenda ese día, el anterior o el siguiente, y a esa misma hora
-  no hay un partido de la agenda de la misma competición, en ese canal o con
-  un nombre que se parece. Id `guia-<fecha>-<hash>`.
+  juega en la agenda ese día, el anterior o el siguiente; los dos nombres no
+  se parecen a los de un partido de ese día, ni uno solo si es de la misma
+  competición; ese canal no da a esa hora un partido de la agenda; y no es,
+  en el mismo canal y de la misma competición, un partido de la agenda que
+  la guía no encuentra a su hora (con la hora mal). La misma competición a
+  la misma hora, sola, **no** basta: en una noche de Champions se añade el
+  partido que le falta a la agenda. Id `guia-<fecha>-<hash>`.
+- **Alias en los dos sentidos**: la tabla curada de la guía
+  (`EPG_TEAM_ALIASES`) vale desde cualquiera de sus formas («Nápoles»,
+  «Oporto», «Brujas», «Estrella Roja», «Salzburgo», «Copenhague», como
+  futbolenlatv, encuentran «Napoli», «Porto», «Club Brugge», «Crvena
+  Zvezda», «Salzburg», «Copenhagen», y al revés): así la guía mueve la hora
+  en vez de añadir el partido otra vez.
 - **Preferir la guía**: las fuentes del canal confirmado van delante de
   todas (IPTV y AceStream; dentro, el orden de siempre), también por delante
   de la IPTV por nombre de otro canal que anuncie futbolenlatv. Una AceStream
