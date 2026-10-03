@@ -941,13 +941,14 @@ describe('cadencia de entrega (auditoría 0.9.0)', () => {
     await session.close();
   });
 
-  it('sin cadencia aprendida, 11 s sin nada sí reconecta (el plazo de siempre, 10 s)', async () => {
+  it('el primer minuto, sin cadencia aún, aguanta 15 s sin nada; después, con entrega seguida, 10 s', async () => {
     const r = await rig();
     let opens = 0;
+    let golpe: ((seconds: number) => void) | null = null;
     r.setHandler((req, res) => {
       if (req.url !== '/live/1.ts') return void res.writeHead(404).end();
       opens += 1;
-      burstStream(res);
+      golpe = burstStream(res);
     });
     const session = await r.relay.open({ variants: [variant('/live/1.ts')] });
     let received = 0;
@@ -956,6 +957,41 @@ describe('cadencia de entrega (auditoría 0.9.0)', () => {
     );
     ffmpeg.on('error', () => undefined);
     await waitFor('bytes', () => received > 10_000);
+    /* El primer silencio de un proveedor a golpes puede pasar de 10 s antes de haber visto ninguno. */
+    await silence(r, 13);
+    expect(opens).toBe(1);
+    await silence(r, 3);
+    await waitFor('reconectado', () => opens === 2);
+    ffmpeg.destroy();
+    await session.close();
+    void golpe;
+  });
+
+  it('pasado el primer minuto con entrega seguida, 11 s sin nada sí reconecta (el plazo de siempre, 10 s)', async () => {
+    const r = await rig();
+    let opens = 0;
+    let golpe: ((seconds: number) => void) | null = null;
+    r.setHandler((req, res) => {
+      if (req.url !== '/live/1.ts') return void res.writeHead(404).end();
+      opens += 1;
+      golpe = burstStream(res);
+    });
+    const session = await r.relay.open({ variants: [variant('/live/1.ts')] });
+    let received = 0;
+    const ffmpeg = http.get(session.inputUrl, { agent: false }, (res) =>
+      res.on('data', (c: Buffer) => (received += c.length)),
+    );
+    ffmpeg.on('error', () => undefined);
+    await waitFor('bytes', () => received > 10_000);
+    /* Un minuto de entrega seguida (un trozo por segundo): ya no es «aprendiendo». */
+    for (let second = 0; second < 61; second += 1) {
+      const before = received;
+      (golpe as unknown as (seconds: number) => void)(1);
+      await waitFor('trozo', () => received > before);
+      await tick(5);
+      await r.clock.advanceAsync(1_000);
+    }
+    expect(session.stats().cadenceMs).toBeNull();
     await silence(r, 9);
     expect(opens).toBe(1);
     await silence(r, 3);

@@ -202,6 +202,12 @@ export const IPTV_RELAY = {
   idleMs: 10 * SECOND,
   idleMaxMs: 30 * SECOND,
   /**
+   * Plazo sin bytes mientras se aprende la cadencia: el primer minuto de la
+   * sesión, sin cadencia medida todavía (el primer silencio de un proveedor a
+   * golpes puede pasar de 10 s antes de haber visto ninguno).
+   */
+  idleLearningMs: 15 * SECOND,
+  /**
    * Cadencia de entrega (auditoría 0.9.0: el proveedor de Isma manda lo
    * retenido de golpe cada 8-11 s, alguna vez 15 s, sin perder nada): los
    * huecos sin bytes de al menos `cadenceGapMs`, su p90 en `cadenceWindowMs`.

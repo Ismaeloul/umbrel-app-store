@@ -509,9 +509,17 @@ class TsSession extends BaseSession {
     };
   }
 
-  /** Plazo sin bytes de ahora (sigue a la cadencia del proveedor). */
+  /**
+   * Plazo sin bytes de ahora (sigue a la cadencia del proveedor). El primer minuto, sin cadencia
+   * medida aún, `idleLearningMs`: el primer silencio de un proveedor a golpes llega antes de saberlo.
+   */
   idleMs(): number {
-    return relayIdleMs(this.cadence.cadenceMs(this.relay.deps.clock.now()));
+    const now = this.relay.deps.clock.now();
+    const cadence = this.cadence.cadenceMs(now);
+    if (cadence === null && now - this.openedAt < IPTV_RELAY.cadenceWindowMs) {
+      return IPTV_RELAY.idleLearningMs;
+    }
+    return relayIdleMs(cadence);
   }
 
   override releaseGate(): boolean {
@@ -937,7 +945,7 @@ class TsSession extends BaseSession {
     /* Un solo plazo para toda la sonda: reconnect() siempre acaba (y `reconnecting` vuelve a false).
        El de inactividad, que sigue a la cadencia: un proveedor que entrega a golpes puede tardar en
        mandar el primero. */
-    const deadline = clock.now() + this.idleMs();
+    const deadline = clock.now() + relayIdleMs(this.cadence.cadenceMs(clock.now()));
     while (firstPcr === null && headBytes < PCR_PROBE_BYTES) {
       const left = deadline - clock.now();
       if (left <= 0) break;

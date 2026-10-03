@@ -26,6 +26,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   DEFAULT_PLAYBACK_MODE,
+  IPTV_RELAY,
   IPTV_SESSION,
   LEGACY_DEVICE_NAME,
   SHUTDOWN_TIMINGS,
@@ -1184,7 +1185,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         STALL_FLOWING_MIN_MS,
         (stats.cadenceMs ?? 0) + STALL_FLOWING_MARGIN_MS,
       );
-      const flowing = stats.lastByteAt !== null && now - stats.lastByteAt < marginMs;
+      const quietMs = stats.lastByteAt === null ? Infinity : now - stats.lastByteAt;
+      const flowing = quietMs < marginMs;
       const nudgedAt = stallNudges.get(session.id);
       if (flowing && (nudgedAt === undefined || now - nudgedAt > STALL_NUDGE_FORGET_MS)) {
         stallNudges.set(session.id, now);
@@ -1192,6 +1194,19 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         logger.warn(
           { sessionId: session.id, released, cadenceMs: stats.cadenceMs ?? null },
           'IPTV: la salida no avanza pero el proveedor sigue mandando; no se reconecta',
+        );
+        return;
+      }
+      /* Un proveedor que entrega a golpes y lleva un silencio más largo que de costumbre (el de 15 s de
+         Isma), pero aún dentro del plazo del relé (2× su cadencia): reconectar aquí corta una conexión que
+         sigue viva. Si de verdad se ha caído, el propio relé reconecta al vencer su plazo. */
+      const cadence = stats.cadenceMs ?? 0;
+      const relayIdleMs =
+        cadence > 0 ? Math.min(IPTV_RELAY.idleMaxMs, Math.max(IPTV_RELAY.idleMs, 2 * cadence)) : 0;
+      if (!flowing && quietMs < relayIdleMs) {
+        logger.info(
+          { sessionId: session.id, quietMs, cadenceMs: cadence },
+          'IPTV: la salida no avanza; el proveedor (a golpes) aún está en su plazo: se espera',
         );
         return;
       }

@@ -281,6 +281,28 @@ describe('IPTV: vigilante de salida con un proveedor que entrega a golpes (audit
     expect(iptv.gateReleases).toHaveLength(1);
   });
 
+  it('a golpes y con un silencio más largo de lo normal pero dentro del plazo del relé (2× la cadencia): se espera', async () => {
+    let clockRef: FakeClock | null = null;
+    let lastByteAt: number | null = null;
+    const iptv = fakeIptv({ cadenceMs: 10_000, lastByteAt: () => lastByteAt });
+    const setup = await setupPlayback({ iptv: iptv.service });
+    const { runtime, ffmpeg, remux, clock } = setup;
+    clockRef = clock;
+    await runtime.service.acquire(CANAL, query(), web(), live());
+    lastByteAt = clockRef.now();
+    await remux.watchStalls();
+    /* 16 s sin bytes ni lista nueva: pasa el umbral (15 s) pero el relé aguanta 20 s. */
+    clock.advance(16_000);
+    await remux.watchStalls();
+    await ioTurns(50);
+    expect(ffmpeg.spawned).toHaveLength(1);
+    expect(iptv.gateReleases).toHaveLength(0);
+    /* 32 s: fuera del plazo del relé, reinicio. */
+    clock.advance(16_000);
+    await remux.watchStalls();
+    await until('reinicio por atasco', () => ffmpeg.spawned.length === 2);
+  });
+
   it('con cadencia de 10 s la lista quieta 12 s no es atasco: el umbral es 1,5× la cadencia', async () => {
     const iptv = fakeIptv({ cadenceMs: 10_000 });
     const setup = await setupPlayback({ iptv: iptv.service });
