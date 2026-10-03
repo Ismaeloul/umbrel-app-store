@@ -202,12 +202,14 @@ export function useVodPages(scope: BrowseScope, enabled: boolean) {
     enabled,
     staleTime: STALE_MS,
     retry: 1,
-    /* Mientras llega lo nuevo (otro filtro, otra letra), lo de antes a la
-       vista; cambiar de tipo (películas ↔ series) sí empieza de cero. */
-    placeholderData: (previous, previousQuery) =>
-      (previousQuery?.queryKey[3] as BrowseScope | undefined)?.kind === scope.kind
-        ? previous
-        : undefined,
+    /* Mientras llega lo nuevo (otro distintivo, otro orden, otra letra), lo de
+       antes a la vista; cambiar de tipo o de CATEGORÍA sí empieza de cero: la
+       cabecera ya dice «VOD | 4K» y no puede enseñar los carteles de otra
+       categoría (se tocaría uno que no es). */
+    placeholderData: (previous, previousQuery) => {
+      const before = previousQuery?.queryKey[3] as BrowseScope | undefined;
+      return before?.kind === scope.kind && before.cat === scope.cat ? previous : undefined;
+    },
   });
   /* Otra sincronización entre dos páginas: esa página ya es de otro catálogo. */
   const staleHit = query.data?.pages.some((page, index) => index > 0 && page.stale) ?? false;
