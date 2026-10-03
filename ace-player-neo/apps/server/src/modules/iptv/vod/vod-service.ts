@@ -1155,7 +1155,7 @@ export class VodService {
       tags: tagsOf(table.tags[row] as number),
       adult: table.isAdult(row),
       category: this.categoryIdOf(kind, table, row),
-      /* Lo demás que da Xtream (point 3 de la 0.9.0): estreno y tráiler. */
+      /* Lo demás que da Xtream (punto 3 de la 0.9.0): estreno y tráiler. */
       releaseDate: info?.releaseDate ?? null,
       trailer: info?.trailer ?? null,
     };
@@ -1192,6 +1192,7 @@ export class VodService {
       n: season.number,
       name: this.text(season.name, 80),
       plot: this.textOrNull(season.plot, 600),
+      airDate: season.airDate,
       episodes: season.episodes.flatMap((episode): VodEpisode[] => {
         const refEpisode = episodes[index];
         index += 1;

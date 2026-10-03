@@ -579,9 +579,12 @@ Se guarda ya limpia; el JSON crudo se tira.
 
 - **Película:** título, título original, año, sinopsis (≤ 2 000), géneros (≤ 8), reparto (≤ 12 nombres), dirección,
   país, edad, nota, duración, fondo, `video: {codec, width, height, bitDepth}`, `audio0: {codec, channels, lang}`,
-  extensión y alta.
-- **Serie:** los mismos textos, y `seasons: [{number, name, episodes: [{source, number, title, plot ≤ 600, durationS,
-  still, ext}]}]`. Topes: 100 temporadas, 500 episodios por temporada, 3 000 en total; pasarlos da `truncated: true`.
+  extensión y alta. Desde la 0.9.0, también estreno (`releaseDate`) y tráiler (`trailer`, el id de YouTube).
+- **Serie:** los mismos textos, y `seasons: [{number, name, plot, airDate, episodes: [{source, number, title, plot ≤
+  600, durationS, still, ext, airDate, rating}]}]`, más `episodeDurationS` (`episode_run_time`). La sinopsis y la fecha
+  de cada temporada salen de `seasons[].overview` y `seasons[].air_date`. El cartel propio de cada temporada
+  (`cover`) **no** llega a la ficha: pediría una ruta de carteles nueva (la web usa el de la serie). Topes: 100
+  temporadas, 500 episodios por temporada, 3 000 en total; pasarlos da `truncated: true`.
   - Temporadas deducidas de las claves de `episodes` si `seasons` viene vacío; la 0 es «Especiales» y va al final.
   - Episodios por `episode_num` y, a igualdad, por id.
   - El título del episodio pierde el prefijo «Serie - S01E03 - »; si no queda nada, «Episodio 3».

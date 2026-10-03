@@ -320,7 +320,14 @@ export function createFakeVod(base: () => string, extra = 0): FakeVod {
               overview: 'Llega el equipo de documentales.',
               air_date: '2005-03-24',
             },
-            { season_number: 2, name: 'Temporada 2', episode_count: 2, overview: '' },
+            {
+              season_number: 2,
+              name: 'Temporada 2',
+              episode_count: 2,
+              overview: '',
+              /* Como la manda algún panel: con barras y día delante. */
+              air_date: '20/09/2005',
+            },
           ],
       info: raro()
         ? []

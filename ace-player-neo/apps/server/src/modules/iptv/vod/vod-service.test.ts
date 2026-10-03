@@ -311,6 +311,12 @@ describe('VodService contra el proveedor falso', () => {
       null,
       null,
     ]);
+    /* La fecha de cada temporada (`air_date`, también «20/09/2005»). */
+    expect(series.seasons.map((season) => season.airDate)).toEqual([
+      '2005-03-24',
+      '2005-09-20',
+      null,
+    ]);
     expect(series.seasons[0]?.episodes[0]).toMatchObject({
       container: 'mkv',
       airDate: '2005-04-11',

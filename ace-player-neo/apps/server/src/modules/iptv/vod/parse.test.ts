@@ -411,7 +411,7 @@ describe('paneles reales: textos, fechas, notas y duraciones (0.9.0)', () => {
           overview: 'La primera.',
           air_date: '2005-03-24',
         },
-        '2': { season_number: 2, name: 'Temporada 2', overview: '' },
+        '2': { season_number: 2, name: 'Temporada 2', overview: '', air_date: '20/09/2005' },
       },
       info: {
         name: 'The Office',
@@ -445,9 +445,11 @@ describe('paneles reales: textos, fechas, notas y duraciones (0.9.0)', () => {
       ageRating: '12+',
       rating: 8.6,
     });
-    expect(series.seasons.map((season) => [season.number, season.name, season.plot])).toEqual([
-      [1, 'Temporada 1', 'La primera.'],
-      [2, 'Temporada 2', null],
+    expect(
+      series.seasons.map((season) => [season.number, season.name, season.plot, season.airDate]),
+    ).toEqual([
+      [1, 'Temporada 1', 'La primera.', '2005-03-24'],
+      [2, 'Temporada 2', null, '2005-09-20'],
     ]);
     expect(
       series.seasons[0]?.episodes.map((e) => [

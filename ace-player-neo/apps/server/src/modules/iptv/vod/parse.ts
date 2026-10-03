@@ -399,6 +399,8 @@ export interface VodSeasonInfo {
   readonly episodes: readonly VodEpisodeInfo[];
   /** Sinopsis de la temporada (`overview`). */
   readonly plot: string | null;
+  /** Fecha de la temporada (`air_date` de `seasons`), `AAAA-MM-DD`. */
+  readonly airDate: string | null;
 }
 
 export interface VodSeriesInfo extends VodInfoTexts {
@@ -621,6 +623,7 @@ export function parseSeriesInfo(body: unknown): VodSeriesInfo {
   const info = objectOf(root.info);
   const names = new Map<number, string>();
   const overviews = new Map<number, string>();
+  const airDates = new Map<number, string>();
   for (const season of seasonsList(root.seasons)) {
     const record = objectOf(season);
     const number = looseInt(record.season_number);
@@ -629,6 +632,8 @@ export function parseSeriesInfo(body: unknown): VodSeriesInfo {
     if (name) names.set(number, name);
     const overview = firstText(record, ['overview', 'plot'], VOD_LIMITS.episodePlotMax);
     if (overview) overviews.set(number, overview);
+    const airDate = dateOf(firstValue(record, ['air_date', 'releasedate', 'release_date']));
+    if (airDate) airDates.set(number, airDate);
   }
   const bySeason = new Map<number, VodEpisodeInfo[]>();
   let skippedEpisodes = 0;
@@ -705,6 +710,7 @@ export function parseSeriesInfo(body: unknown): VodSeriesInfo {
         name: names.get(number) ?? (number === 0 ? 'Especiales' : `Temporada ${number}`),
         episodes: kept,
         plot: overviews.get(number) ?? null,
+        airDate: airDates.get(number) ?? null,
       });
     }
     if (total >= VOD_LIMITS.episodesMax) {
