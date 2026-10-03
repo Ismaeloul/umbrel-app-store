@@ -7,6 +7,8 @@ import { VOD_LIMITS } from '@ace/shared';
 import { parseJsonArrayStream } from '../json-array.js';
 import {
   cleanText,
+  dateOf,
+  durationOf,
   episodeTitle,
   extName,
   imageUrl,
@@ -15,6 +17,10 @@ import {
   parseSeriesInfo,
   playableHint,
   RATING_NONE,
+  ratingOf,
+  seasonName,
+  trailerOf,
+  yearOf,
 } from './parse.js';
 import { tagsOf } from './titles.js';
 
@@ -280,5 +286,180 @@ describe('fichas (§7.2)', () => {
     /* AVI y TS: no en la v1 (§9.11). */
     expect(playableHint('h264', 8, 5)).toBe('no');
     expect(playableHint(null, null, 6)).toBe('no');
+  });
+});
+
+describe('paneles reales: textos, fechas, notas y duraciones (0.9.0)', () => {
+  it('cleanText: entidades de PHP (con nombre, de tilde y numéricas), etiquetas y caracteres de control', () => {
+    expect(cleanText('Pel&iacute;culas &amp; Series &#8211; Espa&ntilde;a &#xE9;&#233;', 200)).toBe(
+      'Películas & Series – España éé',
+    );
+    expect(cleanText('PEL<b>Í</b>CULAS<br/>NUEVAS', 200)).toBe('PELÍCULAS NUEVAS');
+    expect(cleanText('nota < 5 y > 3', 200)).toBe('nota < 5 y > 3');
+    expect(cleanText('a\u0000b\u0007c d', 200)).toBe('a b c d');
+    expect(cleanText('&#0;&#x1F;&#55296;x', 200)).toBe('x');
+    expect(cleanText('&nada; &amp;amp;', 200)).toBe('&nada; &amp;');
+    /* Nunca parte un emoji al recortar. */
+    expect(cleanText('ab😀cd', 3)).toBe('ab');
+    expect(cleanText(null, 10)).toBe('');
+    expect(cleanText(12, 10)).toBe('12');
+  });
+
+  it('fechas a AAAA-MM-DD, años sueltos y notas con coma', () => {
+    expect(dateOf('2023-07-21')).toBe('2023-07-21');
+    expect(dateOf('2023-07-21 12:30:00')).toBe('2023-07-21');
+    expect(dateOf('2023/7/1')).toBe('2023-07-01');
+    expect(dateOf('21/07/2023')).toBe('2023-07-21');
+    expect(dateOf('21.07.2023')).toBe('2023-07-21');
+    for (const bad of ['2023-02-31', '2023', '', null, 'mañana', '0000-00-00', '1500-01-01']) {
+      expect(dateOf(bad), String(bad)).toBeNull();
+    }
+    expect(yearOf('21/07/2023')).toBe(2023);
+    expect(yearOf('2023-07-21')).toBe(2023);
+    expect(yearOf('12345')).toBeNull();
+    expect(ratingOf({ rating: '7,8' })).toBe(7.8);
+    expect(ratingOf({ rating: '', rating_5based: '3,5' })).toBe(7);
+    expect(ratingOf({ rating: 'N/A' })).toBeNull();
+  });
+
+  it('tráiler: id de YouTube o URL de YouTube; lo demás, nada', () => {
+    expect(trailerOf('uYPbbksJxIg')).toBe('uYPbbksJxIg');
+    expect(trailerOf('https://www.youtube.com/watch?v=uYPbbksJxIg&t=3')).toBe('uYPbbksJxIg');
+    expect(trailerOf('youtu.be/uYPbbksJxIg')).toBe('uYPbbksJxIg');
+    expect(trailerOf('https://www.youtube.com/embed/uYPbbksJxIg')).toBe('uYPbbksJxIg');
+    for (const bad of [
+      '',
+      null,
+      'corto',
+      'https://vimeo.com/123456789',
+      'https://evil.example/watch?v=uYPbbksJxIg',
+    ]) {
+      expect(trailerOf(bad), String(bad)).toBeNull();
+    }
+  });
+
+  it('duraciones: segundos, HH:MM:SS, «1h 30m», «95 min» y minutos de `episode_run_time`', () => {
+    expect(durationOf({ duration_secs: '5400' })).toBe(5_400);
+    expect(durationOf({ duration: '01:30:00' })).toBe(5_400);
+    expect(durationOf({ duration: '1h 30m' })).toBe(5_400);
+    expect(durationOf({ duration: '95 min' })).toBe(5_700);
+    expect(durationOf({ duration: '', episode_run_time: '45' })).toBe(2_700);
+    expect(durationOf({ episode_run_time: [42, 45] })).toBe(2_520);
+    expect(durationOf({ duration: 'mucho' })).toBeNull();
+    expect(seasonName('Season 2', 2)).toBe('Temporada 2');
+    expect(seasonName('Saison 02', 2)).toBe('Temporada 2');
+    expect(seasonName('Season 0', 0)).toBe('Especiales');
+    expect(seasonName('Parte 1', 1)).toBe('Parte 1');
+    expect(seasonName('Season 3', 2)).toBe('Season 3');
+  });
+
+  it('ficha de película de un panel real: claves vacías, alternativas, nulos y todo lo que da Xtream', () => {
+    const movie = parseMovieInfo({
+      info: {
+        kinopoisk_url: '',
+        tmdb_id: '872585',
+        name: 'Oppenheimer',
+        o_name: 'Oppenheimer',
+        cover_big: '',
+        movie_image: 'https://image.tmdb.org/t/p/w600/a.jpg',
+        releasedate: '21/07/2023',
+        youtube_trailer: 'https://www.youtube.com/watch?v=uYPbbksJxIg',
+        director: 'Christopher Nolan',
+        actors: 'Cillian Murphy, Emily Blunt',
+        cast: '',
+        description: 'Sinopsis de &quot;la&quot; película.',
+        plot: '',
+        age: '',
+        mpaa_rating: 'R',
+        country: 'United States of America',
+        genre: null,
+        genres: 'Drama, Historia',
+        backdrop_path: ['', 'https://image.tmdb.org/t/p/w1280/b.jpg'],
+        duration_secs: null,
+        duration: '03:00:00',
+        video: null,
+        audio: [],
+        rating: '8,1',
+      },
+      movie_data: { stream_id: '1', container_extension: '', added: '2023-11-02 10:00:00' },
+    });
+    expect(movie).toMatchObject({
+      title: 'Oppenheimer',
+      plot: 'Sinopsis de "la" película.',
+      cast: ['Cillian Murphy', 'Emily Blunt'],
+      genres: ['Drama', 'Historia'],
+      ageRating: 'R',
+      rating: 8.1,
+      durationS: 10_800,
+      releaseDate: '2023-07-21',
+      year: 2023,
+      trailer: 'uYPbbksJxIg',
+      cover: 'https://image.tmdb.org/t/p/w600/a.jpg',
+      backdrop: 'https://image.tmdb.org/t/p/w1280/b.jpg',
+      ext: 0,
+    });
+    expect(movie.added).toBeGreaterThan(1_698_000_000);
+    expect(parseMovieInfo(null)).toMatchObject({ title: null, releaseDate: null, trailer: null });
+  });
+
+  it('ficha de serie de un panel real: `seasons` como objeto, «Season N», sin `episode_num` y fechas', () => {
+    const series = parseSeriesInfo({
+      seasons: {
+        '1': {
+          season_number: '1',
+          name: 'Season 1',
+          overview: 'La primera.',
+          air_date: '2005-03-24',
+        },
+        '2': { season_number: 2, name: 'Temporada 2', overview: '' },
+      },
+      info: {
+        name: 'The Office',
+        o_name: 'The Office (US)',
+        plot: 'Scranton.',
+        cast: 'Steve Carell',
+        releaseDate: '2005-03-24',
+        youtube_trailer: 'LHOtME2DL4g',
+        episode_run_time: '22',
+        age: '12+',
+        rating_5based: '4,3',
+      },
+      episodes: {
+        '1': [
+          {
+            id: '11',
+            title: 'The Office - S01E01 - Piloto',
+            container_extension: 'MP4',
+            info: { air_date: '2005-03-24', rating: '7.5' },
+          },
+          { id: '12', title: '', container_extension: 'mkv', info: null },
+        ],
+        '2': [{ id: '21', episode_num: '01', title: 'El regreso', info: [] }],
+      },
+    });
+    expect(series).toMatchObject({
+      originalTitle: 'The Office (US)',
+      releaseDate: '2005-03-24',
+      trailer: 'LHOtME2DL4g',
+      episodeDurationS: 1_320,
+      ageRating: '12+',
+      rating: 8.6,
+    });
+    expect(series.seasons.map((season) => [season.number, season.name, season.plot])).toEqual([
+      [1, 'Temporada 1', 'La primera.'],
+      [2, 'Temporada 2', null],
+    ]);
+    expect(
+      series.seasons[0]?.episodes.map((e) => [
+        e.number,
+        e.title,
+        e.airDate,
+        e.rating,
+        extName(e.ext),
+      ]),
+    ).toEqual([
+      [1, 'Piloto', '2005-03-24', 7.5, 'mp4'],
+      [2, 'Episodio 2', null, null, 'mkv'],
+    ]);
   });
 });

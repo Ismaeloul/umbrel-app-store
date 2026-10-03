@@ -89,9 +89,9 @@ import {
   type ProgressTarget,
 } from './progress.js';
 import { listPage, parseVodQuery, searchCached, searchPage, type VodFilter } from './search.js';
-import type { VodTable } from './table.js';
+import { foldKeepLength, type VodTable } from './table.js';
 import type { VodSyncMode } from './table-codec.js';
-import { tagBit, tagsOf } from './titles.js';
+import { cleanVodTitle, tagBit, tagsOf } from './titles.js';
 import { xtreamVodInfo } from './xtream-vod.js';
 
 /** Lo que `VodService` necesita del proveedor configurado. */
@@ -1080,7 +1080,12 @@ export class VodService {
       tags: tagsOf(table.tags[row] as number),
       adult: table.isAdult(row),
       category: this.categoryIdOf(kind, table, row),
+      /* Lo demás que da Xtream (point 3 de la 0.9.0): estreno y tráiler. */
+      releaseDate: info?.releaseDate ?? null,
+      trailer: info?.trailer ?? null,
     };
+    const originalTitle = this.originalTitleOf(info?.originalTitle ?? null, listPart.title);
+    const ageRating = this.textOrNull(info?.ageRating ?? null, 16);
     const progress = this.progressMap();
     if (kind === 'movie') {
       const movie = info && info.kind === 'movie' ? info : null;
@@ -1089,8 +1094,8 @@ export class VodService {
       const title: VodMovie = {
         kind: 'movie',
         ...listPart,
-        originalTitle: this.textOrNull(movie?.originalTitle ?? null, 200),
-        ageRating: this.textOrNull(movie?.ageRating ?? null, 16),
+        originalTitle,
+        ageRating,
         durationS: movie?.durationS ?? null,
         tech: {
           container: extName(ext),
@@ -1105,15 +1110,20 @@ export class VodService {
     const series = info && info.kind === 'series' ? info : null;
     const episodes = series ? this.episodesOf(ref.source, series) : [];
     const byId = new Map(episodes.map((episode) => [episode.id, episode] as const));
+    /* Un panel que repite un episodio (el mismo id dos veces) lo enseña una vez. */
+    const shown = new Set<string>();
     let index = 0;
     const seasons: VodSeries['seasons'] = (series?.seasons ?? []).map((season) => ({
       n: season.number,
       name: this.text(season.name, 80),
+      plot: this.textOrNull(season.plot, 600),
       episodes: season.episodes.flatMap((episode): VodEpisode[] => {
         const refEpisode = episodes[index];
         index += 1;
-        if (!refEpisode || !byId.has(refEpisode.id)) return [];
+        if (!refEpisode || !byId.has(refEpisode.id) || shown.has(refEpisode.id)) return [];
+        shown.add(refEpisode.id);
         const entry = progress.get(refEpisode.id);
+        const container = extName(episode.ext);
         return [
           {
             id: refEpisode.id,
@@ -1124,6 +1134,9 @@ export class VodService {
             still: episode.still ? this.art.stamp(episode.still) : null,
             playable: playableHint(episode.codec, episode.bitDepth, episode.ext),
             progress: entry ? { posS: entry.posS, durS: entry.durS, watched: entry.watched } : null,
+            ...(container ? { container } : {}),
+            airDate: episode.airDate,
+            rating: episode.rating,
           },
         ];
       }),
@@ -1134,8 +1147,23 @@ export class VodService {
       seasons,
       main: episodes.length ? seriesMain(episodes, progress) : null,
       truncated: series?.truncated ?? false,
+      originalTitle,
+      ageRating,
+      episodeDurationS: series?.episodeDurationS ?? null,
     };
     return title;
+  }
+
+  /**
+   * Título original para la ficha: limpio como los de la lista (sin «ES| »
+   * ni «(2023)») y null si es el mismo que el título (muchos paneles ponen
+   * en `o_name` el nombre con su prefijo: repetirlo no dice nada).
+   */
+  private originalTitleOf(raw: string | null, title: string): string | null {
+    const text = this.textOrNull(raw, 200);
+    if (!text) return null;
+    const clean = cleanVodTitle(text).title;
+    return foldKeepLength(clean) === foldKeepLength(title) ? null : clean;
   }
 
   /** La ficha (de la caché o por la cola, sin `pre`), o null si falla. */

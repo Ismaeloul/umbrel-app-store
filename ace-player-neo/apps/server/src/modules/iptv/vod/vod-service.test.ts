@@ -245,6 +245,19 @@ describe('VodService contra el proveedor falso', () => {
       progress: null,
     });
     expect(movie.backdrop).toMatch(/^[a-f0-9]{8}$/);
+    /* Todo lo que da Xtream (0.9.0): estreno, tráiler; el título original
+       igual que el título no se repite. */
+    expect(movie).toMatchObject({
+      releaseDate: '2023-07-21',
+      trailer: 'uYPbbksJxIg',
+      originalTitle: null,
+      country: 'Estados Unidos',
+    });
+    const amelie = home.newMovies.find((card) => card.title === 'Amélie')?.id as string;
+    expect(await settle(rig, vod.title(amelie))).toMatchObject({
+      originalTitle: "Le Fabuleux Destin d'Amélie Poulain",
+      trailer: null,
+    });
     /* La segunda vez, de la caché: ninguna llamada más. */
     const before = vodCalls(rig, 'get_vod_info');
     await Promise.all(Array.from({ length: 10 }, () => vod.title(oppenheimer)));
@@ -283,6 +296,29 @@ describe('VodService contra el proveedor falso', () => {
       label: 'Ver T1:E1',
       episodeId: series.seasons[0]?.episodes[0]?.id,
     });
+    /* Todo lo que da Xtream de la serie, sus temporadas y sus episodios. */
+    expect(series).toMatchObject({
+      originalTitle: 'The Office',
+      ageRating: '12',
+      releaseDate: '2005-03-24',
+      trailer: 'LHOtME2DL4g',
+      episodeDurationS: 1_320,
+      cast: ['Steve Carell', 'Rainn Wilson'],
+      director: 'Greg Daniels',
+    });
+    expect(series.seasons.map((season) => season.plot)).toEqual([
+      'Llega el equipo de documentales.',
+      null,
+      null,
+    ]);
+    expect(series.seasons[0]?.episodes[0]).toMatchObject({
+      container: 'mkv',
+      airDate: '2005-04-11',
+      rating: 7.1,
+      durationS: 1_320,
+      plot: 'Episodio 1 de la temporada 1.',
+    });
+    expect(series.seasons[0]?.episodes[0]?.still).toMatch(/^[a-f0-9]{8}$/);
     /* El id del episodio lleva dentro el series_id (§5.1). */
     const keys = loadIptvKeys(rig.core.config);
     const providerId = rig.state.iptv().read().provider?.id as string;

@@ -168,21 +168,84 @@ export function sourceOf(value: unknown): number | null {
   return number;
 }
 
-function yearOf(value: unknown): number | null {
+/**
+ * Año de un campo del panel: «2023», «2023-07-21», «21/07/2023» o
+ * «2023-07-21 00:00:00». El primer grupo de 4 cifras suelto entre 1880 y
+ * 2100; si no, null.
+ */
+export function yearOf(value: unknown): number | null {
   const text = looseString(value);
-  const match = /^(\d{4})/.exec(text);
-  if (!match) return null;
-  const year = Number(match[1]);
-  return year >= VOD_YEAR_MIN && year <= VOD_YEAR_MAX ? year : null;
+  for (const match of text.matchAll(/(?:^|\D)(\d{4})(?!\d)/g)) {
+    const year = Number(match[1]);
+    if (year >= VOD_YEAR_MIN && year <= VOD_YEAR_MAX) return year;
+  }
+  return null;
 }
 
-/** Nota 0-10: `rating`, o `rating_5based` × 2. null si no hay o no vale. */
+/**
+ * Fecha del panel normalizada a `AAAA-MM-DD` (§7.2): «2023-07-21»,
+ * «2023-07-21 12:00:00», «2023/07/21», «21/07/2023», «21-07-2023» o
+ * «21.07.2023» (día primero, como en Europa). Una fecha que no existe (31
+ * de febrero) o fuera de 1880-2100, null.
+ */
+export function dateOf(value: unknown): string | null {
+  const text = looseString(value);
+  if (!text) return null;
+  let parts: [number, number, number] | null = null;
+  const isoLike = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:$|[T\s])/.exec(text);
+  const european = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:$|\s)/.exec(text);
+  if (isoLike) parts = [Number(isoLike[1]), Number(isoLike[2]), Number(isoLike[3])];
+  else if (european) parts = [Number(european[3]), Number(european[2]), Number(european[1])];
+  if (!parts) return null;
+  const [year, month, day] = parts;
+  if (year < VOD_YEAR_MIN || year > VOD_YEAR_MAX || month < 1 || month > 12 || day < 1) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return `${String(year)}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** Número con coma decimal europea («7,8») además de lo que acepta `looseNumber`. */
+function looseDecimal(value: unknown): number | null {
+  if (typeof value === 'string' && /^\s*\d+,\d+\s*$/.test(value)) {
+    return looseNumber(value.replace(',', '.'));
+  }
+  return looseNumber(value);
+}
+
+/** Nota 0-10: `rating`, o `rating_5based` × 2. null si no hay o no vale. También «7,8». */
 export function ratingOf(item: Record<string, unknown>): number | null {
-  const direct = looseNumber(item.rating);
+  const direct = looseDecimal(item.rating);
   if (direct !== null && direct > 0 && direct <= 10) return Math.round(direct * 10) / 10;
-  const five = looseNumber(item.rating_5based);
+  const five = looseDecimal(item.rating_5based);
   if (five !== null && five > 0 && five <= 5) return Math.round(five * 20) / 10;
   return null;
+}
+
+/**
+ * El tráiler de YouTube (`youtube_trailer`): un id de 11 caracteres o una
+ * URL de YouTube (`watch?v=`, `youtu.be/`, `/embed/`, `/shorts/`). Solo sale
+ * el id; cualquier otra cosa, null.
+ */
+export function trailerOf(value: unknown): string | null {
+  const text = looseString(value);
+  if (!text || text.length > 200) return null;
+  if (/^[A-Za-z0-9_-]{11}$/.test(text)) return text;
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
+  } catch {
+    return null;
+  }
+  const host = url.hostname.toLowerCase().replace(/^(?:www\.|m\.)/, '');
+  let id: string | null = null;
+  if (host === 'youtu.be') id = url.pathname.slice(1).split('/')[0] ?? null;
+  else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    id =
+      url.searchParams.get('v') ??
+      /^\/(?:embed|shorts|v)\/([^/?#]+)/.exec(url.pathname)?.[1] ??
+      null;
+  }
+  return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
 }
 
 /** Índice de la extensión (1-7) o 0 si no está en la lista cerrada. */
@@ -211,8 +274,13 @@ export function imageUrl(value: unknown): string | null {
   }
 }
 
+/** Segundos Unix de `added`/`last_modified`: número, número en texto o una fecha («2023-07-21 10:00:00»). */
 function unixSeconds(value: unknown): number {
-  const number = looseNumber(value);
+  let number = looseNumber(value);
+  if (number === null && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value.trim())) {
+    const ms = Date.parse(value.trim().replace(' ', 'T'));
+    number = Number.isFinite(ms) ? ms / 1000 : null;
+  }
   if (number === null || number <= 0 || number >= 2 ** 32) return 0;
   return Math.floor(number);
 }
@@ -292,6 +360,10 @@ export interface VodInfoTexts {
   readonly backdrop: string | null;
   /** URL del cartel grande de la ficha, si la lista no traía. */
   readonly cover: string | null;
+  /** Estreno (`releasedate`, `releaseDate`, `release_date`), `AAAA-MM-DD`. */
+  readonly releaseDate: string | null;
+  /** Id de YouTube del tráiler (`youtube_trailer`). */
+  readonly trailer: string | null;
 }
 
 export interface VodMovieInfo extends VodInfoTexts {
@@ -316,17 +388,24 @@ export interface VodEpisodeInfo {
   readonly ext: number;
   readonly codec: string | null;
   readonly bitDepth: number | null;
+  /** Emisión (`air_date`, `releasedate`), `AAAA-MM-DD`. */
+  readonly airDate: string | null;
+  readonly rating: number | null;
 }
 
 export interface VodSeasonInfo {
   readonly number: number;
   readonly name: string;
   readonly episodes: readonly VodEpisodeInfo[];
+  /** Sinopsis de la temporada (`overview`). */
+  readonly plot: string | null;
 }
 
 export interface VodSeriesInfo extends VodInfoTexts {
   readonly kind: 'series';
   readonly seasons: readonly VodSeasonInfo[];
+  /** Duración típica de un episodio (`episode_run_time`), en segundos. */
+  readonly episodeDurationS: number | null;
   readonly truncated: boolean;
   /** Episodios que no se pueden reproducir (id que no es entero, series_id > 2³²). */
   readonly skippedEpisodes: number;
@@ -372,22 +451,49 @@ function firstImage(value: unknown): string | null {
   return imageUrl(value);
 }
 
-/** Duración en segundos: `duration_secs`, o `duration` en `HH:MM:SS`. */
+/** El primer valor con algo de una lista de claves (los paneles mandan `""` en la que no usan). */
+function firstValue(record: Record<string, unknown>, keys: readonly string[]): unknown {
+  for (const key of keys) {
+    const value = record[key];
+    if (value === undefined || value === null) continue;
+    if (typeof value === 'string' && !value.trim()) continue;
+    if (Array.isArray(value) && !value.length) continue;
+    return value;
+  }
+  return undefined;
+}
+
+/** Minutos de `episode_run_time`/`runtime` («45», 45, [45, 50], «45 min») → segundos. */
+function runTimeOf(value: unknown): number | null {
+  const first = Array.isArray(value) ? value[0] : value;
+  const text = typeof first === 'string' ? first.replace(/\s*min(?:utos|utes)?\.?$/i, '') : first;
+  const minutes = looseNumber(text);
+  return minutes !== null && minutes > 0 && minutes < 1_440 ? Math.round(minutes * 60) : null;
+}
+
+/**
+ * Duración en segundos: `duration_secs`; o `duration` en `HH:MM:SS`,
+ * `MM:SS`… o en texto («1h 30m», «95 min»); o `episode_run_time`/`runtime`
+ * en minutos.
+ */
 export function durationOf(record: Record<string, unknown>): number | null {
   const secs = looseNumber(record.duration_secs);
   if (secs !== null && secs > 0 && secs < 86_400) return Math.round(secs);
-  const text = looseString(record.duration);
-  const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(text);
-  if (match) {
-    const total =
-      match[3] === undefined
-        ? Number(match[1]) * 3600 + Number(match[2]) * 60
-        : Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
-    return total > 0 && total < 86_400 ? total : null;
+  const text = looseString(record.duration).toLowerCase();
+  const clock = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(text);
+  const words =
+    /^(?:(\d{1,2})\s*h(?:oras?|ours?)?)?\s*(?:(\d{1,3})\s*m(?:in(?:utos|utes)?)?\.?)?$/.exec(text);
+  let total: number | null = null;
+  if (clock) {
+    total =
+      clock[3] === undefined
+        ? Number(clock[1]) * 3600 + Number(clock[2]) * 60
+        : Number(clock[1]) * 3600 + Number(clock[2]) * 60 + Number(clock[3]);
+  } else if (words && (words[1] !== undefined || words[2] !== undefined)) {
+    total = Number(words[1] ?? 0) * 3600 + Number(words[2] ?? 0) * 60;
   }
-  const minutes = looseNumber(record.episode_run_time ?? record.runtime);
-  if (minutes !== null && minutes > 0 && minutes < 1_440) return Math.round(minutes * 60);
-  return null;
+  if (total !== null) return total > 0 && total < 86_400 ? total : null;
+  return runTimeOf(firstValue(record, ['episode_run_time', 'runtime']));
 }
 
 function videoOf(value: unknown): VodVideoHint {
@@ -421,26 +527,30 @@ function audioOf(value: unknown): VodAudioHint | null {
   };
 }
 
+/* Claves alternativas de la ficha: los paneles rellenan una y mandan las
+   demás vacías («cast» vacío y «actors» lleno), así que cuenta la primera
+   que trae algo, no la primera que existe. */
+const RELEASE_KEYS = ['releasedate', 'releaseDate', 'release_date', 'air_date'] as const;
+
 function textsOf(info: Record<string, unknown>): VodInfoTexts {
-  const plot = firstText(info, ['plot', 'description'], VOD_LIMITS.plotMax);
-  const age = cleanText(info.mpaa_rating ?? info.age ?? info.certification, 16);
+  const plot = firstText(info, ['plot', 'description', 'overview'], VOD_LIMITS.plotMax);
+  const age = cleanText(firstValue(info, ['age', 'mpaa_rating', 'certification']), 16);
+  const releaseDate = dateOf(firstValue(info, RELEASE_KEYS));
   return {
     title: firstText(info, ['name', 'title'], VOD_LIMITS.titleMax),
     originalTitle: firstText(info, ['o_name', 'original_name', 'original_title'], 200),
-    year:
-      yearOf(info.year) ??
-      yearOf(info.releasedate) ??
-      yearOf(info.releaseDate) ??
-      yearOf(info.release_date),
+    year: yearOf(info.year) ?? yearOf(firstValue(info, RELEASE_KEYS)),
     plot,
-    genres: listOf(info.genre ?? info.genres, 8, 40),
-    cast: listOf(info.cast ?? info.actors, 12, 80),
+    genres: listOf(firstValue(info, ['genre', 'genres']), 8, 40),
+    cast: listOf(firstValue(info, ['cast', 'actors']), 12, 80),
     director: firstText(info, ['director', 'directors'], 200),
     country: firstText(info, ['country'], 80),
     ageRating: age || null,
     rating: ratingOf(info),
     backdrop: firstImage(info.backdrop_path) ?? firstImage(info.backdrop),
     cover: firstImage(info.cover_big) ?? firstImage(info.movie_image) ?? firstImage(info.cover),
+    releaseDate,
+    trailer: trailerOf(firstValue(info, ['youtube_trailer', 'trailer'])),
   };
 }
 
@@ -455,7 +565,7 @@ export function parseMovieInfo(body: unknown): VodMovieInfo {
     durationS: durationOf(info),
     video: videoOf(info.video),
     audio0: audioOf(info.audio),
-    ext: extIndex(data.container_extension ?? info.container_extension),
+    ext: extIndex(firstValue(data, ['container_extension']) ?? info.container_extension),
     added: unixSeconds(data.added),
   };
 }
@@ -486,17 +596,39 @@ function episodesByKey(value: unknown): Array<[string | null, unknown[]]> {
  * en total). Las temporadas se deducen de los episodios si `seasons` viene
  * vacío; la 0 es «Especiales» y va al final.
  */
+/**
+ * Nombre de una temporada del panel: «Season 2», «Saison 2» o «Stagione 2»
+ * pasan a «Temporada 2» (la app va en castellano); lo demás («Parte 1»,
+ * «Temporada 1»), tal cual.
+ */
+export function seasonName(raw: unknown, number: number): string | null {
+  const name = cleanText(raw, 80);
+  if (!name) return null;
+  const generic = /^(?:season|saison|stagione|staffel|temporada)\s*0*(\d{1,3})$/i.exec(name);
+  if (generic && Number(generic[1]) === number)
+    return number === 0 ? 'Especiales' : `Temporada ${number}`;
+  return name;
+}
+
+/** La lista de temporadas del panel: un array o un objeto por número. */
+function seasonsList(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  return Object.values(objectOf(value));
+}
+
 export function parseSeriesInfo(body: unknown): VodSeriesInfo {
   const root = objectOf(body);
   const info = objectOf(root.info);
   const names = new Map<number, string>();
-  if (Array.isArray(root.seasons)) {
-    for (const season of root.seasons) {
-      const record = objectOf(season);
-      const number = looseInt(record.season_number);
-      const name = cleanText(record.name, 80);
-      if (number !== null && number < 1000 && name) names.set(number, name);
-    }
+  const overviews = new Map<number, string>();
+  for (const season of seasonsList(root.seasons)) {
+    const record = objectOf(season);
+    const number = looseInt(record.season_number);
+    if (number === null || number >= 1000) continue;
+    const name = seasonName(record.name, number);
+    if (name) names.set(number, name);
+    const overview = firstText(record, ['overview', 'plot'], VOD_LIMITS.episodePlotMax);
+    if (overview) overviews.set(number, overview);
   }
   const bySeason = new Map<number, VodEpisodeInfo[]>();
   let skippedEpisodes = 0;
@@ -510,21 +642,33 @@ export function parseSeriesInfo(body: unknown): VodSeriesInfo {
         skippedEpisodes += 1;
         continue;
       }
+      const season = bySeason.get(seasonNumber) ?? [];
       const episodeInfo = objectOf(record.info);
-      const number = Math.min(9_999, looseInt(record.episode_num) ?? 0);
+      /* Sin `episode_num`, el puesto en la lista del panel (no «Episodio 0»). */
+      const number = Math.min(9_999, looseInt(record.episode_num) ?? season.length + 1);
       const video = videoOf(episodeInfo.video);
       const episode: VodEpisodeInfo = {
         source,
         number,
-        title: episodeTitle(record.title, number),
-        plot: firstText(episodeInfo, ['plot', 'description'], VOD_LIMITS.episodePlotMax),
+        title: episodeTitle(firstValue(record, ['title', 'name']), number),
+        plot: firstText(
+          episodeInfo,
+          ['plot', 'description', 'overview'],
+          VOD_LIMITS.episodePlotMax,
+        ),
         durationS: durationOf(episodeInfo),
-        still: firstImage(episodeInfo.movie_image) ?? firstImage(episodeInfo.cover_big),
+        still:
+          firstImage(episodeInfo.movie_image) ??
+          firstImage(episodeInfo.cover_big) ??
+          firstImage(episodeInfo.still_path),
         ext: extIndex(record.container_extension),
         codec: video.codec,
         bitDepth: video.bitDepth,
+        airDate: dateOf(
+          firstValue(episodeInfo, ['air_date', 'releasedate', 'releaseDate', 'release_date']),
+        ),
+        rating: ratingOf(episodeInfo),
       };
-      const season = bySeason.get(seasonNumber) ?? [];
       season.push(episode);
       bySeason.set(seasonNumber, season);
     }
@@ -560,6 +704,7 @@ export function parseSeriesInfo(body: unknown): VodSeriesInfo {
         number,
         name: names.get(number) ?? (number === 0 ? 'Especiales' : `Temporada ${number}`),
         episodes: kept,
+        plot: overviews.get(number) ?? null,
       });
     }
     if (total >= VOD_LIMITS.episodesMax) {
@@ -567,7 +712,14 @@ export function parseSeriesInfo(body: unknown): VodSeriesInfo {
       break;
     }
   }
-  return { kind: 'series', ...textsOf(info), seasons, truncated, skippedEpisodes };
+  return {
+    kind: 'series',
+    ...textsOf(info),
+    seasons,
+    episodeDurationS: runTimeOf(firstValue(info, ['episode_run_time', 'runtime'])),
+    truncated,
+    skippedEpisodes,
+  };
 }
 
 /**

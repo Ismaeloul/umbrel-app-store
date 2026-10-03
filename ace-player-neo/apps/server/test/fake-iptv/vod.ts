@@ -52,6 +52,8 @@ interface FakeMovie {
   readonly adult?: boolean;
   readonly icon?: string | null;
   readonly codec?: string;
+  /** `o_name` de la ficha (si no, el nombre sin el prefijo). */
+  readonly original?: string;
 }
 
 interface FakeSeries {
@@ -100,6 +102,7 @@ export const FAKE_VOD_MOVIES: readonly FakeMovie[] = [
     ext: 'mkv',
     added: 1_700_000_700,
     rating: 8.0,
+    original: 'Le Fabuleux Destin d&#039;Amélie Poulain',
   },
   {
     id: 2004,
@@ -222,20 +225,31 @@ export function createFakeVod(base: () => string, extra = 0): FakeVod {
     }
     return {
       info: {
+        /* Lo que manda un panel de verdad (get_vod_info), con sus claves
+           vacías: `cast` vacío y `actors` lleno, `age` vacío y `mpaa_rating`
+           lleno, `kinopoisk_url`… */
+        kinopoisk_url: '',
+        tmdb_id: String(id + 870_000),
         name: movie.name,
-        o_name: movie.name.replace(/^[^|]*\|\s*/, ''),
+        o_name: movie.original ?? movie.name.replace(/^[^|]*\|\s*/, ''),
         plot: 'Una sinopsis &amp; algo más.\u0007',
-        cast: 'Cillian Murphy, Emily Blunt, Matt Damon',
+        description: '',
+        cast: '',
+        actors: 'Cillian Murphy, Emily Blunt, Matt Damon',
         director: 'Christopher Nolan',
         genre: 'Drama / Historia',
         country: 'Estados Unidos',
         releasedate: '2023-07-21',
+        youtube_trailer: id === 2001 ? 'uYPbbksJxIg' : '',
+        episode_run_time: '180',
         duration_secs: 10_800,
         duration: '03:00:00',
         rating: movie.rating ?? '',
+        age: '',
         mpaa_rating: '+13',
         backdrop_path: [`${base()}/arte/fondo-${id}.png`],
         cover_big: `${base()}/arte/${id}.png`,
+        movie_image: '',
         video: {
           codec_name: movie.codec ?? 'h264',
           width: 1920,
@@ -270,6 +284,8 @@ export function createFakeVod(base: () => string, extra = 0): FakeVod {
           duration_secs: 1_320,
           plot: `Episodio ${number} de la temporada ${season}.`,
           movie_image: `${base()}/arte/ep-${id}.png`,
+          air_date: `2005-0${Math.min(9, season + 3)}-${String(10 + number)}`,
+          rating: (7 + number / 10).toFixed(1),
           video: { codec_name: 'h264', width: 1280, height: 720 },
         },
   });
@@ -291,19 +307,29 @@ export function createFakeVod(base: () => string, extra = 0): FakeVod {
       seasons: raro()
         ? []
         : [
-            { season_number: 1, name: 'Temporada 1', episode_count: 2 },
-            { season_number: 2, name: 'Temporada 2', episode_count: 2 },
+            {
+              season_number: 1,
+              name: 'Season 1',
+              episode_count: 2,
+              overview: 'Llega el equipo de documentales.',
+              air_date: '2005-03-24',
+            },
+            { season_number: 2, name: 'Temporada 2', episode_count: 2, overview: '' },
           ],
       info: raro()
         ? []
         : {
             name: series.name,
+            o_name: id === 3001 ? 'The Office' : series.name,
             plot: 'Una oficina de papel en Scranton.',
             cast: 'Steve Carell, Rainn Wilson',
             director: 'Greg Daniels',
             genre: 'Comedia',
             releaseDate: '2005-03-24',
             rating: series.rating ?? '',
+            age: '12',
+            youtube_trailer: id === 3001 ? 'https://www.youtube.com/watch?v=LHOtME2DL4g' : '',
+            episode_run_time: '22',
             backdrop_path: [`${base()}/arte/fondo-${id}.png`],
           },
       episodes: raro() ? [s1, s2, specials] : { '2': s2, '1': s1, '0': specials },
