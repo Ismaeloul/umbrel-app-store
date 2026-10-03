@@ -6,10 +6,10 @@
    - agenda/index.tsx: deslizar la lista cambia de día (móvil y tableta);
    - library/LibraryView.tsx: deslizar cambia de pestaña (móvil);
    - player/PlayerSurface.tsx: deslizar hacia abajo minimiza el vídeo, un toque
-     enseña los controles; deslizar hacia arriba pasa al favorito siguiente y,
-     a pantalla completa, en horizontal o en la tableta, hacia abajo al
-     anterior (cambiar de canal rápido, 0.8.4); con ratón, clic pausa, doble clic pantalla completa
-     y clic derecho abre el menú;
+     enseña los controles; deslizar a la izquierda pasa al favorito siguiente
+     y a la derecha al anterior, en todos los modos (cambiar de canal rápido,
+     0.8.4); con ratón, clic pausa, doble clic pantalla completa y clic
+     derecho abre el menú;
    - player/MiniPlayer.tsx: hacia arriba lo abre, a un lado lo detiene (con
      «Deshacer»);
    - ui/Menu.tsx (useContextMenu): pulsación larga de 500 ms o clic derecho;
@@ -49,14 +49,14 @@ export const TOUCH_GESTURES: readonly GestureHelp[] = [
     label: 'Vídeo: lo minimiza y sigue sonando',
   },
   {
-    id: 'video-arriba',
-    gesture: 'Desliza hacia arriba',
+    id: 'video-izquierda',
+    gesture: 'Desliza a la izquierda',
     label: 'Vídeo: el favorito siguiente (cambiar de canal rápido)',
   },
   {
-    id: 'video-abajo-completa',
-    gesture: 'Desliza hacia abajo',
-    label: 'Vídeo a pantalla completa, en horizontal o en la tableta: el favorito anterior',
+    id: 'video-derecha',
+    gesture: 'Desliza a la derecha',
+    label: 'Vídeo: el favorito anterior',
   },
   { id: 'video-toque', gesture: 'Toca el vídeo', label: 'Enseña u oculta los controles' },
   {

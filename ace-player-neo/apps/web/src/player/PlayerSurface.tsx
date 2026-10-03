@@ -22,10 +22,11 @@
    - Ratón: un clic pausa o reanuda (espera 190 ms para distinguirlo del
      doble clic, que pone pantalla completa); clic derecho, el menú propio.
    - Móvil: deslizar hacia abajo sobre el vídeo lo minimiza.
-   - Táctil: deslizar hacia arriba sobre el vídeo pasa al favorito siguiente
-     (cambiar de canal rápido, favorite-zap.ts). Hacia abajo, al anterior,
-     salvo en el móvil en vertical, donde hacia abajo sigue minimizando. El
-     toque (controles) y los gestos a los lados no cambian. */
+   - Táctil: deslizar a los lados sobre el vídeo cambia de canal rápido entre
+     favoritos (favorite-zap.ts), como pasar páginas: a la izquierda el
+     siguiente, a la derecha el anterior. En todos los modos (vertical,
+     horizontal, pantalla completa, tableta). Solo cuenta sobre la capa del
+     vídeo: lo que empieza en un control (barra, volumen, botones) no. */
 
 import {
   useCallback,
@@ -48,7 +49,12 @@ import { Menu, MenuButton, useContextMenu } from '../ui/Menu.tsx';
 import { Num } from '../ui/Num.tsx';
 import { usePlayer, type PlayerState } from './api.ts';
 import { ChannelMark } from '../ui/ChannelMark.tsx';
-import { CLICK_DELAY_MS, CONTROLS_HIDE_MS, CONTROLS_HIDE_TOUCH_MS } from './constants.ts';
+import {
+  CLICK_DELAY_MS,
+  CONTROLS_HIDE_MS,
+  CONTROLS_HIDE_TOUCH_MS,
+  ZAP_SWIPE_MIN_PX,
+} from './constants.ts';
 import { usePlayerContext, type PlayerContextValue } from './context.ts';
 import { useZapBanner } from './favorite-zap.ts';
 import { NerdPanel } from './NerdPanel.tsx';
@@ -373,20 +379,26 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
     wake();
   };
 
-  /* En vertical sobre el vídeo: hacia abajo lo minimiza (móvil, no en
-     horizontal); con el dedo, hacia arriba pasa al favorito siguiente y,
-     donde abajo no minimiza (pantalla completa, horizontal, tableta), hacia
-     abajo al anterior. Con ratón no hay deslizamientos (el clic pausa). */
+  /* Sobre el vídeo: hacia abajo lo minimiza (móvil en vertical, no a
+     pantalla completa); con el dedo, a los lados cambia de canal rápido
+     entre favoritos: a la izquierda el siguiente, a la derecha el anterior
+     (como pasar páginas), en todos los modos. Hacia arriba, nada. Con ratón
+     no hay deslizamientos (el clic pausa).
+     El eje decide `touch-action`: donde no se minimiza (tableta, horizontal,
+     pantalla completa) solo se escucha el horizontal y el scroll vertical de
+     la página sigue siendo del navegador (pan-y). La capa `player-hit` no
+     tiene hijos: los controles son hermanos, así que un gesto que empieza en
+     la barra de tiempo, el volumen o un botón nunca llega aquí. */
   const minimizes = ctx.compact && !ctx.immersive;
   const zapSwipes = !ctx.finePointer && hasChannel;
   useSwipe(hitRef, {
-    axis: 'y',
+    axis: minimizes && zapSwipes ? 'both' : minimizes ? 'y' : 'x',
+    threshold: ZAP_SWIPE_MIN_PX,
     enabled: minimizes || zapSwipes,
     onSwipe: (direction) => {
-      if (direction === 'down') {
-        if (minimizes) actions.minimize();
-        else if (zapSwipes) actions.zapFavorite(-1);
-      } else if (direction === 'up' && zapSwipes) actions.zapFavorite(1);
+      if (direction === 'down' && minimizes) actions.minimize();
+      else if (direction === 'left' && zapSwipes) actions.zapFavorite(1);
+      else if (direction === 'right' && zapSwipes) actions.zapFavorite(-1);
     },
   });
 

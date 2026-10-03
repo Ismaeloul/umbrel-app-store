@@ -3,7 +3,8 @@
    - Teclado: ↑ o Re Pág = favorito anterior; ↓ o Av Pág = favorito
      siguiente (index.tsx registra los atajos). ← → siguen siendo el zapping
      de siempre (favoritos + directorio, zapping.ts).
-   - Táctil: deslizar en vertical sobre el vídeo (PlayerSurface.tsx).
+   - Táctil: deslizar a los lados sobre el vídeo, como pasar páginas: a la
+     izquierda el siguiente, a la derecha el anterior (PlayerSurface.tsx).
    - La lista es la de favoritos de Canales (AceStream e IPTV) en su orden
      guardado; da la vuelta en los extremos. Si lo que suena no es un favorito,
      «siguiente» empieza por el primero y «anterior» por el último.
