@@ -148,7 +148,7 @@ export class RingLog {
  */
 export async function findOrphanPids(
   procRoot: string,
-  knownSessions: ReadonlySet<string>,
+  knownSessions: { has(sessionId: string): boolean },
   ownPid: number,
 ): Promise<number[]> {
   let entries: string[];

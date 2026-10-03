@@ -20,6 +20,8 @@ import {
   type FakeLauncherOptions,
 } from './test-support.js';
 import type { RemuxCloseReason, RemuxSource } from './types.js';
+import { FakeFfmpegLauncher } from '../../../test/fake-vod/fake-ffmpeg.js';
+import type { VodIndex } from './vod/types.js';
 
 const hex = (n: number): string => n.toString(16).padStart(2, '0').repeat(20);
 
@@ -39,6 +41,28 @@ interface Detached {
   readonly reason: RemuxCloseReason;
 }
 
+/* Una película de 2 minutos con un fotograma clave cada 2 s (para el VOD). */
+const VOD_MOVIE = { keyframes: Array.from({ length: 60 }, (_, i) => i * 2), durationS: 120 };
+const VOD_INDEX: VodIndex = {
+  container: 'mkv',
+  durationS: VOD_MOVIE.durationS,
+  keyframes: Float64Array.from(VOD_MOVIE.keyframes),
+  video: {
+    codec: 'h264',
+    codecs: 'avc1.640028',
+    width: 1920,
+    height: 1080,
+    bitDepth: 8,
+    profile: 100,
+    chromaFormat: 1,
+  },
+  audio: [
+    { index: 0, codec: 'aac', aacLc: true, channels: 2, lang: 'spa', name: null, isDefault: true },
+  ],
+  subtitles: [],
+  sizeBytes: 1_000_000,
+};
+
 const runtimes: RemuxRuntime[] = [];
 afterEach(async () => {
   while (runtimes.length) await runtimes.pop()?.service.stop();
@@ -48,6 +72,7 @@ function setup(
   options: {
     launcher?: FakeLauncherOptions;
     procRoot?: string | null;
+    vodLauncher?: FakeFfmpegLauncher;
   } = {},
 ) {
   const core = createTestCore();
@@ -57,6 +82,9 @@ function setup(
     ...core,
     engine: notImplementedService<EngineService>('engine'),
     launcher: fake.launcher,
+    ...(options.vodLauncher
+      ? { vodLauncher: options.vodLauncher, readVodIndex: async () => VOD_INDEX }
+      : {}),
     procRoot: options.procRoot ?? null,
     killPid: (pid) => killed.push(pid),
     watchFiles: false,
@@ -412,6 +440,29 @@ describe('recolector y huérfanos (B-226)', () => {
     add(fake.last().pid, 's_sesion0001');
     await runtime.reap();
     expect(killed).toEqual([501]);
+  });
+
+  it('no mata el ffmpeg de una película abierta; sí cuando la sesión VOD se cierra (C1)', async () => {
+    const procRoot = tempDir('proc-');
+    const vodLauncher = new FakeFfmpegLauncher(VOD_MOVIE, { fragmentDelayMs: 50 });
+    const { service, runtime, killed } = setup({ procRoot, vodLauncher });
+    await service.openVod({
+      sessionId: 's_vod00000001',
+      titleId: 'm_1',
+      inputUrl: 'http://127.0.0.1:41234/r/AbCdEfGhIjKlMnOpQrStUv/vod.mkv',
+      hevc: false,
+      startS: 0,
+    });
+    const mark = vodLauncher.runs[0]?.args.find((arg) => arg.startsWith('ace_session='));
+    expect(mark).toBe('ace_session=s_vod00000001');
+    mkdirSync(path.join(procRoot, '777'));
+    writeFileSync(path.join(procRoot, '777', 'cmdline'), `ffmpeg -metadata ${mark} `);
+    await runtime.reap();
+    await runtime.reap();
+    expect(killed).toEqual([]);
+    await service.closeVod('s_vod00000001');
+    await runtime.reap();
+    expect(killed).toEqual([777]);
   });
 });
 
