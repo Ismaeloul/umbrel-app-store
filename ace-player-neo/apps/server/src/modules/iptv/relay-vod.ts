@@ -37,6 +37,22 @@
    - Redirecciones: las sigue `open` (net, SSRF en cada salto). En la v1 cada
      apertura pide la URL original; con `reuseRedirect` se guarda la final
      SOLO en memoria y con 401/403/404/410 se vuelve una vez a la original.
+     El Paso 0 (3-oct) vio el token del 302 dar 500 a los 15 min: se queda en
+     `false` (VOD_PLAY.reuseRedirect).
+
+   Ajustes del Paso 0 (docs/analisis/paso0-2026-10-03, VOD-5):
+   - Primer byte: el panel de Isma a veces no contesta (1 de cada 3-5
+     aperturas, 20 s sin nada). Plazo de cabeceras corto (`firstByteMs`, 8 s)
+     y hasta `firstByteRetries` reintentos antes de dar `vod_timeout`.
+   - Reapertura perezosa tras una pausa: una conexión parada 60 s o más ya no
+     entrega datos (no la cierra: se queda muerta). Una conexión sin leer en
+     `staleUpstreamMs` (30 s) no se reutiliza: se cierra y se abre otra desde
+     donde va quien lee, solo cuando pide más. Sin contar como corte.
+   - Ritmo limitado: con `setPace(bytes/s del título)`, lo que lee ffmpeg del
+     proveedor va como mucho a `paceFactor` veces la tasa de bits (con un
+     arranque de `paceBurstS` segundos de vídeo a toda velocidad tras cada
+     salto). Junto con la contrapresión del productor (como mucho 60 s por
+     delante de lo que se pide), una película nunca se baja entera de golpe.
 
    Es una clase suelta: los enganches con relay.ts (`route`, `openVod`,
    `connections`) y la URL del proveedor van en VOD-5. La URL del proveedor
@@ -77,6 +93,18 @@ export interface VodRelayLimits {
   readonly busyRetryWindowMs: number;
   /** Tras servir de la caché, cuánto se espera antes de abrir la continuación (perezosa). */
   readonly continuationDelayMs: number;
+  /** Plazo de las cabeceras de cada apertura (Paso 0: el panel a veces no contesta). */
+  readonly firstByteMs: number;
+  /** Reintentos de una apertura que no contesta a tiempo. */
+  readonly firstByteRetries: number;
+  /** Una conexión sin leer en este rato se da por muerta (Paso 0: parada 60 s ya no entrega). */
+  readonly staleUpstreamMs: number;
+  /** Ritmo: como mucho estas veces la tasa de bits del título. */
+  readonly paceFactor: number;
+  /** Arranque a toda velocidad tras cada salto: estos segundos de vídeo. */
+  readonly paceBurstS: number;
+  /** Suelo del ritmo (bytes/s), para títulos de tasa muy baja o mal medida. */
+  readonly paceMinBytesPerS: number;
 }
 
 export const DEFAULT_VOD_RELAY_LIMITS: VodRelayLimits = {
@@ -93,6 +121,12 @@ export const DEFAULT_VOD_RELAY_LIMITS: VodRelayLimits = {
   busyRetryMs: IPTV_SESSION.busyRetryMs,
   busyRetryWindowMs: IPTV_SESSION.busyRetryWindowMs,
   continuationDelayMs: 100,
+  firstByteMs: 8_000,
+  firstByteRetries: 2,
+  staleUpstreamMs: 30_000,
+  paceFactor: 3,
+  paceBurstS: 20,
+  paceMinBytesPerS: 256 * 1024,
 };
 
 /** Lo que pide la sesión a quien sabe abrir el proveedor (en VOD-5, `relay.connect` con Range e identity). */
@@ -102,6 +136,8 @@ export interface VodOpenRequest {
   readonly start: number;
   readonly end: number | null;
   readonly signal: AbortSignal;
+  /** Plazo de las cabeceras (el corto del Paso 0). */
+  readonly headersMs?: number;
 }
 
 export interface VodSessionDeps {
@@ -136,6 +172,12 @@ export interface VodSessionStats {
   readonly cacheBytes: number;
   readonly size: number | null;
   readonly rangeless: boolean;
+  /** Aperturas que no contestaron a tiempo y se reintentaron. */
+  readonly timeouts: number;
+  /** Tiempo que el ritmo ha frenado la lectura, en ms. */
+  readonly pacedMs: number;
+  /** Ritmo en bytes/s (null sin limitar). */
+  readonly paceBytesPerS: number | null;
 }
 
 // --- Caché de rangos ---
@@ -260,6 +302,8 @@ const UPSTREAM_QUEUE_MAX_BYTES = 512 * 1024;
 class Upstream {
   pos: number;
   finished = false;
+  /** Última vez que quien lee sacó un trozo (o se abrió). */
+  lastReadAt: number;
   error: unknown = null;
   private readonly queue: Buffer[] = [];
   private queued = 0;
@@ -271,8 +315,10 @@ class Upstream {
     readonly start: number,
     /** Fin incluido de lo pedido (null = hasta el final). */
     readonly end: number | null,
+    private readonly clock: Clock,
   ) {
     this.pos = start;
+    this.lastReadAt = clock.now();
     this.body = opened.body;
     this.body.on('data', (chunk: Buffer | string) => {
       const piece = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
@@ -310,6 +356,7 @@ class Upstream {
       if (chunk) {
         this.pos += chunk.length;
         this.queued -= chunk.length;
+        this.lastReadAt = this.clock.now();
         if (!this.finished && this.queued < UPSTREAM_QUEUE_MAX_BYTES / 2) this.body.resume();
         return chunk;
       }
@@ -452,6 +499,13 @@ export class VodSession {
   private reopens = 0;
   private bytes = 0;
   private lastByteAt: number | null = null;
+  private timeouts = 0;
+  private readonly closedListeners: (() => void)[] = [];
+  /** Ritmo (bytes/s y cubo) o null sin limitar. */
+  private pace: { readonly rate: number; readonly burst: number } | null = null;
+  private tokens = 0;
+  private tokensAt = 0;
+  private pacedMs = 0;
 
   constructor(
     private readonly deps: VodSessionDeps,
@@ -477,7 +531,42 @@ export class VodSession {
       cacheBytes: this.cache.bytes,
       size: this.size,
       rangeless: this.rangeless,
+      timeouts: this.timeouts,
+      pacedMs: this.pacedMs,
+      paceBytesPerS: this.pace?.rate ?? null,
     };
+  }
+
+  /**
+   * Ritmo de lectura (Paso 0): `bytesPerS` es la tasa media del título
+   * (tamaño / duración). ffmpeg lee como mucho `paceFactor` veces eso, con
+   * un arranque de `paceBurstS` segundos de vídeo tras cada salto. null quita
+   * el límite.
+   */
+  setPace(bytesPerS: number | null): void {
+    if (bytesPerS === null || !(bytesPerS > 0) || !Number.isFinite(bytesPerS)) {
+      this.pace = null;
+      return;
+    }
+    const rate = Math.max(this.limits.paceMinBytesPerS, bytesPerS * this.limits.paceFactor);
+    this.pace = { rate, burst: Math.max(512 * 1024, bytesPerS * this.limits.paceBurstS) };
+    this.tokens = this.pace.burst;
+    this.tokensAt = this.deps.clock.now();
+  }
+
+  /**
+   * Suelta la conexión con el proveedor sin cerrar la sesión (pausa larga
+   * del productor): la plaza queda libre y la siguiente lectura reabre.
+   */
+  async release(): Promise<void> {
+    if (this.closed) return;
+    if (this.leg) this.abandon(this.leg);
+    await this.dropUpstream();
+  }
+
+  /** Avisa cuando la sesión se cierra (el relé la olvida). */
+  onClosed(listener: () => void): void {
+    this.closedListeners.push(listener);
   }
 
   /** El proveedor ha cortado más veces de las que se aguantan (`vod_dropped`). */
@@ -541,6 +630,11 @@ export class VodSession {
     const previous = this.leg;
     this.leg = leg;
     if (previous) this.abandon(previous);
+    /* Un salto (o el arranque) de ffmpeg: el cubo del ritmo se llena otra vez. */
+    if (this.pace && leg.end === null && (!previous || previous.pos !== start)) {
+      this.tokens = this.pace.burst;
+      this.tokensAt = this.deps.clock.now();
+    }
     res.once('close', () => leg.controller.abort());
     this.chain = this.chain.then(() => this.serve(leg)).catch(() => undefined);
   }
@@ -552,6 +646,11 @@ export class VodSession {
     if (this.leg) this.abandon(this.leg);
     await this.dropUpstream();
     await this.chain;
+    for (const listener of this.closedListeners.splice(0)) {
+      try {
+        listener();
+      } catch {}
+    }
   }
 
   // --- Atender una petición ---
@@ -633,6 +732,8 @@ export class VodSession {
       if (to > from) {
         if (!(await write(leg, this.deps.clock, chunk.subarray(from, to)))) return;
         leg.pos = chunkStart + to;
+        /* Ritmo: solo lo que lee ffmpeg (abierto); el índice va sin freno. */
+        if (leg.end === null) await this.throttle(leg, to - from);
       }
     }
   }
@@ -680,7 +781,11 @@ export class VodSession {
          cambiarla sin más. */
       if (!up.alive && leg.pos === up.pos) return up;
       const last = this.lastByte(leg);
+      /* Paso 0: una conexión parada mucho rato ya no entrega (se queda muerta
+         sin cerrarse): se cambia por otra en vez de esperar al plazo de net. */
+      const fresh = this.deps.clock.now() - up.lastReadAt < this.limits.staleUpstreamMs;
       const reusable =
+        fresh &&
         up.alive &&
         leg.pos >= up.pos &&
         leg.pos - up.pos <= this.limits.forwardSkipBytes &&
@@ -719,14 +824,14 @@ export class VodSession {
       this.opening = false;
       leg.controller.signal.removeEventListener('abort', cancel);
     }
-    const fresh = new Upstream(opened, leg.pos, end);
+    const created = new Upstream(opened, leg.pos, end, this.deps.clock);
     if (this.gone(leg)) {
-      await fresh.destroy(this.deps.clock, this.limits.socketReleaseMs);
+      await created.destroy(this.deps.clock, this.limits.socketReleaseMs);
       this.noteClosed();
       return null;
     }
-    this.upstream = fresh;
-    return fresh;
+    this.upstream = created;
+    return created;
   }
 
   /** Abre el proveedor en [start, end]: plaza de la cuenta, ocupado, rangeless y tamaño. */
@@ -742,13 +847,31 @@ export class VodSession {
     let url = this.reuse ?? this.options.url;
     let resolvedAgain = false;
     let busyTry = 0;
+    let timeoutTry = 0;
     for (;;) {
       let opened: OpenedStream;
       try {
         this.opens += 1;
-        opened = await this.deps.open({ url, start, end, signal });
+        opened = await this.deps.open({
+          url,
+          start,
+          end,
+          signal,
+          headersMs: this.limits.firstByteMs,
+        });
       } catch (error) {
         if (signal.aborted) throw signal.reason ?? error;
+        /* Paso 0: el panel a veces no contesta; otra vez enseguida suele ir. */
+        if (errorCodeOf(error) === 'fetch_timeout' && timeoutTry < this.limits.firstByteRetries) {
+          timeoutTry += 1;
+          this.timeouts += 1;
+          this.noteClosed();
+          this.deps.logger.debug(
+            { ticket: '•••', attempt: timeoutTry },
+            'relé VOD: el proveedor no contesta, se reintenta',
+          );
+          continue;
+        }
         const status = httpStatusOf(error);
         if (
           status !== null &&
@@ -871,6 +994,20 @@ export class VodSession {
         ...(typeof reason === 'string' ? { [VOD_REASON_HEADER]: reason } : {}),
       })
       .end();
+  }
+
+  /** Frena la lectura si va por encima del ritmo (cubo de fichas). */
+  private async throttle(leg: Leg, bytes: number): Promise<void> {
+    const pace = this.pace;
+    if (!pace) return;
+    const now = this.deps.clock.now();
+    this.tokens = Math.min(pace.burst, this.tokens + ((now - this.tokensAt) * pace.rate) / 1000);
+    this.tokensAt = now;
+    this.tokens -= bytes;
+    if (this.tokens >= 0) return;
+    const waitMs = Math.min(5_000, Math.ceil((-this.tokens / pace.rate) * 1000));
+    this.pacedMs += waitMs;
+    await this.deps.clock.sleep(waitMs, leg.controller.signal).catch(() => undefined);
   }
 
   private emitDropped(code: string): void {

@@ -34,7 +34,7 @@ import type { StateService } from '../state/index.js';
 import type { GuideAgendaRequest, GuideAgendaResult } from './guide-agenda.js';
 import type { GuideApi } from './guide-api.js';
 import type { ChannelScorer } from './match.js';
-import type { VodService } from './vod/vod-service.js';
+import type { VodPlayTarget, VodService } from './vod/vod-service.js';
 
 export type { ChannelScorer } from './match.js';
 export type {
@@ -123,6 +123,36 @@ export interface IptvInput {
   /** Otra base de tiempos o variante: hay que reiniciar el remux en la misma sesión. */
   onRestart(listener: () => void): void;
   /** Aborta la conexión con el proveedor y espera a que se suelte. Idempotente. */
+  close(): Promise<void>;
+}
+
+/**
+ * La entrada de una película o un episodio (docs/vod.md §9.8): una sesión del
+ * relé VOD. La URL del proveedor nunca sale de `iptv`.
+ */
+export interface VodInput {
+  readonly id: string;
+  /** `http://127.0.0.1:<p>/r/<ticket>/vod.<ext>`: lo único que ven el índice y ffmpeg. */
+  readonly inputUrl: string;
+  /** Lo que la concesión necesita del título (textos, siguiente, progreso, audio). */
+  readonly target: VodPlayTarget;
+  stats(): {
+    readonly bytes: number;
+    readonly kbps: number;
+    readonly lastByteAt: number | null;
+    readonly opens: number;
+    readonly timeouts: number;
+    readonly pacedMs: number;
+  };
+  /** Ritmo de lectura (bytes/s del título, Paso 0); null sin límite. */
+  setPace(bytesPerS: number | null): void;
+  /** Pausa larga: suelta la conexión con el proveedor (la sesión sigue). */
+  release(): Promise<void>;
+  /** El proveedor corta una y otra vez: hay que cerrar con ese código (`vod_dropped`). */
+  onDropped(listener: (code: string) => void): void;
+  /** Duración real (la del índice), para comprobar el progreso (`knownDurationS`). */
+  noteDuration(durationS: number): void;
+  /** Corta con el proveedor y espera a que se suelte el socket. Idempotente. */
   close(): Promise<void>;
 }
 
@@ -280,6 +310,12 @@ export interface IptvService extends Lifecycle {
    * panel aún puede contarla) o si la cuenta tiene todas sus plazas ocupadas.
    */
   prewarmBlocker(): string | null;
+  /**
+   * Abre la entrada de una película o un episodio (relé VOD, docs/vod.md
+   * §9.8). Lanza `vod_*` (`vod_not_found`, `vod_unavailable`, `vod_busy`…).
+   * Opcional por los dobles de los tests de otros módulos.
+   */
+  openVod?(id: string, options: { readonly signal: AbortSignal }): Promise<VodInput>;
   /** Abre la entrada de una sesión IPTV (relé); lanza los `iptv_*` de §5.6. */
   openInput(id: string, options: { readonly signal: AbortSignal }): Promise<IptvInput>;
   /** Carril IPTV del comprobador (§7.3): null = sin veredicto (cuenta bien, «Sin comprobar»). */

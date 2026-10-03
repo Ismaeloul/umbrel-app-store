@@ -33,7 +33,16 @@
      cuenta, salvo que el aviso lleve mucho sin efecto o nunca llegara a estar
      lista (entonces se relanza como antes). */
 
+/* Películas y series (docs/vod.md §9.7-§9.8, VOD-5): `openVod` lee el índice
+   por el relé VOD (caché de 8 por título), elige el audio y abre un
+   `VodProducer` en `remuxDir/vod-<sid>`, registrado aparte de los remux del
+   directo pero contando en el tope de 3. `serveFile` sirve sus ficheros
+   (la lista desde el índice con `EXT-X-START`; los segmentos, cuando el
+   productor los tiene; 503 con `Retry-After: 1` si aún no). Al arrancar se
+   barren las carpetas `vod-*` que no son de nadie. */
+
 import { randomBytes } from 'node:crypto';
+import type { FastifyReply } from 'fastify';
 import { watch, type FSWatcher } from 'node:fs';
 import { mkdir, rm, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
@@ -70,6 +79,10 @@ import {
 } from './files.js';
 import { SerialLock } from './lock.js';
 import { RingLog, createSpawnLauncher, findOrphanPids, killProcessTree } from './process.js';
+import { pickVodAudio } from './vod/audio.js';
+import { assertPlayable, readVodIndex, VodIndexCache } from './vod/index.js';
+import { VOD_DIR_PREFIX, VodProducer, sweepVodDirs } from './vod/producer.js';
+import { createHttpRangeReader } from './vod/reader.js';
 import type {
   RemuxCloseReason,
   RemuxDeps,
@@ -254,6 +267,16 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const registry = new SerialLock();
   /* Sesiones a mitad de un restart/retarget: si entre medias no hay entrada, «aún no está» y no 410. */
   const replacing = new Map<string, number>();
+  /** Productores VOD por sesión (docs/vod.md §9.7) y dónde empieza su lista. */
+  const vods = new Map<string, { readonly producer: VodProducer; startS: number }>();
+  const vodIndexes = new VodIndexCache();
+  const vodLauncher =
+    deps.vodLauncher ??
+    createSpawnLauncher({
+      stdout: 'pipe',
+      /* En Windows (solo desarrollo), «nice 10» se queda sin turno con la CPU llena. */
+      ...(process.platform === 'win32' ? { niceness: 0 } : {}),
+    });
   let ffmpegMissing = false;
   let reaper: TimerHandle | null = null;
   let stallTimer: TimerHandle | null = null;
@@ -626,7 +649,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
 
   /** Tope de 3 sesiones: desaloja solo las que no tienen espectadores (server.js:247-255). */
   async function makeRoomLocked(): Promise<void> {
-    while (byHash.size >= MAX_REMUX_SESSIONS) {
+    while (byHash.size + vods.size >= MAX_REMUX_SESSIONS) {
       const candidates = new Map<string, EvictionCandidate>();
       for (const [key, entry] of byHash) {
         candidates.set(key, {
@@ -752,6 +775,58 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     };
   }
 
+  /** Un fichero de una sesión VOD (docs/vod.md §9.7): la lista del índice o lo que tiene el productor. */
+  async function serveVodFile(
+    reply: FastifyReply,
+    sessionId: string,
+    vod: { readonly producer: VodProducer; readonly startS: number },
+    file: string,
+    options: {
+      readonly rangeHeader?: string;
+      readonly head?: boolean;
+      readonly videoToken?: string;
+      readonly deviceId?: string | null;
+    },
+  ): Promise<void> {
+    if (!VIDEO_FILE_RE.test(file)) throw new AppError('not_found');
+    /* Pedir ficheros cuenta como actividad del visor (latido). */
+    for (const listener of [...listeners]) {
+      try {
+        listener.onAccess?.(sessionId, options.deviceId ?? null);
+      } catch (error) {
+        logger.error({ err: error }, 'un suscriptor del remux ha fallado');
+      }
+    }
+    const dir = path.join(remuxDir, `${VOD_DIR_PREFIX}${sessionId}`);
+    const send = { rangeHeader: options.rangeHeader, head: options.head };
+    if (file === 'index.m3u8') {
+      const text = vod.producer.playlist(vod.startS > 0 ? vod.startS : undefined);
+      const body = options.videoToken ? rewritePlaylist(text, options.videoToken) : text;
+      await sendBuffer(reply, path.join(dir, file), Buffer.from(body), send);
+      return;
+    }
+    const controller = new AbortController();
+    const onClose = (): void => controller.abort();
+    reply.raw.once('close', onClose);
+    let result: Awaited<ReturnType<VodProducer['file']>>;
+    try {
+      result = await vod.producer.file(file, controller.signal);
+    } finally {
+      reply.raw.off('close', onClose);
+    }
+    if (reply.raw.destroyed) return;
+    if (result.kind === 'file') {
+      await sendFile(reply, result.path, send);
+      return;
+    }
+    if (result.kind === 'not_yet') {
+      /* Aún no está: hls.js reintenta (la app nativa, el 404 de siempre con Retry-After). */
+      await sendBare(reply, options.videoToken ? 404 : 503, { ...NOT_YET_HEADERS });
+      return;
+    }
+    await sendBare(reply, 404, { 'cache-control': 'no-store' });
+  }
+
   async function reap(): Promise<void> {
     await registry.run(async () => {
       for (const entry of [...byHash.values()]) {
@@ -775,6 +850,9 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const service: RemuxService = {
     async start() {
       if (reaper || stopped) return;
+      /* Carpetas VOD de un proceso anterior que murió sin limpiar (docs/vod.md §9.7). */
+      const swept = await sweepVodDirs(remuxDir, new Set(vods.keys())).catch(() => []);
+      if (swept.length) logger.info({ count: swept.length }, 'VOD: carpetas huérfanas borradas');
       reaper = clock.setInterval(
         () => {
           reap().catch((error: unknown) => logger.error({ err: error }, 'recolector del remux'));
@@ -903,6 +981,86 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       return replacing.has(sessionId);
     },
 
+    async openVod(request) {
+      if (stopped) throw new AppError('remux_died', { detail: 'remux parado' });
+      if (ffmpegMissing) throw new AppError('ffmpeg_missing');
+      const index = await vodIndexes.get(request.titleId, () =>
+        readVodIndex(
+          createHttpRangeReader(request.inputUrl, {
+            /* Un poco más que los reintentos del relé (3 × 8 s): ver iptv/relay-vod.ts. */
+            timeoutMs: 30_000,
+            ...(request.signal ? { signal: request.signal } : {}),
+          }),
+        ),
+      );
+      assertPlayable(index, request.hevc);
+      const audio = pickVodAudio(index.audio, {
+        requested: request.audio,
+        preferredLang: request.preferredLang ?? null,
+      });
+      const last = Math.max(0, index.durationS - 1);
+      const startS = Math.min(Math.max(0, request.startS), last);
+      return registry.run(async () => {
+        if (stopped) throw new AppError('remux_died', { detail: 'remux parado' });
+        const previous = vods.get(request.sessionId);
+        if (previous) {
+          vods.delete(request.sessionId);
+          await previous.producer.close();
+        }
+        await makeRoomLocked();
+        const producer = await VodProducer.open(
+          {
+            clock,
+            logger,
+            launcher: vodLauncher,
+            redact,
+            onIdle: () => request.onIdle?.(),
+            onDropped: (error) => request.onDropped?.(error),
+          },
+          {
+            sessionId: request.sessionId,
+            dir: path.join(remuxDir, `${VOD_DIR_PREFIX}${request.sessionId}`),
+            inputUrl: request.inputUrl,
+            index,
+            audio,
+            hevc: request.hevc,
+            startS,
+          },
+        );
+        vods.set(request.sessionId, { producer, startS });
+        logger.info(
+          {
+            sessionId: request.sessionId,
+            container: index.container,
+            video: index.video.codec,
+            durationS: Math.round(index.durationS),
+            segments: producer.plan.segments.length,
+            startS: Math.round(startS),
+          },
+          'VOD: productor abierto',
+        );
+        return { sessionId: request.sessionId, index, audio, startS };
+      });
+    },
+
+    async closeVod(sessionId) {
+      await registry.run(async () => {
+        const entry = vods.get(sessionId);
+        if (!entry) return;
+        vods.delete(sessionId);
+        await entry.producer.close();
+      });
+    },
+
+    setVodStart(sessionId, startS) {
+      const entry = vods.get(sessionId);
+      if (entry) entry.startS = Math.max(0, startS);
+    },
+
+    vodStats(sessionId) {
+      return vods.get(sessionId)?.producer.stats() ?? null;
+    },
+
     async detach(sessionId, viewerId) {
       await registry.run(async () => {
         const entry = findBySession(sessionId);
@@ -917,6 +1075,11 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     },
 
     async serveFile(reply, sessionId, file, options) {
+      const vod = vods.get(sessionId);
+      if (vod) {
+        await serveVodFile(reply, sessionId, vod, file, options);
+        return;
+      }
       const entry = findBySession(sessionId);
       if (!entry) {
         /* A mitad de un reinicio: «aún no está» (503 con Retry-After; la app nativa, el 404 de siempre
@@ -1050,6 +1213,10 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     async stopAll() {
       await registry.run(async () => {
         for (const entry of [...byHash.values()]) await closeLocked(entry, 'shutdown', true);
+        for (const [sessionId, entry] of [...vods]) {
+          vods.delete(sessionId);
+          await entry.producer.close();
+        }
       });
     },
 

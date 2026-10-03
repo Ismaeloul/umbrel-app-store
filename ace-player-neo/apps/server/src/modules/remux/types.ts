@@ -25,12 +25,17 @@ import type { FastifyReply } from 'fastify';
 import type { LegacyRemuxStopBodySchema, LegacyRemuxStopResponseSchema } from '@ace/shared';
 import type { z } from 'zod';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
+import type { AppError } from '../../core/errors.js';
 import type { EngineService } from '../engine/types.js';
+import type { VodProducerStats } from './vod/producer.js';
+import type { VodIndex, VodProcessLauncher, VodTrack } from './vod/types.js';
 
 export interface RemuxDeps extends CoreDeps {
   readonly engine: EngineService;
   /** Quién lanza ffmpeg. Por defecto `spawn('ffmpeg')`; en los tests, un ffmpeg falso. */
   readonly launcher?: ProcessLauncher;
+  /** Quién lanza el ffmpeg del VOD (salida por la tubería). Por defecto `spawn('ffmpeg')`. */
+  readonly vodLauncher?: VodProcessLauncher;
   /**
    * Raíz de /proc para buscar ffmpeg huérfanos con `ace_session=`. Por defecto
    * `/proc` en Linux y nada en otros sistemas; `null` lo desactiva.
@@ -140,6 +145,37 @@ export interface RemuxHandle {
   readonly seamless?: boolean;
 }
 
+/** Lo que pide playback para abrir el productor de una película (docs/vod.md §9.8). */
+export interface RemuxVodRequest {
+  /** Id de la sesión de playback (`s_…`): la carpeta es `remuxDir/vod-<sid>`. */
+  readonly sessionId: string;
+  /** Id del título: clave de la caché de índices (reanudar no vuelve a leerlo). */
+  readonly titleId: string;
+  /** La URL del relé VOD. */
+  readonly inputUrl: string;
+  /** Pista pedida (`audio=<n>`), si la hay. */
+  readonly audio?: number | undefined;
+  /** Lengua recordada para el título (§10.4), o null. */
+  readonly preferredLang?: string | null;
+  /** El cliente decodifica HEVC. */
+  readonly hevc: boolean;
+  readonly startS: number;
+  readonly signal?: AbortSignal;
+  /** Pausa larga: el productor ha matado ffmpeg; se puede soltar el proveedor. */
+  readonly onIdle?: () => void;
+  /** La sesión no puede seguir (`vod_dropped`, `vod_disk_full`…). */
+  readonly onDropped?: (error: AppError) => void;
+}
+
+export interface RemuxVodHandle {
+  readonly sessionId: string;
+  readonly index: VodIndex;
+  /** La pista que suena (null sin audio). */
+  readonly audio: VodTrack | null;
+  /** Dónde empieza de verdad (recortado a la duración). */
+  readonly startS: number;
+}
+
 export interface RemuxStats {
   readonly sessions: number;
   readonly max: number;
@@ -190,6 +226,20 @@ export interface RemuxService extends Lifecycle {
    * mitad (dos avisos a la vez: el relé y el vigilante de salida), el resultado es el del otro.
    */
   restarting(sessionId: string): boolean;
+  /**
+   * Película o episodio (docs/vod.md §9.7-§9.8): lee el índice por el relé
+   * (con caché por título), comprueba que se puede ver (`vod_unsupported`),
+   * elige el audio y arranca el productor en el segmento de `startS`. No
+   * espera al primer segmento: la lista sale del índice. Cuenta en el tope de
+   * 3 sesiones del remux.
+   */
+  openVod(request: RemuxVodRequest): Promise<RemuxVodHandle>;
+  /** Cierra el productor (mata ffmpeg y borra su carpeta). Idempotente. */
+  closeVod(sessionId: string): Promise<void>;
+  /** La lista VOD de esta sesión empieza aquí (`EXT-X-START`), p. ej. al reutilizarla en otra posición. */
+  setVodStart(sessionId: string, startS: number): void;
+  /** Estado del productor de una sesión VOD (null si no es VOD). */
+  vodStats(sessionId: string): VodProducerStats | null;
   /** Un visor deja la sesión; sin visores, ffmpeg se para. */
   detach(sessionId: string, viewerId: string): Promise<void>;
   /** Sirve un fichero de la sesión con Range (206/416) y `no-store`; en m3u8, reescribe las URI con `?t=`. */

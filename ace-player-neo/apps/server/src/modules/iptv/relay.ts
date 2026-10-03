@@ -78,6 +78,7 @@ import {
   type SegmentExt,
 } from './hls.js';
 import { TsGate } from './ts-gate.js';
+import { VodSession, type VodOpenRequest, type VodSessionOptions } from './relay-vod.js';
 
 /** Una variante del canal (la mejor primero). La URL nunca sale del relé. */
 export interface RelayVariant {
@@ -1106,6 +1107,25 @@ class HlsSession extends BaseSession {
 export interface ConnectLimits {
   readonly maxBytes?: number;
   readonly totalMs?: number;
+  /**
+   * VOD (P7, docs/vod.md §9.3): `Range: bytes=<start>-[end]` y `identity`
+   * (sin compresión: los bytes tienen que ser los del fichero).
+   */
+  readonly range?: { readonly start: number; readonly end: number | null };
+  /** Plazo de las cabeceras (por defecto `IPTV_RELAY.headersMs`). */
+  readonly headersMs?: number;
+}
+
+/** Lo que pide `openVod` (la URL del proveedor la monta `iptv` y nunca sale del relé). */
+export interface RelayVodOptions {
+  readonly url: string;
+  readonly headers: Readonly<Record<string, string>>;
+  /** Extensión de la URL del relé (`vod.<ext>`, solo informativa para ffmpeg). */
+  readonly ext: string;
+  readonly accountGate?: (signal: AbortSignal) => Promise<void>;
+  readonly lastClosedAt?: () => number | null;
+  readonly onUpstreamClosed?: () => void;
+  readonly session?: Omit<VodSessionOptions, 'ticket' | 'inputUrl' | 'url'>;
 }
 
 export interface IptvRelay {
@@ -1116,7 +1136,7 @@ export interface IptvRelay {
   open(options: RelayOpenOptions): Promise<RelaySession>;
   /** Conexiones abiertas ahora con el proveedor (0 o 1: un canal a la vez en casa). */
   connections(): number;
-  /** Sesiones vivas. */
+  /** Sesiones vivas (también las VOD). */
   sessions(): number;
 }
 
@@ -1125,6 +1145,8 @@ export class IptvRelayImpl implements IptvRelay {
   private server: http.Server | null = null;
   private listening: number | null = null;
   private readonly live = new Map<string, TsSession | HlsSession>();
+  /** Sesiones VOD (docs/vod.md §9.3): `/r/<ticket>/vod.<ext>`. */
+  private readonly vods = new Map<string, VodSession>();
 
   constructor(readonly deps: RelayDeps) {}
 
@@ -1145,6 +1167,8 @@ export class IptvRelayImpl implements IptvRelay {
 
   async stop(): Promise<void> {
     for (const session of [...this.live.values()]) await session.close();
+    for (const session of [...this.vods.values()]) await session.close();
+    this.vods.clear();
     const server = this.server;
     this.server = null;
     this.listening = null;
@@ -1163,11 +1187,12 @@ export class IptvRelayImpl implements IptvRelay {
   }
 
   sessions(): number {
-    return this.live.size;
+    return this.live.size + this.vods.size;
   }
 
   connections(): number {
     let count = 0;
+    for (const session of this.vods.values()) count += session.connections();
     for (const session of this.live.values()) {
       if (session instanceof TsSession) count += session.hasUpstream() ? 1 : 0;
       else count += session.connections() > 0 ? 1 : 0;
@@ -1177,6 +1202,7 @@ export class IptvRelayImpl implements IptvRelay {
 
   forget(ticket: string): void {
     this.live.delete(ticket);
+    this.vods.delete(ticket);
   }
 
   private policy(): IptvFetchPolicy {
@@ -1204,8 +1230,14 @@ export class IptvRelayImpl implements IptvRelay {
       try {
         return await this.deps.net.openStream(url, {
           idleMs: IPTV_RELAY.idleMs,
-          headersMs: IPTV_RELAY.headersMs,
-          headers: variant.headers,
+          headersMs: limits.headersMs ?? IPTV_RELAY.headersMs,
+          headers: limits.range
+            ? {
+                ...variant.headers,
+                range: `bytes=${limits.range.start}-${limits.range.end ?? ''}`,
+              }
+            : variant.headers,
+          ...(limits.range ? { identity: true } : {}),
           accept: '*/*',
           iptv: this.policy(),
           signal,
@@ -1391,8 +1423,50 @@ export class IptvRelayImpl implements IptvRelay {
     );
   }
 
+  /**
+   * Una sesión VOD (docs/vod.md §9.3): no abre nada todavía; la primera
+   * petición de abajo (el lector del índice) abre el proveedor con Range. Se
+   * olvida sola al cerrarla.
+   */
+  async openVod(options: RelayVodOptions): Promise<VodSession> {
+    if (!this.server || this.listening === null) await this.start();
+    const ticket = newTicket();
+    const host = this.host();
+    const ext = /^[a-z0-9]{2,5}$/.test(options.ext) ? options.ext : 'bin';
+    const inputUrl = `http://${host.includes(':') ? `[${host}]` : host}:${this.listening}/r/${ticket}/vod.${ext}`;
+    const variant: RelayVariant = { entryId: 'vod', url: options.url, headers: options.headers };
+    const session = new VodSession(
+      {
+        clock: this.deps.clock,
+        logger: this.deps.logger,
+        open: (request: VodOpenRequest) =>
+          this.connect({ ...variant, url: request.url }, request.signal, [], {
+            range: { start: request.start, end: request.end },
+            ...(request.headersMs === undefined ? {} : { headersMs: request.headersMs }),
+          }),
+        ...(options.accountGate ? { accountGate: options.accountGate } : {}),
+        ...(options.lastClosedAt ? { lastClosedAt: options.lastClosedAt } : {}),
+        ...(options.onUpstreamClosed ? { onUpstreamClosed: options.onUpstreamClosed } : {}),
+      },
+      { ...options.session, ticket, inputUrl, url: options.url },
+    );
+    this.vods.set(ticket, session);
+    session.onClosed(() => {
+      if (this.vods.get(ticket) === session) this.vods.delete(ticket);
+    });
+    return session;
+  }
+
   private route(req: http.IncomingMessage, res: http.ServerResponse): void {
     res.on('error', () => undefined);
+    const vod = /^\/r\/([A-Za-z0-9_-]{16,64})\/vod\.[a-z0-9]{2,5}(?:\?.*)?$/.exec(req.url ?? '');
+    if (vod) {
+      const session = this.vods.get(vod[1] as string);
+      if (session) {
+        session.handle(req, res);
+        return;
+      }
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405).end();
       return;

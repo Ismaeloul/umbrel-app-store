@@ -64,6 +64,11 @@ import { createGzip, gzipSync } from 'node:zlib';
 import { colorFromSeed, generateSegment, TsMuxer, TS_PACKET_SIZE } from '../fake-engine/mpegts.js';
 import { bigCatalog, type BigChannel } from './catalogo-grande.js';
 import { fakeGuideChunks } from './guia.js';
+import {
+  createFakeVodHandler,
+  type FakeVodHandler,
+  type FakeVodOriginOptions,
+} from '../fake-vod/origin.js';
 import { createFakeVod, FAKE_VOD_MODES, type FakeVodMode } from './vod.js';
 
 export const FAKE_IPTV_USER = 'usuario-e2e';
@@ -223,6 +228,14 @@ export interface FakeIptvOptions {
   /** Películas sintéticas que se suman al catálogo VOD pequeño (docs/vod.md §15.3). */
   readonly vod?: number;
   /**
+   * Ficheros de vídeo de verdad para `/movie/<u>/<p>/<id>.<ext>` y
+   * `/series/<u>/<p>/<id>.<ext>` (VOD-5, docs/vod.md §15.3): `<id>.<ext>` →
+   * ruta en disco. Con Range/206 y las rarezas de `vodOrigen` (el manejador
+   * de test/fake-vod/origin.ts con las credenciales de este proveedor).
+   */
+  readonly vodFiles?: Readonly<Record<string, string>>;
+  readonly vodOrigen?: FakeVodOriginOptions;
+  /**
    * Guía TV (docs/iptv.md §20.9): además de los programas de siempre, una
    * parrilla sintética de ayer a dentro de 3 días para todos los demás
    * canales (también los del catálogo grande), servida en streaming. Con
@@ -265,6 +278,8 @@ export interface FakeIptv {
   vodModo(mode: FakeVodMode): void;
   /** Canales del catálogo grande (vacío sin `grande`). */
   readonly grandes: readonly BigChannel[];
+  /** El proveedor de ficheros VOD (null sin `vodFiles`): estadísticas, `set` y `cutOpen`. */
+  readonly vodOrigen: FakeVodHandler | null;
   close(): Promise<void>;
 }
 
@@ -387,6 +402,13 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
 
   const base = (): string => `http://${publicHost}`;
   const vod = createFakeVod(base, options.vod ?? 0);
+  const vodOrigen = options.vodFiles
+    ? createFakeVodHandler(options.vodFiles, {
+        ...options.vodOrigen,
+        user: FAKE_IPTV_USER,
+        password: FAKE_IPTV_PASSWORD,
+      })
+    : null;
 
   const m3u = (short: boolean): string => {
     const guide = short
@@ -772,7 +794,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
               status: account.status,
               exp_date: String(Math.floor(Date.now() / 1000) + 90 * 24 * 3600),
               max_connections: String(maxConnections),
-              active_cons: String(open.size + heldNow()),
+              active_cons: String(open.size + heldNow() + (vodOrigen?.stats.open ?? 0)),
               allowed_output_formats: formats,
             },
             server_info: { url: 'otro-host.example', port: '80', server_protocol: 'http' },
@@ -843,6 +865,11 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
         }
         res.writeHead(200, { 'content-type': art.type, 'content-length': String(art.body.length) });
         res.end(art.body);
+        return;
+      }
+      /* Ficheros VOD (Range/206, una conexión, rarezas del panel). */
+      if (vodOrigen && /^\/(?:movie|series|lb)\//.test(path)) {
+        vodOrigen.handler(req, res);
         return;
       }
       const live = /^\/live\/([^/]+)\/([^/]+)\/(\d+)\.(ts|m3u8)$/.exec(path);
@@ -939,7 +966,9 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
       vod.modo(mode);
     },
     grandes: big?.channels ?? [],
+    vodOrigen,
     async close() {
+      vodOrigen?.cutOpen();
       for (const res of open) res.destroy();
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve) => server.close(() => resolve()));

@@ -83,6 +83,7 @@ import {
   continueWatching,
   episodeSubtitle,
   nextEpisode,
+  resumeAt,
   seriesMain,
   VodDocStore,
   type EpisodeRef,
@@ -131,6 +132,26 @@ export interface VodHost {
   emitStatus(): void;
   /** Duración que conoce el servidor para un id (la sesión VOD de VOD-5), o null. */
   knownDurationS?(id: string): number | null;
+}
+
+/** Lo que necesita la reproducción de un título (`VodService.playTarget`). */
+export interface VodPlayTarget {
+  readonly kind: 'movie' | 'episode';
+  /** `stream_id` de la película o `episode_id` del episodio. */
+  readonly source: number;
+  /** Extensión de la URL del proveedor (lista cerrada de `xtreamVodUrl`). */
+  readonly ext: string;
+  readonly title: string;
+  readonly subtitle: string | null;
+  readonly seriesId: string | null;
+  readonly next: { readonly id: string; readonly title: string; readonly label: string } | null;
+  readonly poster: string | null;
+  /** Dónde reanudar según el progreso guardado (0 = desde el principio). */
+  readonly resumeS: number;
+  /** Lengua de audio recordada para la película o la serie (§10.4), o null. */
+  readonly audioLang: string | null;
+  /** Duración que dice la ficha (solo orientativa), o null. */
+  readonly durationHintS: number | null;
 }
 
 type TimerName = 'sync';
@@ -1408,6 +1429,74 @@ export class VodService {
     });
     if (body.event === 'tick') this.doc.soft(mutate);
     else await this.doc.write(mutate);
+  }
+
+  /**
+   * Lo que hace falta para reproducir una película o un episodio (VOD-5,
+   * docs/vod.md §9.8): el origen y la extensión (para la URL del proveedor,
+   * que monta `iptv` y nunca sale del relé), los textos de la concesión, el
+   * siguiente episodio, el progreso guardado y la lengua de audio preferida.
+   * `vod_not_found` si el id no es de película ni de episodio.
+   */
+  async playTarget(id: string): Promise<VodPlayTarget> {
+    const { ref, table, row } = await this.locate(id, ['movie', 'episode']);
+    const title = this.text(table.title(row), 200) || 'Sin título';
+    const progress = this.progressMap().get(id) ?? null;
+    const doc = this.doc.read();
+    if (ref.kind === 'movie') {
+      const info = await this.infoOf('movie', ref.source).catch(() => null);
+      const movie = info && info.kind === 'movie' ? info : null;
+      const ext = extName(movie?.ext || (table.ext[row] as number)) ?? 'mp4';
+      return {
+        kind: 'movie',
+        source: ref.source,
+        ext,
+        title,
+        subtitle: null,
+        seriesId: null,
+        next: null,
+        poster: this.posterStamp(table, row),
+        resumeS: resumeAt(progress),
+        audioLang: doc.prefs.find((pref) => pref.id === id)?.audio ?? null,
+        durationHintS: movie?.durationS ?? null,
+      };
+    }
+    const seriesId = this.idOf('series', ref.parent);
+    const info = await this.infoOf('series', ref.parent).catch(() => null);
+    const series = info && info.kind === 'series' ? info : null;
+    let ext: string | null = null;
+    let durationHintS: number | null = null;
+    for (const season of series?.seasons ?? []) {
+      const episode = season.episodes.find((item) => item.source === ref.source);
+      if (episode) {
+        ext = extName(episode.ext);
+        durationHintS = episode.durationS ?? null;
+        break;
+      }
+    }
+    const episodes = series ? this.episodesOf(ref.parent, series) : [];
+    const current = episodes.find((episode) => episode.id === id) ?? null;
+    const next = nextEpisode(episodes, id);
+    return {
+      kind: 'episode',
+      source: ref.source,
+      /* Sin ficha (proveedor caído): la extensión más común del panel (Paso 0: 74 % MKV). */
+      ext: ext ?? 'mkv',
+      title,
+      subtitle: current ? episodeSubtitle(current).slice(0, 200) : null,
+      seriesId,
+      next: next
+        ? {
+            id: next.id,
+            title,
+            label: episodeSubtitle(next).slice(0, 80),
+          }
+        : null,
+      poster: this.posterStamp(table, row),
+      resumeS: resumeAt(progress),
+      audioLang: doc.prefs.find((pref) => pref.id === seriesId)?.audio ?? null,
+      durationHintS,
+    };
   }
 
   /** Para los tests: el catálogo en memoria. */
