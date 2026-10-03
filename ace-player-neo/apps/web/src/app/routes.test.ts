@@ -14,6 +14,7 @@ import {
   VISTA_TITLE,
   type Route,
 } from './routes.ts';
+import { CINE_PARAMS } from '../features/cine/model.ts';
 import { FACET_PARAM } from '../features/library/iptv/model.ts';
 import { SEARCH_PARAM } from '../features/search/navigation.ts';
 
@@ -99,7 +100,21 @@ describe('rutas (?vista=)', () => {
     for (const param of [...Object.values(FACET_PARAM), 'cat', 'pestana'])
       expect(VISTA_PARAMS.biblioteca).toContain(param);
     expect(VISTA_PARAMS.buscar).toContain(SEARCH_PARAM);
+    for (const param of [...CINE_PARAMS, 'temporada']) expect(VISTA_PARAMS.cine).toContain(param);
     for (const global of ['demo', 'flag', 'vista']) expect(names).not.toContain(global);
+  });
+
+  it('los filtros de Pelis y series no viajan a otras vistas y vuelven al regresar', () => {
+    const cine = '?vista=cine&flag=cine&cine=series&cinecat=d4e5f6071829&cineq=office';
+    expect(searchFor({ vista: 'biblioteca' }, cine)).toBe('?vista=biblioteca&flag=cine');
+    expect(viewParams('cine', cine)).toBe('cine=series&cinecat=d4e5f6071829&cineq=office');
+    expect(
+      searchFor(
+        { vista: 'cine', id: null },
+        '?vista=biblioteca&flag=cine',
+        viewParams('cine', cine),
+      ),
+    ).toBe('?vista=cine&flag=cine&cine=series&cinecat=d4e5f6071829&cineq=office');
   });
 
   it('sentido de la transición y comparación', () => {
