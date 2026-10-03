@@ -75,15 +75,13 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
       todo sigue exactamente como hoy, con futbolenlatv como única fuente. La guía solo suma, nunca es
       obligatoria ni deja la agenda vacía.
 13. **Ideas aceptadas por Isma (3-oct):**
-    - **Avisos de partido:** marcar un partido y que avise ~5 min antes (navegador/móvil).
     - **Arranque instantáneo:** minutos antes de un partido de sus favoritos, el Umbrel deja preparada la mejor
       fuente (IPTV primero) para que «Ver» sea inmediato.
     - **Cambiar de canal rápido** entre favoritos (flechas en PC, deslizar en el móvil), como en la tele.
-    - **Aprender qué canales de la IPTV fallan** y evitarlos o ponerlos detrás. **No** con AceStream: sus hashes
-      cambian demasiado y aprender de ellos no sirve.
     - **Copia de seguridad de los ajustes:** exportar e importar listas, favoritos, IPTV y preferencias (por si
       formatea).
-    Descartadas: retroceder más tiempo, dos partidos a la vez, página de equipo con historial de fuentes,
+    Descartadas: avisos de partido (usa SofaScore), aprender qué canales fallan (los de la IPTV no cambian: si
+    uno falla, se lo dice al proveedor), retroceder más tiempo, dos partidos a la vez, página de equipo con historial de fuentes,
     marcador en el reproductor, calendario exportable, grabar, perfiles, mando remoto y modo tele.
 14. **App de iPhone: al final, con el Mac de su hermano** (simulador de iPhone y cambios al momento, mucho más
     práctico que compilar en GitHub y bajar la IPA). Primero pulir al máximo la web; la app irá basada en la web.
