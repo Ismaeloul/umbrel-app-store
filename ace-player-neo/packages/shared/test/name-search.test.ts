@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NAME_TIER,
   compareNameRank,
+  keySearchWords,
   leadingCountry,
   nameFacts,
   nameFactsOf,
@@ -66,6 +67,8 @@ describe('nameSearchWords: las palabras de un nombre tal cual lo da el panel', (
     ['ES: M+ #0 HD', 'movistar 0'],
     ['ES: #VAMOS FHD', 'vamos'],
     ['LALIGA+ PPV 1', 'laligaplus ppv 1'],
+    ['laliga+', 'laligaplus'],
+    ['LALIGA+ ★', 'laligaplus'],
     ['ES: TELE5 SD', 'telecinco'],
     ['DE: TELE 5 HD', 'telecinco'],
     ['ES - TELE CINCO', 'telecinco'],
@@ -105,6 +108,16 @@ describe('nameSearchWords: las palabras de un nombre tal cual lo da el panel', (
     expect(nameSearchKey('TV-3')).toBe('tv 3');
   });
 
+  it('keySearchWords: lo mismo, más rápido, con una clave ya normalizada del catálogo', () => {
+    expect(keySearchWords('rai uno')).toEqual(['rai', '1']);
+    expect(keySearchWords('movistar laliga tv 2')).toEqual(['movistar', 'laliga', 'tv', '2']);
+    expect(keySearchWords('cuatro')).toEqual(['cuatro']);
+    expect(keySearchWords('a3')).toEqual(['antena', '3']);
+    expect(keySearchWords('0')).toEqual(['0']);
+    /* Con algo que no es una clave normalizada, como `nameSearchWords`. */
+    expect(keySearchWords('ES: LA 1 HD')).toEqual(['la', '1']);
+  });
+
   it('el país escrito delante (los adornos no son un país)', () => {
     expect(leadingCountry('UK: DAZN 1')).toBe('UK');
     expect(leadingCountry('ES► LA 1')).toBe('ES');
@@ -119,7 +132,11 @@ describe('nameSearchWords: las palabras de un nombre tal cual lo da el panel', (
 
 describe('parseNameQuery: lo que escribe una persona', () => {
   it('el país pedido delante, en cualquier caja; España es «de casa»', () => {
-    expect(parseNameQuery('uk: la liga tv')).toMatchObject({ key: 'laliga tv', country: 'UK' });
+    expect(parseNameQuery('uk: la liga tv')).toMatchObject({
+      key: 'laliga tv',
+      text: 'la liga tv',
+      country: 'UK',
+    });
     expect(parseNameQuery('[es] dazn 1')).toMatchObject({ key: 'dazn 1', country: '' });
     expect(parseNameQuery('de: dazn 1')).toMatchObject({ key: 'dazn 1', country: 'DE' });
     expect(parseNameQuery('de dazn')).toMatchObject({ key: 'de dazn', country: '' });
@@ -195,6 +212,10 @@ describe('wordMatch y nameTier', () => {
     ['movistar ellas', 'LAS ESTRELLAS', -1],
     ['tve', 'REAL MADRID TV EN', -1],
     ['madridtven', 'REAL MADRID TV EN', NAME_TIER.partial],
+    /* Solo relleno escrito: el relleno del nombre también cuenta. */
+    ['canal', 'CANAL 5', NAME_TIER.prefix],
+    ['canal sur', 'CANAL SUR', NAME_TIER.exact],
+    ['tv 3', 'TV3', NAME_TIER.exact],
   ] as const)('«%s» con «%s» → %i', (q, name, expected) => {
     expect(tier(q, name)).toBe(expected);
   });

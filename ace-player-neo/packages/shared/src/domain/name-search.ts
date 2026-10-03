@@ -195,8 +195,8 @@ function stripLead(text: string): string {
   return out;
 }
 
-/* Adornos del final que tapan la copia («TELECINCO #2 ★»): todo lo que no es letra, número ni cierre. */
-const TRAILING_DECOR_RE = /[^\p{L}\p{N})\]]+$/u;
+/* Adornos del final que tapan la copia («TELECINCO #2 ★»): lo que no es letra, número, cierre ni el «+» pegado (LaLiga+). */
+const TRAILING_DECOR_RE = /[^\p{L}\p{N})\]+]+$/u;
 /* La reserva escrita: «(BK-1)», «[BK 2]», «BK-1», «bk2», «backup 2», «ALT 1» (el número es de la reserva). */
 const BACKUP_TAG_RE =
   /[([]\s*(?:bk|bkp|backup)\s*[-_]?\s*\d{0,2}\s*[)\]]|\b(?:backup|back\s*up|bkp|bk|alt|alternativ[oa]|reserva|respaldo)(?:\s?[-_]?\s?\d{1,2})?\b/gu;
@@ -289,6 +289,29 @@ function countryOfCode(code: string): string {
   if (code === 'gb' || code === 'gbr' || code === 'eng') return 'UK';
   if (code === 'latam' || code === 'latino' || code === 'lam') return 'LAT';
   return code.toUpperCase();
+}
+
+const NORMALIZED_KEY_RE = /^[a-z0-9]+(?: [a-z0-9]+)*$/;
+
+/**
+ * `nameSearchWords` para una clave ya normalizada del catálogo
+ * (`normalizeChannelKey` sobre un nombre ya limpio y con `channelSpelling`:
+ * «rai uno», «movistar laliga tv 2»): solo trocea, quita lo que no dice qué
+ * canal es y pasa los números con letra a cifra. Diez veces más rápido; da lo
+ * mismo que `nameSearchWords` con esas claves (lo prueba el servidor con el
+ * corpus). Con otra cosa, `nameSearchWords`.
+ */
+export function keySearchWords(key: string): string[] {
+  if (!NORMALIZED_KEY_RE.test(key)) return nameSearchWords(key);
+  const words: string[] = [];
+  for (const raw of key.split(' ')) {
+    if (NOISE_WORDS.has(raw) || RESOLUTION_RE.test(raw)) continue;
+    if (/^\d{2,3}fps$/u.test(raw) || /^(?:2160|1080|720)p\d{2}$/u.test(raw)) continue;
+    const number = NUMBER_WORDS[raw];
+    words.push(number !== undefined && (words.length > 0 || number === '0') ? number : raw);
+  }
+  if (words.length === 1 && words[0] === 'a3') return ['antena', '3'];
+  return words;
 }
 
 /** Las palabras de un nombre unidas por espacios («ES► LA 1 FHD» → «la 1»). */
@@ -403,6 +426,8 @@ export interface NameQueryAlias {
 }
 
 export interface NameQuery extends NameQueryWords {
+  /** Lo escrito sin el país pedido delante, con los espacios colapsados («uk: la liga tv» → «la liga tv»). */
+  readonly text: string;
   /** El país pedido delante («uk: la liga tv» → «UK»); '' si ninguno o España. */
   readonly country: string;
   /** Otras consultas que buscar (Champions, TVE, A3, TDP): lo que casa con ellas se suma. */
@@ -465,12 +490,12 @@ export function parseNameQuery(value: string): NameQuery {
     country = SPAIN_CODES.has(code) ? '' : code === 'gb' ? 'UK' : code.toUpperCase();
     text = text.slice(prefix[0].length);
   }
-  text = text.replace(QUERY_MOVISTAR_RE, 'Movistar ');
-  const words = nameSearchWords(text);
+  const words = nameSearchWords(text.replace(QUERY_MOVISTAR_RE, 'Movistar '));
   const base = queryWordsOf(words);
   const all = new Set(words);
   return {
     ...base,
+    text,
     country,
     aliases: nameQueryAliases(base.key).map((alias) => ({
       query: queryWordsOf(alias.key.split(' ')),
@@ -604,7 +629,10 @@ export function nameTier(query: NameQueryWords, facts: NameFacts): number {
   if (!query.required.length) return -1;
   const byCompact = compactTier(query, facts);
   if (byCompact === NAME_TIER.exact) return byCompact;
-  const words = facts.sigWords;
+  /* Si lo escrito es solo relleno («canal», «tv»), el relleno del nombre también cuenta: «canal» empieza «Canal 5». */
+  const words = query.required.some((word) => OPTIONAL_SEARCH_WORDS.has(word))
+    ? facts.words
+    : facts.sigWords;
   /* Cada palabra escrita casa con alguna del nombre (en cualquier orden). */
   for (const word of query.required) {
     if (!facts.words.some((token) => wordMatch(token, word) > 0)) {
