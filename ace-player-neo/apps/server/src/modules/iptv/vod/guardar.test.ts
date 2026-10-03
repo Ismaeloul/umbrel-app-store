@@ -69,6 +69,30 @@ describe('guardar vod.enc mientras se quita la IPTV (fallo 4)', () => {
     });
   }
 
+  it('el directo llega mientras el VOD guarda: el VOD acaba bien y NO se vuelve a descargar entero', async () => {
+    const rig = await ready();
+    const vodLists = (): number =>
+      rig.fake.peticiones().filter((request) => request.includes('action=get_vod_streams')).length;
+    let preempted = false;
+    hooks.before = async () => {
+      if (preempted) return;
+      preempted = true;
+      /* «Actualizar» del directo: pasa delante y aborta el VOD con `VodPreemptedError`. */
+      await rig.service.sync();
+    };
+    const before = vodLists();
+    await rig.service.vod.requestSync('manual');
+    for (let round = 0; round < 3; round += 1) {
+      await rig.service.idle();
+      await rig.service.vod.idle();
+    }
+    expect(preempted).toBe(true);
+    expect(rig.service.vod.catalogForTests()).not.toBeNull();
+    expect(rig.service.vod.state()).toBe('ready');
+    /* Una sola descarga: la que ya había terminado se aplica y no se repite. */
+    expect(vodLists() - before).toBe(1);
+  });
+
   it('pausar mientras se guarda no aplica nada pero el fichero (del mismo proveedor) se queda', async () => {
     const rig = await ready();
     const file = rig.core.config.paths.vodCatalogFile;

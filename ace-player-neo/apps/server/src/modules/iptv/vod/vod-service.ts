@@ -244,6 +244,11 @@ export class VodService {
   private syncPromise: Promise<void> | null = null;
   /** La sincronización en curso ha cedido el sitio: al soltar el cerrojo se vuelve a pedir. */
   private requeue = false;
+  /**
+   * La sincronización en curso ya tiene su resultado (la descarga acabó):
+   * ceder el sitio al directo ya no la deja a medias, así que no se repite.
+   */
+  private landed = false;
   /** Modo de la última sincronización con éxito (para empezar por él, §4.7). */
   private lastMode: VodSyncMode = 'completo';
   /** Cuándo acabó la última sincronización (bien o mal). */
@@ -456,6 +461,7 @@ export class VodService {
     if (this.syncPromise) return this.syncPromise;
     const fp = this.syncDoc() as string;
     const snapshot = { id: provider.id, revision: provider.revision, fp };
+    this.landed = false;
     const promise = this.host
       .runHeavy((signal) => this.doSync(signal, snapshot, credentials, reason))
       .catch(() => undefined)
@@ -480,7 +486,9 @@ export class VodService {
    * cerrojo se vuelve a pedir sola.
    */
   onPreempted(): void {
-    if (this.syncPromise) this.requeue = true;
+    /* Si la descarga ya acabó (está guardando), se aplica igual
+       (`stillCurrent`): repetirla serían minutos más contra el panel. */
+    if (this.syncPromise && !this.landed) this.requeue = true;
   }
 
   /**
@@ -517,6 +525,11 @@ export class VodService {
         { providerId: snapshot.id, providerFp: snapshot.fp, revision: snapshot.revision, mode },
       );
       if (!this.stillCurrent(snapshot, signal)) return;
+      /* La descarga ha acabado: lo que queda (guardar y aplicar) no se
+         repite aunque el directo pida paso ahora o lo haya pedido justo al
+         final (el resultado se aplica igual). */
+      this.landed = true;
+      this.requeue = false;
       if (result.state === 'none' && this.hadTitles() && !this.noneOnce) {
         /* Había catálogo y ahora el panel dice «sin VOD» (`[]` o `{}` en las
            dos listas): puede ser un mal momento del panel. Una sola vez no
