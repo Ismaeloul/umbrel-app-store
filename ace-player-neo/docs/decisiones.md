@@ -473,3 +473,36 @@ conservador). Todas se pueden revertir.
   `iptv.status`.
 - **Vuelta atrás**: no cambia el formato de ningún fichero de `data/`;
   volver a la 0.8.3 es seguro (solo se pierden las rutas nuevas).
+
+## D-propuesta. Guía TV: la guía completa en disco y la API por trozos (0.9.0, equipo/guia-servidor)
+
+Número por poner al unir. Diseño entero en `docs/iptv.md` §20.
+
+- **Para qué**: la vista «Guía TV» (parrilla estilo Movistar+ con «Favoritos |
+  Todos», docs/pendiente.md punto 11) necesita la guía entera de la IPTV, no
+  solo los ~93 canales con partidos de la 0.8.x.
+- **G1 · Sin cifrar**: `v2/iptv/guia.db` es SQLite (`node:sqlite`, que viene
+  con Node 24) y no se cifra: SQLite de Node no sabe y la guía no lleva
+  credenciales (las URL de la guía siguen en `catalogo.enc`; las de imagen que
+  llevarían algo de las credenciales se descartan). 0600 en la carpeta 0700,
+  como lo demás de la IPTV.
+- **G2 · Orden de «Todos»**: España y sin país primero, luego los demás
+  países; dentro de cada grupo, el orden del proveedor. El número de un canal
+  es su puesto ahí (el catálogo no guarda el `num` de Xtream).
+- **G3 · «Favoritos»**: tus favoritos en su orden; un canal de tu lista de
+  AceStream cuenta si es un canal de la IPTV (≥ 92, el mismo emparejado que el
+  buscador). Un favorito sin guía sale con «Sin información»; si ninguno
+  tiene guía, se enseña «Todos» (`fellBack`).
+- **G4 · Ajustes**: «N canales con programación» cuenta ya todos los canales
+  con guía (antes, solo los que tenían partidos).
+- **G5 · Topes**: los de tamaño de la descarga (64 MiB comprimida, 512 MiB
+  descomprimida) no se tocan hasta tener la medida del panel de Isma
+  (`scripts/epg-sondeo.mjs`); el plazo total sube de 180 a 300 s porque cada
+  programa se escribe en disco mientras se lee. `guia.db`: 2 M de programas y
+  512 MiB como mucho (lo que pase no se guarda y se dice).
+- **Lo que no cambia**: la guía de partidos (`guia.enc`), `guide-match.ts` y
+  la agenda híbrida; un solo trabajo pesado de la IPTV a la vez; con alguien
+  viendo, la descarga periódica se retrasa como siempre, y si coincide, la
+  construcción cede el hilo cada 12 ms (el directo no espera).
+- **Vuelta atrás**: la 0.8.x no conoce `guia.db` y lo deja en disco sin
+  usarlo; nada más cambia de formato.
