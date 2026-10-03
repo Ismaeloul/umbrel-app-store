@@ -791,14 +791,15 @@ describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
   it('16 · variantes de resolución (§17): una fila con sus calidades; 4 carteles 1080p, 4K, 720p y SD; la 1080p caída no gasta las demás; cambiar de variante cierra la anterior', async () => {
     const r = await setup();
     await saveXtream(r);
-    /* Todo desbloqueado: el de España con sus 4 calidades y, detrás, los de otros países con el suyo. */
+    /* Todo desbloqueado: el de España con sus 4 calidades y, detrás, los de otros países con el suyo (entre ellos, la
+       mejor calidad primero: docs/buscador.md). */
     const found = await channels(r.h, 'dazn 1');
     expect(
       found.channels.map((channel) => [channel.title, channel.country ?? null, channel.qualities]),
     ).toEqual([
       ['DAZN 1', null, ['uhd', 'fhd', 'hd', 'sd']],
-      ['DAZN 1', 'UK', []],
       ['DAZN 1', 'DE', ['hd']],
+      ['DAZN 1', 'UK', []],
     ]);
     const row = found.channels[0] as (typeof found.channels)[number];
     const result = await resolve(

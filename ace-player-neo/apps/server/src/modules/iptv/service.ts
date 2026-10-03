@@ -1539,7 +1539,7 @@ export class IptvServiceImpl implements IptvService {
     const catalog = this.catalog as Catalog;
     const record = this.record as IptvProviderRecord;
     const max = Math.min(limit, IPTV_SEARCH.limit);
-    const found = searchCatalog(catalog, q, max);
+    const found = searchCatalog(catalog, q, max, { favorites: this.favoriteChannels(catalog) });
     const state = this.deps.state.get();
     const candidates = libraryCandidates([...state.favorites, ...state.history, ...state.web], q);
     const keys = this.ensureKeys();
@@ -1718,7 +1718,10 @@ export class IptvServiceImpl implements IptvService {
     const stale = cursor !== null && cursor.stamp !== stamp;
     const offset = cursor && !stale ? cursor.offset : 0;
     const list = (value: string | undefined) => (value ? value.split(',') : undefined);
+    const favorites = q ? this.favoriteChannels(catalog) : undefined;
     const result = browseIndex(index, {
+      favorites,
+      favoritesKey: favorites ? [...favorites].sort().join('\n') : undefined,
       category: query.category,
       q,
       country: list(query.country),
@@ -1774,6 +1777,22 @@ export class IptvServiceImpl implements IptvService {
       nextCursor: result.nextOffset === null ? null : encodeCursor(stamp, result.nextOffset),
       stale,
     };
+  }
+
+  /**
+   * Los canales (`channelIdOf`) de tus favoritos que son de tu IPTV (docs/buscador.md): en el buscador y en la
+   * pestaña IPTV desempatan delante (nunca delante de lo igual). Solo los ids IPTV: un favorito de AceStream se
+   * empareja por nombre en otra parte, y aquí costaría puntuar cada uno.
+   */
+  private favoriteChannels(catalog: Catalog): ReadonlySet<string> {
+    const keys = this.ensureKeys();
+    const out = new Set<string>();
+    for (const item of this.deps.state.get().favorites) {
+      if (!isIptvId(keys, item.id)) continue;
+      const entry = catalog.get(item.id);
+      if (entry) out.add(channelIdOf(entry));
+    }
+    return out;
   }
 
   /**
