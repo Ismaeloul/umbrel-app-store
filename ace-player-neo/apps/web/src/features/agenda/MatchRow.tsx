@@ -356,7 +356,8 @@ export function MatchRowView({
           {status ? (
             <span className={cx('agenda-row__note', `is-${status.phase}`)}>
               {live ? <LiveDot /> : null}
-              {keepUnitsTogether(status.text)}
+              {/* En el descanso, lo mismo que la cápsula de arriba (no «En directo»). */}
+              {live && when.label === 'Descanso' ? 'Descanso' : keepUnitsTogether(status.text)}
             </span>
           ) : null}
           {channels.length === 0 ? (

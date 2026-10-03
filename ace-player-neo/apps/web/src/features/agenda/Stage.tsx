@@ -118,7 +118,8 @@ export function AgendaStage({
           {signal ? (
             <p className="agenda-stage__signal">
               <SignalCapsule signal={signal} size="md" glass={false} />
-              <span>{signal.summary}</span>
+              {/* La cápsula ya dice «Comprobando»: la frase, sin repetirlo. */}
+              <span>{signal.summary.replace(/^Comprobando:\s*/, '')}</span>
             </p>
           ) : (
             <p className="agenda-stage__muted">

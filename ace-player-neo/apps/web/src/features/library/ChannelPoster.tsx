@@ -91,8 +91,13 @@ export function ChannelPoster({
             ) : minute ? (
               <Num value={minute} label={`minuto ${minute}`} />
             ) : null}
-            {halftime || minute ? <span aria-hidden="true"> · </span> : null}
-            <span className="chp__state">{watching ? 'En pantalla' : 'En directo'}</span>
+            {/* «Descanso» ya dice que está en directo: sin «Descanso · En directo». */}
+            {(halftime && watching) || (minute && !halftime) ? (
+              <span aria-hidden="true"> · </span>
+            ) : null}
+            {halftime && !watching ? null : (
+              <span className="chp__state">{watching ? 'En pantalla' : 'En directo'}</span>
+            )}
           </Capsule>
         </span>
         <span className="chp__bottom">
