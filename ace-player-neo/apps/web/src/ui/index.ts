@@ -14,6 +14,7 @@ export {
   type ButtonVariant,
   type IconButtonProps,
 } from './Button.tsx';
+export { BrandMark, type BrandMarkProps } from './BrandMark.tsx';
 export { Capsule, type CapsuleProps, type CapsuleTone } from './Capsule.tsx';
 export { Card, Panel, type PanelProps } from './Surface.tsx';
 export {
