@@ -325,8 +325,20 @@ async function packed(name: string, text: string): Promise<ZipEntry> {
   };
 }
 
-/** Monta el zip de «Descargar logs» (sin escribir nada en el disco). */
-export async function buildLogsZip(
+/** «Descargar logs» de una en una: cada una lee hasta 48 MiB y monta el zip en memoria. */
+let zipQueue: Promise<unknown> = Promise.resolve();
+
+/** Monta el zip de «Descargar logs» (sin escribir nada en el disco), detrás de la que esté en marcha. */
+export function buildLogsZip(
+  services: LogsServices,
+  body: { readonly period?: LogPeriod | undefined; readonly web: WebDiagnostics },
+): Promise<LogsZip> {
+  const run = zipQueue.then(() => buildLogsZipNow(services, body));
+  zipQueue = run.catch(() => undefined);
+  return run;
+}
+
+async function buildLogsZipNow(
   services: LogsServices,
   body: { readonly period?: LogPeriod | undefined; readonly web: WebDiagnostics },
 ): Promise<LogsZip> {

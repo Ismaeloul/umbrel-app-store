@@ -303,6 +303,28 @@ describe('POST /api/v1/diagnostics/log/download («Descargar logs»)', () => {
     expect(summary.storage.days).toBe(2);
   });
 
+  it('dos descargas a la vez van de una en una (cada una lee hasta 48 MiB en memoria)', async () => {
+    const { download, store } = await setup();
+    const target = store as NonNullable<typeof store>;
+    const readRange = target.readRange.bind(target);
+    let active = 0;
+    let most = 0;
+    vi.spyOn(target, 'readRange').mockImplementation(async (...args) => {
+      active += 1;
+      most = Math.max(most, active);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      try {
+        return await readRange(...args);
+      } finally {
+        active -= 1;
+      }
+    });
+    const [first, second] = await Promise.all([download('dia'), download('dia')]);
+    expect(first.response.statusCode).toBe(200);
+    expect(second.response.statusCode).toBe(200);
+    expect(most).toBe(1);
+  });
+
   it('sin registro en disco: el zip sale igual (con fallos.json) y lo dice', async () => {
     const { download, app } = await setup({ store: false });
     const { response, files } = await download('semana');
