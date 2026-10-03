@@ -106,12 +106,12 @@ describe('rutas de la IPTV (esqueleto del contrato)', () => {
 
 /* Películas y series (docs/vod.md §11.1). Sin IPTV: la portada y la rejilla
    responden 200 con `active: false` (no es un error); la ficha y el progreso,
-   `vod_unavailable`; un cartel, `vod_not_found`. `vodStream` sigue en 501
-   hasta los enganches de la reproducción (VOD-5). Con IPTV, vod-service.test.ts. */
+   `vod_unavailable`; un cartel, `vod_not_found`; `vodStream`, `vod_unavailable`
+   (VOD-5). Con IPTV, vod-service.test.ts y test/integration/vod.test.ts. */
 describe('rutas de Películas y series sin IPTV', () => {
   const VOD_ID = '4b5c6d7e8f9012345678abcdef0123457a8b9c0d';
 
-  it('portada y rejilla 200 con active false; ficha, cartel y progreso con su código; vodStream 501', async () => {
+  it('portada y rejilla 200 con active false; ficha, cartel, progreso y vodStream con su código', async () => {
     const { app } = await createTestApp();
     const home = await app.inject({ method: 'GET', url: '/api/v1/vod', headers: web() });
     expect(home.statusCode).toBe(200);
@@ -131,8 +131,8 @@ describe('rutas de Películas y series sin IPTV', () => {
       [`/api/v1/vod/titles/${VOD_ID}/art/poster?v=3fa9c210`, 404, 'vod_not_found'],
       [
         `/api/v1/vod/titles/${VOD_ID}/stream?client=web&viewer=viewer_tab01`,
-        501,
-        'not_implemented',
+        503,
+        'vod_unavailable',
       ],
     ];
     for (const [url, status, code] of cases) {

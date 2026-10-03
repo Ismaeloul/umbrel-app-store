@@ -1910,11 +1910,15 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       const id = normalizeHash(idParam);
       if (!id) throw new AppError('validation_error', { detail: 'id' });
       const iptv = deps.iptv;
-      if (!iptv?.openVod || !isVodId(id)) {
-        throw new AppError(iptv?.openVod ? 'vod_not_found' : 'vod_unavailable', {
-          detail: 'id',
-        });
+      let xtream = false;
+      try {
+        xtream = iptv?.vod?.status() !== undefined;
+      } catch {}
+      /* Sin IPTV Xtream, como la ficha: `vod_unavailable`; un id que no es de este proveedor, `vod_not_found`. */
+      if (!iptv?.openVod || !xtream) {
+        throw new AppError('vod_unavailable', { detail: 'sin IPTV Xtream activa' });
       }
+      if (!isVodId(id)) throw new AppError('vod_not_found', { detail: 'id' });
       /* Tope duro de `vodStream` (§9.12): 40 s, por debajo de los 50 s de la web. */
       const controller = new AbortController();
       const onAbort = (): void => controller.abort(signal.reason);

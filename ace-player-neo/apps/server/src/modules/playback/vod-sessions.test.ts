@@ -135,6 +135,8 @@ function fakeIptv() {
     classify: (id: string) =>
       id === CANAL ? 'owned' : id === PELI || id === OTRA ? 'iptv_gone' : 'engine',
     isVodId: (id: string) => id === PELI || id === OTRA,
+    /* Con IPTV Xtream: `status()` dice algo (sin ella, `vod_unavailable`). */
+    vod: { status: () => ({ state: 'ready' }) } as unknown as IptvService['vod'],
     titleOf: () => 'La 1',
     subscribe: () => () => undefined,
     openInput: async () => {

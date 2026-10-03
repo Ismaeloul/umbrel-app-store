@@ -450,3 +450,62 @@ describe('RangeCache y toVodError', () => {
     expect(code(new AppError('vod_unsupported'))).toBe('vod_unsupported');
   });
 });
+
+describe('VodSession: ajustes del Paso 0 (docs/analisis/paso0-2026-10-03)', () => {
+  it('el proveedor no contesta a la primera: plazo corto y reintento, sin error hacia abajo', async () => {
+    const { origin, vod } = await rig({ hangOpens: 1 });
+    const session = vod.session(origin.url('1.mkv'), 'mkv', {
+      limits: { ...FAST, firstByteMs: 300 },
+    });
+    const part = await rawGet(session.inputUrl, { range: 'bytes=100-199' });
+    expect(part.status).toBe(206);
+    expect(part.body.equals(small.subarray(100, 200))).toBe(true);
+    expect(origin.stats.hung).toBe(1);
+    expect(session.stats().timeouts).toBe(1);
+  });
+
+  it('sin respuesta más veces de las que se reintenta: vod_timeout', async () => {
+    const { origin, vod } = await rig({ hangOpens: 5 });
+    const session = vod.session(origin.url('1.mkv'), 'mkv', {
+      limits: { ...FAST, firstByteMs: 200, firstByteRetries: 2 },
+    });
+    const part = await rawGet(session.inputUrl, { range: 'bytes=0-99' });
+    expect(part.headers[VOD_ERROR_HEADER]).toBe('vod_timeout');
+    expect(origin.stats.hung).toBe(3);
+  });
+
+  it('ritmo: ffmpeg lee como mucho paceFactor × la tasa del título (tras el arranque)', async () => {
+    const { origin, vod } = await rig();
+    const session = vod.session(origin.url('2.mkv'), 'mkv', {
+      limits: { ...FAST, paceFactor: 1, paceBurstS: 1, paceMinBytesPerS: 1 },
+    });
+    session.setPace(2 * MIB);
+    const open = await openGet(session.inputUrl, 'bytes=0-');
+    let bytes = 0;
+    open.res.on('data', (chunk: Buffer) => {
+      bytes += chunk.length;
+    });
+    open.res.resume();
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    open.close();
+    /* Arranque (2 MiB) + 1 s a 2 MiB/s + lo que va de camino; sin ritmo serían los 64 MiB. */
+    expect(bytes).toBeGreaterThan(1 * MIB);
+    expect(bytes).toBeLessThan(7 * MIB);
+    expect(session.stats().pacedMs).toBeGreaterThan(0);
+    expect(session.stats().paceBytesPerS).toBe(2 * MIB);
+  });
+
+  it('release() suelta la conexión con el proveedor y la siguiente lectura reabre', async () => {
+    const { origin, vod } = await rig({ rateMbps: 40 });
+    const session = vod.session(origin.url('1.mkv'), 'mkv', { limits: FAST });
+    const open = await openGet(session.inputUrl, 'bytes=0-');
+    await until(() => origin.stats.open === 1);
+    await session.release();
+    await until(() => origin.stats.open === 0);
+    expect(session.connections()).toBe(0);
+    open.close();
+    const part = await rawGet(session.inputUrl, { range: 'bytes=3000000-3000099' });
+    expect(part.body.equals(small.subarray(3_000_000, 3_000_100))).toBe(true);
+    expect(origin.stats.maxOpen).toBe(1);
+  });
+});
