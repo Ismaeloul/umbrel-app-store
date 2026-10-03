@@ -145,6 +145,17 @@ export const ESPERADOS: readonly Esperado[] = [
   { q: 'uk: laliga tv', top: ['laliga/UK'] },
   { q: 'de: dazn 1', top: ['dazn 1/DE', 'dazn 1'] },
   { q: 'sport 1', top: ['sport 1/DE|sport 1/PT', 'sport 1/DE|sport 1/PT'] },
+  /* Con la primera letra en mayúscula, como la pone el teclado del iPhone: la caja no cuenta. */
+  { q: 'Es la 1', top: LA1_TOP, nunca: LA1_NUNCA, fuera: ['la 10'] },
+  { q: 'Esp dazn', top: ['dazn 1', 'dazn 2', 'dazn 3'] },
+  { q: 'Es dazn', top: ['dazn 1', 'dazn 2', 'dazn 3'] },
+  { q: 'Dazn', top: ['dazn 1', 'dazn 2', 'dazn 3'] },
+  { q: 'Tele 5', top: ['telecinco', 'tele 5/DE'] },
+  {
+    q: 'M+ laliga',
+    top: ['movistar laliga', 'movistar laliga 2', 'movistar laliga 2|movistar laliga 3'],
+  },
+  { q: 'Uk: laliga tv', top: ['laliga/UK'] },
 ];
 
 /** Comprueba una fila de esperados.ts contra una lista ya ordenada de etiquetas. */
