@@ -42,7 +42,14 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
     blanco). Dentro de la web sale otro «feísimo» (`capturas/pendiente/logo-feo-dentro-app.png`: el de la cabecera,
     favicon y PWA en `apps/web/public/icon*.{svg,png}`). Cambiar todos (cabecera, favicon, iconos de la PWA,
     manifiesto) por el del menú de Umbrel.
-11. **App de iPhone: al final, con el Mac de su hermano** (simulador de iPhone y cambios al momento, mucho más
+11. **Programación (EPG), experimental.** Su IPTV sí tiene guía (Ajustes → IPTV: «93 canales con programación»,
+    pero eso es solo lo que guardamos hoy: canales de España, 48 h y programas que parecen partidos, docs/iptv.md
+    §3.6). Isma quiere probar un **botón nuevo «Programación»** con una parrilla como la de la tele: a la
+    izquierda la lista de canales con EPG y a la derecha la línea de tiempo del día con cada programa en su hueco.
+    Va a mandar una foto de referencia. Implica guardar la guía completa (todos los programas, no solo partidos;
+    ojo memoria) y quizá «ahora / después» en Canales. Idea aparte, para valorar: que la guía rellene partidos
+    que falten en la agenda (no sustituir a futbolenlatv: la guía cubre pocos días y su texto es libre).
+12. **App de iPhone: al final, con el Mac de su hermano** (simulador de iPhone y cambios al momento, mucho más
     práctico que compilar en GitHub y bajar la IPA). Primero pulir al máximo la web; la app irá basada en la web.
 
 Nota: la IPTV de la 0.8.3 «parece que va bien» (Isma, 2-oct).
