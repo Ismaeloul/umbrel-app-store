@@ -1438,6 +1438,8 @@ export function demoVodTitle(id: string): VodTitle | null {
           rating: e.rating,
         })),
       plot: series.seasonPlots[n] ?? null,
+      // Una temporada por año desde el estreno (la de especiales, sin fecha).
+      airDate: series.released && n > 0 ? dayAfter(series.released, (n - 1) * 364) : null,
     })),
     main: seriesMain(
       series.episodes.map((e) => ({

@@ -78,6 +78,13 @@ describe('demo de Películas y series', () => {
     expect(parts.trailer).toMatch(/^[\w-]{11}$/);
     // Lo que el servidor saca de más de Xtream: resumen de temporada, emisión y nota del episodio.
     expect(parts.seasons[0]?.plot).toMatch(/Fábrica Nacional/);
+    expect(parts.seasons.map((season) => season.airDate?.slice(0, 4))).toEqual([
+      '2017',
+      '2018',
+      '2019',
+      '2020',
+      '2021',
+    ]);
     expect(parts.seasons[0]?.episodes[1]).toMatchObject({ airDate: '2017-05-09' });
     expect(parts.seasons[0]?.episodes[1]?.rating).toBeGreaterThan(0);
     const office = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.series)) as VodSeries;

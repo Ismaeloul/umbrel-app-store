@@ -224,9 +224,11 @@ describe('serie', () => {
     expect(document.querySelector('.cine-hero__original')?.textContent).toBe('The Office (US)');
     expect(within(details).getByText('The Office (US)')).toBeInTheDocument();
     expect(document.querySelector('.cine-hero__meta')?.textContent).toContain('+12');
-    // …y, en la temporada 1, su resumen y la emisión y la nota de cada episodio.
+    // …y, en la temporada 1, su año, su resumen y la emisión y la nota de cada episodio.
+    expect(document.querySelector('.cine-seasons__count')?.textContent).toBe('2 episodios');
     fireEvent.click(screen.getByRole('button', { name: 'Temporada 1' }));
     expect(await screen.findByText(/le graba un equipo de documentales/)).toBeInTheDocument();
+    expect(document.querySelector('.cine-seasons__count')?.textContent).toBe('1 episodio · 2005');
     const pilot = document.querySelector('.cine-episode .cine-episode__meta');
     expect(pilot?.textContent).toContain('24 mar 2005');
     expect(pilot?.textContent).toContain('7,4');

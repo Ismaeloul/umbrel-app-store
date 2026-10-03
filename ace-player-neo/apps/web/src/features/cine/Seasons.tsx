@@ -8,7 +8,8 @@
      «s02» se ven como «Temporada 2» (model.ts, seasonName).
    - La temporada elegida viaja en la URL (`&temporada=`); sin ella, la del
      botón principal (el episodio por el que se va) o la primera.
-   - Debajo, «10 episodios», el resumen de la temporada si el proveedor lo da
+   - Debajo, «10 episodios · 2006» (el año, si el proveedor da la fecha de la
+     temporada), el resumen de la temporada si el proveedor lo da
      (`overview`, recortado con «Más») y la lista (EpisodeList.tsx). */
 
 import type { VodSeries } from '@ace/shared';
@@ -104,8 +105,13 @@ export function Seasons({ series }: { series: VodSeries }) {
         </div>
       )}
       <p className="cine-seasons__count">
-        {series.seasons.length < 2 ? `${seasonName(season.n, season.name)} · ` : ''}
-        {episodesText(season.episodes.length)}
+        {[
+          series.seasons.length < 2 ? seasonName(season.n, season.name) : null,
+          episodesText(season.episodes.length),
+          /^\d{4}/.exec(season.airDate ?? '')?.[0] ?? null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       </p>
       {season.plot ? (
         <Synopsis key={season.n} plot={season.plot} className="cine-seasons__plot" />
