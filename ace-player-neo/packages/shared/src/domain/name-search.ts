@@ -229,20 +229,36 @@ export function nameSearchWords(value: string): string[] {
   text = text.replace(FPS_RE, ' ').replace(TVE_AFTER_RE, '$1').replace(TVE_NUMBER_RE, 'la $1');
   /* «M+» y «Movistar Plus+» sueltos (sin otra palabra detrás) también son Movistar. */
   text = text.replace(/\bm\s*\+/gu, ' movistar ').replace(/\bmovistar\s*plus\b\+?/gu, ' movistar ');
-  const words: string[] = [];
-  for (const raw of text.split(/[^\p{L}\p{N}]+/u)) {
-    if (!raw || NOISE_WORDS.has(raw) || RESOLUTION_RE.test(raw)) continue;
-    if (/^\d{2,3}fps$/u.test(raw) || /^(?:2160|1080|720)p\d{2}$/u.test(raw)) continue;
-    const number = NUMBER_WORDS[raw];
-    if (number !== undefined && (words.length > 0 || number === '0')) {
-      words.push(number);
-      continue;
-    }
-    words.push(raw);
-  }
+  const words = finishWords(text.split(/[^\p{L}\p{N}]+/u));
   /* «full hd»: el «full» suelto que queda delante de una calidad quitada. */
   if (words.length > 1 && words[words.length - 1] === 'full' && /\bfull\s*hd\b/u.test(text)) {
     words.pop();
+  }
+  return words;
+}
+
+/* La calidad pegada detrás de un número: «LA1HD» → «la1», «DAZN1FHD» → «dazn1» (las listas de AceStream). */
+const GLUED_QUALITY_RE = /^(\p{L}[\p{L}\p{N}]*\d)(?:uhd|fhd|hd|sd|4k)$/u;
+
+/*
+ * El último paso de `nameSearchWords` y `keySearchWords`, sobre las palabras
+ * ya troceadas: fuera lo que no dice qué canal es (calidad, códec,
+ * fotogramas, resoluciones, adornos), la calidad pegada, «24 horas» = «24h»,
+ * los números con letra detrás de otra palabra y «A3» a secas = Antena 3.
+ */
+function finishWords(raws: readonly string[]): string[] {
+  const words: string[] = [];
+  for (let i = 0; i < raws.length; i += 1) {
+    let raw = raws[i] as string;
+    if (!raw || NOISE_WORDS.has(raw) || RESOLUTION_RE.test(raw)) continue;
+    if (/^\d{2,3}fps$/u.test(raw) || /^(?:2160|1080|720)p\d{2}$/u.test(raw)) continue;
+    if (raw === '24' && raws[i + 1] === 'horas') {
+      raw = '24h';
+      i += 1;
+    }
+    raw = GLUED_QUALITY_RE.exec(raw)?.[1] ?? raw;
+    const number = NUMBER_WORDS[raw];
+    words.push(number !== undefined && (words.length > 0 || number === '0') ? number : raw);
   }
   /* «A3» a secas es Antena 3 (con la calidad detrás, `channelSpelling` no lo ve: «A3 HD»). */
   if (words.length === 1 && words[0] === 'a3') return ['antena', '3'];
@@ -303,15 +319,7 @@ const NORMALIZED_KEY_RE = /^[a-z0-9]+(?: [a-z0-9]+)*$/;
  */
 export function keySearchWords(key: string): string[] {
   if (!NORMALIZED_KEY_RE.test(key)) return nameSearchWords(key);
-  const words: string[] = [];
-  for (const raw of key.split(' ')) {
-    if (NOISE_WORDS.has(raw) || RESOLUTION_RE.test(raw)) continue;
-    if (/^\d{2,3}fps$/u.test(raw) || /^(?:2160|1080|720)p\d{2}$/u.test(raw)) continue;
-    const number = NUMBER_WORDS[raw];
-    words.push(number !== undefined && (words.length > 0 || number === '0') ? number : raw);
-  }
-  if (words.length === 1 && words[0] === 'a3') return ['antena', '3'];
-  return words;
+  return finishWords(key.split(' '));
 }
 
 /** Las palabras de un nombre unidas por espacios («ES► LA 1 FHD» → «la 1»). */

@@ -68,7 +68,8 @@ persona:
    **A3 a secas → Antena 3**; **A3 Series → Atreseries**).
 6. «La 1 TVE», «Clan RTVE» → sin la cadena; «TVE 1» → la 1.
 7. Trocea en letras y números («3/24» → 3 24, «BARÇA» → barca) y quita lo que no dice qué canal es: calidad,
-   códec, fotogramas, resoluciones (1080p, 720p50…), VIP, RAW.
+   códec, fotogramas, resoluciones (1080p, 720p50…), VIP, RAW; también la calidad pegada detrás de un número
+   («LA1HD» → la1, «DAZN1FHD» → dazn1). «24 horas» es «24h».
 8. **Números con letra** (es, ca, it, en, fr, pt; del 0 al 10) **detrás de otra palabra**: «la uno» = «la 1»,
    «RAI UNO» = «RAI 1», «BBC ONE» = «BBC 1»; una palabra que empieza el nombre se deja («Cuatro» y «Ten» son
    canales). «cero» siempre es 0 (el «#0» de Movistar).
@@ -172,7 +173,7 @@ antes de pedir (sin cambios), así que el móvil no hace nada al teclear.
 - `packages/shared/test/corpus/canales-iptv.ts`: el **corpus** (~1 500 nombres escritos a mano con la forma de
   las listas; nada sale de la lista real de Isma) y `corpusIptvGrande(n)` hasta 20 000 o 100 000 con relleno de
   otros países.
-- `packages/shared/test/corpus/esperados.ts`: **la tabla consulta → los primeros** (68 consultas: «la 1» de 7
+- `packages/shared/test/corpus/esperados.ts`: **la tabla consulta → los primeros** (71 consultas: «la 1» de 8
   formas, «la 2», «la 10», «tele 5», «a3», «m+ laliga», «hypermotion», «dazn», «dazn 1», «#vamos», «#0»,
   «champions», «tv3», «rai uno», «uk: laliga tv»…), con lo que nunca puede salir antes («la 10», «laliga 1»…)
   ni salir.
@@ -230,3 +231,6 @@ orden y las filas juntas porque los da el servidor. Si se quiere el resaltado en
 - «Tele 5» alemán comparte clave con Telecinco: son filas distintas por el país, pero el emparejado con la
   agenda los distingue igual que antes (otro país no se empareja).
 - Los números con letra solo del 0 al 10 y en seis idiomas.
+- Los nombres en otros alfabetos (cirílico, árabe…) no se pueden buscar: la clave del catálogo
+  (`normalizeChannelKey`, con la matriz 0.6.59 congelada) se queda solo con letras latinas y números. Ya pasaba
+  antes; el módulo común sí los pliega (para Pelis y series).

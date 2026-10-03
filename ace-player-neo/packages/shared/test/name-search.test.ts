@@ -52,6 +52,9 @@ describe('nameSearchWords: las palabras de un nombre tal cual lo da el panel', (
     ['ES: LA 1 FULL HD', 'la 1'],
     ['ES: LA 1 ⚽', 'la 1'],
     ['LA 1 HD --> ELCANO', 'la 1'],
+    ['LA1HD', 'la1'],
+    ['DAZN1FHD', 'dazn1'],
+    ['CANAL 24 HORAS', 'canal 24h'],
     /* Reservas y copias (el número de la copia no es el del canal). */
     ['ES: LA 1 (backup)', 'la 1'],
     ['ES: LA 1 #2', 'la 1'],
