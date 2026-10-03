@@ -92,7 +92,11 @@ import { useOnScreenHash } from './play.ts';
 import { selectChannel, useSelection } from './selection.ts';
 import { useChannelActions } from './useChannelActions.tsx';
 import { VirtualList } from './VirtualList.tsx';
+import { registerIptvChannelsDemo } from '../search/demo-register.ts';
 import './library.css';
+
+/* En la demo, «En tu IPTV» del filtro sin haber pasado por Buscar. */
+registerIptvChannelsDemo();
 
 type Row =
   | { type: 'channel'; collection: LibraryCollection; item: Item }
@@ -343,6 +347,7 @@ export default function LibraryView({ active }: ViewProps) {
         onToggleFavorite={() => actions.toggleFavorite(item)}
         menuItems={actions.menuFor(item, collection, { withPlay: selectOnClick })}
         enterIndex={entering ? Math.min(index, 12) : null}
+        highlight={q}
       />
     );
   };
@@ -482,6 +487,7 @@ export default function LibraryView({ active }: ViewProps) {
                   onScreen={onScreen === channel.id}
                   onAir={onAir(iptvRow)}
                   iptv
+                  highlight={q}
                   ace={channel.library.length}
                   subtitle={iptvSubtitle(channel)}
                   tags={iptvTags(channel)}

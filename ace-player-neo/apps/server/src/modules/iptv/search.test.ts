@@ -205,7 +205,8 @@ describe('alias, relleno escrito y consulta pegada (diagnóstico 0.8.2, E1)', ()
     expect(searchQueryAliases('champions hockey league')).toEqual([]);
     expect(searchQueryAliases('champions cup')).toEqual([]);
     expect(searchQueryAliases('a3').map((alias) => alias.key)).toEqual(['antena 3']);
-    expect(searchQueryAliases('a3 series')).toEqual([]);
+    /* «a3 series» no es «antena 3 series»: es el apodo de Atreseries (0.9.0, docs/buscador.md). */
+    expect(searchQueryAliases('a3 series').map((alias) => alias.key)).toEqual(['atreseries']);
     expect(searchQueryAliases('rtve').map((alias) => alias.key)).toContain('teledeporte');
     expect(searchQueryAliases('tve internacional')).toEqual([]);
   });

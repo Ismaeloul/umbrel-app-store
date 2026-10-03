@@ -418,6 +418,7 @@ export default function SearchView({ active }: ViewProps) {
                     onAir={onAir(item)}
                     iptv={iptv !== null}
                     ace={aceCount}
+                    highlight={query}
                     subtitle={idState ? IPTV_ID_SUBTITLE[idState] : undefined}
                     tags={iptvChannel ? iptvTags(iptvChannel) : undefined}
                     onPlay={() => actions.play(channel, 'buscar')}
@@ -477,6 +478,7 @@ export default function SearchView({ active }: ViewProps) {
                       onAir={onAir(row)}
                       iptv
                       ace={ace}
+                      highlight={query}
                       subtitle={iptvSubtitle(channel)}
                       tags={iptvTags(channel)}
                       /* IPTV primero y, de respaldo, sus AceStream de tu biblioteca (§19). */
@@ -600,6 +602,7 @@ export default function SearchView({ active }: ViewProps) {
                     onAir={onAir(result)}
                     iptv={iptv !== null}
                     ace={iptv ? ace : 0}
+                    highlight={query}
                     onPlay={() => actions.play(channel, 'buscar')}
                     onToggleFavorite={() => actions.toggleFavorite(result)}
                     menuItems={actions.menuFor(result, 'search')}

@@ -584,9 +584,9 @@ describe('buscador y biblioteca (docs/iptv.md §14)', () => {
     ).toEqual([
       ['DAZN 1', null, ['uhd', 'fhd', 'hd', 'sd']],
       ['DAZN LaLiga', null, ['fhd', 'hd']],
-      /* Otro país, detrás de todos los de España (§19). */
-      ['DAZN 1', 'UK', []],
+      /* Otro país, detrás de todos los de España (§19); entre ellos, la mejor calidad (0.9.0, docs/buscador.md). */
       ['DAZN 1', 'DE', ['hd']],
+      ['DAZN 1', 'UK', []],
     ]);
     /* La fila de «DAZN 1» arranca por la 1080p. */
     expect(dazn.channels[0]?.quality).toBe('fhd');
@@ -595,6 +595,21 @@ describe('buscador y biblioteca (docs/iptv.md §14)', () => {
     expect(r.service.searchChannels('canal+').channels.map((channel) => channel.country)).toEqual([
       'FR',
     ]);
+  });
+
+  it('un favorito IPTV desempata delante en Buscar y en la pestaña IPTV (docs/buscador.md), nunca de lo igual', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const laliga = r.service
+      .searchChannels('dazn laliga')
+      .channels.find((channel) => channel.title === 'DAZN LaLiga')?.id as string;
+    expect(r.service.searchChannels('dazn').channels[0]?.title).toBe('DAZN 1');
+    await favorite(r, laliga, 'DAZN LaLiga');
+    expect(r.service.searchChannels('dazn').channels[0]?.title).toBe('DAZN LaLiga');
+    const tab = await r.service.browse({ q: 'dazn' });
+    expect(tab.channels[0]?.title).toBe('DAZN LaLiga');
+    /* Lo igual sigue primero: «dazn 1» da DAZN 1 aunque DAZN LaLiga sea favorito. */
+    expect(r.service.searchChannels('dazn 1').channels[0]?.title).toBe('DAZN 1');
   });
 
   it('un canal con 5 variantes: 4 carteles 1080p, 4K, 720p y SD; la reserva, de respaldo del relé', async () => {

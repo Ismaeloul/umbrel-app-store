@@ -347,6 +347,7 @@ export function IptvTab({ text, active, actions, onScreen, onAir, onCategoryName
                     onScreen={onScreen === channel.id}
                     onAir={onAir(row)}
                     iptv
+                    highlight={q}
                     tags={rowTags(channel)}
                     subtitle={channelSubtitle(channel, {
                       inCategory: screen === 'category',
