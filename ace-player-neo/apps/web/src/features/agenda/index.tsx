@@ -414,7 +414,11 @@ export default function Agenda({ active }: ViewProps) {
   // frenan el scroll; una fila de tarjetas solo se queda el gesto si todavía
   // puede desplazarse hacia ese lado.
 
-  const suppressClick = useRef(0);
+  /* El clic que el navegador manda al acabar un deslizamiento (si lo manda)
+     no abre la tarjeta donde empezó. Va ligado al gesto, no a un reloj: se
+     traga UN clic y se olvida al empezar otro toque o al usar el teclado
+     (con un temporizador fallaba con la máquina cargada). */
+  const suppressClick = useRef(false);
   const resetDrag = () => {
     const el = listRef.current;
     if (el) el.style.transform = '';
@@ -436,7 +440,7 @@ export default function Agenda({ active }: ViewProps) {
     },
     onSwipe: (direction) => {
       resetDrag();
-      suppressClick.current = performance.now() + 400;
+      suppressClick.current = true;
       goDay(direction === 'next' ? 1 : -1);
     },
     onCancel: resetDrag,
@@ -711,9 +715,16 @@ export default function Agenda({ active }: ViewProps) {
           role="tabpanel"
           aria-labelledby={day ? `agenda-dia-${day}` : undefined}
           className="agenda-panel"
+          onTouchStartCapture={() => {
+            suppressClick.current = false;
+          }}
+          onKeyDownCapture={() => {
+            suppressClick.current = false;
+          }}
           onClickCapture={(event) => {
             // Un deslizamiento no puede acabar abriendo la tarjeta donde empezó.
-            if (performance.now() < suppressClick.current) {
+            if (suppressClick.current) {
+              suppressClick.current = false;
               event.preventDefault();
               event.stopPropagation();
             }
