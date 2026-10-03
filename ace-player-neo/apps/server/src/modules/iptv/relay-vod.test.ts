@@ -18,7 +18,8 @@ import { AppError } from '../../core/errors.js';
 import { loopbackHost } from '../../../test/fake-engine/test-utils.js';
 import { openGet, rawGet, until } from '../../../test/fake-vod/http.js';
 import { createFakeVodOrigin, type FakeVodOrigin } from '../../../test/fake-vod/origin.js';
-import { createVodHost, type VodHost } from '../../../test/fake-vod/vod-host.js';
+import { createVodHost, netOpener, type VodHost } from '../../../test/fake-vod/vod-host.js';
+import { createSystemClock } from '../../core/clock.js';
 import { VOD_ERROR_HEADER, VOD_REASON_HEADER } from '../remux/vod/reader.js';
 import { RangeCache, toVodError, type VodSession } from './relay-vod.js';
 
@@ -277,6 +278,74 @@ describe('VodSession', () => {
     const busy = await rawGet(closed.inputUrl, { range: 'bytes=0-99' });
     expect(busy.headers[VOD_ERROR_HEADER]).toBe('vod_busy');
     expect(vod.opens.length).toBe(opens);
+  });
+
+  it('la plaza de la cuenta no se cuenta a sí misma: máx. 1 con otro aparato → vod_busy sin abrir (M1)', async () => {
+    const { origin, vod } = await rig();
+    let session: VodSession | null = null;
+    let seen = -1;
+    /* Como `vodAccountGate`: activas 1 (otro aparato), máximo 1; las nuestras, las del relé. */
+    const gate = async (): Promise<void> => {
+      seen = session?.connections() ?? -1;
+      const foreign = Math.max(0, 1 - seen);
+      if (foreign >= 1) throw new AppError('vod_busy');
+    };
+    session = vod.session(origin.url('1.mkv'), 'mkv', {
+      limits: FAST,
+      deps: { accountGate: gate },
+    });
+    const opens = vod.opens.length;
+    const busy = await rawGet(session.inputUrl, { range: 'bytes=0-99' });
+    expect(seen).toBe(0);
+    expect(busy.headers[VOD_ERROR_HEADER]).toBe('vod_busy');
+    expect(vod.opens.length).toBe(opens);
+  });
+
+  it('un 5xx o un ECONNRESET al abrir gastan reaperturas con espera; solo agotadas cortan la película (M2)', async () => {
+    const { origin, vod } = await rig();
+    const realOpen = netOpener(createSystemClock());
+    let fails = 2;
+    let attempts = 0;
+    const failing = (): Error =>
+      attempts % 2 === 0
+        ? new AppError('http_502')
+        : Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' });
+    const drops: string[] = [];
+    const flaky = vod.session(origin.url('1.mkv'), 'mkv', {
+      limits: FAST,
+      deps: {
+        open: async (request) => {
+          attempts += 1;
+          if (fails > 0) {
+            fails -= 1;
+            throw failing();
+          }
+          return realOpen(request);
+        },
+      },
+    });
+    flaky.onDropped((code) => drops.push(code));
+    const ok = await rawGet(flaky.inputUrl, { range: 'bytes=100-199' });
+    expect(ok.status).toBe(206);
+    expect(ok.body.equals(small.subarray(100, 200))).toBe(true);
+    expect(attempts).toBe(3);
+    expect(drops).toEqual([]);
+
+    let tries = 0;
+    const dead = vod.session(origin.url('1.mkv'), 'mkv', {
+      limits: FAST,
+      deps: {
+        open: async () => {
+          tries += 1;
+          throw new AppError('http_503');
+        },
+      },
+    });
+    dead.onDropped((code) => drops.push(code));
+    const gone = await rawGet(dead.inputUrl, { range: 'bytes=0-99' });
+    expect(gone.headers[VOD_ERROR_HEADER]).toBe('vod_dropped');
+    expect(tries).toBe(1 + FAST.reopenBackoffMs.length);
+    expect(drops).toEqual(['vod_dropped']);
   });
 
   it('reuseRedirect apagado: la URL original cada vez; encendido: la final, y con un 404 vuelve a la original', async () => {

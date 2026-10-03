@@ -1252,8 +1252,11 @@ export class IptvRelayImpl implements IptvRelay {
           busyTry += 1;
           continue;
         }
+        /* Con Range es el VOD: su id no es un canal de la lista, y un 404 de
+           una película no se arregla refrescando la lista del directo. */
         if (
           !refreshed &&
+          !limits.range &&
           this.deps.refreshRef &&
           (status === 401 || status === 403 || status === 404)
         ) {

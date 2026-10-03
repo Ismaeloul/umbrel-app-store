@@ -160,13 +160,17 @@ function addedMatch(payload: FootballSchedule, addition: GuideAgendaAddition): F
 
 /** Por hora de saque; los que no la tienen («Por confirmar»), donde estaban. */
 function byKickoff(matches: readonly FootballMatch[]): FootballMatch[] {
-  return matches
-    .map((match, index) => ({ match, index, at: matchKickoff(match) }))
-    .sort((a, b) => {
-      if (a.at === null || b.at === null) return a.index - b.index;
-      return a.at - b.at || a.index - b.index;
-    })
-    .map((item) => item.match);
+  /* Un solo comparador que mezclara «por índice» (sin hora) y «por hora» no
+     es transitivo y `sort` puede dar cualquier orden: los que tienen hora se
+     ordenan aparte y vuelven a los huecos que ocupaban; los demás, quietos. */
+  const items = matches.map((match, index) => ({ match, index, at: matchKickoff(match) }));
+  const timed = items
+    .filter((item): item is typeof item & { at: number } => item.at !== null)
+    .sort((a, b) => a.at - b.at || a.index - b.index);
+  let next = 0;
+  return items.map((item) =>
+    item.at === null ? item.match : (timed[next++]?.match as FootballMatch),
+  );
 }
 
 /** La agenda con lo que dice la guía; la misma agenda (el mismo objeto) si la guía no dice nada. */

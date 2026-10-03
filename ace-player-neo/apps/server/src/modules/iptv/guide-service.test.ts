@@ -358,6 +358,59 @@ describe('Guía TV en el servicio (§20.5)', () => {
     expect(again).toMatchObject({ failedAt: null, partial: false, all: before.all });
   });
 
+  it('una guía que solo cubre hoy se vuelve a pedir poco después de acabarse, no a las 8 h; y si el XMLTV falla entonces, no se cambia por la corta (M8)', async () => {
+    const day = 24 * HOUR;
+    const r = await rig({ fake: { guiaCompleta: 'hoy' } });
+    /* Las 20:00: la de hoy se acaba en ~4 h. */
+    r.core.clock.set(Math.floor(r.core.clock.now() / day) * day + 20 * HOUR);
+    const net = patchGuideNet(r);
+    await saveXtream(r);
+    const scheduled: number[] = [];
+    const service = r.service as unknown as {
+      schedule(name: string, ms: number, task: () => void): void;
+    };
+    const original = service.schedule.bind(r.service);
+    service.schedule = (name, ms, task) => {
+      if (name === 'guide') scheduled.push(ms);
+      original(name, ms, task);
+    };
+    await downloadGuide(r);
+    const before = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(before).toMatchObject({ state: 'ready', partial: false });
+    const next = scheduled.at(-1) as number;
+    expect(next).toBeLessThan(IPTV_REFRESH.guideMs);
+    expect(next).toBeGreaterThan(2 * HOUR);
+    expect(next).toBeLessThan(7 * HOUR);
+    /* Antes de esa hora no se pide nada; a esa hora, la de mañana. */
+    const calls = net.calls.xmltv;
+    r.core.clock.advance(next - 60_000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(net.calls.xmltv).toBe(calls);
+    r.core.clock.advance(61_000);
+    await waitFor('descarga de la guía de mañana', () => net.calls.xmltv > calls);
+    await r.service.idle();
+    const after = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(after.version).not.toBe(before.version);
+    expect(after.coveredTo).toBeGreaterThan(before.coveredTo ?? 0);
+  });
+
+  it('un fallo del XMLTV mientras la guía completa aún tiene programación no la cambia por la corta, también con la nueva cadencia (M8)', async () => {
+    const day = 24 * HOUR;
+    const r = await rig({ fake: { guiaCompleta: 'hoy' } });
+    r.core.clock.set(Math.floor(r.core.clock.now() / day) * day + 20 * HOUR);
+    const net = patchGuideNet(r);
+    await saveXtream(r);
+    await downloadGuide(r);
+    const before = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    net.xmltv = 'falla';
+    net.shortEpg = 'uno';
+    r.core.clock.advance(2 * HOUR);
+    await downloadGuide(r);
+    const after = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(after).toMatchObject({ version: before.version, partial: false, all: before.all });
+    expect(after.failedAt).not.toBe(null);
+  });
+
   it('un xmltv.php que se corta SIN error (PHP se pasa de tiempo: 200, sin </tv>) no cambia la guía completa: se queda la de antes, queda dicho y se reintenta a los 30 min', async () => {
     const r = await rig({ fake: { guiaCompleta: true } });
     const net = patchGuideNet(r);

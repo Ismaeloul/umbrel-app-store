@@ -36,6 +36,8 @@ export interface RemuxDeps extends CoreDeps {
   readonly launcher?: ProcessLauncher;
   /** Quién lanza el ffmpeg del VOD (salida por la tubería). Por defecto `spawn('ffmpeg')`. */
   readonly vodLauncher?: VodProcessLauncher;
+  /** Cómo se lee el índice de una película (tests). Por defecto, por HTTP con Range sobre el relé. */
+  readonly readVodIndex?: (inputUrl: string, signal?: AbortSignal) => Promise<VodIndex>;
   /**
    * Raíz de /proc para buscar ffmpeg huérfanos con `ace_session=`. Por defecto
    * `/proc` en Linux y nada en otros sistemas; `null` lo desactiva.

@@ -256,8 +256,16 @@ describe('el título manda sobre la categoría', () => {
   it('una marca en el título gana', () => {
     expect(both(' (FR)', 'ES | ANIMACIÓN')).toEqual(['frances']);
     expect(both(' (LAT)', 'ES | ACCIÓN')).toEqual(['latino']);
-    expect(both('ES - ', 'VOSE')).toEqual(['castellano']);
     expect(both(' [VOSE]', 'ES | DRAMA')).toEqual(['vose']);
+  });
+
+  it('un castellano flojo en una categoría VOSE es VOSE, salvo firme o MULTI (M3)', () => {
+    expect(both('ES - ', 'VOSE')).toEqual(['vose']);
+    expect(both('ES| ', 'PELÍCULAS VOSE')).toEqual(['vose']);
+    expect(both(' [Castellano]', 'VOSE')).toEqual(['castellano']);
+    expect(both('[ES] [MULTI] ', 'VOSE')).toEqual(['castellano']);
+    /* Una categoría que dice castellano: el título decide. */
+    expect(both('ES - ', 'VOSE | CASTELLANO')).toEqual(['castellano']);
   });
 
   it('un castellano flojo en una categoría latina es latino', () => {

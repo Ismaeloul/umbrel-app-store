@@ -487,6 +487,36 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
     clock.clearTimeout(timer);
   }
 
+  /**
+   * Una respuesta que llegó (o llega) tarde, tras vencer el plazo de
+   * cabeceras: se tira y se espera a su socket como con `settleUnused`. Si
+   * el transporte la rechazó (abortada), no hay nada que esperar. Como mucho
+   * `RELEASE_WAIT_MS` en total.
+   */
+  async function settleLate(pending: Promise<TransportResponse>): Promise<void> {
+    const started = clock.now();
+    let timer: TimerHandle | null = null;
+    const late = await Promise.race([
+      pending.catch(() => null),
+      new Promise<null>((resolve) => {
+        timer = clock.setTimeout(() => resolve(null), RELEASE_WAIT_MS);
+      }),
+    ]);
+    clock.clearTimeout(timer);
+    if (!late?.closed) return;
+    late.body.destroy();
+    const left = RELEASE_WAIT_MS - (clock.now() - started);
+    if (left <= 0) return;
+    let wait: TimerHandle | null = null;
+    await Promise.race([
+      late.closed,
+      new Promise<void>((resolve) => {
+        wait = clock.setTimeout(resolve, left);
+      }),
+    ]);
+    clock.clearTimeout(wait);
+  }
+
   async function openStream(url: string, options: OpenStreamOptions): Promise<OpenedStream> {
     const { iptv } = options;
     const identity = options.identity === true;
@@ -523,9 +553,10 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
         if (!controller.signal.aborted) controller.abort(new AppError('fetch_timeout'));
       }, headersMs);
       let response: TransportResponse;
+      let pending: Promise<TransportResponse> | null = null;
       try {
         if (controller.signal.aborted) throw reasonOf(controller.signal);
-        const pending = deps.transport({
+        pending = deps.transport({
           url: parsed,
           addresses,
           headers: requestHeaders(options.accept, options.headers),
@@ -540,7 +571,21 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
         response = await Promise.race([pending, whenAborted(controller.signal)]);
       } catch (error) {
         release();
-        if (controller.signal.aborted) throw reasonOf(controller.signal);
+        if (controller.signal.aborted) {
+          const reason = reasonOf(controller.signal);
+          /* Plazo de cabeceras con `identity`: el reintento de quien llama no
+             puede solaparse con este socket (proveedor de una plaza, P6). */
+          if (
+            identity &&
+            pending &&
+            reason instanceof AppError &&
+            reason.code === 'fetch_timeout'
+          ) {
+            clock.clearTimeout(headersTimer);
+            await settleLate(pending);
+          }
+          throw reason;
+        }
         throw error;
       } finally {
         clock.clearTimeout(headersTimer);

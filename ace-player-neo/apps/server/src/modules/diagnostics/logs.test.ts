@@ -2,7 +2,7 @@
    resumen, fallos y registro del periodo), lo que hay guardado, los errores
    de la web y que NADA sensible sale en el zip. */
 
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { inflateRawSync, gzipSync } from 'node:zlib';
 import {
@@ -303,6 +303,28 @@ describe('POST /api/v1/diagnostics/log/download («Descargar logs»)', () => {
     expect(summary.storage.days).toBe(2);
   });
 
+  it('dos descargas a la vez van de una en una (cada una lee hasta 48 MiB en memoria)', async () => {
+    const { download, store } = await setup();
+    const target = store as NonNullable<typeof store>;
+    const readRange = target.readRange.bind(target);
+    let active = 0;
+    let most = 0;
+    vi.spyOn(target, 'readRange').mockImplementation(async (...args) => {
+      active += 1;
+      most = Math.max(most, active);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      try {
+        return await readRange(...args);
+      } finally {
+        active -= 1;
+      }
+    });
+    const [first, second] = await Promise.all([download('dia'), download('dia')]);
+    expect(first.response.statusCode).toBe(200);
+    expect(second.response.statusCode).toBe(200);
+    expect(most).toBe(1);
+  });
+
   it('sin registro en disco: el zip sale igual (con fallos.json) y lo dice', async () => {
     const { download, app } = await setup({ store: false });
     const { response, files } = await download('semana');
@@ -481,6 +503,30 @@ describe('líneas del registro', () => {
         message: 'x',
       }).level,
     ).toBe('info');
+  });
+
+  it('un fallo que manda un cliente va con origen «cliente» (su tope aparte); uno del servidor, no (H-1)', async () => {
+    const { app, services, store, dir, core } = await setup();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/diagnostics',
+      headers: web(),
+      payload: { cause: 'engine', code: 'player_stalled', message: 'desde el navegador' },
+    });
+    expect(response.statusCode).toBe(201);
+    services.diagnostics.record({ cause: 'engine', code: 'engine_down', message: 'del servidor' });
+    await store?.flush();
+    const day = madridDay(core.clock.now());
+    const text = readFileSync(path.join(dir, `registro-${day}.jsonl`), 'utf8');
+    const lines = text
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(lines.find((line) => line.msg === 'desde el navegador')).toMatchObject({
+      module: 'fallos',
+      origen: 'cliente',
+    });
+    expect(lines.find((line) => line.msg === 'del servidor')?.origen).toBeUndefined();
   });
 
   it('el arranque dice cómo terminó el anterior y si cambió la versión', async () => {

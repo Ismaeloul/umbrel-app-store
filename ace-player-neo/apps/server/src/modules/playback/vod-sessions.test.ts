@@ -235,6 +235,21 @@ describe('vodStream (docs/vod.md §9.8)', () => {
     expect(setup.events.of('stream.ready')).toHaveLength(1);
   });
 
+  it('apagar (stopAll) también cierra las sesiones VOD: el productor y el relé', async () => {
+    const iptv = fakeIptv();
+    const setup = await setupPlayback({ iptv: iptv.service });
+    const producer = stubProducer(setup);
+    const grant = await setup.runtime.service.acquireVod(
+      PELI,
+      vodQuery('visor-a'),
+      web('visor-a'),
+      live(),
+    );
+    await setup.runtime.service.stopAll(5_000);
+    expect(producer.closed).toContain(grant.session.id);
+    expect(iptv.vodInputs[0]?.closed).toBe(true);
+  });
+
   it('un VOD corta el directo IPTV y otro VOD (D-VOD11)', async () => {
     const iptv = fakeIptv();
     const setup = await setupPlayback({ iptv: iptv.service });

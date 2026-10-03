@@ -588,6 +588,38 @@ describe('openStream con identity (relé VOD)', () => {
     expect(await pending).toBe('http_458');
   });
 
+  it('plazo de cabeceras vencido: espera al socket de la respuesta que llega tarde antes de lanzar (reintento sin solaparse)', async () => {
+    let deliver: (response: TransportResponse) => void = () => undefined;
+    let close: () => void = () => undefined;
+    const transport: NetTransport = () =>
+      new Promise((resolve) => {
+        deliver = resolve as (response: TransportResponse) => void;
+      });
+    const { core, net } = setup(transport);
+    let settled = false;
+    const pending = codeOf(
+      net.openStream(VIDEO, { idleMs: 5000, headersMs: 1000, identity: true }),
+    ).then((code) => {
+      settled = true;
+      return code;
+    });
+    await settle();
+    core.clock.advance(1000);
+    await settle();
+    expect(settled).toBe(false);
+    /* La respuesta llega tarde; su socket aún no se ha soltado. */
+    deliver({
+      status: 206,
+      headers: {},
+      body: Readable.from([Buffer.from('x')]),
+      closed: new Promise<void>((resolve) => (close = resolve)),
+    });
+    await settle();
+    expect(settled).toBe(false);
+    close();
+    expect(await pending).toBe('fetch_timeout');
+  });
+
   it('sin identity no se espera al socket', async () => {
     const { transport } = closingTransport({ [VIDEO]: { status: 458 } });
     const { net } = setup(transport);

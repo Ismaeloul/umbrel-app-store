@@ -16,6 +16,7 @@ import {
   FAKE_IPTV_USER,
 } from '../../../test/fake-iptv/provider.js';
 import { FAKE_IPTV_HOST } from '../../../test/fake-iptv/net.js';
+import { TOKEN_REFRESH_WAIT_MS } from './service.js';
 import {
   IPTV_TEST_MATCH_OFFSET_MS,
   createIptvTestRig,
@@ -301,6 +302,57 @@ describe('trabajos (§3.4 y §3.5)', () => {
     await r.service.save({ kind: 'm3u', url: `${SERVER}/lista.m3u` }, signal());
     await r.service.idle();
     expect(r.service.classify(id)).toBe('iptv_gone');
+  });
+});
+
+describe('guardar con la prueba rápida fallando (M7)', () => {
+  it('lo abortado (lista y guía en marcha) se vuelve a programar', async () => {
+    const r = await rig();
+    await r.service.start();
+    await saveXtream(r);
+    const timers = r.service['timers'];
+    /* La lista y la guía estaban descargándose: sus temporizadores ya se habían consumido. */
+    for (const name of ['list', 'guide']) {
+      r.core.clock.clearTimeout(timers.get(name));
+      timers.delete(name);
+    }
+    expect(
+      await codeOf(
+        r.service.save(
+          { kind: 'xtream', server: SERVER, username: FAKE_IPTV_USER, password: 'mala' },
+          signal(),
+        ),
+      ),
+    ).toBe('iptv_auth_failed');
+    expect(timers.has('list')).toBe(true);
+    expect(timers.has('guide')).toBe(true);
+  });
+});
+
+describe('token caducado de una M3U con la guía descargándose (M6)', () => {
+  it('el canal no espera a la guía: a los 10 s sigue sin la URL nueva, y la lista se refresca detrás', async () => {
+    const r = await rig();
+    await r.service.save({ kind: 'm3u', url: `${SERVER}/lista.m3u` }, signal());
+    await r.service.idle();
+    const id = r.service.resolve({ channels: ['La 1'], scorer }).candidates[0]?.id as string;
+    expect(id).toBeTruthy();
+    /* Una descarga de la guía larga ocupa el cerrojo de los trabajos pesados. */
+    let release: () => void = () => undefined;
+    const guide = r.service['runHeavy'](
+      'guide',
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    await r.core.clock.advanceAsync(2 * 60_000);
+    let settled = false;
+    const pending = r.service['refreshRef'](id).finally(() => (settled = true));
+    await r.core.clock.advanceAsync(TOKEN_REFRESH_WAIT_MS - 1);
+    expect(settled).toBe(false);
+    await r.core.clock.advanceAsync(2);
+    expect(await pending).toBeNull();
+    release();
+    await guide;
+    await r.service.idle();
+    expect(r.service.classify(id)).toBe('owned');
   });
 });
 

@@ -33,6 +33,7 @@ import {
   LOG_DOWNLOAD_MAX_BYTES,
   LOG_MODULE_FAULTS,
   LOG_MODULE_WEB,
+  LOG_ORIGIN_CLIENT,
   LOG_STORE_MAX_BYTES,
   LOG_STORE_MAX_DAYS,
   LOGS_FILES,
@@ -61,6 +62,7 @@ import { createLogStore, type LogStore, type LogStoreBoot } from '../../core/log
 import { logStoreOf, type Logger } from '../../core/logger.js';
 import type { Services } from '../../services.js';
 import { buildDiagnosticsExport, type ExportServices } from './export.js';
+import { isClientReport } from './service.js';
 
 const deflateRaw = promisify(deflateRawCallback);
 
@@ -149,6 +151,7 @@ export function faultLineFields(entry: DiagnosticEntry): Record<string, unknown>
     ...(entry.deviceId ? { deviceId: entry.deviceId } : {}),
     ...(entry.requestId ? { reqId: entry.requestId } : {}),
     ...(entry.metrics ? { metrics: entry.metrics } : {}),
+    ...(isClientReport(entry) ? { origen: LOG_ORIGIN_CLIENT } : {}),
     msg: entry.message,
   };
 }
@@ -325,8 +328,20 @@ async function packed(name: string, text: string): Promise<ZipEntry> {
   };
 }
 
-/** Monta el zip de «Descargar logs» (sin escribir nada en el disco). */
-export async function buildLogsZip(
+/** «Descargar logs» de una en una: cada una lee hasta 48 MiB y monta el zip en memoria. */
+let zipQueue: Promise<unknown> = Promise.resolve();
+
+/** Monta el zip de «Descargar logs» (sin escribir nada en el disco), detrás de la que esté en marcha. */
+export function buildLogsZip(
+  services: LogsServices,
+  body: { readonly period?: LogPeriod | undefined; readonly web: WebDiagnostics },
+): Promise<LogsZip> {
+  const run = zipQueue.then(() => buildLogsZipNow(services, body));
+  zipQueue = run.catch(() => undefined);
+  return run;
+}
+
+async function buildLogsZipNow(
   services: LogsServices,
   body: { readonly period?: LogPeriod | undefined; readonly web: WebDiagnostics },
 ): Promise<LogsZip> {

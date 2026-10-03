@@ -188,6 +188,40 @@ describe('applyGuideAgenda', () => {
     expect(FootballScheduleSchema.parse(result)).toEqual(result);
   });
 
+  it('orden del día: los «Por confirmar» se quedan en su sitio y los demás, por hora (orden transitivo)', () => {
+    const late = fltv('fltv-late', 'Getafe', 'Osasuna', at(20), ['DAZN LaLiga']);
+    const tbc: FootballMatch = {
+      ...fltv('fltv-tbc', 'Alavés', 'Celta', at(0), ['DAZN LaLiga']),
+      start: 0,
+      time: 'Por confirmar',
+    };
+    const early = fltv('fltv-early', 'Mallorca', 'Elche', at(17), ['DAZN LaLiga']);
+    const result = applyGuideAgenda(
+      schedule([late, tbc, early]),
+      {
+        confirmations: [],
+        additions: [
+          {
+            home: 'Girona',
+            away: 'Sevilla',
+            family: 'laliga',
+            competition: 'LaLiga EA Sports',
+            date: '2026-10-03',
+            start: at(18),
+            channels: ['DAZN LaLiga'],
+          },
+        ],
+      },
+      options,
+    );
+    expect(day(result, '2026-10-03').map((m) => m.home)).toEqual([
+      'Mallorca',
+      'Alavés',
+      'Girona',
+      'Getafe',
+    ]);
+  });
+
   it('una competición que la agenda no trae: el rótulo de la guía', () => {
     const result = applyGuideAgenda(
       PAYLOAD,

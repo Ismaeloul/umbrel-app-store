@@ -16,9 +16,14 @@
      borra lo más viejo; nunca el día de hoy). Un día que pasa de
      LOG_STORE_DAY_SOFT_BYTES solo guarda avisos y errores; de
      LOG_STORE_DAY_HARD_BYTES, nada más hasta el día siguiente (una línea lo
-     dice). Una línea que se repite sin parar (mismo nivel, módulo, frase,
-     código y estado HTTP) no llena el disco: 60 seguidas y luego 6 por
-     minuto; la siguiente que se guarda dice cuántas se omitieron
+     dice) salvo los avisos y errores del servidor y lo de `auth`
+     (emparejar), que tienen LOG_STORE_RESERVE_BYTES reservados. Lo que
+     mandan los clientes (errores de la web y fallos que reporta un aparato)
+     va aparte, con LOG_STORE_CLIENT_DAY_BYTES por día y clase, y no gasta
+     del día común (H-1). Una línea que se repite sin parar (mismo nivel,
+     módulo, frase, código y estado HTTP; las de un cliente, sin la frase:
+     módulo, código, tipo y aparato) no llena el disco: 60 seguidas y luego
+     6 por minuto; la siguiente que se guarda dice cuántas se omitieron
      (`omitidas`) y, si ya no vuelve, una línea al rato lo resume.
    - TODO REDACTADO ANTES DE ESCRIBIRSE: en el acto, con el redactor de la
      IPTV de ese momento (`setScrubber`: usuario, contraseña y URLs
@@ -57,11 +62,16 @@ import { createGzip, gunzip as gunzipCallback, gzip as gzipCallback } from 'node
 import {
   LOG_BOOT_MSG,
   LOG_CLEAN_STOP_MSG,
+  LOG_MODULE_AUTH,
+  LOG_MODULE_WEB,
+  LOG_ORIGIN_CLIENT,
+  LOG_STORE_CLIENT_DAY_BYTES,
   LOG_STORE_DAY_HARD_BYTES,
   LOG_STORE_DAY_SOFT_BYTES,
   LOG_STORE_LINE_MAX_CHARS,
   LOG_STORE_MAX_BYTES,
   LOG_STORE_MAX_DAYS,
+  LOG_STORE_RESERVE_BYTES,
   madridDay,
   redactReportText,
   redactReportValue,
@@ -170,7 +180,37 @@ export interface LogStoreOptions {
   readonly maxPendingChars?: number;
   readonly burst?: number;
   readonly refillPerMinute?: number;
+  /** Tope por día de lo que mandan los clientes, por clase (web y fallos reportados). */
+  readonly clientDayBytes?: number;
+  /** Sitio reservado por día, pasado el tope duro, para avisos y errores del servidor y `auth`. */
+  readonly reserveBytes?: number;
 }
+
+/**
+ * De quién es una línea: lo que manda un cliente (`web`: errores de la web;
+ * `reporte`: un fallo que reporta un aparato), lo que tiene sitio reservado
+ * (avisos y errores del servidor, y el emparejamiento) o lo demás.
+ */
+type LineClass = 'web' | 'reporte' | 'reservada' | 'normal';
+type ClientClass = Extract<LineClass, 'web' | 'reporte'>;
+
+interface Ready {
+  readonly text: string;
+  readonly cls: LineClass;
+}
+
+const SERIOUS_LEVELS = new Set(['warn', 'error', 'fatal']);
+
+function classOf(entry: Record<string, unknown>): LineClass {
+  if (entry.module === LOG_MODULE_WEB) return 'web';
+  if (entry.origen === LOG_ORIGIN_CLIENT) return 'reporte';
+  if (entry.module === LOG_MODULE_AUTH || SERIOUS_LEVELS.has(String(entry.level))) {
+    return 'reservada';
+  }
+  return 'normal';
+}
+
+const isClient = (cls: LineClass): cls is ClientClass => cls === 'web' || cls === 'reporte';
 
 interface FileInfo {
   readonly day: string;
@@ -229,6 +269,8 @@ class FileLogStore implements LogStore {
   private readonly maxPending: number;
   private readonly burst: number;
   private readonly refill: number;
+  private readonly clientDayMax: number;
+  private readonly reserveMax: number;
 
   private pending: string[] = [];
   private pendingChars = 0;
@@ -243,6 +285,11 @@ class FileLogStore implements LogStore {
   private day: string | null = null;
   private dayBytes = 0;
   private cap: 'no' | 'soft' | 'hard' = 'no';
+  /** Lo de hoy de cada clase de cliente (aparte de `dayBytes`) y si ya se dijo que se llenó. */
+  private clientBytes: Record<ClientClass, number> = { web: 0, reporte: 0 };
+  private clientFull: Record<ClientClass, boolean> = { web: false, reporte: false };
+  /** Lo gastado hoy del sitio reservado (pasado el tope duro). */
+  private reserveUsed = 0;
   private totalBytes = 0;
   private sinceCache: { name: string; since: string | null } | null = null;
 
@@ -264,6 +311,8 @@ class FileLogStore implements LogStore {
     this.maxPending = options.maxPendingChars ?? 4 * 1024 * 1024;
     this.burst = options.burst ?? LOG_STORE_BURST;
     this.refill = options.refillPerMinute ?? LOG_STORE_REFILL_PER_MINUTE;
+    this.clientDayMax = options.clientDayBytes ?? LOG_STORE_CLIENT_DAY_BYTES;
+    this.reserveMax = options.reserveBytes ?? LOG_STORE_RESERVE_BYTES;
   }
 
   // ---- Entrada (síncrona y barata) ----
@@ -334,8 +383,8 @@ class FileLogStore implements LogStore {
 
   // ---- Procesar (redactar, repetidos, tamaño) ----
 
-  /** Una línea lista para el disco, o null si se omite por repetida. */
-  private process(line: string, now: number): string | null {
+  /** Una línea lista para el disco (con su clase), o null si se omite por repetida. */
+  private process(line: string, now: number): Ready | null {
     let entry: Record<string, unknown>;
     try {
       const parsed: unknown = JSON.parse(line);
@@ -355,11 +404,12 @@ class FileLogStore implements LogStore {
         text: cut(line, 2000),
       };
     }
-    const omitted = this.take(entry, now);
+    const cls = classOf(entry);
+    const omitted = this.take(entry, now, cls);
     if (omitted < 0) return null;
     if (omitted > 0) entry.omitidas = omitted;
     const clean = redactReportValue(entry, redactReportText) as Record<string, unknown>;
-    return this.fit(clean);
+    return { text: this.fit(clean), cls };
   }
 
   private fit(entry: Record<string, unknown>): string {
@@ -378,8 +428,13 @@ class FileLogStore implements LogStore {
   }
 
   /** Repetidos: -1 si se omite; si no, cuántas iguales se omitieron antes. */
-  private take(entry: Record<string, unknown>, now: number): number {
-    const key = [entry.level, entry.module, entry.msg, entry.errorCode, entry.status]
+  private take(entry: Record<string, unknown>, now: number, cls: LineClass): number {
+    /* Lo de un cliente se agrupa SIN la frase (la escribe él: cambiándola en cada
+       envío se saltaría los repetidos), por módulo, código, tipo y aparato. */
+    const parts = isClient(cls)
+      ? [cls, entry.level, entry.module, entry.errorCode, entry.kind, entry.deviceId]
+      : [entry.level, entry.module, entry.msg, entry.errorCode, entry.status];
+    const key = parts
       .map((part) => (part === undefined ? '' : String(part)))
       .join('|')
       .slice(0, 300);
@@ -473,7 +528,7 @@ class FileLogStore implements LogStore {
       const batch = this.pending.splice(0, 512);
       for (const line of batch) this.pendingChars -= line.length;
       const now = this.now();
-      const out: string[] = [];
+      const out: Ready[] = [];
       let count = 0;
       for (const line of batch) {
         const ready = this.process(line, now);
@@ -481,17 +536,20 @@ class FileLogStore implements LogStore {
         count += 1;
         if (count % LINES_PER_SLICE === 0) await yieldToLoop();
       }
-      out.push(...this.omittedSummaries(now, final && this.pending.length === 0));
+      for (const text of this.omittedSummaries(now, final && this.pending.length === 0)) {
+        out.push({ text, cls: 'normal' });
+      }
       if (this.lostSinceNotice > 0) {
-        out.push(
-          this.notice(
+        out.push({
+          text: this.notice(
             'warn',
             'registro: líneas perdidas (llegaban más rápido de lo que se escribían)',
             {
               perdidas: this.lostSinceNotice,
             },
           ),
-        );
+          cls: 'reservada',
+        });
         this.lostSinceNotice = 0;
       }
       if (out.length) await this.write(out);
@@ -502,32 +560,76 @@ class FileLogStore implements LogStore {
     return path.join(this.dir, `registro-${day}.jsonl${gz ? '.gz' : ''}`);
   }
 
-  private async write(lines: string[]): Promise<void> {
-    const day = madridDay(this.now());
-    if (day !== this.day) await this.rotate(day);
-    let selected = lines;
-    if (this.cap === 'hard' || this.dayBytes >= this.dayHard) {
-      if (this.cap === 'hard') {
-        this.counters.capped += lines.length;
-        return;
+  /**
+   * Lo que manda un cliente, con su propio tope del día (H-1): no gasta del
+   * día común. Pasado el tope, una línea lo dice (una vez) y lo demás se
+   * cuenta como `capped`.
+   */
+  private selectClient(lines: readonly Ready[]): string[] {
+    const out: string[] = [];
+    for (const line of lines) {
+      if (!isClient(line.cls)) continue;
+      const bytes = Buffer.byteLength(line.text) + 1;
+      if (this.clientBytes[line.cls] + bytes <= this.clientDayMax) {
+        this.clientBytes[line.cls] += bytes;
+        out.push(line.text);
+        continue;
       }
-      this.cap = 'hard';
-      this.counters.capped += lines.length;
-      selected = [
-        this.notice(
-          'warn',
-          'registro: tope del día alcanzado; hasta mañana no se guarda nada más',
-          {
-            bytes: this.dayBytes,
-          },
-        ),
-      ];
-    } else if (this.cap === 'soft' || this.dayBytes >= this.daySoft) {
-      selected = lines.filter((line) => !line.startsWith(INFO_PREFIX));
-      this.counters.capped += lines.length - selected.length;
+      this.counters.capped += 1;
+      if (!this.clientFull[line.cls]) {
+        this.clientFull[line.cls] = true;
+        out.push(
+          this.notice(
+            'warn',
+            line.cls === 'web'
+              ? 'registro: la web ha mandado demasiados errores hoy; hasta mañana no se guardan más'
+              : 'registro: los aparatos han reportado demasiados fallos hoy; hasta mañana no se guardan más',
+            { bytes: this.clientBytes[line.cls] },
+          ),
+        );
+      }
+    }
+    return out;
+  }
+
+  /** Lo del servidor: tope suave (solo avisos y errores), duro (nada) y el sitio reservado. */
+  private selectServer(lines: readonly Ready[]): {
+    readonly day: string[];
+    readonly reserve: string[];
+  } {
+    const server = lines.filter((line) => !isClient(line.cls));
+    if (this.cap === 'hard' || this.dayBytes >= this.dayHard) {
+      const reserve: string[] = [];
+      if (this.cap !== 'hard') {
+        this.cap = 'hard';
+        reserve.push(
+          this.notice(
+            'warn',
+            'registro: tope del día alcanzado; hasta mañana solo se guardan avisos y errores del servidor, en su sitio reservado',
+            {
+              bytes: this.dayBytes,
+            },
+          ),
+        );
+      }
+      for (const line of server) {
+        const bytes = Buffer.byteLength(line.text) + 1;
+        if (line.cls === 'reservada' && this.reserveUsed + bytes <= this.reserveMax) {
+          this.reserveUsed += bytes;
+          reserve.push(line.text);
+        } else this.counters.capped += 1;
+      }
+      return { day: [], reserve };
+    }
+    if (this.cap === 'soft' || this.dayBytes >= this.daySoft) {
+      /* Avisos y errores, y lo del emparejamiento aunque sea info. */
+      const kept = server
+        .filter((line) => line.cls === 'reservada' || !line.text.startsWith(INFO_PREFIX))
+        .map((line) => line.text);
+      this.counters.capped += server.length - kept.length;
       if (this.cap === 'no') {
         this.cap = 'soft';
-        selected.unshift(
+        kept.unshift(
           this.notice(
             'warn',
             'registro: el día va muy cargado; hasta mañana solo se guardan avisos y errores',
@@ -537,8 +639,18 @@ class FileLogStore implements LogStore {
           ),
         );
       }
-      if (!selected.length) return;
+      return { day: kept, reserve: [] };
     }
+    return { day: server.map((line) => line.text), reserve: [] };
+  }
+
+  private async write(lines: readonly Ready[]): Promise<void> {
+    const day = madridDay(this.now());
+    if (day !== this.day) await this.rotate(day);
+    const fromServer = this.selectServer(lines);
+    const fromClients = this.selectClient(lines);
+    const selected = [...fromServer.day, ...fromServer.reserve, ...fromClients];
+    if (!selected.length) return;
     const data = `${selected.join('\n')}\n`;
     try {
       await appendFile(this.file(day), data, { mode: 0o600 });
@@ -553,9 +665,10 @@ class FileLogStore implements LogStore {
         return;
       }
     }
-    const bytes = Buffer.byteLength(data);
-    this.dayBytes += bytes;
-    this.totalBytes += bytes;
+    /* El día común solo cuenta lo suyo: lo de los clientes y lo reservado llevan su cuenta. */
+    const dayData = fromServer.day.length ? `${fromServer.day.join('\n')}\n` : '';
+    this.dayBytes += Buffer.byteLength(dayData);
+    this.totalBytes += Buffer.byteLength(data);
     this.counters.written += selected.length;
     if (this.totalBytes > this.maxBytes) await this.enforceLimits();
   }
@@ -567,10 +680,18 @@ class FileLogStore implements LogStore {
     this.dayBytes = await this.sizeOf(this.file(day));
     this.cap =
       this.dayBytes >= this.dayHard ? 'hard' : this.dayBytes >= this.daySoft ? 'soft' : 'no';
+    this.resetDayBudgets();
     if (previous && previous !== day) {
       await this.compress(previous);
       await this.enforceLimits();
     }
+  }
+
+  /** Día nuevo (o arranque): los topes de los clientes y el sitio reservado, a cero. */
+  private resetDayBudgets(): void {
+    this.clientBytes = { web: 0, reporte: 0 };
+    this.clientFull = { web: false, reporte: false };
+    this.reserveUsed = 0;
   }
 
   private async sizeOf(file: string): Promise<number> {
@@ -748,7 +869,7 @@ class FileLogStore implements LogStore {
     this.pendingChars = 0;
     const now = this.now();
     const out = batch
-      .map((line) => this.process(line, now))
+      .map((line) => this.process(line, now)?.text ?? null)
       .filter((line): line is string => line !== null);
     if (!out.length) return;
     try {

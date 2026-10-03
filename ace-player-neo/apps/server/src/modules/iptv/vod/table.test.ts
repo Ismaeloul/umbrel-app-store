@@ -29,6 +29,25 @@ describe('plegado que conserva la longitud', () => {
     expect(foldKeepLength('Amélie ÁRBOL Ñandú')).toBe('amelie arbol nandu');
     expect(compactOf(foldKeepLength('Spider-Man: No Way Home'))).toBe('spidermannowayhome');
   });
+
+  it('«İ» y la sigma griega: misma longitud, mismo plegado por título que en bloque y rápido (A1)', () => {
+    const titles = ['İSTANBUL', 'Kış Masalı İzmir', 'ΟΔΥΣΣΕΑΣ', 'Σας Ευχαριστώ', 'Amélie'];
+    for (const title of titles) expect(foldKeepLength(title)).toHaveLength(title.length);
+    expect(foldKeepLength('İSTANBUL')).toBe('istanbul');
+    expect(foldKeepLength('ΟΔΥΣΣΕΑΣ')).toBe('οδυσσεας');
+    expect(foldKeepLength(titles.join('\n'))).toBe(titles.map(foldKeepLength).join('\n'));
+
+    /* Un catálogo grande con una sola «İ»: antes, ~8 M caracteres concatenados de uno en uno. */
+    const many = Array.from({ length: 200_000 }, (_, i) => `Título número ${i} Σοφία`);
+    many[123] = 'İstanbul Hatırası';
+    const block = many.join('\n');
+    const started = performance.now();
+    const folded = foldKeepLength(block);
+    const elapsed = performance.now() - started;
+    expect(folded).toHaveLength(block.length);
+    expect(folded.split('\n')[123]).toBe('istanbul hatırası');
+    expect(elapsed).toBeLessThan(2_000);
+  });
 });
 
 describe('VodTableBuilder', () => {

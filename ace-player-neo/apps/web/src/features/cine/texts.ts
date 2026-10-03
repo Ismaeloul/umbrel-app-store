@@ -352,7 +352,7 @@ export function staleText(day: string): string {
 }
 
 /**
- * «Tu IPTV tiene más de 200.000 películas; se ven las primeras 200.000.» Si
+ * «Tu IPTV tiene más de 400.000 películas; se ven las primeras 400.000.» Si
  * lo recortado son las series (el tope de películas no se alcanzó), lo mismo
  * con las series. Sin llegar a ningún tope, `truncated` es que el modo por
  * categorías se cortó por tiempo la primera vez (docs/vod.md §4.7): faltan

@@ -269,6 +269,11 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const replacing = new Map<string, number>();
   /** Productores VOD por sesión (docs/vod.md §9.7) y dónde empieza su lista. */
   const vods = new Map<string, { readonly producer: VodProducer; startS: number }>();
+  /**
+   * Sesiones VOD a medio abrir: `VodProducer.open` lanza ffmpeg antes de que
+   * la sesión entre en `vods`, y el recolector de huérfanos no debe matarlo.
+   */
+  const vodOpening = new Set<string>();
   const vodIndexes = new VodIndexCache();
   const vodLauncher =
     deps.vodLauncher ??
@@ -827,6 +832,16 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     await sendBare(reply, 404, { 'cache-control': 'no-store' });
   }
 
+  /** La sesión es nuestra: directo/IPTV en el registro, VOD abierto o a medio abrir, o en un relevo. */
+  function isKnownSession(sessionId: string): boolean {
+    return (
+      !!findBySession(sessionId) ||
+      vods.has(sessionId) ||
+      vodOpening.has(sessionId) ||
+      replacing.has(sessionId)
+    );
+  }
+
   async function reap(): Promise<void> {
     await registry.run(async () => {
       for (const entry of [...byHash.values()]) {
@@ -839,8 +854,9 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       }
     });
     if (!procRoot) return;
-    const known = new Set([...byHash.values()].map((entry) => entry.sessionId));
-    const orphans = await findOrphanPids(procRoot, known, process.pid);
+    /* Vista viva (no una foto): leer /proc tarda, y una sesión que se abre
+       entre medias (directo o VOD) tampoco es huérfana. */
+    const orphans = await findOrphanPids(procRoot, { has: isKnownSession }, process.pid);
     for (const pid of orphans) {
       logger.warn({ pid }, 'ffmpeg huérfano del remux: se mata');
       killPid(pid);
@@ -985,13 +1001,15 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       if (stopped) throw new AppError('remux_died', { detail: 'remux parado' });
       if (ffmpegMissing) throw new AppError('ffmpeg_missing');
       const index = await vodIndexes.get(request.titleId, () =>
-        readVodIndex(
-          createHttpRangeReader(request.inputUrl, {
-            /* Un poco más que los reintentos del relé (3 × 8 s): ver iptv/relay-vod.ts. */
-            timeoutMs: 30_000,
-            ...(request.signal ? { signal: request.signal } : {}),
-          }),
-        ),
+        deps.readVodIndex
+          ? deps.readVodIndex(request.inputUrl, request.signal)
+          : readVodIndex(
+              createHttpRangeReader(request.inputUrl, {
+                /* Un poco más que los reintentos del relé (3 × 8 s): ver iptv/relay-vod.ts. */
+                timeoutMs: 30_000,
+                ...(request.signal ? { signal: request.signal } : {}),
+              }),
+            ),
       );
       assertPlayable(index, request.hevc);
       const audio = pickVodAudio(index.audio, {
@@ -1008,29 +1026,36 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
           await previous.producer.close();
         }
         await makeRoomLocked();
-        const producer = await VodProducer.open(
-          {
-            clock,
-            logger,
-            launcher: vodLauncher,
-            redact,
-            onIdle: () => request.onIdle?.(),
-            onDropped: (error) => request.onDropped?.(error),
-          },
-          {
-            sessionId: request.sessionId,
-            dir: path.join(remuxDir, `${VOD_DIR_PREFIX}${request.sessionId}`),
-            inputUrl: request.inputUrl,
-            index,
-            audio,
-            /* `-tag:v hvc1` solo si el VÍDEO es HEVC: `request.hevc` dice que el
+        /* «Arrancando» antes de lanzar ffmpeg: el recolector no lo toma por huérfano. */
+        vodOpening.add(request.sessionId);
+        let producer: VodProducer;
+        try {
+          producer = await VodProducer.open(
+            {
+              clock,
+              logger,
+              launcher: vodLauncher,
+              redact,
+              onIdle: () => request.onIdle?.(),
+              onDropped: (error) => request.onDropped?.(error),
+            },
+            {
+              sessionId: request.sessionId,
+              dir: path.join(remuxDir, `${VOD_DIR_PREFIX}${request.sessionId}`),
+              inputUrl: request.inputUrl,
+              index,
+              audio,
+              /* `-tag:v hvc1` solo si el VÍDEO es HEVC: `request.hevc` dice que el
                cliente lo decodifica (Chrome lo manda siempre) y, con H.264,
                ffmpeg no escribe la cabecera. */
-            hevc: index.video.codec === 'hevc',
-            startS,
-          },
-        );
-        vods.set(request.sessionId, { producer, startS });
+              hevc: index.video.codec === 'hevc',
+              startS,
+            },
+          );
+          vods.set(request.sessionId, { producer, startS });
+        } finally {
+          vodOpening.delete(request.sessionId);
+        }
         logger.info(
           {
             sessionId: request.sessionId,

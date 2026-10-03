@@ -41,7 +41,7 @@
    otro proveedor se borra y se vuelve a descargar. */
 
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, renameSync, rmSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, fsyncSync, openSync, renameSync, rmSync } from 'node:fs';
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 import { GUIDE_FLAGS, IPTV_GUIDE_NORMALIZE, IPTV_GUIDE_STORE } from '@ace/shared';
@@ -188,6 +188,37 @@ CREATE TABLE det (
 /** ¿Es el SQLITE_FULL de SQLite (disco o tope de páginas lleno)? */
 function isFull(error: unknown): boolean {
   return (error as { errcode?: number } | null)?.errcode === 13;
+}
+
+/** Pasa a disco lo escrito en un fichero (`fsync`). */
+function syncFile(file: string): void {
+  const fd = openSync(file, 'r+');
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** Pasa a disco un cambio de nombre en la carpeta (en Windows no se puede abrir una carpeta: nada). */
+function syncDir(dir: string): void {
+  if (process.platform === 'win32') return;
+  try {
+    const fd = openSync(dir, 'r');
+    try {
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    /* Sistemas de ficheros que no lo admiten: el fichero ya está a disco. */
+  }
+}
+
+/** SQLITE_CORRUPT (11) o SQLITE_NOTADB (26): el fichero está roto. */
+function isCorrupt(error: unknown): boolean {
+  const code = (error as { errcode?: number } | null)?.errcode;
+  return code === 11 || code === 26;
 }
 
 function lines(value: unknown): string[] {
@@ -498,8 +529,11 @@ export class GuideWriter {
   }
 
   private onWriteError(error: unknown): void {
-    /* El tope de páginas (o el disco) lleno: se deja de guardar, lo que hay vale. */
-    if (isFull(error)) {
+    /* El tope de páginas (o el disco) lleno: se deja de guardar, lo que hay vale… si
+       sigue dentro de la transacción. Con SQLITE_FULL, SQLite puede deshacerla entera
+       por su cuenta: entonces no queda nada que valga y lo siguiente iría sin
+       transacción (y sin el SAVEPOINT de la fuente): se lanza y quien llama la deshace. */
+    if (isFull(error) && this.db.isTransaction) {
       this.stop('disco');
       return;
     }
@@ -651,6 +685,8 @@ export class GuideReader {
   private byG: Map<number, GuideChannelInfo> | null = null;
   private allCoverage: GuideCoverage | null | undefined = undefined;
   private closed = false;
+  /** Se le avisa (una vez) si una consulta dice que el fichero está roto (SQLITE_CORRUPT). */
+  onCorrupt: (() => void) | null = null;
 
   private constructor(db: DatabaseSync, meta: GuideMeta) {
     this.db = db;
@@ -705,14 +741,28 @@ export class GuideReader {
     return this.meta.version;
   }
 
+  /** Una consulta; si el fichero resulta estar roto, se avisa (para borrarlo y volver a bajarla). */
+  private guard<T>(query: () => T): T {
+    try {
+      return query();
+    } catch (error) {
+      if (isCorrupt(error)) {
+        const notify = this.onCorrupt;
+        this.onCorrupt = null;
+        notify?.();
+      }
+      throw error;
+    }
+  }
+
   /** Canales con programas, por `tvg-id`. Se lee una vez (unos pocos miles de filas). */
   channels(): ReadonlyMap<string, GuideChannelInfo> {
     if (this.channelMap) return this.channelMap;
     const map = new Map<string, GuideChannelInfo>();
     const byG = new Map<number, GuideChannelInfo>();
-    const rows = this.db
-      .prepare('SELECT g, tvg, icon, n, first, last FROM ch WHERE n > 0')
-      .all() as unknown as {
+    const rows = this.guard(() =>
+      this.db.prepare('SELECT g, tvg, icon, n, first, last FROM ch WHERE n > 0').all(),
+    ) as unknown as {
       g: number;
       tvg: string;
       icon: string | null;
@@ -768,22 +818,16 @@ export class GuideReader {
   slice(g: number, fromMs: number, toMs: number, limit: number): GuideGridRow[] {
     const fromMin = Math.floor(fromMs / MINUTE);
     const toMin = Math.ceil(toMs / MINUTE);
-    return this.sliceStmt.all(
-      g,
-      fromMin - this.meta.maxDurationMin,
-      toMin,
-      fromMin,
-      limit,
+    return this.guard(() =>
+      this.sliceStmt.all(g, fromMin - this.meta.maxDurationMin, toMin, fromMin, limit),
     ) as unknown as GuideGridRow[];
   }
 
   /** Lo que se emite en `atMs` y lo siguiente. */
   nowNext(g: number, atMs: number): { now: GuideGridRow | null; next: GuideGridRow | null } {
     const at = Math.floor(atMs / MINUTE);
-    const rows = this.aroundStmt.all(
-      g,
-      at - this.meta.maxDurationMin,
-      at,
+    const rows = this.guard(() =>
+      this.aroundStmt.all(g, at - this.meta.maxDurationMin, at),
     ) as unknown as GuideGridRow[];
     const [first, second] = rows;
     if (!first) return { now: null, next: null };
@@ -793,7 +837,8 @@ export class GuideReader {
 
   /** La ficha de un programa (null si no existe). */
   programme(g: number, s: number): GuideDetailRow | null {
-    const row = this.programmeStmt.get(g, s) as Record<string, unknown> | undefined;
+    const row = this.guard(() => this.programmeStmt.get(g, s)) as
+      Record<string, unknown> | undefined;
     if (!row) return null;
     return {
       g,
@@ -818,11 +863,12 @@ export class GuideReader {
   /** URL del logo de un canal (`programmeStart` null) o de la imagen de un programa. Nunca sale del módulo. */
   iconUrl(g: number, programmeStart: number | null): string | null {
     if (programmeStart === null) {
-      const row = this.db.prepare('SELECT icon FROM ch WHERE g = ?').get(g) as
+      const row = this.guard(() => this.db.prepare('SELECT icon FROM ch WHERE g = ?').get(g)) as
         { icon: string | null } | undefined;
       return textOrNull(row?.icon);
     }
-    const row = this.iconStmt.get(g, programmeStart) as { icon: string | null } | undefined;
+    const row = this.guard(() => this.iconStmt.get(g, programmeStart)) as
+      { icon: string | null } | undefined;
     return textOrNull(row?.icon);
   }
 
@@ -848,6 +894,8 @@ export class GuideStore {
     private readonly file: string,
     private readonly dir: string,
     private readonly logger: Logger,
+    /** El fichero de la guía resultó estar roto (ya borrado): hay que volver a descargarla. */
+    private readonly onCorrupt: () => void = () => undefined,
   ) {}
 
   get nextFile(): string {
@@ -858,13 +906,34 @@ export class GuideStore {
   open(providerId: string): GuideReader | null {
     if (this.reader && this.reader.meta.providerId === providerId) return this.reader;
     this.closeReader();
+    /* Una construcción que se quedó a medias (se apagó en mitad de una descarga). */
+    try {
+      rmSync(this.nextFile, { force: true });
+    } catch {
+      /* Windows con el fichero abierto: se borrará la próxima vez. */
+    }
     const reader = GuideReader.open(this.file, providerId);
     if (!reader && existsSync(this.file)) {
       this.logger.info('Guía TV: la guardada es de otro proveedor o no se puede leer; se descarta');
       this.removeFiles();
     }
+    this.watch(reader);
     this.reader = reader;
     return reader;
+  }
+
+  /** Si una consulta dice SQLITE_CORRUPT: se cierra, se borra y se pide otra. */
+  private watch(reader: GuideReader | null): void {
+    if (!reader) return;
+    reader.onCorrupt = () => {
+      if (this.reader !== reader) return;
+      this.logger.warn(
+        'Guía TV: el fichero de la guía está roto; se borra y se vuelve a descargar',
+      );
+      this.closeReader();
+      this.removeFiles();
+      this.onCorrupt();
+    };
   }
 
   current(): GuideReader | null {
@@ -881,12 +950,17 @@ export class GuideStore {
   install(providerId: string): GuideReader | null {
     this.closeReader();
     try {
+      /* Se escribió sin fsync (synchronous = OFF): a disco antes de cambiarla por la
+         buena, para que un corte de luz no deje un guia.db a medias. */
+      syncFile(this.nextFile);
       renameSync(this.nextFile, this.file);
+      syncDir(this.dir);
     } catch (error) {
       this.logger.warn({ err: error }, 'Guía TV: no se pudo instalar la guía nueva');
       rmSync(this.nextFile, { force: true });
     }
     this.reader = GuideReader.open(this.file, providerId);
+    this.watch(this.reader);
     return this.reader;
   }
 

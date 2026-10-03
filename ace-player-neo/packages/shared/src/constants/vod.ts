@@ -24,10 +24,14 @@ const HOUR = 60 * MINUTE;
  * `maxObjectBytes` son propios: el troceador del directo salta en silencio
  * lo que pasa de 16 KiB (T5), y una serie con sinopsis y reparto largos
  * llega a los 200 KiB; lo que se salta se cuenta en `skipped`.
+ *
+ * Los topes de títulos dejan margen ×2 sobre el panel de Isma (Paso 0 del
+ * 3-oct: 181.210 películas en 66,6 MB y 48.797 series en 50,6 MB), y al
+ * doble las listas siguen cabiendo en sus 160 MiB.
  */
 export const VOD_LIMITS = {
-  maxMovies: 200_000,
-  maxSeries: 50_000,
+  maxMovies: 400_000,
+  maxSeries: 100_000,
   categories: { maxBytes: 2 * MIB, totalMs: 20 * SECOND },
   movies: {
     maxBytes: 160 * MIB,

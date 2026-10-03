@@ -424,6 +424,50 @@ describe('el fichero', () => {
     expect(existsSync(file)).toBe(false);
   });
 
+  it('al abrir se borra un guia.db.next que se quedó a medias (se apagó a mitad de una descarga)', async () => {
+    const { store: target, file } = store();
+    await build(target, [programme('a.es', at(1), at(2), 'Buena')]);
+    target.close();
+    writeFileSync(target.nextFile, 'a medias');
+    const again = new GuideStore(file, path.dirname(file), logger);
+    open.push(again);
+    expect(again.open('p_prueba01')?.version).toBe(BUILT.toString(36));
+    expect(existsSync(again.nextFile)).toBe(false);
+  });
+
+  it('una consulta con SQLITE_CORRUPT: se cierra, se borra y se avisa para volver a descargarla', async () => {
+    const dir = tempDir('ace-guia-');
+    const file = path.join(dir, 'guia.db');
+    let corrupt = 0;
+    const target = new GuideStore(file, dir, logger, () => (corrupt += 1));
+    open.push(target);
+    const reader = await build(target, [programme('a.es', at(1), at(2), 'Algo')]);
+    const g = reader.channels().get('a.es')?.g as number;
+    (reader as unknown as { sliceStmt: { all(): never } }).sliceStmt = {
+      all() {
+        throw Object.assign(new Error('database disk image is malformed'), { errcode: 11 });
+      },
+    };
+    expect(() => reader.slice(g, at(0), at(3), 10)).toThrow('malformed');
+    expect(corrupt).toBe(1);
+    expect(target.current()).toBe(null);
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it('SQLITE_FULL: dentro de la transacción se para y lo guardado vale; fuera (SQLite la deshizo) se lanza', async () => {
+    const { store: target } = store();
+    const full = (): Error => Object.assign(new Error('database or disk is full'), { errcode: 13 });
+    const writer = writerOf(target) as unknown as {
+      db: { exec(sql: string): void };
+      onWriteError(error: unknown): void;
+      abort(): void;
+    };
+    expect(() => writer.onWriteError(full())).not.toThrow();
+    writer.db.exec('ROLLBACK');
+    expect(() => writer.onWriteError(full())).toThrow('full');
+    writer.abort();
+  });
+
   it('volver a abrir la guardada (tras reiniciar) da la misma guía', async () => {
     const { store: target, file } = store();
     await build(target, [programme('a.es', at(1), at(2), 'Persiste')]);
