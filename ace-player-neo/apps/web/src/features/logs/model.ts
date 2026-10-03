@@ -17,9 +17,9 @@ import { unbrokenFileName, webDiagnostics, type WebContext } from '../health/fau
 export const LOGS_DOWNLOAD_TIMEOUT_MS = 55_000;
 
 export const LOGS_PERIODS: ReadonlyArray<{ value: LogPeriod; label: string }> = [
-  { value: 'dia', label: 'Último día' },
-  { value: 'semana', label: 'Última semana' },
-  { value: 'mes', label: 'Último mes' },
+  { value: 'dia', label: '1 día' },
+  { value: 'semana', label: '7 días' },
+  { value: 'mes', label: '30 días' },
 ];
 
 /** Descripción de la sección (la pone Ajustes bajo el título). */

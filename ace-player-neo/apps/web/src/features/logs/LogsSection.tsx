@@ -87,7 +87,7 @@ export default function LogsSection() {
       <Stored />
       <div className="set-field">
         <p className="set-label" id="logs-periodo">
-          Qué periodo
+          Cuánto hacia atrás
         </p>
         <Segmented
           label="Qué periodo"

@@ -77,7 +77,7 @@ describe('Ajustes → Registro', () => {
     expect(within(list).getByText('1,4 MB de 40 MB')).toBeInTheDocument();
     expect(within(list).getByText('lo de más de 45 días')).toBeInTheDocument();
     const group = screen.getByRole('radiogroup', { name: 'Qué periodo' });
-    expect(within(group).getByRole('radio', { name: 'Último mes' })).toHaveAttribute(
+    expect(within(group).getByRole('radio', { name: '30 días' })).toHaveAttribute(
       'aria-checked',
       'true',
     );
@@ -98,7 +98,7 @@ describe('Ajustes → Registro', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
     const group = screen.getByRole('radiogroup', { name: 'Qué periodo' });
-    fireEvent.click(within(group).getByRole('radio', { name: 'Último día' }));
+    fireEvent.click(within(group).getByRole('radio', { name: '1 día' }));
     fireEvent.click(screen.getByRole('button', { name: 'Descargar logs' }));
 
     // Preparando: el botón lo dice y no se puede pulsar otra vez.
