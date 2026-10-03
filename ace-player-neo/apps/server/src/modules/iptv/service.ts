@@ -929,7 +929,7 @@ export class IptvServiceImpl implements IptvService {
       redactor.add(secrets.username);
       redactor.add(secrets.password);
     }
-    let account: XtreamAccount | null = null;
+    let account: XtreamAccount | null;
     try {
       account = options.test ? await this.quickTest(secrets, { lan }, signal, host) : null;
     } catch (error) {
