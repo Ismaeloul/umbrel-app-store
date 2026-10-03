@@ -19,18 +19,53 @@ function escapeXml(text: string): string {
   return text.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-/** Parte un título en líneas de ~`max` letras (3 como mucho). */
-function lines(title: string, max: number): string[] {
+/** Parte un título en líneas de ~`max` letras (`limit` como mucho, la última con «…» si no cabe). */
+function lines(title: string, max: number, limit: number = POSTER_TEXT.maxLines): string[] {
   const out: string[] = [];
   let line = '';
-  for (const word of title.split(/\s+/)) {
+  for (const word of title.split(/\s+/).filter(Boolean)) {
     if (line && (line + ' ' + word).length > max) {
       out.push(line);
       line = word;
     } else line = line ? `${line} ${word}` : word;
   }
   if (line) out.push(line);
-  return out.slice(0, 3);
+  if (out.length <= limit) return out;
+  const kept = out.slice(0, limit);
+  kept[limit - 1] = `${kept[limit - 1]}…`;
+  return kept;
+}
+
+/**
+ * El título de un cartel de la demo, con la MISMA geometría que el de un
+ * cartel sin imagen (`.cine-art__name` en cine.css): sobre 200 × 300, a 18 px
+ * (9 %) del borde izquierdo, letra de 24 (12 % del ancho), líneas de 25,2
+ * (1,05) y la ÚLTIMA línea siempre a la misma altura, a 24 px (8 %) del
+ * borde de abajo; un título de 2 o 3 líneas crece hacia arriba. Antes la
+ * primera línea iba fija a 228 y crecía hacia abajo, y en una fila los de la
+ * demo y los de respaldo quedaban unos altos y otros bajos (lo vio Isma con
+ * «Relatos salvajes» y «Coco», 0.9.0).
+ */
+export const POSTER_TEXT = {
+  x: 18,
+  size: 24,
+  lineHeight: 25.2,
+  /**
+   * Línea base de la última línea: su caja acaba en 276 (300 − 24) y mide
+   * 25,2; Mona Sans pone la línea base a 21 de su borde de arriba (medido en
+   * Chrome): 276 − 25,2 + 21 ≈ 272.
+   */
+  lastBaseline: 272,
+  maxLines: 4,
+  /** Letras por línea (unas 11 de 24 px en los 164 px de ancho útil). */
+  maxChars: 11,
+} as const;
+
+/** Las líneas base del título en un cartel de la demo (de arriba abajo). */
+export function posterTextBaselines(count: number): number[] {
+  return Array.from({ length: count }, (_, i) =>
+    Number((POSTER_TEXT.lastBaseline - (count - 1 - i) * POSTER_TEXT.lineHeight).toFixed(1)),
+  );
 }
 
 export function demoArtSvg(id: string, art: VodArtKind, v: string, title = ''): string {
@@ -42,14 +77,14 @@ export function demoArtSvg(id: string, art: VodArtKind, v: string, title = ''): 
   const cx = 30 + ((h >> 3) % (w - 60));
   const cy = 30 + ((h >> 11) % (hgt - 60));
   const r = 40 + ((h >> 17) % 60);
-  const text = poster
-    ? lines(title, 12)
-        .map(
-          (line, i) =>
-            `<text x="16" y="${228 + i * 24}" font-family="system-ui,sans-serif" font-size="21" font-weight="700" fill="#fff">${escapeXml(line)}</text>`,
-        )
-        .join('')
-    : '';
+  const titleLines = poster ? lines(title, POSTER_TEXT.maxChars) : [];
+  const baselines = posterTextBaselines(titleLines.length);
+  const text = titleLines
+    .map(
+      (line, i) =>
+        `<text x="${POSTER_TEXT.x}" y="${baselines[i]}" font-family="system-ui,sans-serif" font-size="${POSTER_TEXT.size}" font-weight="800" fill="#fff">${escapeXml(line)}</text>`,
+    )
+    .join('');
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hgt}" viewBox="0 0 ${w} ${hgt}">` +
     `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +

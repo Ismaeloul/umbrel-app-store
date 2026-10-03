@@ -758,3 +758,39 @@ Diseño entero en `docs/iptv.md` §20.
   construcción cede el hilo cada 12 ms (el directo no espera).
 - **Vuelta atrás**: la 0.8.x no conoce `guia.db` y lo deja en disco sin
   usarlo; nada más cambia de formato.
+
+## D32. La rueda baja la página; flechas y halos de los carruseles (0.9.0, equipo/carruseles)
+
+Lo pidió Isma al ver la vista
+previa de Pelis y series; afecta a TODOS los carruseles (`ui/PosterRail`:
+filas de Pelis y series, filas por competición de la agenda, «Emitiendo
+ahora» de Canales, Sistema) y a la tira de días.
+
+- **La rueda vertical baja la página siempre** (cambia B-143, que venía de
+  la 0.6.59): con el ratón encima de una tarjeta no se podía bajar. A los
+  lados se va con el touchpad (deltaX, lo hace el navegador), Mayús + rueda
+  (Chrome, Edge y Safari ya la convierten; `shiftWheelToHorizontal` solo
+  la hace donde no) o las flechas. La ayuda («?») lo dice así.
+- **El apretón de `.press` es la propiedad `scale`**, no `transform:
+  scale()`: así se suma al transform propio del control. Con `transform`,
+  la flecha de un carrusel (centrada con translate(-50%)) bajaba media
+  altura al pulsarla; también «Toca para reproducir». Regla para lo nuevo:
+  quien centre algo con `.press` encima, con `translate`/`transform`, no
+  tiene que hacer nada; quien quiera quitar el apretón, `scale: none`.
+- **Las flechas se apagan en su extremo** (tenues, con `aria-disabled`,
+  NO con `disabled` ni `pointer-events: none`): «Anteriores» salía con la
+  fila al principio y no hacía nada. Siguen en su sitio recogiendo el clic
+  y el foco: ocultas y sin recoger clics, el clic de más al pulsar varias
+  veces caía en el cartel de debajo y lo abría, y con teclado el foco se
+  iba al body. Desplazan
+  solo en horizontal (`scrollBy`, nunca `scrollIntoView`) y respetan
+  «reducir movimiento».
+- **Halo en vez de velo en las tarjetas de cine**: al pasar el ratón o
+  pulsar, un fondo suave por detrás con 8 px de aire alrededor del cartel y
+  de su texto (y del «Más opciones» en «Seguir viendo»); el texto de
+  debajo del cartel entra 4 px. La pista tiene sitio para el halo (10 px de
+  relleno; en escritorio, a la izquierda con margen negativo).
+- **El título pintado en un cartel acaba siempre a la misma altura**
+  (anclado abajo, crece hacia arriba, 4 líneas como mucho), igual en el
+  cartel de respaldo (CSS) y en los carteles de la demo (SVG), con la misma
+  geometría comprobada por una prueba.

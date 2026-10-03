@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react';
 import { useRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { scrollChildIntoView, useKeepActiveVisible, wheelToHorizontal } from './scroll.ts';
+import { scrollChildIntoView, shiftWheelToHorizontal, useKeepActiveVisible } from './scroll.ts';
 
 function rect(left: number, width: number): DOMRect {
   return {
@@ -73,14 +73,71 @@ describe('useKeepActiveVisible', () => {
   });
 });
 
-describe('wheelToHorizontal', () => {
-  it('la rueda vertical desplaza el carrusel en horizontal', () => {
+describe('shiftWheelToHorizontal', () => {
+  /** Un carrusel de 1000 px de contenido en 300 de ancho, con scrollBy espiado. */
+  function rail(scrollLeft = 0) {
     const container = document.createElement('div');
     Object.defineProperty(container, 'scrollWidth', { value: 1000 });
     Object.defineProperty(container, 'clientWidth', { value: 300 });
-    const event = new WheelEvent('wheel', { deltaY: 120, cancelable: true });
-    wheelToHorizontal(event, container);
-    expect(container.scrollLeft).toBe(120);
+    container.scrollLeft = scrollLeft;
+    const scrollBy = vi.fn();
+    container.scrollBy = scrollBy as unknown as typeof container.scrollBy;
+    return { container, scrollBy };
+  }
+  const wheel = (init: WheelEventInit) => new WheelEvent('wheel', { cancelable: true, ...init });
+
+  it('la rueda vertical sola NO se toca: baja la página aunque el ratón esté encima', () => {
+    const { container, scrollBy } = rail(200);
+    for (const deltaY of [120, -120, 3]) {
+      const event = wheel({ deltaY });
+      shiftWheelToHorizontal(event, container);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(scrollBy).not.toHaveBeenCalled();
+    expect(container.scrollLeft).toBe(200);
+  });
+
+  it('el touchpad (deltaX) lo desplaza el navegador: tampoco se toca', () => {
+    const { container, scrollBy } = rail();
+    const event = wheel({ deltaX: 80, deltaY: 10 });
+    shiftWheelToHorizontal(event, container);
+    expect(event.defaultPrevented).toBe(false);
+    expect(scrollBy).not.toHaveBeenCalled();
+  });
+
+  it('Mayús + rueda (si el navegador no la pasa a deltaX) la desplaza a los lados con scrollBy', () => {
+    const { container, scrollBy } = rail();
+    const event = wheel({ deltaY: 120, shiftKey: true });
+    shiftWheelToHorizontal(event, container);
     expect(event.defaultPrevented).toBe(true);
+    // scrollBy y no scrollLeft: con scroll-snap, un salto corto volvería al cartel de antes.
+    expect(scrollBy).toHaveBeenCalledWith({ left: 120, behavior: 'auto' });
+  });
+
+  it('Mayús + rueda en líneas (Firefox) cuenta 40 px por línea', () => {
+    const { container, scrollBy } = rail(300);
+    shiftWheelToHorizontal(wheel({ deltaY: -3, deltaMode: 1, shiftKey: true }), container);
+    expect(scrollBy).toHaveBeenCalledWith({ left: -120, behavior: 'auto' });
+  });
+
+  it('en el extremo hacia el que va, la suelta (no se queda la rueda)', () => {
+    const start = rail(0);
+    const back = wheel({ deltaY: -120, shiftKey: true });
+    shiftWheelToHorizontal(back, start.container);
+    expect(back.defaultPrevented).toBe(false);
+    const end = rail(700);
+    const forward = wheel({ deltaY: 120, shiftKey: true });
+    shiftWheelToHorizontal(forward, end.container);
+    expect(forward.defaultPrevented).toBe(false);
+    expect(start.scrollBy).not.toHaveBeenCalled();
+    expect(end.scrollBy).not.toHaveBeenCalled();
+  });
+
+  it('Ctrl + rueda (zoom) no se toca', () => {
+    const { container, scrollBy } = rail();
+    const event = wheel({ deltaY: 120, shiftKey: true, ctrlKey: true });
+    shiftWheelToHorizontal(event, container);
+    expect(event.defaultPrevented).toBe(false);
+    expect(scrollBy).not.toHaveBeenCalled();
   });
 });

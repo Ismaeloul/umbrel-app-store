@@ -58,13 +58,33 @@ export function useKeepActiveVisible(
   });
 }
 
-/** La rueda vertical del ratón desplaza el carrusel en horizontal (como la tira de días de la 0.6.59). */
-export function wheelToHorizontal(event: WheelEvent, container: HTMLElement): void {
-  if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+/** Píxeles de una «línea» de rueda (deltaMode 1, Firefox con ratón). */
+const WHEEL_LINE_PX = 40;
+
+/**
+ * Mayús + rueda desplaza el carrusel a los lados en el navegador que no lo
+ * hace solo. La rueda vertical SIN Mayús no se toca nunca: baja la página
+ * aunque el ratón esté encima de un carrusel (lo pidió Isma en la 0.9.0; hasta
+ * entonces la rueda movía la fila, como la tira de días de la 0.6.59, y no se
+ * podía bajar con el ratón encima de una tarjeta). Lo horizontal de verdad (el
+ * touchpad, o Mayús + rueda en Chrome, Edge y Safari, que ya llegan con
+ * `deltaX`) lo desplaza el propio navegador: aquí no se toca.
+ *
+ * Con `scrollBy` y no asignando `scrollLeft`: con `scroll-snap` obligatorio,
+ * Chrome devuelve una asignación corta (100 px de una muesca en carteles de
+ * 218) al cartel de antes y la fila no se movería; `scrollBy` lleva dirección
+ * y pasa al siguiente.
+ */
+export function shiftWheelToHorizontal(event: WheelEvent, container: HTMLElement): void {
+  if (!event.shiftKey || event.ctrlKey || event.deltaX !== 0 || event.deltaY === 0) return;
   const max = container.scrollWidth - container.clientWidth;
   if (max <= 0) return;
-  const next = Math.min(max, Math.max(0, container.scrollLeft + event.deltaY));
-  if (next === container.scrollLeft) return;
+  const unit =
+    event.deltaMode === 1 ? WHEEL_LINE_PX : event.deltaMode === 2 ? container.clientWidth : 1;
+  const delta = event.deltaY * unit;
+  // En el extremo hacia el que va, la rueda sigue su camino (no se la queda).
+  if ((delta < 0 && container.scrollLeft <= 0) || (delta > 0 && container.scrollLeft >= max - 1))
+    return;
   event.preventDefault();
-  container.scrollLeft = next;
+  container.scrollBy({ left: delta, behavior: 'auto' });
 }

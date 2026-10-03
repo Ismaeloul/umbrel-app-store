@@ -250,12 +250,16 @@ video {
   backdrop-filter: none;
 }
 
-/* ---- Microinteracción al pulsar: el control se aprieta (transform, 0,975
-   como los carteles de Palco) y se ilumina (una capa con opacidad, no un
-   filtro). ------------------------------------------------------------------ */
+/* ---- Microinteracción al pulsar: el control se aprieta (0,975 como los
+   carteles de Palco) y se ilumina (una capa con opacidad, no un filtro).
+   El apretón es la propiedad `scale` y NO `transform: scale()`: se suma al
+   `transform`/`translate` propio del control en vez de pisarlo. Con
+   `transform`, un control centrado con translate(-50%) (las flechas de los
+   carruseles, «Toca para reproducir») perdía el centrado al pulsarlo y bajaba
+   media altura de golpe (0.9.0). ---------------------------------------------- */
 .press {
   position: relative;
-  transition: transform var(--dur-rapido) var(--ease-rapido);
+  transition: scale var(--dur-rapido) var(--ease-rapido);
 }
 .press::after {
   content: '';
@@ -268,7 +272,7 @@ video {
   transition: opacity var(--dur-rapido) var(--ease-rapido);
 }
 .press:active:not(:disabled) {
-  transform: scale(0.975);
+  scale: 0.975;
 }
 .press:active:not(:disabled)::after {
   opacity: 0.1;
