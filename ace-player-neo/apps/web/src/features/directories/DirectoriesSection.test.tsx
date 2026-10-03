@@ -2,6 +2,7 @@ import type { DirectoryView } from '@ace/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors.ts';
+import { rememberedViewParams } from '../../app/router.tsx';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { json, mockFetch } from '../../test/fetch.ts';
@@ -136,7 +137,9 @@ describe('Ajustes → Listas', () => {
       await screen.findByText('«Principal»: 3 canales. Actualización automática cada 3 h.'),
     ).toBeInTheDocument();
     expect(toastStore.get().at(-1)?.text).toBe('Lista guardada: 3 canales');
-    expect(new URLSearchParams(location.search).get('pestana')).toBe('listas');
+    // Canales abrirá en «Listas», pero la URL de Ajustes no lleva `pestana`.
+    expect(rememberedViewParams('biblioteca')).toBe('pestana=listas');
+    expect(new URLSearchParams(location.search).get('pestana')).toBeNull();
   });
 
   it('una dirección sin http(s) se avisa sin mandarla; el fallo del servidor sale traducido', async () => {

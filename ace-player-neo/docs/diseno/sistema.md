@@ -116,6 +116,13 @@ La misma tabla de muelles que SwiftUI, muestreada con `linear()`:
 | `--ease-heroe` / `--dur-heroe` | `.spring(duration: 0.55, bounce: 0.3)` | 800 ms | entrar a un partido, un gol, progreso del partido |
 | `--ease-out` / `--dur-fade` | — | 320 ms | fundidos de salida (línea de estado, toasts) |
 
+Bucles (todos se paran con movimiento reducido): `--dur-pulse` 2 s (onda del
+anillo, punto de directo, relleno de «comprobando»), `--dur-latido` 1,4 s
+(barras y textos de «comprobando…»), `--dur-giro` 900 ms (icono de
+«cargando»), `--dur-giro-lento` 1,6 s (anillo de señal comprobando),
+`--dur-brillo` 1,6 s (esqueletos) y `--dur-eq` 1,1 s (ecualizador de «suena»).
+Ninguna duración va escrita a mano en el CSS: siempre un token.
+
 ---
 
 ## 2. Reglas
@@ -136,7 +143,12 @@ La misma tabla de muelles que SwiftUI, muestreada con `linear()`:
   (`<ViewTransition>`) lanza la transición; donde no existe, la navegación es
   instantánea. Tipos `adelante`/`atras`. El partido que viaja de la fila de la
   agenda al centro de partido usa `partidoTransitionName(id)` en los dos sitios
-  (`src/app/transitions.ts`).
+  (`src/app/transitions.ts`). Cada vista va en su propia `<ViewTransition>`
+  dentro de su `<Activity>`: la que se deja sale y la que se abre entra, cada
+  una en su sitio de la pantalla (nunca una caja que se transforma en otra:
+  con scroll y altos distintos se deslizaba la página entera). Las barras de
+  navegación tienen nombre propio y quedan quietas encima. Al volver a una
+  vista, sus apariciones de entrada no se repiten.
 - **Movimiento reducido:** fundidos de 120-150 ms, sin ondas ni pulsos (el
   anillo queda fijo), «comprobando» con contorno discontinuo en vez de relleno
   (corrección 3) y sin escalonado.

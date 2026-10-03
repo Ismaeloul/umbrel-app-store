@@ -53,6 +53,7 @@ import { useBack, useNavigate, useRoute } from './router.tsx';
 import { formatVista, type Route, type Vista } from './routes.ts';
 import { restoreScroll } from './scroll-memory.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
+import { finishEntranceAnimations, VISTA_CAMBIA, VISTA_ENTRA, VISTA_SALE } from './transitions.ts';
 import { useShortcut } from './shortcuts.ts';
 import { AgendaColumn, asideComponent, PlayerDock, viewComponent } from './views.tsx';
 import './shell.css';
@@ -80,8 +81,19 @@ function ViewSkeleton({ vista }: { vista: Vista }) {
 function ViewSlot({ vista, route, active }: { vista: Vista; route: Route; active: boolean }) {
   const Component = viewComponent(vista);
   const navigate = useNavigate();
+  const ref = useRef<HTMLDivElement>(null);
+  const shown = useRef(false);
+  // Al volver a una vista ya vista, sus apariciones de entrada (filas
+  // escalonadas, tarjetas…) no se repiten: el navegador las relanza al quitar
+  // el display:none de Activity y se sumaban al fundido de la vista. Va en
+  // fase de layout: la instantánea de la View Transition ya sale terminada.
+  useLayoutEffect(() => {
+    if (!active) return;
+    if (shown.current) finishEntranceAnimations(ref.current);
+    shown.current = true;
+  }, [active]);
   return (
-    <div className="view" data-vista={vista} data-active={active ? 'true' : 'false'}>
+    <div ref={ref} className="view" data-vista={vista} data-active={active ? 'true' : 'false'}>
       <ErrorBoundary what={WHAT[vista]} onHome={() => navigate({ vista: 'agenda' })}>
         <Suspense fallback={<ViewSkeleton vista={vista} />}>
           <Component route={route} active={active} />
@@ -254,28 +266,46 @@ export function Shell() {
               {inPartido ? <StatusLineHost className="stage__status" /> : null}
             </div>
           ) : null}
-          <ViewTransition name="ace-vista">
-            <div className="views">
-              {visited.map((vista) => (
-                <Activity key={vista} mode={vista === route.vista ? 'visible' : 'hidden'}>
+          <div className="views">
+            {/* Una <ViewTransition> por vista, la primera cosa dentro de su
+                Activity: al cambiar de vista, una sale y otra entra, cada una
+                en su sitio (src/app/transitions.ts explica por qué). */}
+            {visited.map((vista) => (
+              <Activity key={vista} mode={vista === route.vista ? 'visible' : 'hidden'}>
+                <ViewTransition
+                  enter={VISTA_ENTRA}
+                  exit={VISTA_SALE}
+                  update={VISTA_CAMBIA}
+                  default="none"
+                >
                   <ViewSlot
                     vista={vista}
                     route={lastRoutes.current.get(vista) ?? route}
                     active={vista === route.vista}
                   />
-                </Activity>
-              ))}
-            </div>
-          </ViewTransition>
+                </ViewTransition>
+              </Activity>
+            ))}
+          </div>
         </main>
         {asideVisible && Aside ? (
-          <aside className="app-aside" aria-label="Panel lateral">
-            <ErrorBoundary what="el panel lateral">
-              <Suspense fallback={<SkeletonRows rows={4} label="Cargando el panel…" />}>
-                <Aside route={route} active />
-              </Suspense>
-            </ErrorBoundary>
-          </aside>
+          // El panel de cada vista entra y sale con ella (sin esto, el de
+          // Canales aparecía de golpe mientras la columna aún se fundía).
+          <ViewTransition
+            key={route.vista}
+            enter={VISTA_ENTRA}
+            exit={VISTA_SALE}
+            update="none"
+            default="none"
+          >
+            <aside className="app-aside" aria-label="Panel lateral">
+              <ErrorBoundary what="el panel lateral">
+                <Suspense fallback={<SkeletonRows rows={4} label="Cargando el panel…" />}>
+                  <Aside route={route} active />
+                </Suspense>
+              </ErrorBoundary>
+            </aside>
+          </ViewTransition>
         ) : null}
         <div className="bottom-veil" aria-hidden="true" hidden={!tabbarVisible} />
         <TabBar route={route} hidden={!tabbarVisible} />

@@ -112,3 +112,35 @@ describe('movimiento solo con transform y opacity', () => {
     ).toEqual([{ name: 'x', props: ['top', 'opacity'] }]);
   });
 });
+
+/* El reproductor lo lleva otro frente de trabajo: sus bucles (giro, ecualizador,
+   luz que respira, corte a negro) aún llevan cifras propias. */
+const DURACIONES_PENDIENTES = new Set(['player/player.css']);
+
+describe('duraciones del movimiento, siempre de los tokens', () => {
+  // Así el movimiento reducido las acorta todas a la vez (tokens.css) y no hay
+  // fundidos de 150 ms aquí y de 120 ms allá.
+  it('ninguna animación ni transición lleva su duración escrita a mano', () => {
+    const wrong: string[] = [];
+    for (const file of cssFiles(SRC)) {
+      const relative = path.relative(SRC, file).replace(/\\/g, '/');
+      if (relative === 'styles/tokens.css' || DURACIONES_PENDIENTES.has(relative)) continue;
+      const css = stripComments(readFileSync(file, 'utf8'));
+      // animation/transition (y su -duration); los retrasos no cuentan.
+      const re = /(?:^|[;{\s])((?:animation|transition)(?:-duration)?)\s*:\s*([^;{}]+)/g;
+      for (const match of css.matchAll(re)) {
+        const value = match[2] ?? '';
+        if (/(^|[\s,(])-?\d*\.?\d+m?s\b/.test(value))
+          wrong.push(`${relative}: ${match[1]}: ${value.trim()}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it('los tokens de movimiento se acortan con movimiento reducido', () => {
+    const tokens = readFileSync(path.join(SRC, 'styles/tokens.css'), 'utf8');
+    const reduced = tokens.slice(tokens.indexOf('@media (prefers-reduced-motion: reduce)'));
+    for (const token of ['--dur-rapido', '--dur-estandar', '--dur-heroe', '--stagger-step'])
+      expect(reduced).toContain(`${token}:`);
+  });
+});

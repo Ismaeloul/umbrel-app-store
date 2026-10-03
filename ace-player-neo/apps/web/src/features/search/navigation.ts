@@ -2,20 +2,16 @@
    «Buscar «{q}» en el motor AceStream» desde cualquier pestaña de la
    biblioteca). El texto viaja en la URL (`?vista=buscar&q=…`), así que también
    sirve de enlace directo; el buscador lo lee con useSearchParam('q') y lanza
-   la búsqueda al momento, sin la espera de 450 ms. */
+   la búsqueda al momento, sin la espera de 450 ms.
 
-import type { Navigate } from '../../app/router.tsx';
+   `q` es de Buscar (VISTA_PARAMS en app/routes.ts): se deja preparado para
+   Buscar y el router lo pone en la URL al llegar, sin pasar por la de Canales. */
+
+import { rememberViewParam, type Navigate } from '../../app/router.tsx';
 
 export const SEARCH_PARAM = 'q';
 
 export function goToEngineSearch(navigate: Navigate, query: string): void {
-  const q = query.trim();
-  try {
-    const params = new URLSearchParams(location.search);
-    if (q) params.set(SEARCH_PARAM, q);
-    else params.delete(SEARCH_PARAM);
-    const search = params.toString().replace(/%2F/gi, '/');
-    history.replaceState(history.state, '', `${location.pathname}${search ? `?${search}` : ''}`);
-  } catch {}
+  rememberViewParam('buscar', SEARCH_PARAM, query.trim() || null);
   navigate({ vista: 'buscar' });
 }

@@ -218,6 +218,26 @@
   height: calc(var(--safe-bottom) + var(--tabbar-gap) + var(--tabbar-h) + var(--mini-h) + 34px);
 }
 
+/* ---- Barras durante una transición de vista ------------------------------------
+   Las instantáneas de las vistas se pintan POR ENCIMA de toda la página: sin
+   nombre propio, las filas que quedan bajo la barra superior (o bajo la
+   inferior y su velo) se veían encima de ellas mientras duraba el fundido
+   (Canales con scroll, sobre todo). Con nombre, las barras son su propia
+   capa, encima de las vistas, y base.css las deja quietas (clase ace-barra):
+   la píldora sigue deslizándose porque la imagen nueva está viva. */
+.topbar {
+  view-transition-name: ace-barra-superior;
+  view-transition-class: ace-barra;
+}
+.bottom-veil {
+  view-transition-name: ace-velo;
+  view-transition-class: ace-barra;
+}
+.tabbar {
+  view-transition-name: ace-barra-inferior;
+  view-transition-class: ace-barra;
+}
+
 /* ---- Barra inferior flotante (móvil) -------------------------------------------
    Cristal, márgenes de 12, radio 24 y la sombra larga de Palco. La píldora
    (::before) es la única pieza que se mueve: translateX hasta la columna --i. */

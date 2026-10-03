@@ -7,6 +7,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, configure } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
+import { resetViewParamsMemory } from '../app/router.tsx';
 
 /* Las vistas y secciones perezosas (Ajustes, IPTV, Sistema) se transforman la
    primera vez que se piden; con `pnpm -r test` el servidor corre sus pruebas a
@@ -17,6 +18,8 @@ configure({ asyncUtilTimeout: 5_000 });
 
 afterEach(() => {
   cleanup();
+  // Lo que cada vista dejó en la URL (router.tsx) no pasa de un test a otro.
+  resetViewParamsMemory();
   try {
     localStorage.clear();
     sessionStorage.clear();

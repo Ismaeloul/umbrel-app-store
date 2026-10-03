@@ -117,7 +117,7 @@
 }
 /* El rebote del gol (W14): las cifras crecen un 14 % y vuelven. */
 .mc-scap.is-goal .mc-scap__digits {
-  animation: mc-rebote 720ms var(--ease-heroe) both;
+  animation: mc-rebote var(--dur-heroe) var(--ease-heroe) both;
 }
 @keyframes mc-rebote {
   0% {
@@ -801,6 +801,6 @@
     animation: none;
   }
   .mc-flip.is-turning {
-    animation: ace-funde 150ms ease-out both;
+    animation: ace-funde var(--dur-estandar) var(--ease-out) both;
   }
 }

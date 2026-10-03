@@ -411,6 +411,5 @@
 @media (prefers-reduced-motion: reduce) {
   .disp-pair {
     animation-name: ace-funde;
-    animation-duration: 150ms;
   }
 }

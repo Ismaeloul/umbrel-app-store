@@ -20,6 +20,7 @@ import { errorMessage, type WebSourceSummary } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, useApiQuery } from '../../api/index.ts';
+import { rememberViewParam } from '../../app/router.tsx';
 import { notify } from '../../notices/index.ts';
 import { cx } from '../../lib/cx.ts';
 import {
@@ -53,16 +54,9 @@ type Busy = { kind: 'add' } | { kind: 'refresh' | 'activate' | 'delete'; id: str
 type Note = { tone: 'info' | 'ok' | 'err'; text: string } | null;
 
 function setLibraryTabParam(tab: string): void {
-  // Tras guardar, la biblioteca abre en «Listas» (index.html:5773).
-  try {
-    const params = new URLSearchParams(location.search);
-    params.set('pestana', tab);
-    history.replaceState(
-      history.state,
-      '',
-      `${location.pathname}?${params.toString().replace(/%2F/gi, '/')}`,
-    );
-  } catch {}
+  // Tras guardar, la biblioteca abre en «Listas» (index.html:5773). Se deja
+  // preparado para Canales: la URL de Ajustes no lleva `pestana` (routes.ts).
+  rememberViewParam('biblioteca', 'pestana', tab);
 }
 
 export function DirectoriesSection() {

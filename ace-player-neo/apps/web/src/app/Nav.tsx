@@ -30,7 +30,7 @@ import { IconButton } from '../ui/Button.tsx';
 import { Icon } from '../ui/Icon.tsx';
 import type { IconName } from '../ui/icons.ts';
 import { EngineIndicator } from './EngineIndicator.tsx';
-import { useNavigate } from './router.tsx';
+import { rememberedViewParams, useNavigate } from './router.tsx';
 import { NAV_VISTAS, searchFor, VISTA_TITLE, type NavVista, type Route } from './routes.ts';
 import { preloadView } from './views.tsx';
 
@@ -48,7 +48,12 @@ function navRoute(vista: NavVista): Route {
 function useNavLink(current: Route) {
   const navigate = useNavigate();
   return (vista: NavVista) => ({
-    href: searchFor(navRoute(vista), globalThis.location?.search ?? ''),
+    // El mismo destino que el clic (abrir en otra pestaña lleva lo mismo).
+    href: searchFor(
+      navRoute(vista),
+      globalThis.location?.search ?? '',
+      rememberedViewParams(vista),
+    ),
     'aria-current': current.vista === vista ? ('page' as const) : undefined,
     onClick: (event: MouseEvent<HTMLAnchorElement>) => {
       if (

@@ -17,7 +17,7 @@ import { IPTV_BROWSE, IPTV_CLIENT, type IptvBrowseResponse } from '@ace/shared';
 import { useInfiniteQuery, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../api/index.ts';
-import { useRoute } from '../../../app/router.tsx';
+import { noteViewParams, useRoute } from '../../../app/router.tsx';
 import {
   readIptvState,
   sameFilters,
@@ -87,6 +87,7 @@ export function useIptvUrlState(): IptvUrlControls {
         urlWith(writeIptvState(location.search, next)),
       );
     } catch {}
+    noteViewParams();
     setState(next);
   }, []);
 
@@ -101,6 +102,7 @@ export function useIptvUrlState(): IptvUrlControls {
     try {
       history.replaceState(history.state, '', urlWith(writeIptvState(location.search, next)));
     } catch {}
+    noteViewParams();
     setState(next);
   }, []);
 
@@ -109,6 +111,7 @@ export function useIptvUrlState(): IptvUrlControls {
     try {
       history.replaceState(history.state, '', urlWith(writeIptvState(location.search, next)));
     } catch {}
+    noteViewParams();
     setState(next);
   }, []);
 
