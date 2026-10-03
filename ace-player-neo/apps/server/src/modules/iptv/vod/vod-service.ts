@@ -1,0 +1,1166 @@
+/* `VodService`: Películas y series de la IPTV (docs/vod.md §4-§8 y §10).
+
+   Es propiedad de `IptvServiceImpl`, que le presta por `VodHost` lo que ya
+   tiene: el proveedor y sus credenciales, la política de red (`policy()`),
+   el redactor, el cerrojo de trabajos pesados (`runHeavy('vod')`), si hay
+   una sesión IPTV abierta y el aviso `iptv.status`. Todo lo que ve
+   credenciales, URLs del proveedor o JSON crudo se queda en `modules/iptv`:
+   hacia fuera solo salen objetos reducidos con ids sellados (§5) y sellos
+   `v` de carteles (§8), con los textos del panel ya redactados.
+
+   - Catálogo: `catalog.ts` (sincronizar cada 24 h, guardar, carga perezosa).
+   - Rejilla y búsqueda: `search.ts`. Portada en una petición (§6.4).
+   - Fichas: `details.ts` (cola que no raspa el panel). Nunca en blanco.
+   - Carteles: `art.ts`. Progreso: `progress.ts` (`v2/vod.json`).
+
+   Estados (§4.8): `off` sin IPTV o en pausa; `unsupported` con M3U;
+   `preparing` en la primera sincronización o cargando `vod.enc`; `ready`
+   (con `stale` si la última falló); `none` si el proveedor no tiene VOD;
+   `error` si falló y no hay nada guardado. */
+
+import {
+  VOD_KINDS,
+  VOD_PROGRESS,
+  type IptvVodStatus,
+  type VodArtKind,
+  type VodBrowseQuery,
+  type VodBrowseResponse,
+  type VodCard,
+  type VodCatalogState,
+  type VodCatalogSummary,
+  type VodCategory,
+  type VodContinue,
+  type VodEpisode,
+  type VodHome,
+  type VodKind,
+  type VodMovie,
+  type VodProgressBody,
+  type VodProgressEntry,
+  type VodSeries,
+  type VodTagCount,
+  type VodTitle,
+} from '@ace/shared';
+import type { Clock, TimerHandle } from '../../../core/clock.js';
+import { AppError, errorCodeOf } from '../../../core/errors.js';
+import type { Logger } from '../../../core/logger.js';
+import type { IptvKeys } from '../../../config/keys.js';
+import type { IptvFetchPolicy, NetClient } from '../../net/types.js';
+import { categoryId, decodeCursor, encodeCursor } from '../browse.js';
+import type { XtreamCredentials } from '../xtream.js';
+import { VodArtCache, type ArtReply } from './art.js';
+import {
+  loadVodCatalog,
+  saveVodCatalog,
+  syncVodCatalog,
+  VOD_AT_START_MS,
+  VOD_DELAY_WATCHING_MS,
+  VOD_FIRST_AFTER_LIVE_MS,
+  VOD_MANUAL_MIN_AGE_MS,
+  vodDueAction,
+  vodDueAtStart,
+  vodPeriodicDelay,
+  vodRetryDelay,
+  type VodCatalog,
+} from './catalog.js';
+import { VodDetailsQueue, type VodDetailsResult } from './details.js';
+import { vodId, vodProviderFp, vodRef, type VodRef } from './ids.js';
+import {
+  CAT_NONE,
+  extName,
+  parseMovieInfo,
+  parseSeriesInfo,
+  playableHint,
+  type VodInfo,
+  type VodMovieInfo,
+  type VodSeriesInfo,
+} from './parse.js';
+import {
+  applyPref,
+  applyProgressEvent,
+  applySeriesEvent,
+  continueWatching,
+  episodeSubtitle,
+  nextEpisode,
+  seriesMain,
+  VodDocStore,
+  type EpisodeRef,
+  type ProgressTarget,
+} from './progress.js';
+import {
+  listPage,
+  parseVodQuery,
+  searchCached,
+  searchPage,
+  type VodFilter,
+} from './search.js';
+import type { VodTable } from './table.js';
+import { tagBit, tagsOf } from './titles.js';
+import { xtreamVodInfo } from './xtream-vod.js';
+
+/** Lo que `VodService` necesita del proveedor configurado. */
+export interface VodProvider {
+  readonly id: string;
+  readonly revision: number;
+  readonly kind: 'm3u' | 'xtream';
+  readonly enabled: boolean;
+  /** `host[:puerto]` que escribió Isma (el único de la LAN que vale para carteles). */
+  readonly host: string;
+}
+
+/** Lo que `IptvServiceImpl` presta a `VodService`. */
+export interface VodHost {
+  readonly net: NetClient;
+  readonly clock: Clock;
+  readonly logger: Logger;
+  readonly paths: {
+    readonly vodFile: string;
+    readonly vodCatalogFile: string;
+    readonly vodArtDir: string;
+  };
+  keys(): IptvKeys;
+  /** El proveedor, o null (sin IPTV o con secretos ilegibles). */
+  provider(): VodProvider | null;
+  /** Credenciales Xtream, o null. */
+  credentials(): XtreamCredentials | null;
+  /** Política de red de la IPTV (con la red de casa si el proveedor está en ella). */
+  policy(): IptvFetchPolicy;
+  /** Tapa secretos en un texto del panel. */
+  redact(text: string): string;
+  /** Un trabajo pesado IPTV (cerrojo común con la lista y la guía). */
+  runHeavy(task: (signal: AbortSignal) => Promise<void>): Promise<void>;
+  /** ¿Hay una sesión IPTV o VOD abierta? (las periódicas se aplazan). */
+  busy(): boolean;
+  /** Avisa de un cambio de estado (`iptv.status`). */
+  emitStatus(): void;
+  /** Duración que conoce el servidor para un id (la sesión VOD de VOD-5), o null. */
+  knownDurationS?(id: string): number | null;
+}
+
+type TimerName = 'sync';
+
+const HOME_ROWS = 20;
+const CATEGORY_MAX = 2_000;
+
+/** Etiquetas de lengua (§9.9). */
+const LANGUAGE_LABEL: Readonly<Record<string, string>> = {
+  spa: 'Castellano',
+  es: 'Castellano',
+  esp: 'Castellano',
+  'es-es': 'Castellano',
+  'es-419': 'Español (Latinoamérica)',
+  eng: 'Inglés',
+  en: 'Inglés',
+  fra: 'Francés',
+  fre: 'Francés',
+  fr: 'Francés',
+  ita: 'Italiano',
+  it: 'Italiano',
+  deu: 'Alemán',
+  ger: 'Alemán',
+  de: 'Alemán',
+  por: 'Portugués',
+  pt: 'Portugués',
+  cat: 'Catalán',
+  ca: 'Catalán',
+  jpn: 'Japonés',
+  ja: 'Japonés',
+};
+
+const VIDEO_LABEL: Readonly<Record<string, string>> = {
+  h264: 'H.264',
+  hevc: 'HEVC',
+  h265: 'HEVC',
+  mpeg4: 'MPEG-4',
+  mpeg2video: 'MPEG-2',
+  vc1: 'VC-1',
+  av1: 'AV1',
+  vp9: 'VP9',
+};
+
+const AUDIO_LABEL: Readonly<Record<string, string>> = {
+  aac: 'AAC',
+  ac3: 'AC-3',
+  eac3: 'E-AC-3',
+  dts: 'DTS',
+  truehd: 'TrueHD',
+  flac: 'FLAC',
+  opus: 'Opus',
+  mp3: 'MP3',
+  mp2: 'MP2',
+  vorbis: 'Vorbis',
+};
+
+/** «1080p · H.264». */
+export function videoLabel(info: Pick<VodMovieInfo, 'video'>): string | null {
+  const { codec, height } = info.video;
+  const resolution =
+    height === null
+      ? null
+      : height >= 2000
+        ? '4K'
+        : height >= 1000
+          ? '1080p'
+          : height >= 700
+            ? '720p'
+            : `${height}p`;
+  const name = codec ? (VIDEO_LABEL[codec] ?? codec.toUpperCase()) : null;
+  const text = [resolution, name].filter(Boolean).join(' · ');
+  return text ? text.slice(0, 40) : null;
+}
+
+/** «AC-3 5.1 · Castellano». */
+export function audioLabel(info: Pick<VodMovieInfo, 'audio0'>): string[] {
+  const audio = info.audio0;
+  if (!audio) return [];
+  const codec = audio.codec ? (AUDIO_LABEL[audio.codec] ?? audio.codec.toUpperCase()) : null;
+  const layout = audio.channels === 6 ? '5.1' : audio.channels === 8 ? '7.1' : null;
+  const lang = audio.lang ? (LANGUAGE_LABEL[audio.lang] ?? audio.lang.toUpperCase()) : null;
+  const head = [codec, layout].filter(Boolean).join(' ');
+  const text = [head, lang].filter(Boolean).join(' · ');
+  return text ? [text.slice(0, 40)] : [];
+}
+
+function iso(ms: number): string {
+  return new Date(ms).toISOString();
+}
+
+export class VodService {
+  private catalog: VodCatalog | null = null;
+  private loading: Promise<VodCatalog | null> | null = null;
+  private syncPromise: Promise<void> | null = null;
+  private failures = 0;
+  private delayedOnce = false;
+  private readonly timers = new Map<TimerName, TimerHandle>();
+  private started = false;
+  private stopped = false;
+  private docFp: string | null = null;
+  private readonly bucketIds = new WeakMap<VodTable, Map<string, number>>();
+  private homeCache: {
+    readonly catalog: VodCatalog;
+    readonly rows: Readonly<Record<VodKind, readonly number[]>>;
+    readonly categories: VodHome['categories'];
+    readonly tags: VodHome['tags'];
+  } | null = null;
+  readonly doc: VodDocStore;
+  readonly details: VodDetailsQueue;
+  readonly art: VodArtCache;
+
+  constructor(private readonly host: VodHost) {
+    this.doc = new VodDocStore({ file: host.paths.vodFile, clock: host.clock, logger: host.logger });
+    this.details = new VodDetailsQueue(host.clock, (kind, source, signal) =>
+      this.fetchInfo(kind, source, signal),
+    );
+    this.art = new VodArtCache({
+      net: host.net,
+      clock: host.clock,
+      logger: host.logger,
+      dir: host.paths.vodArtDir,
+      keys: () => host.keys(),
+      policyFor: (url) => this.imagePolicy(url),
+    });
+  }
+
+  // --- Ciclo de vida ---
+
+  /** Al arrancar la IPTV: sin red ni `vod.enc` (la carga es perezosa, §4.6). */
+  start(): void {
+    if (this.started || this.stopped) return;
+    this.started = true;
+    this.art.start();
+    this.syncDoc();
+    this.scheduleAtStart();
+  }
+
+  async stop(): Promise<void> {
+    this.stopped = true;
+    this.clearTimers();
+    this.details.stop();
+    this.art.stop();
+    await this.doc.flush();
+  }
+
+  private clearTimers(): void {
+    for (const timer of this.timers.values()) this.host.clock.clearTimeout(timer);
+    this.timers.clear();
+  }
+
+  private schedule(name: TimerName, ms: number, task: () => void): void {
+    const { clock } = this.host;
+    clock.clearTimeout(this.timers.get(name));
+    if (this.stopped || !this.started) return;
+    this.timers.set(
+      name,
+      clock.setTimeout(
+        () => {
+          this.timers.delete(name);
+          task();
+        },
+        Math.max(0, ms),
+        { unref: true },
+      ),
+    );
+  }
+
+  /** El proveedor Xtream activo, o null. */
+  private xtream(): VodProvider | null {
+    const provider = this.host.provider();
+    return provider && provider.enabled && provider.kind === 'xtream' && this.host.credentials()
+      ? provider
+      : null;
+  }
+
+  /** `v2/vod.json` es de este proveedor; si no, se vacía (§10.5). */
+  private syncDoc(): string | null {
+    const provider = this.host.provider();
+    if (!provider) return null;
+    const fp = vodProviderFp(this.host.keys(), provider.id);
+    if (this.docFp === fp) return fp;
+    const doc = this.doc.read();
+    if (doc.providerFp !== null && doc.providerFp !== fp) {
+      /* Otro proveedor: todos los ids cambian (§10.5). */
+      this.catalog = null;
+      this.homeCache = null;
+      this.details.clear();
+      void this.doc.reset(fp);
+    } else if (doc.providerFp === null) {
+      this.doc.adopt(fp);
+    }
+    this.docFp = fp;
+    return fp;
+  }
+
+  /** El resumen guardado, si es de este proveedor. */
+  private summary(): VodCatalogSummary | null {
+    const fp = this.syncDoc();
+    const doc = this.doc.read();
+    return fp && doc.providerFp === fp ? doc.catalog : null;
+  }
+
+  private scheduleAtStart(): void {
+    if (!this.xtream()) return;
+    const summary = this.summary();
+    const builtAt = summary?.builtAt ? Date.parse(summary.builtAt) : null;
+    const now = this.host.clock.now();
+    if (vodDueAtStart(builtAt, now) || summary?.state === 'error') {
+      this.schedule('sync', VOD_AT_START_MS, () => this.due());
+    } else if (builtAt !== null) {
+      this.schedule('sync', vodPeriodicDelay(builtAt, now), () => this.due());
+    }
+  }
+
+  /** ¿Ha habido ya una sincronización VOD con éxito (o un «sin VOD»)? */
+  private everSynced(): boolean {
+    const summary = this.summary();
+    return Boolean(summary && (summary.state === 'ready' || summary.state === 'none'));
+  }
+
+  /** Toca sincronizar: la primera no se aplaza; las siguientes, con alguien viendo, 1 h (§4.7). */
+  private due(): void {
+    const action = vodDueAction({
+      first: !this.everSynced(),
+      busy: this.host.busy(),
+      delayedOnce: this.delayedOnce,
+    });
+    if (action === 'delay') {
+      this.delayedOnce = true;
+      this.schedule('sync', VOD_DELAY_WATCHING_MS, () => this.due());
+      return;
+    }
+    this.delayedOnce = false;
+    void this.requestSync('periodic');
+  }
+
+  /** Tras la primera sincronización del directo con éxito: la primera del VOD, 60 s después. */
+  onLiveSynced(): void {
+    if (!this.started || !this.xtream() || this.everSynced() || this.syncPromise) return;
+    if (this.timers.has('sync')) return;
+    this.schedule('sync', VOD_FIRST_AFTER_LIVE_MS, () => this.due());
+  }
+
+  /** Ajustes → IPTV → «Actualizar»: también el VOD si tiene más de 1 h (§4.7). */
+  refreshIfOlder(minAgeMs: number = VOD_MANUAL_MIN_AGE_MS): void {
+    if (!this.xtream()) return;
+    const summary = this.summary();
+    const builtAt = summary?.builtAt ? Date.parse(summary.builtAt) : null;
+    if (builtAt !== null && this.host.clock.now() - builtAt < minAgeMs) return;
+    void this.requestSync('manual');
+  }
+
+  /** La IPTV se ha reanudado o ha cambiado: se recalcula la cadencia. */
+  reschedule(): void {
+    this.clearTimers();
+    this.syncDoc();
+    this.scheduleAtStart();
+  }
+
+  /**
+   * IPTV eliminada u otro proveedor (§10.5): se olvida el catálogo, la caché
+   * de fichas y la de carteles, y se vacía `v2/vod.json`. Los ficheros
+   * (`vod.enc` y `arte/`) los borra `IptvFiles.removeAll`.
+   */
+  async purge(): Promise<void> {
+    this.clearTimers();
+    this.catalog = null;
+    this.loading = null;
+    this.homeCache = null;
+    this.failures = 0;
+    this.delayedOnce = false;
+    this.details.clear();
+    this.art.reset();
+    this.docFp = null;
+    await this.doc.reset(null);
+  }
+
+  // --- Sincronización ---
+
+  /** Sincroniza el catálogo (se engancha a la que esté en marcha). */
+  requestSync(reason: 'periodic' | 'manual' | 'vista'): Promise<void> {
+    const provider = this.xtream();
+    const credentials = this.host.credentials();
+    if (!provider || !credentials) return Promise.resolve();
+    if (this.syncPromise) return this.syncPromise;
+    const fp = this.syncDoc() as string;
+    const snapshot = { id: provider.id, revision: provider.revision, fp };
+    const promise = this.host
+      .runHeavy((signal) => this.doSync(signal, snapshot, credentials, reason))
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.syncPromise === promise) this.syncPromise = null;
+        this.host.emitStatus();
+      });
+    this.syncPromise = promise;
+    this.host.emitStatus();
+    return promise;
+  }
+
+  private stillCurrent(snapshot: { id: string; revision: number }, signal: AbortSignal): boolean {
+    const provider = this.xtream();
+    return Boolean(
+      provider && provider.id === snapshot.id && provider.revision === snapshot.revision && !signal.aborted,
+    );
+  }
+
+  private async doSync(
+    signal: AbortSignal,
+    snapshot: { id: string; revision: number; fp: string },
+    credentials: XtreamCredentials,
+    reason: string,
+  ): Promise<void> {
+    const { clock, logger } = this.host;
+    if (!this.stillCurrent(snapshot, signal)) return;
+    const startedAt = clock.now();
+    const mode = this.catalog?.meta.mode ?? 'completo';
+    try {
+      const result = await syncVodCatalog(
+        { net: this.host.net, clock, logger, credentials, policy: this.host.policy(), signal },
+        { providerId: snapshot.id, providerFp: snapshot.fp, revision: snapshot.revision, mode },
+      );
+      if (!this.stillCurrent(snapshot, signal)) return;
+      this.failures = 0;
+      if (result.state === 'none') {
+        this.catalog = null;
+        this.homeCache = null;
+        await this.doc.setCatalog({
+          state: 'none',
+          movies: 0,
+          series: 0,
+          builtAt: iso(clock.now()),
+          truncated: false,
+          skipped: result.skipped,
+        });
+        logger.info({ reason, ms: clock.now() - startedAt }, 'VOD: el proveedor no ofrece películas ni series');
+      } else {
+        const { catalog } = result;
+        await saveVodCatalog(this.host.paths.vodCatalogFile, this.host.keys(), catalog).catch(
+          (error: unknown) => logger.warn({ err: error }, 'VOD: no se pudo guardar vod.enc'),
+        );
+        if (!this.stillCurrent(snapshot, signal)) return;
+        this.catalog = catalog;
+        this.homeCache = null;
+        this.details.clear();
+        await this.doc.setCatalog({
+          state: 'ready',
+          movies: catalog.tables.movie.n,
+          series: catalog.tables.series.n,
+          builtAt: iso(catalog.meta.builtAt),
+          truncated: catalog.meta.truncated,
+          skipped: catalog.meta.skipped,
+        });
+        logger.info(
+          {
+            reason,
+            movies: catalog.tables.movie.n,
+            series: catalog.tables.series.n,
+            skipped: catalog.meta.skipped,
+            truncated: catalog.meta.truncated,
+            mode: catalog.meta.mode,
+            ms: clock.now() - startedAt,
+          },
+          'VOD: catálogo sincronizado',
+        );
+        if (catalog.meta.skipped > 0) {
+          logger.warn({ skipped: catalog.meta.skipped }, 'VOD: títulos que no se han podido leer');
+        }
+      }
+      this.schedule('sync', vodPeriodicDelay(clock.now(), clock.now()), () => this.due());
+    } catch (error) {
+      if (!this.stillCurrent(snapshot, signal)) return;
+      this.failures += 1;
+      logger.warn(
+        { reason, errorCode: errorCodeOf(error) ?? 'desconocido', failures: this.failures },
+        'VOD: la sincronización ha fallado',
+      );
+      if (!this.catalog && !this.everSyncedReady()) {
+        await this.doc
+          .setCatalog({
+            state: 'error',
+            movies: 0,
+            series: 0,
+            builtAt: null,
+            truncated: false,
+            skipped: 0,
+          })
+          .catch(() => undefined);
+      }
+      this.schedule('sync', vodRetryDelay(this.failures), () => this.due());
+    }
+  }
+
+  private everSyncedReady(): boolean {
+    return this.summary()?.state === 'ready';
+  }
+
+  /** El catálogo en memoria, cargando `vod.enc` la primera vez (perezoso, §4.6). */
+  private async ensureCatalog(): Promise<VodCatalog | null> {
+    const provider = this.xtream();
+    if (!provider) return null;
+    const fp = this.syncDoc() as string;
+    if (this.catalog?.providerId === provider.id) return this.catalog;
+    this.catalog = null;
+    const summary = this.summary();
+    if (summary?.state !== 'ready') {
+      /* Nunca sincronizado (o falló): la primera petición a la vista la lanza. */
+      if (!summary || summary.state === 'error') void this.requestSync('vista');
+      return null;
+    }
+    this.loading ??= (async () => {
+      this.host.emitStatus();
+      const loaded = await loadVodCatalog(
+        this.host.paths.vodCatalogFile,
+        this.host.keys(),
+        provider.id,
+        fp,
+        this.host.logger,
+      );
+      if (loaded && this.xtream()?.id === provider.id) {
+        this.catalog = loaded;
+        this.homeCache = null;
+      } else if (!loaded) {
+        await this.doc.setCatalog(null).catch(() => undefined);
+        void this.requestSync('vista');
+      }
+      return this.catalog;
+    })().finally(() => {
+      this.loading = null;
+      this.host.emitStatus();
+    });
+    return this.loading;
+  }
+
+  // --- Estado ---
+
+  /** Estado del catálogo (§4.8). */
+  state(): VodCatalogState {
+    const provider = this.host.provider();
+    if (!provider || !provider.enabled || !this.host.credentials() && provider.kind === 'xtream') {
+      return 'off';
+    }
+    if (provider.kind !== 'xtream') return 'unsupported';
+    if (this.catalog) return 'ready';
+    if (this.loading) return 'preparing';
+    const summary = this.summary();
+    if (summary?.state === 'ready') return 'ready';
+    if (this.syncPromise) return 'preparing';
+    if (summary?.state === 'none') return 'none';
+    if (summary?.state === 'error') return 'error';
+    return 'preparing';
+  }
+
+  /** `IptvStatus.vod` (§11.4), o undefined sin IPTV. */
+  status(): IptvVodStatus | undefined {
+    const provider = this.host.provider();
+    if (!provider) return undefined;
+    const state = this.state();
+    const summary = this.summary();
+    const ready = state === 'ready' && summary?.state === 'ready';
+    return {
+      state,
+      movies: ready ? Math.max(0, summary.movies) : 0,
+      series: ready ? Math.max(0, summary.series) : 0,
+      builtAt: summary?.state === 'ready' ? summary.builtAt : null,
+      truncated: ready ? summary.truncated : false,
+      skipped: summary ? Math.max(0, summary.skipped) : 0,
+      stale: ready && this.failures > 0,
+    };
+  }
+
+  /** `bootstrap.features.vod` (§11.4): Xtream activo y catálogo `ready` con algún título, o `preparing`. */
+  feature(): boolean {
+    const state = this.state();
+    if (state === 'preparing') return true;
+    if (state !== 'ready') return false;
+    const summary = this.summary();
+    return Boolean(summary && summary.movies + summary.series > 0);
+  }
+
+  /** ¿Es un id VOD de este proveedor? (§5.3). */
+  isVodId(id: string): boolean {
+    const provider = this.host.provider();
+    return Boolean(provider && vodRef(this.host.keys(), provider.id, id));
+  }
+
+  // --- Piezas ---
+
+  private providerId(): string {
+    const provider = this.xtream();
+    if (!provider) throw new AppError('vod_unavailable', { detail: 'sin IPTV Xtream activa' });
+    return provider.id;
+  }
+
+  private text(value: string, max: number): string {
+    return this.host.redact(value).slice(0, max);
+  }
+
+  private textOrNull(value: string | null, max: number): string | null {
+    if (!value) return null;
+    const text = this.text(value, max).trim();
+    return text || null;
+  }
+
+  private idOf(kind: 'movie' | 'series', source: number): string {
+    return vodId(this.host.keys(), this.providerId(), { kind, parent: 0, source });
+  }
+
+  private posterStamp(table: VodTable, row: number): string | null {
+    const url = table.posterUrl(row);
+    return url ? this.art.stamp(url) : null;
+  }
+
+  private progressMap(): Map<string, VodProgressEntry> {
+    return new Map(this.doc.read().progress.map((entry) => [entry.id, entry] as const));
+  }
+
+  private card(
+    kind: VodKind,
+    table: VodTable,
+    row: number,
+    progress: ReadonlyMap<string, VodProgressEntry>,
+  ): VodCard {
+    const id = this.idOf(kind, table.source[row] as number);
+    const entry = kind === 'movie' ? progress.get(id) : undefined;
+    return {
+      id,
+      kind,
+      title: this.text(table.title(row), 200) || 'Sin título',
+      year: table.yearOf(row),
+      rating: table.ratingOf(row),
+      poster: this.posterStamp(table, row),
+      tags: tagsOf(table.tags[row] as number),
+      adult: table.isAdult(row),
+      progress:
+        entry && entry.durS > 0
+          ? entry.watched
+            ? 1
+            : Math.max(0, Math.min(1, entry.posS / entry.durS))
+          : null,
+    };
+  }
+
+  /** Id de 12 hex de cada categoría → cubeta de la tabla (§5.4). */
+  private buckets(kind: VodKind, table: VodTable): Map<string, number> {
+    let map = this.bucketIds.get(table);
+    if (map) return map;
+    map = new Map();
+    const providerId = this.providerId();
+    for (const [index, name] of table.cats.entries()) {
+      map.set(categoryId(providerId, `vod\n${kind}\n${name}`), index);
+    }
+    map.set('none', table.cats.length);
+    this.bucketIds.set(table, map);
+    return map;
+  }
+
+  private categoryIdOf(kind: VodKind, table: VodTable, row: number): VodMovie['category'] {
+    const value = table.cat[row] as number;
+    if (value === CAT_NONE || value >= table.cats.length) return null;
+    const name = table.cats[value] ?? '';
+    return {
+      id: categoryId(this.providerId(), `vod\n${kind}\n${name}`),
+      name: this.text(name, 120),
+    };
+  }
+
+  private categoriesOf(kind: VodKind, table: VodTable): VodCategory[] {
+    const out: Array<VodCategory & { order: number }> = [];
+    const providerId = this.providerId();
+    for (let bucket = 0; bucket <= table.cats.length; bucket += 1) {
+      const count = (table.byCatStart[bucket + 1] as number) - (table.byCatStart[bucket] as number);
+      if (!count) continue;
+      const none = bucket === table.cats.length;
+      const name = none ? 'Sin categoría' : (table.cats[bucket] ?? '');
+      const rows = table.categoryRows(bucket);
+      let adult = true;
+      for (const row of rows) {
+        if (!table.isAdult(row)) {
+          adult = false;
+          break;
+        }
+      }
+      out.push({
+        id: none ? 'none' : categoryId(providerId, `vod\n${kind}\n${name}`),
+        kind,
+        name: this.text(name, 120) || 'Sin nombre',
+        count,
+        adult,
+        order: none ? Number.MAX_SAFE_INTEGER - 1 : bucket,
+      });
+    }
+    /* Las de adultos al final (D-VOD7); «Sin categoría», antes de ellas. */
+    out.sort((a, b) => Number(a.adult) - Number(b.adult) || a.order - b.order);
+    return out.slice(0, CATEGORY_MAX).map(({ order: _order, ...category }) => category);
+  }
+
+  private tagCountsOf(table: VodTable): VodTagCount[] {
+    return listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, 0).tagCounts.map((item) => ({
+      tag: item.tag,
+      count: item.count,
+    }));
+  }
+
+  private homeParts(catalog: VodCatalog): NonNullable<VodService['homeCache']> {
+    if (this.homeCache?.catalog === catalog) return this.homeCache;
+    const newest = (table: VodTable): number[] =>
+      listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, HOME_ROWS).rows.slice();
+    this.homeCache = {
+      catalog,
+      rows: { movie: newest(catalog.tables.movie), series: newest(catalog.tables.series) },
+      categories: {
+        movie: this.categoriesOf('movie', catalog.tables.movie),
+        series: this.categoriesOf('series', catalog.tables.series),
+      },
+      tags: {
+        movie: this.tagCountsOf(catalog.tables.movie),
+        series: this.tagCountsOf(catalog.tables.series),
+      },
+    };
+    return this.homeCache;
+  }
+
+  private continueRow(catalog: VodCatalog): VodContinue[] {
+    const keys = this.host.keys();
+    const providerId = catalog.providerId;
+    const out: VodContinue[] = [];
+    for (const item of continueWatching(this.doc.read().progress)) {
+      const { entry } = item;
+      const ref = vodRef(keys, providerId, entry.id);
+      if (!ref) continue;
+      /* El cartel: el de la película o el de su serie. */
+      let art: VodContinue['art'] = null;
+      const posterOf = (kind: VodKind, source: number, id: string): VodContinue['art'] => {
+        const table = catalog.tables[kind];
+        const row = table.rowOf(source);
+        const stamp = row >= 0 ? this.posterStamp(table, row) : null;
+        return stamp ? { id, art: 'poster', v: stamp } : null;
+      };
+      if (ref.kind === 'movie') art = posterOf('movie', ref.source, entry.id);
+      else if (ref.kind === 'episode' && entry.seriesId) art = posterOf('series', ref.parent, entry.seriesId);
+      const next = item.isNext ? entry.next : null;
+      out.push({
+        id: next ? next.id : entry.id,
+        kind: entry.kind,
+        seriesId: entry.seriesId,
+        title: this.text(entry.title, 200),
+        subtitle: next
+          ? this.text(`Siguiente: ${next.label}`, 120)
+          : entry.subtitle
+            ? this.text(entry.subtitle, 120)
+            : null,
+        posS: next ? 0 : entry.posS,
+        durS: next ? 0 : entry.durS,
+        isNext: item.isNext,
+        art,
+        updatedAt: iso(entry.updatedAt),
+      });
+    }
+    return out;
+  }
+
+  private emptyHome(state: VodCatalogState, active: boolean): VodHome {
+    const summary = this.summary();
+    return {
+      active,
+      state,
+      counts: { movies: 0, series: 0 },
+      builtAt: summary?.state === 'ready' || summary?.state === 'none' ? summary.builtAt : null,
+      truncated: false,
+      stale: false,
+      continue: [],
+      newMovies: [],
+      updatedSeries: [],
+      categories: { movie: [], series: [] },
+      tags: { movie: [], series: [] },
+    };
+  }
+
+  private active(): boolean {
+    const provider = this.host.provider();
+    return Boolean(provider?.enabled);
+  }
+
+  // --- Rutas ---
+
+  /** GET /api/v1/vod (§6.4, D-VOD28). */
+  async home(): Promise<VodHome> {
+    const catalog = await this.ensureCatalog();
+    const state = this.state();
+    if (!catalog || state !== 'ready') return this.emptyHome(state, this.active());
+    const parts = this.homeParts(catalog);
+    const progress = this.progressMap();
+    const cards = (kind: VodKind): VodCard[] =>
+      parts.rows[kind].map((row) => this.card(kind, catalog.tables[kind], row, progress));
+    return {
+      active: true,
+      state,
+      counts: { movies: catalog.tables.movie.n, series: catalog.tables.series.n },
+      builtAt: iso(catalog.meta.builtAt),
+      truncated: catalog.meta.truncated,
+      stale: this.failures > 0,
+      continue: this.continueRow(catalog),
+      newMovies: cards('movie'),
+      updatedSeries: cards('series'),
+      categories: parts.categories,
+      tags: parts.tags,
+    };
+  }
+
+  /** GET /api/v1/vod/browse (§6). */
+  async browse(query: VodBrowseQuery): Promise<VodBrowseResponse> {
+    /* La consulta se valida siempre (también sin catálogo): `empty_query`. */
+    const parsed = query.q !== undefined && query.q.trim() !== '' ? parseVodQuery(query.q) : null;
+    let cursor: { stamp: string; offset: number } | null = null;
+    if (query.cursor !== undefined) {
+      cursor = decodeCursor(query.cursor);
+      if (!cursor) throw new AppError('validation_error', { detail: 'cursor' });
+    }
+    const catalog = await this.ensureCatalog();
+    const state = this.state();
+    const empty: VodBrowseResponse = {
+      active: this.active(),
+      state,
+      items: [],
+      total: 0,
+      capped: false,
+      otherKindTotal: parsed ? 0 : null,
+      tags: [],
+      nextCursor: null,
+      stale: false,
+    };
+    if (!catalog || state !== 'ready') return empty;
+    const table = catalog.tables[query.kind];
+    let bucket: number | null = null;
+    if (query.cat !== 'all') {
+      const found = this.buckets(query.kind, table).get(query.cat);
+      if (found === undefined) return { ...empty, active: true };
+      bucket = found;
+    }
+    const stale = Boolean(cursor && cursor.stamp !== catalog.stamp);
+    const offset = cursor && !stale ? cursor.offset : 0;
+    const filter: VodFilter = { bucket, tagBit: query.tag ? tagBit(query.tag) : 0 };
+    const page = parsed
+      ? searchPage(searchCached(table, parsed, bucket), table, filter, offset, query.limit)
+      : listPage(table, filter, query.sort, offset, query.limit);
+    const other = VOD_KINDS.find((kind) => kind !== query.kind) as VodKind;
+    const progress = this.progressMap();
+    return {
+      active: true,
+      state,
+      items: page.rows.map((row) => this.card(query.kind, table, row, progress)),
+      total: page.total,
+      capped: page.capped,
+      otherKindTotal: parsed ? searchCached(catalog.tables[other], parsed, null).total : null,
+      tags: page.tagCounts.map((item) => ({ tag: item.tag, count: item.count })),
+      nextCursor: page.more ? encodeCursor(catalog.stamp, offset + page.rows.length) : null,
+      stale,
+    };
+  }
+
+  /** Película o serie de un id (con su fila), o `vod_not_found`. */
+  private async locate(id: string, kinds: readonly VodRef['kind'][]): Promise<{
+    readonly catalog: VodCatalog;
+    readonly ref: VodRef;
+    readonly table: VodTable;
+    readonly row: number;
+  }> {
+    const providerId = this.providerId();
+    const ref = vodRef(this.host.keys(), providerId, id);
+    if (!ref || !kinds.includes(ref.kind)) throw new AppError('vod_not_found', { detail: 'id' });
+    const catalog = await this.ensureCatalog();
+    if (!catalog) throw new AppError('vod_unavailable', { detail: `catálogo ${this.state()}` });
+    const kind: VodKind = ref.kind === 'movie' ? 'movie' : 'series';
+    const table = catalog.tables[kind];
+    const row = table.rowOf(ref.kind === 'episode' ? ref.parent : ref.source);
+    if (row < 0) throw new AppError('vod_not_found', { detail: 'fila' });
+    return { catalog, ref, table, row };
+  }
+
+  private async fetchInfo(kind: VodKind, source: number, signal: AbortSignal): Promise<VodInfo> {
+    const credentials = this.host.credentials();
+    if (!credentials || !this.xtream()) throw new AppError('vod_unavailable');
+    const body = await xtreamVodInfo(this.host.net, credentials, kind, source, {
+      policy: this.host.policy(),
+      signal,
+    });
+    return kind === 'movie' ? parseMovieInfo(body) : parseSeriesInfo(body);
+  }
+
+  /** Episodios de una ficha de serie en orden de reproducción, con sus ids sellados. */
+  private episodesOf(seriesSource: number, info: VodSeriesInfo): EpisodeRef[] {
+    const keys = this.host.keys();
+    const providerId = this.providerId();
+    const out: EpisodeRef[] = [];
+    if (seriesSource > 0xffff_ffff) return out;
+    for (const season of info.seasons) {
+      for (const episode of season.episodes) {
+        out.push({
+          id: vodId(keys, providerId, { kind: 'episode', parent: seriesSource, source: episode.source }),
+          season: season.number,
+          number: episode.number,
+          title: this.text(episode.title, 200),
+        });
+      }
+    }
+    return out;
+  }
+
+  /** GET /api/v1/vod/titles/:id (§7). Nunca 502: lo de la lista con `info: failed`. */
+  async title(id: string, options: { readonly pre?: boolean } = {}): Promise<VodTitle> {
+    const { ref, table, row } = await this.locate(id, ['movie', 'series']);
+    const kind: VodKind = ref.kind === 'movie' ? 'movie' : 'series';
+    const result: VodDetailsResult = await this.details.get(kind, ref.source, {
+      pre: options.pre === true,
+    });
+    const info = result.info === 'ok' ? result.data : null;
+    const poster = this.posterStamp(table, row);
+    const listPart = {
+      id,
+      info: result.info,
+      title: this.text(table.title(row), 200) || 'Sin título',
+      year: table.yearOf(row) ?? info?.year ?? null,
+      plot: this.textOrNull(info?.plot ?? null, 2_000),
+      genres: (info?.genres ?? []).map((genre) => this.text(genre, 40)).filter(Boolean).slice(0, 8),
+      cast: (info?.cast ?? []).map((name) => this.text(name, 80)).filter(Boolean).slice(0, 12),
+      director: this.textOrNull(info?.director ?? null, 200),
+      country: this.textOrNull(info?.country ?? null, 80),
+      rating: table.ratingOf(row) ?? info?.rating ?? null,
+      poster: poster ?? (info?.cover ? this.art.stamp(info.cover) : null),
+      backdrop: info?.backdrop ? this.art.stamp(info.backdrop) : null,
+      tags: tagsOf(table.tags[row] as number),
+      adult: table.isAdult(row),
+      category: this.categoryIdOf(kind, table, row),
+    };
+    const progress = this.progressMap();
+    if (kind === 'movie') {
+      const movie = info && info.kind === 'movie' ? info : null;
+      const ext = movie?.ext || (table.ext[row] as number);
+      const entry = progress.get(id);
+      const title: VodMovie = {
+        kind: 'movie',
+        ...listPart,
+        originalTitle: this.textOrNull(movie?.originalTitle ?? null, 200),
+        ageRating: this.textOrNull(movie?.ageRating ?? null, 16),
+        durationS: movie?.durationS ?? null,
+        tech: {
+          container: extName(ext),
+          video: movie ? videoLabel(movie) : null,
+          audio: movie ? audioLabel(movie) : [],
+        },
+        playable: playableHint(movie?.video.codec ?? null, movie?.video.bitDepth ?? null, ext),
+        progress: entry ? { posS: entry.posS, durS: entry.durS, watched: entry.watched } : null,
+      };
+      return title;
+    }
+    const series = info && info.kind === 'series' ? info : null;
+    const episodes = series ? this.episodesOf(ref.source, series) : [];
+    const byId = new Map(episodes.map((episode) => [episode.id, episode] as const));
+    let index = 0;
+    const seasons: VodSeries['seasons'] = (series?.seasons ?? []).map((season) => ({
+      n: season.number,
+      name: this.text(season.name, 80),
+      episodes: season.episodes.flatMap((episode): VodEpisode[] => {
+        const refEpisode = episodes[index];
+        index += 1;
+        if (!refEpisode || !byId.has(refEpisode.id)) return [];
+        const entry = progress.get(refEpisode.id);
+        return [
+          {
+            id: refEpisode.id,
+            n: episode.number,
+            title: refEpisode.title || `Episodio ${episode.number}`,
+            plot: this.textOrNull(episode.plot, 600),
+            durationS: episode.durationS,
+            still: episode.still ? this.art.stamp(episode.still) : null,
+            playable: playableHint(episode.codec, episode.bitDepth, episode.ext),
+            progress: entry ? { posS: entry.posS, durS: entry.durS, watched: entry.watched } : null,
+          },
+        ];
+      }),
+    }));
+    const title: VodSeries = {
+      kind: 'series',
+      ...listPart,
+      seasons,
+      main: episodes.length ? seriesMain(episodes, progress) : null,
+      truncated: series?.truncated ?? false,
+    };
+    return title;
+  }
+
+  /** La ficha (de la caché o por la cola, sin `pre`), o null si falla. */
+  private async infoOf(kind: VodKind, source: number): Promise<VodInfo | null> {
+    const result = await this.details.get(kind, source);
+    return result.info === 'ok' ? result.data : null;
+  }
+
+  /** GET /api/v1/vod/titles/:id/art/:art (§8). */
+  async artOf(
+    id: string,
+    art: VodArtKind,
+    version: string | undefined,
+    ifNoneMatch: string | undefined,
+  ): Promise<ArtReply> {
+    if (!this.xtream()) throw new AppError('vod_not_found', { detail: 'sin IPTV Xtream activa' });
+    const { ref, table, row } = await this.locate(id, ['movie', 'series', 'episode']);
+    let url: string | null = null;
+    if (art === 'poster') {
+      url = table.posterUrl(row);
+      if (!url && ref.kind !== 'episode') {
+        const info = this.details.peek(ref.kind, ref.source);
+        url = info?.cover ?? null;
+      }
+    } else if (art === 'backdrop') {
+      const kind: VodKind = ref.kind === 'movie' ? 'movie' : 'series';
+      const info = await this.infoOf(kind, ref.kind === 'episode' ? ref.parent : ref.source);
+      url = info?.backdrop ?? null;
+    } else if (ref.kind === 'episode') {
+      const info = await this.infoOf('series', ref.parent);
+      if (info?.kind === 'series') {
+        for (const season of info.seasons) {
+          const episode = season.episodes.find((item) => item.source === ref.source);
+          if (episode) {
+            url = episode.still;
+            break;
+          }
+        }
+      }
+    }
+    if (!url) throw new AppError('vod_not_found', { detail: `sin ${art}` });
+    return this.art.serve(url, art, version, ifNoneMatch);
+  }
+
+  /** Filtro de una imagen (§8): la red de casa solo para el host EXACTO del proveedor. */
+  private imagePolicy(url: URL): IptvFetchPolicy {
+    const base = this.host.policy();
+    const provider = this.host.provider();
+    const exact = Boolean(provider && url.host.toLowerCase() === provider.host.toLowerCase());
+    return { ...base, lan: base.lan && exact };
+  }
+
+  /** Lo que se sabe de un episodio para el progreso (textos, orden y siguiente). */
+  private async episodeTarget(
+    id: string,
+    ref: VodRef,
+    seriesTitle: string,
+  ): Promise<{ target: ProgressTarget; episodes: EpisodeRef[] }> {
+    const seriesId = this.idOf('series', ref.parent);
+    const info = await this.infoOf('series', ref.parent);
+    const episodes = info?.kind === 'series' ? this.episodesOf(ref.parent, info) : [];
+    const episode = episodes.find((item) => item.id === id) ?? null;
+    return {
+      target: {
+        id,
+        kind: 'episode',
+        seriesId,
+        title: seriesTitle,
+        subtitle: episode ? episodeSubtitle(episode) : null,
+        season: episode ? episode.season : null,
+        episode: episode ? episode.number : null,
+      },
+      episodes,
+    };
+  }
+
+  /** POST /api/v1/vod/titles/:id/progress (§10.2): 204 sin cuerpo. */
+  async progress(id: string, body: VodProgressBody): Promise<void> {
+    const { ref, table, row } = await this.locate(id, ['movie', 'series', 'episode']);
+    const now = this.host.clock.now();
+    const title = this.text(table.title(row), 200) || 'Sin título';
+    if (ref.kind === 'series') {
+      if (body.event !== 'hide' && body.event !== 'forget') {
+        throw new AppError('validation_error', { detail: 'event' });
+      }
+      const event = body.event;
+      await this.doc.write((doc) => ({ ...doc, progress: applySeriesEvent(doc.progress, id, event) }));
+      return;
+    }
+    let target: ProgressTarget;
+    let episodes: EpisodeRef[] = [];
+    if (ref.kind === 'movie') {
+      target = { id, kind: 'movie', seriesId: null, title, subtitle: null, season: null, episode: null };
+    } else {
+      ({ target, episodes } = await this.episodeTarget(id, ref, title));
+    }
+    const context = {
+      now,
+      knownDurationS: this.host.knownDurationS?.(id) ?? null,
+      next: null as { id: string; label: string } | null,
+      through: undefined as ProgressTarget[] | undefined,
+    };
+    if (body.event === 'ended' && ref.kind === 'episode') {
+      const next = nextEpisode(episodes, id);
+      context.next = next ? { id: next.id, label: episodeSubtitle(next).slice(0, 80) } : null;
+    }
+    if (body.event === 'mark-through' && ref.kind === 'episode') {
+      const index = episodes.findIndex((episode) => episode.id === id);
+      const upTo = index >= 0 ? episodes.slice(0, index + 1) : [];
+      context.through = (upTo.length ? upTo : []).slice(-VOD_PROGRESS.markThroughMax).map((episode) => ({
+        id: episode.id,
+        kind: 'episode' as const,
+        seriesId: target.seriesId,
+        title,
+        subtitle: episodeSubtitle(episode),
+        season: episode.season,
+        episode: episode.number,
+      }));
+      if (!context.through.length) context.through = [target];
+    }
+    const prefId = target.seriesId ?? id;
+    const mutate = (doc: ReturnType<VodDocStore['read']>) => ({
+      ...doc,
+      progress: applyProgressEvent(doc.progress, target, body, context),
+      prefs: applyPref(doc.prefs, prefId, { audio: body.audio, subtitle: body.subtitle }, now),
+    });
+    if (body.event === 'tick') this.doc.soft(mutate);
+    else await this.doc.write(mutate);
+  }
+
+  /** Para los tests: el catálogo en memoria. */
+  catalogForTests(): VodCatalog | null {
+    return this.catalog;
+  }
+
+  /** Espera a la sincronización en marcha (tests). */
+  async idle(): Promise<void> {
+    await this.syncPromise;
+    await this.loading;
+  }
+}
