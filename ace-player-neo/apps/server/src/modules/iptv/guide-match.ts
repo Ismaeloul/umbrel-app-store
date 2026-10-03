@@ -109,9 +109,27 @@ export interface GuideMatchOptions {
 
 // --- Texto ---
 
+/* Los títulos y las categorías de una guía se repiten mucho («Deportes», «Telediario», el título de
+   una serie): los cortos se normalizan una vez. Con tope: la memoria no crece sin límite. */
+const NORMALIZED_MEMO = new Map<string, string>();
+const NORMALIZED_MEMO_MAX = 8192;
+const NORMALIZED_MEMO_LENGTH = 160;
+
 /** Minúsculas, sin tildes y con los separadores unificados. */
 export function normalizeGuideText(value: string): string {
-  return String(value ?? '')
+  const raw = String(value ?? '');
+  if (raw.length > NORMALIZED_MEMO_LENGTH) return computeNormalized(raw);
+  let normalized = NORMALIZED_MEMO.get(raw);
+  if (normalized === undefined) {
+    normalized = computeNormalized(raw);
+    if (NORMALIZED_MEMO.size >= NORMALIZED_MEMO_MAX) NORMALIZED_MEMO.clear();
+    NORMALIZED_MEMO.set(raw, normalized);
+  }
+  return normalized;
+}
+
+function computeNormalized(raw: string): string {
+  return raw
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
@@ -294,7 +312,12 @@ const TEAM_PARTICLES_RE = /(?<![a-z0-9])(?:de|del|la|el)(?![a-z0-9])/g;
  * «Bayern de Múnich» y «Bayern Múnich» se encuentran el uno al otro.
  */
 export function teamSearchText(value: string): string {
-  return normalizeGuideText(value)
+  return teamSearchFromNormalized(normalizeGuideText(value));
+}
+
+/** `teamSearchText` sobre un texto ya pasado por `normalizeGuideText` (para no normalizarlo dos veces). */
+function teamSearchFromNormalized(normalized: string): string {
+  return normalized
     .replace(/[()[\]/:.]/g, (char) => (char === '/' ? ' / ' : ' '))
     .replace(TEAM_PARTICLES_RE, ' ')
     .replace(/\s+/g, ' ')
@@ -505,12 +528,13 @@ const LIVE_MEMO = new WeakMap<GuideProgramme, boolean>();
 
 function computeNotLive(programme: GuideProgramme): boolean {
   if (programme.previouslyShown) return true;
-  for (const field of [programme.title, programme.subTitle, programme.desc]) {
-    if (NOT_LIVE_RE.test(normalizeGuideText(field))) return true;
+  /* Los textos normalizados de `programmeTexts` (título, subtítulo, descripción y categorías), con memoria. */
+  const texts = programmeTexts(programme);
+  for (let index = 0; index < texts.length; index += 1) {
+    const text = texts[index] ?? '';
+    if ((index < 3 ? NOT_LIVE_RE : NOT_LIVE_CATEGORY_RE).test(text)) return true;
   }
-  return programme.categories.some((category) =>
-    NOT_LIVE_CATEGORY_RE.test(normalizeGuideText(category)),
-  );
+  return false;
 }
 
 // --- Otros deportes, femenino y categorías inferiores ---
@@ -552,9 +576,11 @@ export function programmeTexts(programme: GuideProgramme): string[] {
 export function programmeTeamTexts(programme: GuideProgramme): string[] {
   let texts = TEAM_TEXTS_MEMO.get(programme);
   if (!texts) {
-    texts = [programme.title, programme.subTitle, programme.desc].map((field) =>
-      field ? teamSearchText(field) : '',
-    );
+    const normalized = programmeTexts(programme);
+    texts = [0, 1, 2].map((index) => {
+      const text = normalized[index] ?? '';
+      return text ? teamSearchFromNormalized(text) : '';
+    });
     TEAM_TEXTS_MEMO.set(programme, texts);
   }
   return texts;
@@ -855,17 +881,17 @@ export function confirmByGuide(
       programmeFitsKickoff(programme, input.start),
     );
     if (!timely.length) continue;
-    /* Regla 5: país y competición del nombre del canal. */
-    const agendaScore = hasAgenda ? options.agendaScore(candidate.display) : 0;
-    if (candidate.country !== 'ES') {
-      if (candidate.country !== null || !hasAgenda || agendaScore < LIBRARY_MIN_SCORE) continue;
-    }
+    /* Regla 5: país y competición del nombre del canal (otro país, fuera ya; sin país, abajo). */
+    if (candidate.country !== 'ES' && candidate.country !== null) continue;
     const channelFamily = competitionFamily(candidate.display);
     if (family && channelFamily && channelFamily !== family) continue;
     const shows = timely.filter((programme) =>
       programmeShowsMatch(programme, input, cache, family, channelFamily, kind),
     );
     if (!shows.length) continue;
+    /* El casamiento con la agenda (lo caro del nombre), solo para los canales que dan el partido. */
+    const agendaScore = hasAgenda ? options.agendaScore(candidate.display) : 0;
+    if (candidate.country === null && (!hasAgenda || agendaScore < LIBRARY_MIN_SCORE)) continue;
     const best =
       shows.find(hasLiveMark) ??
       [...shows].sort(

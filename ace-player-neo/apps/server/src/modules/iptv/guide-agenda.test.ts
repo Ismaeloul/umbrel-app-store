@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest';
 import { isoDateInMadrid } from '../football/time.js';
 import {
   guideAgenda,
+  guideAgendaFrom,
+  prepareGuideAgenda,
   type GuideAgendaMatch,
   type GuideAgendaRequest,
   type GuideAgendaResult,
@@ -568,5 +570,53 @@ describe('guideAgenda: lo que solo trae la guía', () => {
       run([channel('DAZN LaLiga', [programme('LaLiga: Girona - Sevilla', tomorrow, 125, live)])])
         .additions[0]?.date,
     ).toBe(TOMORROW);
+  });
+});
+
+describe('guideAgenda: lo preparado de la guía (una vez por guía y días)', () => {
+  const guide = (): GuideChannelCandidate[] => [
+    channel('M+ LaLiga TV 2', [
+      programme('Telediario', KICKOFF - 3 * HOUR, 90),
+      programme('Los Simpson - T12 Ep. 4', KICKOFF - 2 * HOUR, 30, { desc: 'Una - dos' }),
+      programme('Fútbol', KICKOFF - 5 * MIN, 120, { subTitle: 'Real Sociedad vs. Villarreal CF' }),
+    ]),
+    channel('DAZN LaLiga', [programme('Real Sociedad × Villarreal', KICKOFF - 5 * MIN, 120)]),
+    channel('M+ LaLiga TV', [
+      /* A las 23:55 en directo: su saque (00:00) ya es de mañana. */
+      programme('LaLiga: Girona - Sevilla (Directo)', KICKOFF + 5 * HOUR + 25 * MIN, 120),
+    ]),
+  ];
+
+  it('lo mismo que mirar la guía entera, con «vs.», «×» y el cambio de día', () => {
+    const request: GuideAgendaRequest = {
+      matches: [match({ channels: ['M+ LaLiga TV 2', 'DAZN LaLiga'] })],
+      dates: [TODAY, TOMORROW],
+      dateOf: isoDateInMadrid,
+      key: 'k',
+    };
+    const index = prepareGuideAgenda(guide(), request.dates, request.dateOf);
+    /* Solo lo que puede ser un partido: ni el telediario (sin enfrentamiento) ni la serie (dura poco). */
+    expect(index.candidates.flatMap((c) => c.programmes.map((p) => p.title))).toEqual([
+      'Fútbol',
+      'Real Sociedad × Villarreal',
+      'LaLiga: Girona - Sevilla (Directo)',
+    ]);
+    const result = guideAgendaFrom(index, request, { agendaScorer });
+    expect(result).toEqual(guideAgenda(guide(), request, { agendaScorer }));
+    expect(result.confirmations).toEqual([
+      {
+        matchId: 'fltv-1',
+        channels: ['M+ LaLiga TV 2', 'DAZN LaLiga'],
+        start: KICKOFF,
+        moved: false,
+      },
+    ]);
+    expect(result.additions).toMatchObject([
+      { home: 'Girona', away: 'Sevilla', date: TOMORROW, start: KICKOFF + 5.5 * HOUR },
+    ]);
+    /* Otra agenda sobre lo mismo preparado, sin volver a mirar la guía. */
+    expect(
+      guideAgendaFrom(index, { ...request, matches: [] }, { agendaScorer }).confirmations,
+    ).toEqual([]);
   });
 });

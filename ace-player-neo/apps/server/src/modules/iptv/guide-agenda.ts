@@ -141,11 +141,29 @@ function distinctChannels(list: readonly GuideConfirmation[]): string[] {
   return out;
 }
 
+/*
+ * Un separador de enfrentamiento en el texto TAL CUAL (sin normalizar, que es
+ * lo caro): «-», «–», «—», «×», «/», «vs», «v», «x» o «contra». Es un
+ * superconjunto de lo que aceptan `programmeHasTeams` (los separadores salen
+ * de estos al normalizar) y `extractGuideMatchup`.
+ */
+const RAW_SEPARATOR_RE = /[-–—×/]|(?<![\p{L}\p{N}])(?:vs|v|x|contra)(?![\p{L}\p{N}])/iu;
+
+function mayShowMatchup(programme: GuideProgramme): boolean {
+  return (
+    RAW_SEPARATOR_RE.test(programme.title) ||
+    RAW_SEPARATOR_RE.test(programme.subTitle) ||
+    RAW_SEPARATOR_RE.test(programme.desc)
+  );
+}
+
 /**
- * Solo lo que puede ser un partido de esos días: dura lo de un partido, no
- * dice que no lo es y su saque posible cae en uno de los días. Es un
- * superconjunto de lo que `confirmByGuide` acepta para esos días, así que el
- * resultado es el mismo que con la guía entera (y mucho más rápido).
+ * Solo lo que puede ser un partido de esos días: dura lo de un partido, su
+ * saque posible cae en uno de los días, tiene un separador de enfrentamiento
+ * y no dice que no lo es. Es un superconjunto de lo que `confirmByGuide`
+ * acepta para esos días, así que el resultado es el mismo que con la guía
+ * entera (y mucho más rápido): lo barato (números y una expresión sobre el
+ * texto tal cual) va antes que normalizar el texto.
  */
 function slimCandidates(
   candidates: readonly GuideChannelCandidate[],
@@ -159,11 +177,33 @@ function slimCandidates(
         programmeLastsAMatch(programme) &&
         (dates.has(dateOf(programme.start + GUIDE_EARLY_MS)) ||
           dates.has(dateOf(programme.start - GUIDE_LATE_MS))) &&
+        mayShowMatchup(programme) &&
         !isNotLive(programme),
     );
     if (programmes.length) out.push({ ...candidate, programmes });
   }
   return out;
+}
+
+const QUARTER_MS = 15 * 60_000;
+
+/**
+ * `dateOf` con memoria por cuarto de hora: el día cambia siempre en un cuarto
+ * de hora exacto (los desfases de todas las zonas horarias son múltiplos de 15
+ * min), así que es exacto. Formatear una fecha de Madrid es lo más caro de
+ * mirar una guía grande programa a programa.
+ */
+function quarterMemo(dateOf: (ms: number) => string): (ms: number) => string {
+  const memo = new Map<number, string>();
+  return (ms: number): string => {
+    const bucket = Math.floor(ms / QUARTER_MS);
+    let value = memo.get(bucket);
+    if (value === undefined) {
+      value = dateOf(bucket * QUARTER_MS);
+      memo.set(bucket, value);
+    }
+    return value;
+  };
 }
 
 function dayNumber(date: string): number | null {
@@ -176,7 +216,7 @@ function dayNumber(date: string): number | null {
  * para buscar equipos y, si los tiene, sus dos equipos (lo caro, una sola vez
  * y no una por partido de la agenda).
  */
-interface LiveShow {
+export interface LiveShow {
   readonly candidate: GuideChannelCandidate;
   readonly programme: GuideProgramme;
   /** Título, subtítulo y descripción en la forma de `teamSearchText`. */
@@ -355,6 +395,30 @@ function sameSlot(show: LiveShow, match: AgendaTeams): boolean {
 }
 
 /**
+ * Lo de la guía que no depende de la agenda: los programas que pueden ser un
+ * partido de esos días y los que van en directo, ya preparados. Es lo caro
+ * con una guía grande; se calcula una vez por guía y días (`buildGuideAgenda`)
+ * y no cada vez que cambia la agenda.
+ */
+export interface GuideAgendaIndex {
+  readonly dates: ReadonlySet<string>;
+  readonly candidates: readonly GuideChannelCandidate[];
+  readonly shows: readonly LiveShow[];
+}
+
+export function prepareGuideAgenda(
+  allCandidates: readonly GuideChannelCandidate[],
+  dates: readonly string[],
+  dateOf: (ms: number) => string,
+): GuideAgendaIndex {
+  const set = new Set(dates);
+  if (!set.size || !allCandidates.length) return { dates: set, candidates: [], shows: [] };
+  const dayOf = quarterMemo(dateOf);
+  const candidates = slimCandidates(allCandidates, set, dayOf);
+  return { dates: set, candidates, shows: liveShows(candidates, dayOf) };
+}
+
+/**
  * La guía de hoy y mañana sobre la agenda: confirmaciones (con la hora
  * movida si hace falta) y partidos que solo trae la guía.
  */
@@ -363,11 +427,21 @@ export function guideAgenda(
   request: GuideAgendaRequest,
   options: GuideAgendaOptions,
 ): GuideAgendaResult {
-  const dates = new Set(request.dates);
-  if (!dates.size || !allCandidates.length) return { confirmations: [], additions: [] };
-  const candidates = slimCandidates(allCandidates, dates, request.dateOf);
-  if (!candidates.length) return { confirmations: [], additions: [] };
-  const shows = liveShows(candidates, request.dateOf);
+  return guideAgendaFrom(
+    prepareGuideAgenda(allCandidates, request.dates, request.dateOf),
+    request,
+    options,
+  );
+}
+
+/** `guideAgenda` sobre lo ya preparado (`prepareGuideAgenda` con los mismos días). */
+export function guideAgendaFrom(
+  index: GuideAgendaIndex,
+  request: GuideAgendaRequest,
+  options: GuideAgendaOptions,
+): GuideAgendaResult {
+  const { dates, candidates, shows } = index;
+  if (!dates.size || !candidates.length) return { confirmations: [], additions: [] };
   /* Muchos partidos anuncian los mismos canales: una puntuación por canales y nombre, una vez. */
   const scorers = new Map<string, (display: string) => number>();
   const scorerFor = (channels: readonly string[]): ((display: string) => number) => {
@@ -519,11 +593,33 @@ export function guideAgenda(
   return { confirmations, additions };
 }
 
-/** La agenda híbrida con el catálogo y la guía del servicio (los mismos candidatos que la resolución). */
+/* Lo preparado de cada guía (la ventana es la misma mientras no se descarga otra). */
+const INDEX_MEMO = new WeakMap<
+  GuideWindow,
+  { readonly catalog: Catalog; readonly dates: string; readonly index: GuideAgendaIndex }
+>();
+
+/**
+ * La agenda híbrida con el catálogo y la guía del servicio (los mismos
+ * candidatos que la resolución). Lo caro (mirar la guía entera) se hace una
+ * vez por guía, catálogo y días; cada cambio de la agenda solo repasa lo
+ * preparado.
+ */
 export function buildGuideAgenda(
   catalog: Catalog,
   window: GuideWindow | null,
   request: GuideAgendaRequest,
 ): GuideAgendaResult {
-  return guideAgenda(guideCandidates(catalog, window), request, { agendaScorer });
+  if (!window) return { confirmations: [], additions: [] };
+  const dates = request.dates.join(',');
+  let memo = INDEX_MEMO.get(window);
+  if (!memo || memo.catalog !== catalog || memo.dates !== dates) {
+    memo = {
+      catalog,
+      dates,
+      index: prepareGuideAgenda(guideCandidates(catalog, window), request.dates, request.dateOf),
+    };
+    INDEX_MEMO.set(window, memo);
+  }
+  return guideAgendaFrom(memo.index, request, { agendaScorer });
 }
