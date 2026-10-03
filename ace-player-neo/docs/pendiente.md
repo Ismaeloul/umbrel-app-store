@@ -156,3 +156,7 @@ WebKit/iOS: la vista que sale no se retira (o la animación de salida no termina
 8. **Salud: botón «Descargar fallos».** Un fichero con los errores y el registro (sin contraseñas ni URLs con
    credenciales: redactado) para que Isma me lo pase y yo distinga lo que es nuestro (motor caído, decodificación
    de vídeo, cortes del relé, errores de la web…) de lo que no (una fuente que no va).
+9. **Panel «Fuentes» del partido (columna derecha): los carteles se solapan.** Al seleccionar un canal, su cartel
+   crece (borde amarillo «En pantalla») y se come al de al lado (ORIÓN tapa a VELA, que además sale cortado por la
+   derecha). Captura: `capturas/pendiente/fuentes-carteles-solapados.png`. Que el seleccionado no crezca por
+   encima de los demás (marcarlo con el borde, sin escalar) y que la rejilla no se salga del panel.
