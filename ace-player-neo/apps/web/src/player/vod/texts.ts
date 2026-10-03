@@ -28,7 +28,8 @@ export const VOD_TEXT = {
   leave: 'Salir',
   stillWatchingIdle:
     'En pausa para no tener ocupada tu IPTV. Pulsa Reintentar para seguir donde ibas.',
-  demo: 'reproducción simulada — en el Umbrel verías la película',
+  demo: (kind: 'movie' | 'episode') =>
+    `reproducción simulada — en el Umbrel verías ${kind === 'episode' ? 'el episodio' : 'la película'}`,
 } as const;
 
 /** Por qué no se puede reproducir (`vod_unsupported`, `data.reason`), §13. */

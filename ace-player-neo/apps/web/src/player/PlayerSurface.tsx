@@ -533,7 +533,9 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
         <p className="player-demo" aria-hidden="true">
           <strong>{state.channel.title.toUpperCase()}</strong>
           <span>
-            {vod ? VOD_TEXT.demo : 'reproducción simulada — en el Umbrel verías el stream real'}
+            {vod
+              ? VOD_TEXT.demo(state.vod?.kind ?? 'movie')
+              : 'reproducción simulada — en el Umbrel verías el stream real'}
           </span>
         </p>
       ) : null}
