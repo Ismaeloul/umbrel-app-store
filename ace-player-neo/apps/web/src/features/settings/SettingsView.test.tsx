@@ -76,6 +76,7 @@ describe('Ajustes', () => {
       'Dónde se está reproduciendo',
       'Apariencia',
       'Copia de seguridad',
+      'Registro',
       'Motor AceStream',
       'Acerca de',
     ]);
