@@ -370,7 +370,8 @@ exige retenido < 45 MB con 150 000 + 30 000.
   con la guía. Otra petición de sincronizar se engancha a la que está en marcha. **El VOD cede el sitio** (0.9.0,
   fallo 8 de `vod-estado.md` §4.1): si llega una sincronización del directo o de la guía con una VOD en marcha o en
   cola, la VOD se aborta (`VodPreemptedError`, no cuenta como fallo) y se vuelve a pedir sola, detrás. Lo ya
-  descargado que solo falta guardar sí se guarda. La lista del directo empieza en menos de 1 s (`vod/cerrojo.test.ts`).
+  descargado que solo falta guardar sí se guarda, y entonces **no** se vuelve a pedir (antes se repetía entera).
+  La lista del directo empieza en menos de 1 s (`vod/cerrojo.test.ts`).
 - **Pasos:** las dos listas de categorías → películas en streaming → series en streaming → índices (`byAdded`,
   `byCat`, `bySource`) por trozos de 5 000 filas con `setImmediate` → guardar.
 - **Aplicar** solo si `provider.id` y `revision` no han cambiado (como `doSync`). Guardar, pausar o eliminar la IPTV
@@ -385,11 +386,19 @@ exige retenido < 45 MB con 150 000 + 30 000.
   - **Ajustes → IPTV → «Actualizar»** sincroniza el directo y, si el VOD tiene más de 1 h, también el VOD. Sin ruta
     nueva.
 - **Modo por categorías** (respaldo automático): si una lista completa falla por tiempo, tamaño o 5xx, se recorre
-  `&category_id=X` de una en una, con 250 ms entre llamadas, los mismos topes y el mismo cerrojo. Se apunta `mode:
-  'por_categorias'` en `vod.enc` para empezar por ahí la próxima vez. Desde la 0.9.0: empieza de cero (lo leído de la
-  lista entera que murió no cuenta); una categoría que falla se salta y se cuenta, y se rinde con 5 fallos seguidos o
-  más de max(5, 20 %); un 401 o la cuenta caducada lo paran al momento; y tiene un tope de 15 min por tipo, pasado el
-  cual se queda lo leído con `truncated`.
+  `&category_id=X` de una en una, con 250 ms entre llamadas, los mismos topes y el mismo cerrojo. Desde la 0.9.0:
+  - Solo se apunta `mode: 'por_categorias'` en `vod.enc` (para empezar por ahí la próxima vez) si la lista entera **no
+    cabe** (`iptv_too_large`), que no cambia de un día para otro. Un plazo o un 5xx pueden ser un mal rato del panel:
+    la próxima vez se prueba otra vez la lista entera, que son 2 peticiones frente a cientos (el panel de Isma tiene
+    444 + 384 categorías y da la lista entera en 4 s).
+  - Empieza de cero (lo leído de la lista entera que murió no cuenta).
+  - Una categoría que falla se salta, y se rinde con 5 fallos seguidos o más de max(5, 20 %); un 401 o la cuenta
+    caducada lo paran al momento. Si fallan todas y no llega ni un título, es un fallo (§4.2).
+  - Tope de **30 min por tipo**. Lo que no se ha podido leer (las categorías que fallan y las que no caben en el tope)
+    **se queda como estaba** en el catálogo anterior (el de memoria o `vod.enc`, que se carga solo si hace falta), y la
+    próxima vez se empieza por la primera que no cupo (**rotación**, en memoria): ninguna categoría se queda fuera para
+    siempre. Solo sin catálogo anterior (la primera vez) faltan títulos de verdad, y entonces sale `truncated` (la web
+    no dice «más de 200.000» si no se ha llegado al tope de títulos: ver §13).
 - **Descartado: catálogo perezoso por categoría.** Sin los nombres de todo no hay buscador global, que es lo que pidió
   Isma.
 
@@ -1630,7 +1639,7 @@ Cada estado vacío tiene una salida (`EmptyState` con `actions`).
 | `preparing` | portada | esqueletos y «Preparando el catálogo… La primera vez tarda unos segundos.» | se refresca sola por SSE |
 | `error` sin catálogo | portada | «No se ha podido cargar el catálogo» | «Reintentar» |
 | `stale` | portada | nota bajo la cabecera: «Catálogo del 28 sep. No se ha podido actualizar.» | — |
-| `truncated` | portada | «Tu IPTV tiene más de 200.000 películas; se ven las primeras 200.000.» | — |
+| `truncated` | portada | «Tu IPTV tiene más de 200.000 películas; se ven las primeras 200.000.» (o las 50.000 series). Sin llegar a ningún tope (el modo por categorías se cortó por tiempo la primera vez, §4.7): «Faltan algunas categorías: tu IPTV tardaba demasiado en contestar. Se completarán en las próximas actualizaciones.» | — |
 | Categoría vacía | rejilla | «Esta categoría está vacía» | «Ver todas» |
 | Falla la página siguiente | rejilla | «No se han podido cargar más» | «Reintentar» |
 | `vod_not_found` | ficha | «Este título ya no está en tu IPTV.» | «Volver a películas» |

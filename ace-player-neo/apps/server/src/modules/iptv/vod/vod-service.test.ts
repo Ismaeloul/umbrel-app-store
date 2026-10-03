@@ -556,6 +556,44 @@ describe('VodService contra el proveedor falso', () => {
     expect(title.main).toMatchObject({ action: 'resume', episodeId, posS: 295 });
   });
 
+  it('modo por categorías tras reiniciar: una categoría que falla se queda como estaba (sale de vod.enc)', async () => {
+    const rig = await ready();
+    const { vod } = await synced(rig);
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3 });
+    await rig.service.stop();
+    const net = createNetClient({
+      ...rig.core,
+      resolver: fakeIptvResolver(),
+      transport: fakeIptvTransport({ host: rig.fake.host, port: rig.fake.port }),
+    });
+    const again = new IptvServiceImpl({
+      ...rig.core,
+      state: rig.state,
+      net,
+      scorer: (channels, item) => scoreResolutionCandidate(channels, item, 'iptv'),
+    });
+    extra.push(again);
+    await again.start();
+    expect(again.vod.catalogForTests()).toBeNull();
+    /* Las listas enteras dan 500 y la categoría «ES | PELÍCULAS» también. */
+    rig.fake.vodModo('categoria-500');
+    const before = rig.fake.peticiones().length;
+    await settle(rig, again.vod.requestSync('manual'));
+    await again.vod.idle();
+    const asked = rig.fake.peticiones().slice(before);
+    expect(asked.some((line) => line.includes('category_id=10'))).toBe(true);
+    /* Sin el catálogo de antes, las películas de esa categoría desaparecían 24 h. */
+    expect(again.vod.status()).toMatchObject({
+      state: 'ready',
+      movies: 9,
+      series: 3,
+      truncated: false,
+      stale: false,
+    });
+    const home = await again.vod.home();
+    expect(home.newMovies.map((card) => card.title)).toContain('Oppenheimer');
+  });
+
   it('eliminar la IPTV borra vod.enc, arte/ y vod.json; nada de las credenciales en ningún sitio', async () => {
     const rig = await ready();
     const { vod } = await synced(rig);

@@ -251,6 +251,13 @@ export class VodService {
   private landed = false;
   /** Modo de la última sincronización con éxito (para empezar por él, §4.7). */
   private lastMode: VodSyncMode = 'completo';
+  /**
+   * Modo por categorías cortado por su tope de tiempo: por qué categoría
+   * empezar la próxima vez, por tipo (rotación, §4.7). Solo en memoria: tras
+   * un reinicio se empieza por la primera, y lo que no quepa sigue estando
+   * (se queda como estaba en el catálogo anterior).
+   */
+  private resumeFrom: Partial<Record<VodKind, string>> = {};
   /** Cuándo acabó la última sincronización (bien o mal). */
   private lastSyncEndAt = Number.NEGATIVE_INFINITY;
   /** El panel ya dijo «sin VOD» una vez con catálogo guardado: la siguiente lo confirma. */
@@ -443,6 +450,7 @@ export class VodService {
     this.failures = 0;
     this.delayedOnce = false;
     this.lastMode = 'completo';
+    this.resumeFrom = {};
     this.noneOnce = false;
     this.requeue = false;
     this.details.clear();
@@ -522,7 +530,14 @@ export class VodService {
     try {
       const result = await syncVodCatalog(
         { net: this.host.net, clock, logger, credentials, policy: this.host.policy(), signal },
-        { providerId: snapshot.id, providerFp: snapshot.fp, revision: snapshot.revision, mode },
+        {
+          providerId: snapshot.id,
+          providerFp: snapshot.fp,
+          revision: snapshot.revision,
+          mode,
+          resumeFrom: this.resumeFrom,
+          previous: () => this.storedCatalog(snapshot),
+        },
       );
       if (!this.stillCurrent(snapshot, signal)) return;
       /* La descarga ha acabado: lo que queda (guardar y aplicar) no se
@@ -578,6 +593,7 @@ export class VodService {
           return;
         }
         this.lastMode = catalog.meta.mode;
+        this.resumeFrom = { ...result.resumeFrom };
         this.catalog = catalog;
         this.homeCache = null;
         this.details.clear();
@@ -639,6 +655,28 @@ export class VodService {
   private hadTitles(): boolean {
     const summary = this.summary();
     return Boolean(summary && summary.state === 'ready' && summary.movies + summary.series > 0);
+  }
+
+  /**
+   * El catálogo guardado de ese proveedor (el de memoria, o `vod.enc`), para
+   * el modo por categorías: lo que no se ha podido leer se queda como estaba
+   * en él (§4.7). Solo se pide si hace falta; lo cargado aquí no pasa a
+   * memoria (lo sustituye enseguida el nuevo).
+   */
+  private async storedCatalog(snapshot: { id: string; fp: string }): Promise<VodCatalog | null> {
+    if (this.catalog?.providerId === snapshot.id) return this.catalog;
+    if (this.loading) {
+      const loaded = await this.loading.catch(() => null);
+      if (loaded?.providerId === snapshot.id) return loaded;
+    }
+    if (!this.hadTitles()) return null;
+    return loadVodCatalog(
+      this.host.paths.vodCatalogFile,
+      this.host.keys(),
+      snapshot.id,
+      snapshot.fp,
+      this.host.logger,
+    );
   }
 
   /** El catálogo en memoria, cargando `vod.enc` la primera vez (perezoso, §4.6). */

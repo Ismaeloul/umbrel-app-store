@@ -22,6 +22,8 @@
    - `user-info`: las listas responden el objeto `user_info` (otros paneles);
    - `lista-500`: las listas COMPLETAS dan 500 y las de una categoría van
      bien (el modo por categorías, §4.7);
+   - `categoria-500`: como `lista-500`, pero la categoría 10 («ES |
+     PELÍCULAS») también da 500 (una categoría mala: se queda como estaba);
    - `fichas-500`: `get_vod_info` y `get_series_info` dan 500;
    - `lista-texto`: las listas responden un texto (un error de PHP) en vez
      del array: es un fallo, no «sin VOD». */
@@ -33,6 +35,7 @@ export const FAKE_VOD_MODES = [
   'vacio',
   'user-info',
   'lista-500',
+  'categoria-500',
   'fichas-500',
   'lista-texto',
 ] as const;
@@ -350,6 +353,9 @@ export function createFakeVod(base: () => string, extra = 0): FakeVod {
     if (mode === 'vacio') return { status: 200, body: [] };
     if (mode === 'user-info') return { status: 200, body: { user_info: { auth: 1 } } };
     if (mode === 'lista-500' && whole) return { status: 500 };
+    if (mode === 'categoria-500' && (whole || url.searchParams.get('category_id') === '10')) {
+      return { status: 500 };
+    }
     if (mode === 'lista-texto') {
       return { status: 200, body: 'Fatal error: Allowed memory size exhausted' };
     }

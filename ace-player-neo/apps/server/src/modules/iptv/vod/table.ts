@@ -216,6 +216,16 @@ export class VodTableBuilder {
     return this.dirs.length;
   }
 
+  /**
+   * Una fila del catálogo anterior (modo por categorías: lo que no se ha
+   * podido leer se queda como estaba). Si el id ya está, se deja la nueva
+   * sin contarla como repetida.
+   */
+  carry(row: VodListRow): boolean {
+    if (this.seen.has(row.source)) return false;
+    return this.add(row);
+  }
+
   /** Añade una fila. false si la tabla ya está llena (quien llama corta la descarga) o el id se repite. */
   add(row: VodListRow): boolean {
     if (this.full) return false;
@@ -554,6 +564,22 @@ export class VodTable implements VodTableData {
     this.byTitleCache = rows;
     return rows;
   }
+}
+
+/** La fila `row` de una tabla tal y como llegó de la lista (para pasarla a otra tabla). */
+export function tableRow(table: VodTable, row: number): VodListRow {
+  return {
+    source: table.source[row] as number,
+    title: table.title(row),
+    year: table.year[row] as number,
+    rating: table.rating[row] as number,
+    added: table.added[row] as number,
+    ext: table.ext[row] as number,
+    adult: table.isAdult(row),
+    poster: table.posterUrl(row),
+    tags: table.tags[row] as number,
+    category: table.categoryName(row),
+  };
 }
 
 /** Cuántas filas de cada distintivo hay en `rows` (para los chips). */

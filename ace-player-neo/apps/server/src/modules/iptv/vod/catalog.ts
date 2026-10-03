@@ -13,8 +13,14 @@
      que no se pudo parsear y los ids repetidos (T5).
    - «Sin VOD» en las dos listas es `none`, no un error.
    - Si una lista completa falla por tiempo, tamaño o 5xx, se recorre por
-     categorías (`&category_id=X`, 250 ms entre llamadas) y se apunta
-     `mode: 'por_categorias'` para empezar por ahí la próxima vez.
+     categorías (`&category_id=X`, 250 ms entre llamadas). Solo si no cabía
+     (`iptv_too_large`) se apunta `mode: 'por_categorias'` para empezar por
+     ahí la próxima vez: un plazo o un 5xx pueden ser un mal rato del panel,
+     y la lista entera son 2 peticiones frente a cientos.
+   - En el modo por categorías, lo que no se ha podido leer (una categoría
+     que falla, o las que no caben en su tope de tiempo) se queda como
+     estaba en el catálogo anterior, y la siguiente vez se empieza por la
+     primera que no cupo (rotación): ninguna se queda fuera para siempre.
 
    `vod.enc` va sellado con `sealBlobBytes` (AAD `ace-iptv-vod|<providerId>`)
    y se carga de forma perezosa, en la primera petición VOD: nunca en el
@@ -45,7 +51,7 @@ import {
   type VodCatalogMeta,
   type VodSyncMode,
 } from './table-codec.js';
-import { VodTableBuilder, type VodTable } from './table.js';
+import { BUILD_CHUNK, tableRow, VodTableBuilder, yieldThread, type VodTable } from './table.js';
 import { shouldFallBackToCategories, xtreamVodCategories, xtreamVodList } from './xtream-vod.js';
 
 const MINUTE = 60_000;
@@ -65,9 +71,10 @@ export const VOD_MANUAL_MIN_AGE_MS = HOUR;
  * Tope de tiempo del modo por categorías, por tipo (películas y series):
  * antes no tenía y podía tardar horas con un panel lento (fallo 8). Ya no
  * retrasa el directo (el VOD cede el cerrojo, `runHeavy` en service.ts),
- * pero tampoco debe quedarse colgado para siempre.
+ * pero tampoco debe quedarse colgado para siempre. Lo que no cabe se queda
+ * como estaba y es lo primero que se lee la vez siguiente (rotación).
  */
-export const VOD_BY_CATEGORY_TOTAL_MS = 15 * MINUTE;
+export const VOD_BY_CATEGORY_TOTAL_MS = 30 * MINUTE;
 /** Fallos SEGUIDOS de categorías tras los que el modo por categorías se rinde (el panel no está). */
 export const VOD_CATEGORY_FAILURES_IN_A_ROW = 5;
 /** Parte de las categorías que puede fallar sin rendirse (si son más de 5). */
@@ -112,18 +119,45 @@ export interface VodSyncInput {
   readonly mode: VodSyncMode;
   /** Tope del modo por categorías por tipo (por defecto `VOD_BY_CATEGORY_TOTAL_MS`; los tests lo bajan). */
   readonly byCategoryTotalMs?: number;
+  /**
+   * Por qué categoría empezar el modo por categorías, por tipo: la primera
+   * que no cupo la vez anterior (rotación). Si ya no existe, por la primera.
+   */
+  readonly resumeFrom?: Readonly<Partial<Record<VodKind, string>>>;
+  /**
+   * El catálogo guardado de este proveedor, si hay (se pide solo si hace
+   * falta): en el modo por categorías, lo que no se ha podido leer se queda
+   * como estaba en él.
+   */
+  readonly previous?: () => Promise<VodCatalog | null>;
 }
 
 export type VodSyncResult =
   | { readonly state: 'none'; readonly skipped: number }
-  | { readonly state: 'ready'; readonly catalog: VodCatalog };
+  | {
+      readonly state: 'ready';
+      readonly catalog: VodCatalog;
+      /** Por qué categoría empezar la próxima vez, por tipo (solo los que se cortaron por tiempo). */
+      readonly resumeFrom: Readonly<Partial<Record<VodKind, string>>>;
+    };
 
 interface KindOutcome {
   readonly table: VodTable;
   readonly none: boolean;
   readonly truncated: boolean;
   readonly skipped: number;
+  /** El modo con el que empezar la próxima vez. */
   readonly mode: VodSyncMode;
+  /** La primera categoría que no cupo en el tope de tiempo, o null. */
+  readonly resumeFrom: string | null;
+}
+
+/** Lo que devuelve un recorrido de la lista (entera o por categorías). */
+interface ListOutcome {
+  readonly none: boolean;
+  /** Se ha quedado a medias: por el tope de títulos, o por el de tiempo sin catálogo anterior. */
+  readonly stopped: boolean;
+  readonly resumeFrom: string | null;
 }
 
 /** Códigos que tumban la sincronización entera aunque sea de una sola categoría (la cuenta). */
@@ -141,12 +175,16 @@ export function vodCategoriesGiveUp(failed: number, inARow: number, total: numbe
   );
 }
 
-async function syncKind(
-  deps: VodSyncDeps,
-  kind: VodKind,
-  preferred: VodSyncMode,
-  byCategoryTotalMs: number,
-): Promise<KindOutcome> {
+/** Lo que `syncKind` saca de `VodSyncInput` para un tipo. */
+interface KindInput {
+  readonly preferred: VodSyncMode;
+  readonly byCategoryTotalMs: number;
+  readonly resumeFrom: string | null;
+  /** La tabla de ese tipo en el catálogo guardado (se carga solo si hace falta), o null. */
+  readonly previous: () => Promise<VodTable | null>;
+}
+
+async function syncKind(deps: VodSyncDeps, kind: VodKind, input: KindInput): Promise<KindOutcome> {
   const { net, credentials, policy, signal, clock, logger } = deps;
   let categories = new Map<string, string>();
   try {
@@ -177,26 +215,48 @@ async function syncKind(
   const onSkip = (): void => {
     skipped += 1;
   };
+  /* Lo que no se ha podido leer en el modo por categorías (las que fallan y
+     las que no caben en el tope de tiempo) se queda como estaba en el
+     catálogo anterior: antes desaparecía 24 h, y las que nunca cabían no
+     salían NUNCA. true si había catálogo anterior. */
+  const carryOver = async (ids: readonly string[]): Promise<boolean> => {
+    if (!ids.length) return false;
+    const previous = await input.previous();
+    if (!previous) return false;
+    const names = new Set(ids.map((id) => categories.get(id) ?? ''));
+    let rows = 0;
+    for (let row = 0; row < previous.n && !builder.full; row += 1) {
+      if (row % BUILD_CHUNK === BUILD_CHUNK - 1) await yieldThread(signal);
+      if (names.has(previous.categoryName(row)) && builder.carry(tableRow(previous, row))) {
+        rows += 1;
+      }
+    }
+    logger.info(
+      { kind, categories: ids.length, rows },
+      'VOD: las categorías que no se han podido leer se quedan como estaban',
+    );
+    return true;
+  };
   /* Por categorías: una mala se salta y se cuenta (fallo 3); con 5 seguidas
-     o más del 20 % se rinde. Tope total de 15 min (fallo 8): pasado, se
-     queda lo leído con `truncated`. */
-  const byCategories = async (): Promise<{ none: boolean; stopped: boolean }> => {
-    const ids = [...categories.keys()].filter((id) => /^\d{1,12}$/.test(id));
-    if (!ids.length) throw new Error('sin categorías');
-    const deadline = clock.now() + byCategoryTotalMs;
+     o más del 20 % se rinde. Tope total de 30 min (fallo 8): lo que no cabe
+     se queda como estaba y la próxima vez se empieza por ahí (rotación). */
+  const byCategories = async (): Promise<ListOutcome> => {
+    const all = [...categories.keys()].filter((id) => /^\d{1,12}$/.test(id));
+    if (!all.length) throw new Error('sin categorías');
+    const start = input.resumeFrom === null ? 0 : Math.max(0, all.indexOf(input.resumeFrom));
+    const ids = start ? [...all.slice(start), ...all.slice(0, start)] : all;
+    const deadline = clock.now() + input.byCategoryTotalMs;
+    const unread: string[] = [];
     let any = false;
     let failed = 0;
     let inARow = 0;
     let lastError: unknown = null;
+    let cutAt = -1;
     for (const [index, categoryId] of ids.entries()) {
       if (index > 0) await clock.sleep(VOD_LIMITS.byCategory.spacingMs, signal);
       if (clock.now() >= deadline) {
-        logger.warn(
-          { kind, done: index, total: ids.length, rows: builder.size },
-          'VOD: el modo por categorías ha pasado de su tope de tiempo; se queda lo leído',
-        );
-        if (!builder.size) throw new AppError('iptv_timeout', { detail: 'vod_por_categorias' });
-        return { none: false, stopped: true };
+        cutAt = index;
+        break;
       }
       try {
         const outcome = await xtreamVodList(net, credentials, kind, onItem, {
@@ -207,7 +267,8 @@ async function syncKind(
         });
         inARow = 0;
         if (outcome.state === 'ok') any = true;
-        if (outcome.stopped || builder.full) return { none: false, stopped: true };
+        if (outcome.stopped || builder.full)
+          return { none: false, stopped: true, resumeFrom: null };
       } catch (error) {
         if (signal.aborted) throw error;
         const code = errorCodeOf(error) ?? 'desconocido';
@@ -215,6 +276,7 @@ async function syncKind(
         failed += 1;
         inARow += 1;
         lastError = error;
+        unread.push(categoryId);
         logger.warn({ kind, errorCode: code, failed }, 'VOD: una categoría ha fallado; se salta');
         if (vodCategoriesGiveUp(failed, inARow, ids.length)) throw error;
       }
@@ -228,24 +290,47 @@ async function syncKind(
          se queda el catálogo de antes y se reintenta en 15 min. */
       if (builder.size === 0) throw lastError;
     }
-    return { none: !any && builder.size === 0, stopped: false };
+    let resumeFrom: string | null = null;
+    if (cutAt >= 0) {
+      const left = ids.slice(cutAt);
+      resumeFrom = left[0] ?? null;
+      logger.warn(
+        { kind, done: cutAt, total: ids.length, rows: builder.size },
+        'VOD: el modo por categorías ha pasado de su tope de tiempo; lo que falta se queda como estaba',
+      );
+      if (!builder.size) throw new AppError('iptv_timeout', { detail: 'vod_por_categorias' });
+      unread.push(...left);
+    }
+    const carried = await carryOver(unread);
+    /* Cortado por tiempo y sin catálogo anterior (la primera vez): faltan categorías de verdad. */
+    return { none: !any && builder.size === 0, stopped: cutAt >= 0 && !carried, resumeFrom };
   };
-  const whole = async (): Promise<{ none: boolean; stopped: boolean }> => {
+  const whole = async (): Promise<ListOutcome> => {
     const outcome = await xtreamVodList(net, credentials, kind, onItem, { policy, signal, onSkip });
-    return { none: outcome.state === 'none' && builder.size === 0, stopped: outcome.stopped };
+    return {
+      none: outcome.state === 'none' && builder.size === 0,
+      stopped: outcome.stopped,
+      resumeFrom: null,
+    };
   };
-  let mode: VodSyncMode = preferred;
-  let outcome: { none: boolean; stopped: boolean };
-  if (preferred === 'completo') {
+  /* El modo con el que empezar la próxima vez. */
+  let next: VodSyncMode = input.preferred;
+  let outcome: ListOutcome;
+  if (input.preferred === 'completo') {
     try {
       outcome = await whole();
     } catch (error) {
       if (signal.aborted || !shouldFallBackToCategories(error) || !categories.size) throw error;
+      const code = errorCodeOf(error);
       logger.warn(
-        { kind, errorCode: errorCodeOf(error), rows: builder.size },
+        { kind, errorCode: code, rows: builder.size },
         'VOD: la lista completa ha fallado; se recorre por categorías',
       );
-      mode = 'por_categorias';
+      /* Solo se recuerda si no cabe, que no cambia de un día para otro. Un
+         plazo o un 5xx pueden ser un mal rato del panel, y la lista entera
+         son 2 peticiones frente a cientos (444 + 384 categorías en el de
+         Isma, que la da entera en 4 s). */
+      next = code === 'iptv_too_large' ? 'por_categorias' : 'completo';
       restart();
       outcome = await byCategories();
     }
@@ -256,7 +341,7 @@ async function syncKind(
       if (signal.aborted) throw error;
       if (FATAL_CODES.has(errorCodeOf(error) ?? '')) throw error;
       /* Sin categorías (o fallan): la lista completa, que a lo mejor ya va. */
-      mode = 'completo';
+      next = 'completo';
       restart();
       outcome = await whole();
     }
@@ -268,7 +353,8 @@ async function syncKind(
     none: outcome.none,
     truncated: outcome.stopped || builder.full,
     skipped: skipped + builder.duplicates,
-    mode,
+    mode: next,
+    resumeFrom: outcome.resumeFrom,
   };
 }
 
@@ -278,9 +364,23 @@ export async function syncVodCatalog(
   input: VodSyncInput,
 ): Promise<VodSyncResult> {
   const totalMs = input.byCategoryTotalMs ?? VOD_BY_CATEGORY_TOTAL_MS;
-  const movies = await syncKind(deps, 'movie', input.mode, totalMs);
+  /* El catálogo anterior se carga una vez y solo si hace falta (una
+     categoría que falla o el tope de tiempo del modo por categorías). */
+  let previous: Promise<VodCatalog | null> | null = null;
+  const kindInput = (kind: VodKind): KindInput => ({
+    preferred: input.mode,
+    byCategoryTotalMs: totalMs,
+    resumeFrom: input.resumeFrom?.[kind] ?? null,
+    previous: async () => {
+      if (!input.previous) return null;
+      previous ??= input.previous().catch(() => null);
+      const catalog = await previous;
+      return catalog && catalog.providerId === input.providerId ? catalog.tables[kind] : null;
+    },
+  });
+  const movies = await syncKind(deps, 'movie', kindInput('movie'));
   if (deps.signal.aborted) throw deps.signal.reason;
-  const series = await syncKind(deps, 'series', input.mode, totalMs);
+  const series = await syncKind(deps, 'series', kindInput('series'));
   const skipped = movies.skipped + series.skipped;
   if (movies.none && series.none) return { state: 'none', skipped };
   const meta: VodCatalogMeta = {
@@ -294,9 +394,13 @@ export async function syncVodCatalog(
         ? 'por_categorias'
         : 'completo',
   };
+  const resumeFrom: Partial<Record<VodKind, string>> = {};
+  if (movies.resumeFrom) resumeFrom.movie = movies.resumeFrom;
+  if (series.resumeFrom) resumeFrom.series = series.resumeFrom;
   return {
     state: 'ready',
     catalog: makeVodCatalog(input.providerId, meta, { movie: movies.table, series: series.table }),
+    resumeFrom,
   };
 }
 

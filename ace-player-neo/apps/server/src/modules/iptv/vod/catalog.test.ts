@@ -18,6 +18,7 @@ import {
   vodPeriodicDelay,
   vodRetryDelay,
   VOD_RETRY_MS,
+  type VodCatalog,
 } from './catalog.js';
 
 const HOST = 'panel.example';
@@ -215,12 +216,40 @@ describe('syncVodCatalog', () => {
     expect(result.state).toBe('ready');
     if (result.state === 'ready') {
       expect(result.catalog.tables.movie.n).toBe(4);
-      expect(result.catalog.meta.mode).toBe('por_categorias');
+      /* Un 5xx puede ser un mal rato: la próxima vez se prueba otra vez la lista entera. */
+      expect(result.catalog.meta.mode).toBe('completo');
     }
     const categories = transport.requests
       .filter((request) => request.url.searchParams.get('action') === 'get_vod_streams')
       .map((request) => request.url.searchParams.get('category_id'));
     expect(categories).toEqual([null, '1', '2']);
+  });
+
+  it('solo una lista que no cabe (`iptv_too_large`) deja apuntado el modo por categorías', async () => {
+    const { run, core } = rig((action, url) => {
+      if (action === 'get_vod_categories')
+        return {
+          body: cats([
+            ['1', 'A'],
+            ['2', 'B'],
+          ]),
+        };
+      if (action === 'get_vod_streams') {
+        const category = url.searchParams.get('category_id');
+        if (category === null) {
+          return { headers: { 'content-length': String(500 * 1024 * 1024) }, body: '[]' };
+        }
+        return {
+          body: JSON.stringify(movies(4).filter((movie) => movie.category_id === category)),
+        };
+      }
+      return undefined;
+    });
+    const promise = run();
+    await drive(core, promise);
+    const result = await promise;
+    expect(result.state === 'ready' && result.catalog.meta.mode).toBe('por_categorias');
+    expect(result.state === 'ready' && result.catalog.tables.movie.n).toBe(4);
   });
 
   it('la lista entera muere A MITAD por inactividad: el modo por categorías empieza de cero y `skipped` sale bien (fallo 2)', async () => {
@@ -250,7 +279,8 @@ describe('syncVodCatalog', () => {
     if (result.state === 'ready') {
       expect(result.catalog.tables.movie.n).toBe(1_000);
       expect(result.catalog.meta).toMatchObject({
-        mode: 'por_categorias',
+        /* Un plazo no se recuerda: la próxima vez, otra vez la lista entera. */
+        mode: 'completo',
         skipped: 0,
         truncated: false,
       });
@@ -279,7 +309,7 @@ describe('syncVodCatalog', () => {
     if (result.state === 'ready') {
       /* Las de la categoría 1 (las impares); la 2 falló y la 3 está vacía. */
       expect(result.catalog.tables.movie.n).toBe(3);
-      expect(result.catalog.meta.mode).toBe('por_categorias');
+      expect(result.catalog.meta.truncated).toBe(false);
     }
     const asked = transport.requests
       .filter((request) => request.url.searchParams.get('action') === 'get_vod_streams')
@@ -410,11 +440,120 @@ describe('syncVodCatalog', () => {
     const result = await promise;
     expect(result.state).toBe('ready');
     if (result.state === 'ready') {
+      /* Sin catálogo anterior (la primera vez), faltan categorías de verdad. */
       expect(result.catalog.meta.truncated).toBe(true);
       expect(result.catalog.tables.movie.n).toBeGreaterThan(0);
       expect(result.catalog.tables.movie.n).toBeLessThan(20);
+      /* La próxima vez se empieza por la primera que no cupo. */
+      expect(result.resumeFrom.movie).toBe(String(result.catalog.tables.movie.n + 1));
     }
     expect(transport.requests.length).toBeLessThan(25);
+  });
+
+  describe('modo por categorías con catálogo anterior (rotación)', () => {
+    const ids = Array.from(
+      { length: 20 },
+      (_, i) => [String(i + 1), `C${i + 1}`] as [string, string],
+    );
+    /* Cada categoría N tiene una película N; la 7 falla si `broken`. */
+    function categoriesRig(broken = { on: false }) {
+      return rig((action, url) => {
+        if (action === 'get_vod_categories') return { body: cats(ids) };
+        if (action !== 'get_vod_streams') return undefined;
+        const raw = url.searchParams.get('category_id');
+        if (raw === null) return { status: 503 };
+        if (broken.on && raw === '7') return { status: 500 };
+        const category = Number(raw);
+        return {
+          body: JSON.stringify([
+            { stream_id: category, name: `Película ${category}`, category_id: raw },
+          ]),
+        };
+      });
+    }
+    function syncWith(
+      setup: ReturnType<typeof categoriesRig>,
+      extra: Partial<Parameters<typeof syncVodCatalog>[1]>,
+    ) {
+      const { core, net } = setup;
+      const promise = syncVodCatalog(
+        {
+          net,
+          clock: core.clock,
+          logger: core.logger,
+          credentials: CREDS,
+          policy: { lan: false },
+          signal: new AbortController().signal,
+        },
+        {
+          providerId: 'p_prueba01',
+          providerFp: '0123456789abcdef',
+          revision: 2,
+          mode: 'por_categorias',
+          ...extra,
+        },
+      );
+      void drive(core, promise);
+      return promise;
+    }
+    const sources = (catalog: VodCatalog): number[] =>
+      Array.from(catalog.tables.movie.source).sort((a, b) => a - b);
+    const asked = (setup: ReturnType<typeof categoriesRig>): Array<string | null> =>
+      setup.transport.requests
+        .filter((request) => request.url.searchParams.get('action') === 'get_vod_streams')
+        .map((request) => request.url.searchParams.get('category_id'));
+
+    it('lo que no cabe en el tope se queda como estaba y la siguiente empieza por ahí: en unas vueltas están todas', async () => {
+      let catalog: VodCatalog | null = null;
+      let resumeFrom: Partial<Record<'movie' | 'series', string>> = {};
+      for (let round = 0; round < 20 && (catalog?.tables.movie.n ?? 0) < 20; round += 1) {
+        const setup = categoriesRig();
+        const previous: VodCatalog | null = catalog;
+        const result = await syncWith(setup, {
+          byCategoryTotalMs: 1_000,
+          resumeFrom,
+          previous: () => Promise.resolve(previous),
+        });
+        expect(result.state).toBe('ready');
+        if (result.state !== 'ready') return;
+        /* Empieza por la primera que no cupo la vez anterior. */
+        expect(asked(setup)[0]).toBe(resumeFrom.movie ?? '1');
+        if (previous) {
+          /* Nada de lo que había se pierde, y ya no es «faltan títulos». */
+          expect(sources(result.catalog)).toEqual(expect.arrayContaining(sources(previous)));
+          expect(result.catalog.meta.truncated).toBe(false);
+        }
+        catalog = result.catalog;
+        resumeFrom = result.resumeFrom;
+      }
+      expect(catalog && sources(catalog)).toEqual(ids.map(([id]) => Number(id)));
+    });
+
+    it('una categoría que falla se queda como estaba en el catálogo anterior (no desaparece 24 h)', async () => {
+      const first = await syncWith(categoriesRig(), {});
+      expect(first.state).toBe('ready');
+      if (first.state !== 'ready') return;
+      expect(first.catalog.tables.movie.n).toBe(20);
+      const previous = first.catalog;
+      const second = await syncWith(categoriesRig({ on: true }), {
+        previous: () => Promise.resolve(previous),
+      });
+      expect(second.state === 'ready' && sources(second.catalog)).toEqual(sources(previous));
+      expect(second.state === 'ready' && second.catalog.meta.truncated).toBe(false);
+      /* Sin catálogo anterior, la 7 falta (y no es `truncated`: es una categoría mala). */
+      const alone = await syncWith(categoriesRig({ on: true }), {});
+      expect(alone.state === 'ready' && alone.catalog.tables.movie.n).toBe(19);
+    });
+
+    it('el catálogo anterior de OTRO proveedor no se usa', async () => {
+      const first = await syncWith(categoriesRig(), {});
+      if (first.state !== 'ready') throw new Error('debería estar listo');
+      const other = { ...first.catalog, providerId: 'p_otro0001' };
+      const second = await syncWith(categoriesRig({ on: true }), {
+        previous: () => Promise.resolve(other),
+      });
+      expect(second.state === 'ready' && second.catalog.tables.movie.n).toBe(19);
+    });
   });
 
   it('las reglas de rendirse: 5 seguidas, o más de max(5, 20 %)', () => {
