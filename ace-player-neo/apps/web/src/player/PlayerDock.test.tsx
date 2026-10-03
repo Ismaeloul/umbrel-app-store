@@ -31,6 +31,9 @@ import {
 import PlayerDock, { sharedRuntimeForTests } from './index.tsx';
 import { madridToday } from './PlayerSurface.tsx';
 import { stageSlotStore } from './stage-slot.ts';
+import { zapBannerStore, ZAP_COMMIT_MS } from './favorite-zap.ts';
+import { setWatching } from '../notices/notify.ts';
+import { resetPlayGuard } from '../features/library/play.ts';
 
 const HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const ROUTE = { vista: 'partido' as const, id: null, canal: HASH };
@@ -107,6 +110,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
+  zapBannerStore.set(null);
+  resetPlayGuard();
   uninstall();
   net.restore();
   resetMode();
@@ -460,6 +466,97 @@ describe('reproductor en grande', () => {
     setPlayer(playing());
     fireEvent.keyDown(window, { key: 's' });
     expect(playerStore.get().nerdOpen).toBe(true);
+  });
+
+  describe('cambiar de canal rápido entre favoritos (↑ ↓, Re Pág / Av Pág, deslizar)', () => {
+    const FAVS = [
+      { id: HASH, title: 'DAZN 1' },
+      { id: 'b'.repeat(40), title: 'DAZN 2' },
+      { id: 'c'.repeat(40), title: 'M+ LaLiga' },
+      { id: 'd'.repeat(40), title: 'Eurosport 1' },
+    ];
+    function withFavorites() {
+      const client = createQueryClient();
+      const base = fixture<{ favorites: Array<Record<string, unknown>> }>('libraryGet');
+      const model = base.favorites[0]!;
+      client.setQueryData(routeKey('libraryGet'), {
+        ...base,
+        favorites: FAVS.map((item) => ({ ...model, ...item })),
+      });
+      return client;
+    }
+
+    it('se registran en la ayuda sin pisar ← → (que siguen siendo el zapping de siempre)', () => {
+      renderDock('stage', undefined, withFavorites());
+      const entries = shortcutStore.get();
+      const prev = entries.find((entry) => entry.id === 'reproductor.favorito-anterior');
+      const next = entries.find((entry) => entry.id === 'reproductor.favorito-siguiente');
+      expect(prev?.keys).toEqual(['ArrowUp', 'PageUp']);
+      expect(next?.keys).toEqual(['ArrowDown', 'PageDown']);
+      expect(entries.find((entry) => entry.id === 'reproductor.siguiente')?.keys).toEqual([
+        'ArrowRight',
+      ]);
+    });
+
+    it('tres ↓ rápidos: el cartel pasa por ellos y solo se abre el tercero', () => {
+      renderDock('stage', undefined, withFavorites());
+      setPlayer(playing());
+      // El armazón marca que se está viendo: los avisos de señal van a la línea de estado.
+      setWatching(true);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      fireEvent.keyDown(window, { key: 'PageDown' });
+      const banner = document.querySelector('.player-zap');
+      expect(banner).toHaveTextContent('Eurosport 1');
+      expect(banner).toHaveTextContent('4/4');
+      expect(banner).toHaveTextContent('AceStream');
+      // Aún no se ha abierto nada: sigue sonando el de antes.
+      expect(playerStore.get().channel?.hash).toBe(HASH);
+      act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+      expect(playerStore.get().channel?.hash).toBe('d'.repeat(40));
+      expect(location.search).toContain(`canal/${'d'.repeat(40)}`);
+      // Se anuncia en la región viva de la línea de estado.
+      expect(statusStore.get().message?.text).toBe('Favorito 4 de 4: Eurosport 1');
+      setWatching(false);
+    });
+
+    it('↑ desde el primero da la vuelta al último; con el foco en un campo, no hace nada', () => {
+      renderDock('stage', undefined, withFavorites());
+      setPlayer(playing());
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const input = document.createElement('input');
+      document.body.append(input);
+      input.focus();
+      fireEvent.keyDown(input, { key: 'ArrowUp' });
+      expect(document.querySelector('.player-zap')).toBeNull();
+      input.blur();
+      input.remove();
+      fireEvent.keyDown(window, { key: 'ArrowUp' });
+      act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+      expect(playerStore.get().channel?.hash).toBe('d'.repeat(40));
+    });
+
+    it('con el dedo: hacia arriba, el favorito siguiente; hacia abajo sigue minimizando (móvil en vertical)', () => {
+      const { container, handlers } = renderDock('stage', undefined, withFavorites());
+      setPlayer(playing());
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const hit = container.querySelector<HTMLElement>('.player-hit')!;
+      const swipe = (dy: number) => {
+        const finger = { pointerId: 4, pointerType: 'touch' };
+        fireEvent.pointerDown(hit, { ...finger, clientX: 200, clientY: 300 });
+        fireEvent.pointerMove(hit, { ...finger, clientX: 200, clientY: 300 + dy / 2 });
+        fireEvent.pointerUp(hit, { ...finger, clientX: 200, clientY: 300 + dy });
+      };
+      swipe(-120);
+      expect(document.querySelector('.player-zap')).toHaveTextContent('DAZN 2');
+      expect(document.querySelector('.player-zap')).toHaveTextContent('2/4');
+      expect(handlers.onMinimize).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+      expect(playerStore.get().channel?.hash).toBe('b'.repeat(40));
+      swipe(120);
+      expect(handlers.onMinimize).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('Palco: publica el hueco del marcador sobre el vídeo y hace un corte a negro al cambiar de fuente (W5, W14)', () => {

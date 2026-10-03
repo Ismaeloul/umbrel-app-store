@@ -63,6 +63,13 @@ import {
 } from './screen.ts';
 import { statusFor } from './status.ts';
 import { zappingList, zapTarget, type ZapItem } from './zapping.ts';
+import {
+  FavoriteZapper,
+  favoriteZapList,
+  verticalKeysForZap,
+  type FavoriteChannel,
+} from './favorite-zap.ts';
+import { playChannel } from '../features/library/play.ts';
 import './player.css';
 
 export * from './api.ts';
@@ -253,6 +260,52 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
   const isFavorite = Boolean(hash && library.data?.favorites.some((item) => item.id === hash));
   const canZap = zapList.length > 1 || (zapList.length === 1 && zapList[0]?.id !== hash);
 
+  /* Cambiar de canal rápido entre favoritos (favorite-zap.ts): las
+     pulsaciones seguidas se acumulan y solo se abre el último canal. Va por
+     playChannel, como tocarlo en Canales: un favorito IPTV nunca va directo
+     al motor y, con la IPTV activa, la sesión del canal pregunta antes. */
+  const favList = useMemo<FavoriteChannel[]>(() => favoriteZapList(library.data), [library.data]);
+  const canZapFavorites = favList.length > 1 || (favList.length === 1 && favList[0]?.id !== hash);
+  const openFavorite = (channel: FavoriteChannel, position: number, total: number) => {
+    haptic('rigid');
+    // La región viva de la línea de estado lo lee (el cartel es aria-hidden).
+    notify(`Favorito ${position} de ${total}: ${channel.title}`, { kind: 'signal', icon: 'tv' });
+    playChannel(navigate, {
+      hash: channel.id,
+      title: channel.title,
+      ih: channel.ih,
+      record: true,
+      origin: 'biblioteca',
+      ...(channel.category ? { category: channel.category } : {}),
+      ...(channel.iptv ? { iptv: channel.id } : {}),
+      ...(channel.iptv && channel.alias ? { alias: channel.alias } : {}),
+    });
+  };
+  const openFavoriteRef = useRef(openFavorite);
+  openFavoriteRef.current = openFavorite;
+  const [zapper] = useState(
+    () =>
+      new FavoriteZapper({
+        current: () => playerStore.get().channel?.hash ?? null,
+        open: (channel, position, total) => openFavoriteRef.current(channel, position, total),
+      }),
+  );
+  useEffect(() => () => zapper.cancel(), [zapper]);
+  // Al minimizar a media ráfaga no se abre nada (abrirlo devolvería al partido).
+  useEffect(() => {
+    if (!stage) zapper.cancel();
+  }, [stage, zapper]);
+  const zapFavorite = (direction: 1 | -1) => {
+    if (!favList.length) {
+      notify('Aún no tienes favoritos: guarda canales con la estrella para cambiar entre ellos', {
+        kind: 'signal',
+        icon: 'star',
+      });
+      return;
+    }
+    if (zapper.press(direction, favList)) haptic('selection');
+  };
+
   const video = () => videoRef.current as VideoWithExtras | null;
 
   const zap = (direction: 1 | -1) => {
@@ -282,6 +335,7 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
     tapToPlay: () => void runtime?.tapToPlay(),
     stop: () => {
       haptic('rigid');
+      zapper.cancel();
       stop();
     },
     retry: () => {
@@ -370,6 +424,7 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
         );
     },
     zap,
+    zapFavorite,
     minimize: () => {
       haptic('light');
       onMinimize();
@@ -600,6 +655,35 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
     handler: () => zap(1),
   });
 
+  /* ↑ ↓ y Re Pág / Av Pág: favorito anterior y siguiente (favorite-zap.ts). Con
+     el foco en la página (una lista, un enlace) siguen desplazando; a
+     pantalla completa, siempre. */
+  const verticalZap = () =>
+    stageRef.current &&
+    has() &&
+    canZapFavorites &&
+    verticalKeysForZap(rootRef.current, immersiveRef.current);
+  const immersiveRef = useRef(immersive);
+  immersiveRef.current = immersive;
+  useShortcut({
+    id: 'reproductor.favorito-anterior',
+    keys: ['ArrowUp', 'PageUp'],
+    display: ['↑', 'Re Pág'],
+    label: 'Favorito anterior (cambiar de canal rápido)',
+    group,
+    when: verticalZap,
+    handler: () => zapFavorite(-1),
+  });
+  useShortcut({
+    id: 'reproductor.favorito-siguiente',
+    keys: ['ArrowDown', 'PageDown'],
+    display: ['↓', 'Av Pág'],
+    label: 'Favorito siguiente (cambiar de canal rápido)',
+    group,
+    when: verticalZap,
+    handler: () => zapFavorite(1),
+  });
+
   // Desarrollo: gancho para las capturas y para probar a mano desde la consola.
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -626,6 +710,7 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
     canFullscreen: abilities.fullscreen,
     canPip: abilities.pip,
     canZap,
+    canZapFavorites,
     isFavorite,
     finePointer,
     compact,

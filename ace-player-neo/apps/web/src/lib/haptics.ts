@@ -40,6 +40,7 @@ export const HAPTIC_MAP: Record<HapticKind, readonly string[]> = {
     'chips de gustos',
     'interruptores y radios de Ajustes',
     'cambio de día en la tira de días',
+    'cada paso por los favoritos al cambiar de canal rápido (↑ ↓, deslizar en vertical)',
   ],
   light: [
     'destapar el marcador',
@@ -49,7 +50,12 @@ export const HAPTIC_MAP: Record<HapticKind, readonly string[]> = {
     'abrir un cartel de partido o de canal',
   ],
   medium: ['pantalla completa', 'cerrar una hoja', 'pulsación larga (menú contextual)'],
-  rigid: ['elegir una fuente', 'detener la reproducción', 'cambio de fuente (zapping)'],
+  rigid: [
+    'elegir una fuente',
+    'detener la reproducción',
+    'cambio de fuente (zapping)',
+    'abrir el favorito elegido (cambiar de canal rápido)',
+  ],
   heavy: ['umbral de descartar el mini (deslizar abajo)'],
   success: [
     'gol',
