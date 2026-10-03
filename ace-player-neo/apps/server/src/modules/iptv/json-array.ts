@@ -17,6 +17,8 @@ import { NetBadResponseError } from '../net/client.js';
 export interface JsonArrayOptions {
   readonly maxObjectBytes?: number;
   readonly signal?: AbortSignal;
+  /** Cada elemento saltado (demasiado grande, JSON roto o que no es objeto), en el momento. */
+  readonly onSkip?: () => void;
 }
 
 const OPEN_BRACE = 0x7b;
@@ -52,6 +54,12 @@ export async function parseJsonArrayStream(
   let size = 0;
   let objects = 0;
   let skipped = 0;
+  /* También al momento por `onSkip`: si `onObject` corta la lectura (un tope),
+     lo saltado hasta ahí no se pierde (docs/vod.md §4.2, T5). */
+  const skip = (): void => {
+    skipped += 1;
+    options.onSkip?.();
+  };
   /* Elemento que no es objeto (un número o una cadena suelta). */
   let scalar = false;
 
@@ -63,13 +71,13 @@ export async function parseJsonArrayStream(
     try {
       value = JSON.parse(text);
     } catch {
-      skipped += 1;
+      skip();
       return;
     }
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       objects += 1;
       onObject(value as Record<string, unknown>);
-    } else skipped += 1;
+    } else skip();
   };
 
   try {
@@ -100,14 +108,14 @@ export async function parseJsonArrayStream(
             collecting = byte === OPEN_BRACE;
             oversize = false;
             segmentStart = collecting ? index : -1;
-            if (!collecting) skipped += 1;
+            if (!collecting) skip();
             continue;
           }
           /* Número, cadena, true/false/null sueltos: se saltan. */
           scalar = true;
           inString = byte === QUOTE;
           escaped = false;
-          skipped += 1;
+          skip();
           continue;
         }
         if (scalar) {
@@ -141,14 +149,14 @@ export async function parseJsonArrayStream(
               const piece = chunk.subarray(segmentStart < 0 ? 0 : segmentStart, index + 1);
               size += piece.length;
               if (size > maxObject) {
-                skipped += 1;
+                skip();
                 pieces = [];
                 size = 0;
               } else {
                 pieces.push(piece);
                 emit();
               }
-            } else if (collecting) skipped += 1;
+            } else if (collecting) skip();
             collecting = false;
             segmentStart = -1;
             continue;

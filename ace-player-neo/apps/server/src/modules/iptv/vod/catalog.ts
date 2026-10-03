@@ -29,6 +29,7 @@ import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { VOD_LIMITS, VOD_REFRESH_MS, type VodKind } from '@ace/shared';
 import type { Clock } from '../../../core/clock.js';
+import { AppError, errorCodeOf } from '../../../core/errors.js';
 import type { Logger } from '../../../core/logger.js';
 import type { IptvKeys } from '../../../config/keys.js';
 import type { IptvFetchPolicy, NetClient } from '../../net/types.js';
@@ -64,6 +65,17 @@ export const VOD_AT_START_MS = 20_000;
 export const VOD_DELAY_WATCHING_MS = HOUR;
 /** «Actualizar» en Ajustes sincroniza también el VOD si tiene más de esto. */
 export const VOD_MANUAL_MIN_AGE_MS = HOUR;
+/**
+ * Tope de tiempo del modo por categorías, por tipo (películas y series):
+ * antes no tenía y podía tardar horas con un panel lento (fallo 8). Ya no
+ * retrasa el directo (el VOD cede el cerrojo, `runHeavy` en service.ts),
+ * pero tampoco debe quedarse colgado para siempre.
+ */
+export const VOD_BY_CATEGORY_TOTAL_MS = 15 * MINUTE;
+/** Fallos SEGUIDOS de categorías tras los que el modo por categorías se rinde (el panel no está). */
+export const VOD_CATEGORY_FAILURES_IN_A_ROW = 5;
+/** Parte de las categorías que puede fallar sin rendirse (si son más de 5). */
+export const VOD_CATEGORY_FAILURES_RATIO = 0.2;
 
 /** Un catálogo VOD en memoria. */
 export interface VodCatalog {
@@ -102,6 +114,8 @@ export interface VodSyncInput {
   readonly revision: number;
   /** El modo con el que empezar (el de la última vez). */
   readonly mode: VodSyncMode;
+  /** Tope del modo por categorías por tipo (por defecto `VOD_BY_CATEGORY_TOTAL_MS`; los tests lo bajan). */
+  readonly byCategoryTotalMs?: number;
 }
 
 export type VodSyncResult =
@@ -116,23 +130,46 @@ interface KindOutcome {
   readonly mode: VodSyncMode;
 }
 
+/** Códigos que tumban la sincronización entera aunque sea de una sola categoría (la cuenta). */
+const FATAL_CODES: ReadonlySet<string> = new Set(['iptv_auth_failed', 'iptv_account_expired']);
+
+/**
+ * ¿Hay que rendirse en el modo por categorías? Con 5 fallos SEGUIDOS (el
+ * panel no está) o con más de max(5, 20 %) de las categorías fallidas.
+ */
+export function vodCategoriesGiveUp(failed: number, inARow: number, total: number): boolean {
+  return (
+    inARow >= VOD_CATEGORY_FAILURES_IN_A_ROW ||
+    failed > Math.max(VOD_CATEGORY_FAILURES_IN_A_ROW, Math.ceil(total * VOD_CATEGORY_FAILURES_RATIO))
+  );
+}
+
 async function syncKind(
   deps: VodSyncDeps,
   kind: VodKind,
   preferred: VodSyncMode,
+  byCategoryTotalMs: number,
 ): Promise<KindOutcome> {
-  const { net, credentials, policy, signal, clock } = deps;
+  const { net, credentials, policy, signal, clock, logger } = deps;
   let categories = new Map<string, string>();
   try {
     categories = await xtreamVodCategories(net, credentials, kind, { policy, signal });
   } catch (error) {
     if (signal.aborted) throw error;
     /* Sin nombres de categoría la lista sigue sirviendo (todo «Sin categoría»). */
-    deps.logger.warn({ kind }, 'VOD: las categorías no han llegado');
+    logger.warn({ kind }, 'VOD: las categorías no han llegado');
   }
   const max = kind === 'movie' ? VOD_LIMITS.maxMovies : VOD_LIMITS.maxSeries;
-  const builder = new VodTableBuilder(max, [...new Set(categories.values())]);
+  const order = [...new Set(categories.values())];
+  /* Un `builder` y un `skipped` por intento: al cambiar de modo a mitad (la
+     lista entera murió tras leer decenas de miles de filas) se empieza de
+     cero, o todo lo leído contaría como repetido (fallo 2). */
+  let builder = new VodTableBuilder(max, order);
   let skipped = 0;
+  const restart = (): void => {
+    builder = new VodTableBuilder(max, order);
+    skipped = 0;
+  };
   const onItem = (item: Record<string, unknown>): boolean => {
     if (builder.full) return false;
     const row = parseListItem(kind, item, categories);
@@ -140,65 +177,91 @@ async function syncKind(
     else builder.add(row);
     return !builder.full;
   };
+  const onSkip = (): void => {
+    skipped += 1;
+  };
+  /* Por categorías: una mala se salta y se cuenta (fallo 3); con 5 seguidas
+     o más del 20 % se rinde. Tope total de 15 min (fallo 8): pasado, se
+     queda lo leído con `truncated`. */
   const byCategories = async (): Promise<{ none: boolean; stopped: boolean }> => {
-    if (!categories.size) throw new Error('sin categorías');
+    const ids = [...categories.keys()].filter((id) => /^\d{1,12}$/.test(id));
+    if (!ids.length) throw new Error('sin categorías');
+    const deadline = clock.now() + byCategoryTotalMs;
     let any = false;
-    let first = true;
-    for (const categoryId of categories.keys()) {
-      if (!/^\d{1,12}$/.test(categoryId)) continue;
-      if (!first) await clock.sleep(VOD_LIMITS.byCategory.spacingMs, signal);
-      first = false;
-      const outcome = await xtreamVodList(net, credentials, kind, onItem, {
-        policy,
-        signal,
-        categoryId,
-      });
-      skipped += outcome.skipped;
-      if (outcome.state === 'ok') any = true;
-      if (outcome.stopped || builder.full) return { none: false, stopped: true };
+    let failed = 0;
+    let inARow = 0;
+    for (const [index, categoryId] of ids.entries()) {
+      if (index > 0) await clock.sleep(VOD_LIMITS.byCategory.spacingMs, signal);
+      if (clock.now() >= deadline) {
+        logger.warn(
+          { kind, done: index, total: ids.length, rows: builder.size },
+          'VOD: el modo por categorías ha pasado de su tope de tiempo; se queda lo leído',
+        );
+        if (!builder.size) throw new AppError('iptv_timeout', { detail: 'vod_por_categorias' });
+        return { none: false, stopped: true };
+      }
+      try {
+        const outcome = await xtreamVodList(net, credentials, kind, onItem, {
+          policy,
+          signal,
+          categoryId,
+          onSkip,
+        });
+        inARow = 0;
+        if (outcome.state === 'ok') any = true;
+        if (outcome.stopped || builder.full) return { none: false, stopped: true };
+      } catch (error) {
+        if (signal.aborted) throw error;
+        const code = errorCodeOf(error) ?? 'desconocido';
+        if (FATAL_CODES.has(code)) throw error;
+        failed += 1;
+        inARow += 1;
+        logger.warn({ kind, errorCode: code, failed }, 'VOD: una categoría ha fallado; se salta');
+        if (vodCategoriesGiveUp(failed, inARow, ids.length)) throw error;
+      }
+    }
+    if (failed) {
+      logger.warn({ kind, failed, total: ids.length }, 'VOD: categorías que no se han podido leer');
     }
     return { none: !any && builder.size === 0, stopped: false };
   };
+  const whole = async (): Promise<{ none: boolean; stopped: boolean }> => {
+    const outcome = await xtreamVodList(net, credentials, kind, onItem, { policy, signal, onSkip });
+    return { none: outcome.state === 'none' && builder.size === 0, stopped: outcome.stopped };
+  };
   let mode: VodSyncMode = preferred;
-  let none: boolean;
-  let stopped: boolean;
+  let outcome: { none: boolean; stopped: boolean };
   if (preferred === 'completo') {
     try {
-      const outcome = await xtreamVodList(net, credentials, kind, onItem, { policy, signal });
-      skipped += outcome.skipped;
-      none = outcome.state === 'none' && builder.size === 0;
-      stopped = outcome.stopped;
+      outcome = await whole();
     } catch (error) {
       if (signal.aborted || !shouldFallBackToCategories(error) || !categories.size) throw error;
-      deps.logger.warn(
-        { kind, errorCode: (error as { code?: string }).code },
+      logger.warn(
+        { kind, errorCode: errorCodeOf(error), rows: builder.size },
         'VOD: la lista completa ha fallado; se recorre por categorías',
       );
       mode = 'por_categorias';
-      const outcome = await byCategories();
-      none = outcome.none;
-      stopped = outcome.stopped;
+      restart();
+      outcome = await byCategories();
     }
   } else {
     try {
-      const outcome = await byCategories();
-      none = outcome.none;
-      stopped = outcome.stopped;
+      outcome = await byCategories();
     } catch (error) {
       if (signal.aborted) throw error;
+      if (FATAL_CODES.has(errorCodeOf(error) ?? '')) throw error;
       /* Sin categorías (o fallan): la lista completa, que a lo mejor ya va. */
       mode = 'completo';
-      const outcome = await xtreamVodList(net, credentials, kind, onItem, { policy, signal });
-      skipped += outcome.skipped;
-      none = outcome.state === 'none' && builder.size === 0;
-      stopped = outcome.stopped;
+      restart();
+      outcome = await whole();
     }
   }
-  const table = await builder.build();
+  if (signal.aborted) throw signal.reason;
+  const table = await builder.build(signal);
   return {
     table,
-    none,
-    truncated: stopped || builder.full,
+    none: outcome.none,
+    truncated: outcome.stopped || builder.full,
     skipped: skipped + builder.duplicates,
     mode,
   };
@@ -206,8 +269,10 @@ async function syncKind(
 
 /** Descarga y monta el catálogo VOD entero (§4.7). Lanza el código IPTV si falla. */
 export async function syncVodCatalog(deps: VodSyncDeps, input: VodSyncInput): Promise<VodSyncResult> {
-  const movies = await syncKind(deps, 'movie', input.mode);
-  const series = await syncKind(deps, 'series', input.mode);
+  const totalMs = input.byCategoryTotalMs ?? VOD_BY_CATEGORY_TOTAL_MS;
+  const movies = await syncKind(deps, 'movie', input.mode, totalMs);
+  if (deps.signal.aborted) throw deps.signal.reason;
+  const series = await syncKind(deps, 'series', input.mode, totalMs);
   const skipped = movies.skipped + series.skipped;
   if (movies.none && series.none) return { state: 'none', skipped };
   const meta: VodCatalogMeta = {
@@ -233,6 +298,13 @@ export async function saveVodCatalog(
   const parts = encodeVodCatalog(catalog.meta, catalog.tables);
   const blob = await sealBlobBytes(keys.secrets, vodAad(catalog.providerId), parts);
   await writeSecret(file, path.dirname(file), blob);
+}
+
+/** Borra `vod.enc` y su resto `.tmp` (nunca lanza). */
+export async function removeVodCatalogFile(file: string): Promise<void> {
+  for (const target of [file, `${file}.tmp`]) {
+    await rm(target, { force: true }).catch(() => undefined);
+  }
 }
 
 /**

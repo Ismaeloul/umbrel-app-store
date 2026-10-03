@@ -136,9 +136,10 @@ class Grow<T extends Uint8Array | Uint16Array | Uint32Array | Float64Array> {
   }
 }
 
-/** Cede el hilo (entre trozos de 5 000 filas, §4.7). */
-export function yieldThread(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
+/** Cede el hilo (entre trozos de 5 000 filas, §4.7); con `signal` abortada, lanza su motivo al volver. */
+export async function yieldThread(signal?: AbortSignal): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve));
+  if (signal?.aborted) throw signal.reason;
 }
 
 /**
@@ -241,8 +242,12 @@ export class VodTableBuilder {
     return true;
   }
 
-  /** Cierra la tabla: textos unidos e índices, cediendo el hilo por trozos. */
-  async build(): Promise<VodTable> {
+  /**
+   * Cierra la tabla: textos unidos e índices, cediendo el hilo por trozos.
+   * Con `signal`, mira entre trozos si hay que soltar (la sincronización VOD
+   * cede el cerrojo al directo y a la guía, fallo 8).
+   */
+  async build(signal?: AbortSignal): Promise<VodTable> {
     const n = this.size;
     const titles = this.texts.titles.done();
     const folded = this.texts.folded.done();
@@ -269,8 +274,8 @@ export class VodTableBuilder {
       cats: [...this.cats],
       dirs: [...this.dirs],
     };
-    await yieldThread();
-    const indexes = await buildIndexes(data);
+    await yieldThread(signal);
+    const indexes = await buildIndexes(data, signal);
     return new VodTable({ ...data, ...indexes });
   }
 }
@@ -307,17 +312,18 @@ export class ChunkedText {
 /** `bySource`, `byAdded` y `byCat` (§4.7: por trozos, cediendo el hilo). */
 export async function buildIndexes(
   data: Pick<VodTableData, 'n' | 'source' | 'added' | 'cat' | 'cats' | 'offsets' | 'folded'>,
+  signal?: AbortSignal,
 ): Promise<Pick<VodTableData, 'bySource' | 'byAdded' | 'byCatStart' | 'byCatRows'>> {
   const { n, source, added, cat } = data;
   const bySource = new Uint32Array(n);
   for (let row = 0; row < n; row += 1) bySource[row] = row;
   bySource.sort((a, b) => (source[a] as number) - (source[b] as number));
-  await yieldThread();
+  await yieldThread(signal);
   const byAdded = new Uint32Array(n);
   for (let row = 0; row < n; row += 1) byAdded[row] = row;
   /* Más reciente primero; a igualdad, por el orden del panel. */
   byAdded.sort((a, b) => (added[b] as number) - (added[a] as number) || a - b);
-  await yieldThread();
+  await yieldThread(signal);
   const buckets = data.cats.length + 1;
   const counts = new Uint32Array(buckets + 1);
   const bucketOf = (row: number): number => {
@@ -339,7 +345,7 @@ export async function buildIndexes(
     const bucket = bucketOf(row);
     byCatRows[cursor[bucket] as number] = row;
     cursor[bucket] = (cursor[bucket] as number) + 1;
-    if (index % BUILD_CHUNK === BUILD_CHUNK - 1) await yieldThread();
+    if (index % BUILD_CHUNK === BUILD_CHUNK - 1) await yieldThread(signal);
   }
   return { bySource, byAdded, byCatStart, byCatRows };
 }

@@ -108,7 +108,11 @@ export async function xtreamVodList(
   credentials: XtreamCredentials,
   kind: VodKind,
   onItem: (item: Record<string, unknown>) => boolean,
-  options: XtreamCallOptions & { readonly categoryId?: string },
+  options: XtreamCallOptions & {
+    readonly categoryId?: string;
+    /** Cada objeto que salta el troceador, al momento (también si se corta por el tope). */
+    readonly onSkip?: () => void;
+  },
 ): Promise<VodListOutcome> {
   const byCategory = options.categoryId !== undefined;
   const limits = kind === 'movie' ? VOD_LIMITS.movies : VOD_LIMITS.series;
@@ -120,6 +124,8 @@ export async function xtreamVodList(
     byCategory ? { category_id: options.categoryId as string } : {},
   );
   let stopped = false;
+  let objects = 0;
+  let skipped = 0;
   try {
     const opened = await net.openStream(url, {
       maxBytes,
@@ -133,6 +139,7 @@ export async function xtreamVodList(
     const result = await parseJsonArrayStream(
       opened.body,
       (item) => {
+        objects += 1;
         if (!onItem(item)) {
           stopped = true;
           throw new StopList();
@@ -140,14 +147,19 @@ export async function xtreamVodList(
       },
       {
         maxObjectBytes: limits.maxObjectBytes,
+        onSkip: () => {
+          skipped += 1;
+          options.onSkip?.();
+        },
         ...(options.signal ? { signal: options.signal } : {}),
       },
     );
     const state = result.objects === 0 && result.skipped === 0 ? 'none' : 'ok';
     return { state, objects: result.objects, skipped: result.skipped, stopped: false };
   } catch (error) {
+    /* Cortada por el tope de títulos: no es un error, y lo saltado hasta ahí cuenta (fallo 10). */
     if (error instanceof StopList || stopped) {
-      return { state: 'ok', objects: 0, skipped: 0, stopped: true };
+      return { state: 'ok', objects, skipped, stopped: true };
     }
     if (notAnArray(error)) return { state: 'none', objects: 0, skipped: 0, stopped: false };
     throw toIptvError(error, 'list');
