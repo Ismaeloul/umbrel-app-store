@@ -330,3 +330,126 @@ export function buildMp4(spec: Mp4Spec): Buffer {
     ? Buffer.concat([ftyp, moof, mdat, free, moov])
     : Buffer.concat([ftyp, moov, moof, free, mdat]);
 }
+
+// --- fMP4 (lo que saca ffmpeg con +frag_keyframe por pipe:1) ---
+
+export interface FragTrackSpec {
+  readonly id: number;
+  readonly handler: 'vide' | 'soun';
+  readonly timescale: number;
+  /** `media_time` del elst del init (0 = lista limpia). */
+  readonly elstMediaTime?: number;
+  /** Bytes que van en el stsd (para que dos inits se distingan). */
+  readonly codecTag?: string;
+}
+
+/** `ftyp` + `moov` de un fMP4 (con `mvex`), como el de ffmpeg con `delay_moov`. */
+export function initSegment(tracks: readonly FragTrackSpec[], movieTimescale = 1000): Buffer {
+  const ftyp = box(
+    'ftyp',
+    Buffer.from('iso5', 'latin1'),
+    u32(0x200),
+    Buffer.from('iso5iso6mp41', 'latin1'),
+  );
+  const mvhd = fullBox(
+    'mvhd',
+    0,
+    0,
+    u32(0, 0, movieTimescale, 0, 0x10000),
+    u16(0x100, 0),
+    Buffer.alloc(8),
+    u32(0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000),
+    Buffer.alloc(24),
+    u32(tracks.length + 1),
+  );
+  const traks = tracks.map((track) => {
+    const tkhd = fullBox('tkhd', 0, 3, u32(0, 0, track.id, 0, 0), Buffer.alloc(52), u32(0, 0));
+    const elst = box(
+      'edts',
+      fullBox('elst', 0, 0, u32(1), u32(0), i32(track.elstMediaTime ?? 0), u32(0x10000)),
+    );
+    const mdhd = fullBox('mdhd', 0, 0, u32(0, 0, track.timescale, 0), u16(0x55c4, 0));
+    const hdlr = fullBox(
+      'hdlr',
+      0,
+      0,
+      u32(0),
+      Buffer.from(track.handler, 'latin1'),
+      Buffer.alloc(13),
+    );
+    const entry = box(
+      track.codecTag ?? (track.handler === 'vide' ? 'avc1' : 'mp4a'),
+      Buffer.alloc(16),
+    );
+    const stbl = box(
+      'stbl',
+      fullBox('stsd', 0, 0, u32(1), entry),
+      fullBox('stts', 0, 0, u32(0)),
+      fullBox('stsc', 0, 0, u32(0)),
+      fullBox('stsz', 0, 0, u32(0, 0)),
+      fullBox('stco', 0, 0, u32(0)),
+    );
+    return box('trak', tkhd, elst, box('mdia', mdhd, hdlr, box('minf', stbl)));
+  });
+  const mvex = box(
+    'mvex',
+    ...tracks.map((track) => fullBox('trex', 0, 0, u32(track.id, 1, 0, 0, 0))),
+  );
+  return Buffer.concat([ftyp, box('moov', mvhd, ...traks, mvex)]);
+}
+
+export interface FragPartSpec {
+  readonly id: number;
+  /** `baseMediaDecodeTime` (con signo: el audio de una ejecución desde 0 da −1024). */
+  readonly tfdt: number;
+  /** Versión del tfdt (por defecto 1, como ffmpeg). */
+  readonly tfdtVersion?: 0 | 1;
+  readonly samples: number;
+  readonly sampleDuration: number;
+  /** Desfase de composición de cada muestra (fotogramas B). */
+  readonly cto?: number;
+  /** La primera muestra es clave (por defecto sí en el vídeo). */
+  readonly firstSync?: boolean;
+  /** Bytes de datos de esta pista en el mdat. */
+  readonly bytes: number;
+}
+
+/** `moof` + `mdat` de un fragmento (un GOP del vídeo y su audio). */
+export function mediaFragment(
+  sequence: number,
+  parts: readonly FragPartSpec[],
+  options: { readonly largeMdat?: boolean; readonly fill?: number } = {},
+): Buffer {
+  const trafs = parts.map((part) => {
+    const flags = 0x020000; // default-base-is-moof
+    const tfhd = fullBox('tfhd', 0, flags, u32(part.id));
+    const tfdt =
+      (part.tfdtVersion ?? 1) === 1
+        ? fullBox('tfdt', 1, 0, i64(part.tfdt))
+        : fullBox('tfdt', 0, 0, u32(part.tfdt));
+    const trunFlags = 0x1 | 0x4 | 0x100 | 0x200 | (part.cto !== undefined ? 0x800 : 0);
+    const firstFlags = part.firstSync === false ? 0x01010000 : 0x02000000;
+    const entries: Buffer[] = [];
+    const sizeEach = Math.floor(part.bytes / Math.max(1, part.samples));
+    for (let i = 0; i < part.samples; i += 1) {
+      const size = i === part.samples - 1 ? part.bytes - sizeEach * (part.samples - 1) : sizeEach;
+      entries.push(u32(part.sampleDuration, size));
+      if (part.cto !== undefined) entries.push(i32(part.cto));
+    }
+    const trun = fullBox(
+      'trun',
+      1,
+      trunFlags,
+      u32(part.samples),
+      i32(0),
+      u32(firstFlags),
+      ...entries,
+    );
+    return box('traf', tfhd, tfdt, trun);
+  });
+  const moof = box('moof', fullBox('mfhd', 0, 0, u32(sequence)), ...trafs);
+  const total = parts.reduce((sum, part) => sum + part.bytes, 0);
+  const payload = Buffer.alloc(total, options.fill ?? sequence & 0xff);
+  const mdat = options.largeMdat ? largeBox('mdat', payload) : box('mdat', payload);
+  return Buffer.concat([moof, mdat]);
+}
