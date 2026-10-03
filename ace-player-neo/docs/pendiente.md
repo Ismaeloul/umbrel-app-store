@@ -119,3 +119,11 @@ Nota: la IPTV de la 0.8.3 «parece que va bien» (Isma, 2-oct).
   referencia es CI (Linux), que no tiene esos filtros.
 - **Qué puedes hacer tú**: probar `pnpm test` con NordVPN desconectado; si
   deja de pasar, es eso.
+
+## Fallo visto por Isma (3-oct) en la vista previa de la 0.8.4, iPhone (Safari)
+
+Navegando de una pestaña a otra (Buscar ↔ Canales) se quedaron **las dos vistas pintadas a la vez, una encima de
+la otra**: títulos «Buscar» y «Canales» superpuestos, el buscador de Buscar sobre el de Canales, «Emitiendo
+ahora» sobre «En el motor AceStream». Captura: `capturas/pendiente/transicion-solapada-iphone.png`. Viene casi
+seguro de las transiciones nuevas por vista (`fix/navegacion`, `<ViewTransition enter/exit>` en Shell.tsx) en
+WebKit/iOS: la vista que sale no se retira (o la animación de salida no termina). Isma pide meterlo en la 0.9.0.
