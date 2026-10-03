@@ -233,8 +233,10 @@ export const VOD_REFRESH_MS = 24 * HOUR;
   `IptvStatus.vod.skipped` (§11.4), para que un tope escaso no pase desapercibido otra vez (T5).
 - **Parámetros de `player_api`:** la acción es una unión cerrada (las 6 de arriba) y `extra` solo admite `category_id`,
   `vod_id` y `series_id` con valores `/^\d{1,12}$/`. No hay forma de inyectar parámetros.
-- **«Sin VOD»:** una respuesta que no es un array, `[]`, `{}` o un objeto con `user_info` (paneles con el VOD apagado),
-  en las dos listas, es el estado `none`. No es un error.
+- **«Sin VOD»:** `[]`, `{}`, un objeto con `user_info`, `null` o `false` (paneles con el VOD apagado), en las dos
+  listas, es el estado `none`. No es un error. **Una página HTML, un texto o un cuerpo cortado sí son un fallo**
+  (0.9.0): no pueden vaciar el catálogo que ya había. Y con catálogo guardado, un «sin VOD» de verdad no lo borra a
+  la primera: se sigue con el que hay (`stale`) y se confirma en la siguiente, 15 min después.
 - **`direct_source` se ignora siempre** (nunca se sigue).
 
 ### 4.3 Parseo tolerante (`parse.ts`)
@@ -357,7 +359,10 @@ exige retenido < 45 MB con 150 000 + 30 000.
 ### 4.7 Sincronización, cadencia y cerrojos (D-VOD2)
 
 - **Cerrojo:** `runHeavy('vod', doVodSync)`, un tipo nuevo de trabajo pesado. Nunca coincide con la lista en directo ni
-  con la guía. Otra petición de sincronizar se engancha a la que está en marcha.
+  con la guía. Otra petición de sincronizar se engancha a la que está en marcha. **El VOD cede el sitio** (0.9.0,
+  fallo 8 de `vod-estado.md` §4.1): si llega una sincronización del directo o de la guía con una VOD en marcha o en
+  cola, la VOD se aborta (`VodPreemptedError`, no cuenta como fallo) y se vuelve a pedir sola, detrás. Lo ya
+  descargado que solo falta guardar sí se guarda. La lista del directo empieza en menos de 1 s (`vod/cerrojo.test.ts`).
 - **Pasos:** las dos listas de categorías → películas en streaming → series en streaming → índices (`byAdded`,
   `byCat`, `bySource`) por trozos de 5 000 filas con `setImmediate` → guardar.
 - **Aplicar** solo si `provider.id` y `revision` no han cambiado (como `doSync`). Guardar, pausar o eliminar la IPTV
@@ -373,7 +378,10 @@ exige retenido < 45 MB con 150 000 + 30 000.
     nueva.
 - **Modo por categorías** (respaldo automático): si una lista completa falla por tiempo, tamaño o 5xx, se recorre
   `&category_id=X` de una en una, con 250 ms entre llamadas, los mismos topes y el mismo cerrojo. Se apunta `mode:
-  'por_categorias'` en `vod.enc` para empezar por ahí la próxima vez.
+  'por_categorias'` en `vod.enc` para empezar por ahí la próxima vez. Desde la 0.9.0: empieza de cero (lo leído de la
+  lista entera que murió no cuenta); una categoría que falla se salta y se cuenta, y se rinde con 5 fallos seguidos o
+  más de max(5, 20 %); un 401 o la cuenta caducada lo paran al momento; y tiene un tope de 15 min por tipo, pasado el
+  cual se queda lo leído con `truncated`.
 - **Descartado: catálogo perezoso por categoría.** Sin los nombres de todo no hay buscador global, que es lo que pidió
   Isma.
 
