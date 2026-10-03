@@ -201,6 +201,8 @@ export class VodPreemptedError extends Error {
 }
 
 const HOME_ROWS = 20;
+/** Lo más que espera `playTarget` a la ficha (va con el cerrojo del motor tomado). */
+export const PLAY_INFO_WAIT_MS = 5_000;
 const CATEGORY_MAX = 2_000;
 /** Portadas guardadas por catálogo (una por filtro de idiomas, §4.10). */
 const HOME_FILTERS_MAX = 4;
@@ -1464,6 +1466,37 @@ export class VodService {
     return result.info === 'ok' ? result.data : null;
   }
 
+  /**
+   * La ficha para reproducir: se pide con el cerrojo del motor tomado, así
+   * que espera como mucho `PLAY_INFO_WAIT_MS` (la cola de fichas puede ir
+   * llena) y se corta con la petición; sin ficha, lo de la lista basta.
+   */
+  private async infoForPlay(
+    kind: VodKind,
+    source: number,
+    signal: AbortSignal | undefined,
+  ): Promise<VodInfo | null> {
+    if (signal?.aborted) throw signal.reason ?? new AppError('vod_timeout');
+    const wait = new AbortController();
+    const onAbort = (): void => wait.abort();
+    signal?.addEventListener('abort', onAbort, { once: true });
+    try {
+      return await Promise.race([
+        this.infoOf(kind, source).catch(() => null),
+        this.host.clock
+          .sleep(PLAY_INFO_WAIT_MS, wait.signal)
+          .then(() => null)
+          .catch(() => {
+            if (signal?.aborted) throw signal.reason ?? new AppError('vod_timeout');
+            return null;
+          }),
+      ]);
+    } finally {
+      wait.abort();
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+
   /** GET /api/v1/vod/titles/:id/art/:art (§8). */
   async artOf(
     id: string,
@@ -1610,13 +1643,13 @@ export class VodService {
    * siguiente episodio, el progreso guardado y la lengua de audio preferida.
    * `vod_not_found` si el id no es de película ni de episodio.
    */
-  async playTarget(id: string): Promise<VodPlayTarget> {
+  async playTarget(id: string, signal?: AbortSignal): Promise<VodPlayTarget> {
     const { ref, table, row } = await this.locate(id, ['movie', 'episode']);
     const title = this.text(table.title(row), 200) || 'Sin título';
     const progress = this.progressMap().get(id) ?? null;
     const doc = this.doc.read();
     if (ref.kind === 'movie') {
-      const info = await this.infoOf('movie', ref.source).catch(() => null);
+      const info = await this.infoForPlay('movie', ref.source, signal);
       const movie = info && info.kind === 'movie' ? info : null;
       const ext = extName(movie?.ext || (table.ext[row] as number)) ?? 'mp4';
       return {
@@ -1634,7 +1667,7 @@ export class VodService {
       };
     }
     const seriesId = this.idOf('series', ref.parent);
-    const info = await this.infoOf('series', ref.parent).catch(() => null);
+    const info = await this.infoForPlay('series', ref.parent, signal);
     const series = info && info.kind === 'series' ? info : null;
     let ext: string | null = null;
     let durationHintS: number | null = null;

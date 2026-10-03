@@ -22,6 +22,7 @@ import {
 } from '../../../../test/fake-iptv/net.js';
 import { loadIptvKeys } from '../crypto.js';
 import { IptvServiceImpl } from '../service.js';
+import { PLAY_INFO_WAIT_MS } from './vod-service.js';
 import { createIptvTestRig, type IptvTestRig } from '../test-support.js';
 import { vodId, vodRef } from './ids.js';
 
@@ -837,6 +838,27 @@ describe('VodService contra el proveedor falso', () => {
       again.vod.title(restarted.updatedSeries[0]?.id as string),
     )) as VodSeries;
     expect(title.main).toMatchObject({ action: 'resume', episodeId, posS: 295 });
+  });
+
+  it('playTarget no se queda esperando a una ficha atascada (va con el cerrojo del motor): plazo y señal', async () => {
+    const rig = await ready();
+    const { vod } = await synced(rig);
+    const home = await vod.home();
+    const movieId = home.newMovies[0]?.id as string;
+    /* La cola de fichas, atascada (el panel no contesta). */
+    (vod as unknown as { details: { get(): Promise<unknown> } }).details.get = () =>
+      new Promise(() => undefined);
+    let settled = false;
+    const pending = vod.playTarget(movieId).finally(() => (settled = true));
+    await rig.core.clock.advanceAsync(PLAY_INFO_WAIT_MS - 1);
+    expect(settled).toBe(false);
+    await rig.core.clock.advanceAsync(2);
+    expect(await pending).toMatchObject({ kind: 'movie', durationHintS: null });
+    /* Si se cancela la petición, se suelta enseguida. */
+    const controller = new AbortController();
+    const cancelled = vod.playTarget(movieId, controller.signal);
+    controller.abort(new Error('cancelada'));
+    await expect(cancelled).rejects.toThrow('cancelada');
   });
 
   it('una sincronización VOD que cede el sitio al directo no se relanza al momento si alguien está viendo algo (MB1)', async () => {

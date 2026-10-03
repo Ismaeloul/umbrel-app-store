@@ -2716,7 +2716,7 @@ export class IptvServiceImpl implements IptvService {
     const dead = this.accountDead();
     if (dead) throw new AppError('vod_account', { detail: dead });
     if (options.signal.aborted) throw options.signal.reason ?? new AppError('vod_timeout');
-    const target = await this.vod.playTarget(id);
+    const target = await this.vod.playTarget(id, options.signal);
     /* Nunca una sonda a la vez que una sesión: se aborta y se espera a que suelte el socket. */
     const probe = this.probe;
     if (probe) {
