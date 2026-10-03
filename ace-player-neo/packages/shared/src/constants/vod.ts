@@ -1,7 +1,9 @@
 /* Constantes de Películas y series, el VOD de la IPTV (docs/vod.md §4.2 y
    §11.5). Un solo sitio para los topes, los plazos y los umbrales que
    comparten el servidor, la web, los tests y, cuando copie la pantalla, la
-   app iOS (`VOD_CLIENT` lo lee `generar-plazos.mjs`).
+   app iOS (`VOD_CLIENT` lo usa hoy `apps/web/src/api/client.ts`; ningún
+   guion de apps/ios/scripts lo copia todavía: la app lo llevará a
+   `PlazosWeb` en su fase, docs/vod.md §17).
 
    Nada de aquí es lógica: el catálogo, las fichas, los carteles y el
    progreso viven en apps/server/src/modules/iptv/vod; el relé VOD en
