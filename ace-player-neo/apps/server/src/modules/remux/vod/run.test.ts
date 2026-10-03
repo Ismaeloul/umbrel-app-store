@@ -129,6 +129,8 @@ describe('VodRun con procesos de verdad', () => {
       command: process.execPath,
       prefixArgs: [script],
       stdout: 'pipe',
+      /* Prioridad normal: en Windows «nice 10» puede quedarse sin turno con la CPU llena. */
+      niceness: 0,
     });
     const run = new VodRun({ launcher, args: [], handlers: recorder().handlers });
     const end = await run.ended;
@@ -148,6 +150,7 @@ describe('VodRun con procesos de verdad', () => {
       command: process.execPath,
       prefixArgs: [script],
       stdout: 'pipe',
+      niceness: 0,
     });
     const run = new VodRun({ launcher, args: [], handlers: recorder().handlers });
     run.pause('adelanto');
