@@ -14,7 +14,7 @@
 //   - en el móvil en horizontal, con un canal sonando, el vídeo ocupa la
 //     pantalla y los controles se ocultan solos (CONTROLS_HIDE_MS).
 // Con --axe pasa además axe-core (WCAG 2.2 AA) en móvil (390×844) y
-// escritorio (1440×900), en oscuro y en claro: cero violaciones serias o críticas.
+// escritorio (1440×900 y 1536×864), en oscuro y en claro: cero violaciones serias o críticas.
 // Con --teclado recorre cada vista con Tab (móvil y escritorio, en oscuro):
 // todo lo enfocable se alcanza, el foco no se pierde ni cae en algo
 // invisible, y siempre se ve.
@@ -89,12 +89,14 @@ const SIZES = [
   { width: 1024, height: 1366, touch: true },
   { width: 1280, height: 800, touch: false },
   { width: 1440, height: 900, touch: false, light: true },
+  // El portátil de Isma (auditoría web 0.9.0).
+  { width: 1536, height: 864, touch: false },
   { width: 1920, height: 1080, touch: false },
   { width: 2560, height: 1440, touch: false },
 ].filter((size) => !ONLY_SIZES || ONLY_SIZES.includes(`${size.width}x${size.height}`));
 
 /** Donde se pasa axe: móvil y escritorio, en los dos temas. */
-const AXE_SIZES = new Set(['390x844', '1440x900']);
+const AXE_SIZES = new Set(['390x844', '1440x900', '1536x864']);
 
 const sizeKey = (size) => `${size.width}x${size.height}`;
 const isPhoneLandscape = (size) => size.width > size.height && size.height <= 540;
@@ -115,6 +117,34 @@ const NO_FAVORITES = [
 
 async function waitPlaying(page, timeout = 25_000) {
   await page.waitForSelector('.player[data-phase="reproduciendo"]', { timeout });
+}
+
+/** Películas y series la primera vez pide los idiomas (§4.10): se pasa con
+    «Ver películas y series» (lo marcado de serie) para llegar a la portada.
+    Sin esto la portada nunca se revisaba (salía antes el selector). */
+async function passCineLanguages(page) {
+  const welcome = page.locator('.cine-welcome');
+  const shown = await welcome
+    .waitFor({ state: 'visible', timeout: 6000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!shown) return;
+  await page.getByRole('button', { name: 'Ver películas y series' }).click();
+  await welcome.waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
+  // El ratón, fuera: si no, se queda sobre una fila y enseña sus flechas.
+  await page.mouse.move(0, 0);
+}
+
+/** Abre la primera película de la portada y le da a reproducir: la sala (`sala/<id>`). */
+async function openSala(page) {
+  await page.locator('.cine-row .cine-card').first().click();
+  await page.waitForSelector('.cine-hero__title', { timeout: 10_000 });
+  await page
+    .getByRole('button', { name: /^(Reproducir|Seguir viendo|Continuar|Ver T)/ })
+    .first()
+    .click();
+  await page.waitForSelector('.sala', { timeout: 10_000 });
+  await waitPlaying(page).catch(() => {});
 }
 
 async function dialogOpen(page) {
@@ -236,6 +266,11 @@ const VIEWS = [
   { name: 'ajustes-reproduccion', search: '?vista=ajustes/reproduccion', ready: 'main' },
   { name: 'ajustes-donde', search: '?vista=ajustes/donde', ready: 'main' },
   { name: 'ajustes-motor', search: '?vista=ajustes/motor', ready: 'main' },
+  { name: 'ajustes-iptv', search: '?vista=ajustes/iptv', ready: 'main' },
+  { name: 'ajustes-copia', search: '?vista=ajustes/copia', ready: 'main' },
+  { name: 'ajustes-registro', search: '?vista=ajustes/registro', ready: 'main' },
+  // Guía TV de la IPTV (docs/iptv.md §20).
+  { name: 'guia', search: '?vista=guia', ready: '.guia' },
   {
     name: 'dispositivos',
     search: '?vista=ajustes/dispositivos',
@@ -278,9 +313,12 @@ const VIEWS = [
   // Películas y series (docs/vod.md §12.11): con `?flag=cine`; en vivo solo
   // salen si el servidor ya tiene películas y series. La portada va en filas
   // (`.cine-row`); la rejilla (`.cine-grid`) es otra pantalla.
-  { name: 'cine', search: '?vista=cine&flag=cine', ready: '.cine-row .cine-card' },
+  // La primera vez, el selector de idiomas (antes de pasarlo).
+  { name: 'cine-idiomas', search: '?vista=cine&flag=cine', ready: '.cine-welcome' },
+  { name: 'cine', search: '?vista=cine&flag=cine', cine: true, ready: '.cine-row .cine-card' },
   {
     name: 'cine-categoria',
+    cine: true,
     search: '?vista=cine&flag=cine',
     ready: '.cine-row .cine-card',
     prepare: async (page) => {
@@ -293,9 +331,15 @@ const VIEWS = [
       await page.waitForTimeout(700);
     },
   },
-  { name: 'cine-busqueda', search: '?vista=cine&flag=cine&cineq=dune', ready: '.cine-grid' },
+  {
+    name: 'cine-busqueda',
+    search: '?vista=cine&flag=cine&cineq=dune',
+    cine: true,
+    ready: '.cine-grid',
+  },
   {
     name: 'cine-pelicula',
+    cine: true,
     search: '?vista=cine&flag=cine',
     ready: '.cine-row .cine-card',
     prepare: async (page) => {
@@ -306,6 +350,7 @@ const VIEWS = [
   },
   {
     name: 'cine-serie',
+    cine: true,
     search: '?vista=cine&flag=cine&cine=series',
     ready: '.cine-row .cine-card',
     prepare: async (page) => {
@@ -313,6 +358,15 @@ const VIEWS = [
       await page.waitForSelector('.cine-episodes', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
+  },
+  // La sala de una película (`sala/<id>`, docs/vod.md §12.8) con ella sonando.
+  {
+    name: 'sala',
+    search: '?vista=cine&flag=cine',
+    cine: true,
+    ready: '.cine-row .cine-card',
+    player: true,
+    prepare: openSala,
   },
 ].filter((view) => !ONLY_VIEWS || ONLY_VIEWS.includes(view.name));
 
@@ -452,7 +506,10 @@ function auditInPage({ width, touch }) {
     // avisos de la línea de estado) se recortan a propósito y solo se apuntan
     // en el informe para revisarlos a ojo.
     else if (hidesX && el.scrollWidth > el.clientWidth + 1 && style.textOverflow === 'ellipsis') {
-      if ((el.textContent ?? '').trim().length <= 20)
+      // En la Guía TV un programa mide lo que dura: un título corto en un
+      // programa corto (o del que asoma un trozo) va con «…» por fuerza, y el
+      // nombre entero está en la celda (aria-label) y en la franja de abajo.
+      if ((el.textContent ?? '').trim().length <= 20 && !el.closest('.guia-block'))
         cut.add(`${describe(el)} con «…» siendo corto (${el.scrollWidth} > ${el.clientWidth})`);
       else ellipsis.add(describe(el));
     }
@@ -868,6 +925,7 @@ async function openView(page, base, view, size) {
           .catch(() => false);
         if (demo) throw new Error('cayó en la demo');
       }
+      if (view.cine) await passCineLanguages(page);
       if (view.ready) await page.waitForSelector(view.ready, { timeout: 15_000 });
       await page.waitForFunction(() => !document.querySelector('.view-skeleton'), null, {
         timeout: 15_000,
@@ -1053,6 +1111,12 @@ const VIEW_TITLES = {
   'cine-busqueda': 'Películas y series · búsqueda',
   'cine-pelicula': 'Películas y series · ficha de una película',
   'cine-serie': 'Películas y series · ficha de una serie con temporadas',
+  'cine-idiomas': 'Películas y series · la primera vez, el selector de idiomas',
+  sala: 'Sala: una película sonando (`sala/<id>`)',
+  guia: 'Guía TV de la IPTV',
+  'ajustes-iptv': 'Ajustes · IPTV',
+  'ajustes-copia': 'Ajustes · Copia de seguridad',
+  'ajustes-registro': 'Ajustes · Registro',
 };
 
 /** docs/capturas/fase2/README.md: una tabla por vista con cada tamaño y tema. */
