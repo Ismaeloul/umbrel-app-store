@@ -1023,7 +1023,10 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
             inputUrl: request.inputUrl,
             index,
             audio,
-            hevc: request.hevc,
+            /* `-tag:v hvc1` solo si el VÍDEO es HEVC: `request.hevc` dice que el
+               cliente lo decodifica (Chrome lo manda siempre) y, con H.264,
+               ffmpeg no escribe la cabecera. */
+            hevc: index.video.codec === 'hevc',
             startS,
           },
         );

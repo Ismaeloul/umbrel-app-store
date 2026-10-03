@@ -170,7 +170,8 @@ describe.skipIf(!HAS_FFMPEG)('Películas y series de punta a punta (@ffmpeg)', (
     const dune = await idOf(h, 'Dune', true);
     const spider = await idOf(h, 'Spider-Man');
 
-    const first = await stream(h, dune, 'visor-a');
+    /* Con `hevc=1`, como la web en Chrome: un H.264 no lleva `-tag:v hvc1`. */
+    const first = await stream(h, dune, 'visor-a', '&hevc=1');
     expect(first.status, first.body).toBe(200);
     const grant = first.grant as VodGrant;
     expect(grant.url).toBe(`/api/v1/video/${grant.session.id}/index.m3u8`);
