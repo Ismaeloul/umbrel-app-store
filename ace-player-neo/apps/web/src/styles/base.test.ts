@@ -30,3 +30,25 @@ describe('base.css con muesca (B-256)', () => {
     expect(block('.skip-link:focus-visible')).toMatch(/transform:\s*none/);
   });
 });
+
+describe('base.css: el apretón de .press (0.9.0)', () => {
+  it('es la propiedad `scale`, que se suma al transform propio en vez de pisarlo', () => {
+    const rule = block('.press:active:not(:disabled)');
+    expect(rule).toMatch(/\bscale:\s*0\.975/);
+    // Con `transform: scale()`, una flecha centrada con translate(-50%) bajaba al pulsarla.
+    expect(rule).not.toMatch(/transform:/);
+    expect(block('.press')).toMatch(/transition:\s*scale\b/);
+  });
+
+  it('las flechas de los carruseles se centran con `translate`, no con `transform`', () => {
+    const rail = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '../ui/PosterRail.css'),
+      'utf8',
+    );
+    const start = rail.indexOf('.prail .prail__arrow {');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const rule = rail.slice(start, rail.indexOf('}', start));
+    expect(rule).toMatch(/translate:\s*0\s+-50%/);
+    expect(rule).not.toMatch(/transform:/);
+  });
+});
