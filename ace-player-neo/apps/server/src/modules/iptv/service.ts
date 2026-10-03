@@ -331,6 +331,15 @@ export class IptvServiceImpl implements IptvService {
       deps.config.paths.iptvGuideDbFile,
       deps.config.paths.iptvDir,
       logger.child({ part: 'guia' }),
+      /* guia.db roto (SQLITE_CORRUPT): ya borrado; se vuelve a descargar enseguida. */
+      () => {
+        this.fullGuideCount = null;
+        this.tvGuide.reset();
+        this.emitStatus();
+        if (this.record?.enabled && this.started) {
+          this.schedule('guide', 1_000, () => this.periodicGuide(true));
+        }
+      },
     );
     this.tvGuide = new GuideApi({
       activeCatalog: () => (this.active() ? this.catalog : null),
