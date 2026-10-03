@@ -21,12 +21,12 @@ describe('chips de distintivos (docs/vod.md §4.4)', () => {
   it('interruptores con su número; tocar el elegido lo quita', () => {
     const onChange = vi.fn();
     const { rerender } = render(<TagChips counts={counts} value={null} onChange={onChange} />);
-    const castellano = screen.getByRole('button', { name: 'Castellano, 1234' });
+    const castellano = screen.getByRole('button', { name: 'Castellano, 1.234' });
     expect(castellano).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(castellano);
     expect(onChange).toHaveBeenLastCalledWith('castellano');
     rerender(<TagChips counts={counts} value="castellano" onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Castellano, 1234' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Castellano, 1.234' }));
     expect(onChange).toHaveBeenLastCalledWith(null);
   });
 

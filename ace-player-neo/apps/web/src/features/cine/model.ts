@@ -313,10 +313,10 @@ export type PlayBlock = { reason: 'hevc' } | { reason: 'formato'; ext: string | 
 export function playBlock(
   playable: VodPlayable,
   hevcOk: boolean,
-  container: string | null = null,
+  container: string | null | undefined = null,
 ): PlayBlock {
   if (playable === 'hevc' && !hevcOk) return { reason: 'hevc' };
-  if (playable === 'no') return { reason: 'formato', ext: container };
+  if (playable === 'no') return { reason: 'formato', ext: container?.trim() || null };
   return null;
 }
 

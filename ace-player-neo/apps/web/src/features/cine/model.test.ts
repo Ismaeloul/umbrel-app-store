@@ -18,6 +18,7 @@ import {
   writeCineState,
   type EpisodeProgressRef,
 } from './model.ts';
+import { formatBlocked, formatCount, titlesText } from './texts.ts';
 
 describe('estado de la URL (docs/vod.md §12.2)', () => {
   it('lee y escribe cine, cinecat, cinetag, cineq y cineorden sin tocar lo demás', () => {
@@ -211,5 +212,29 @@ describe('¿se puede reproducir aquí? (§12.6)', () => {
     expect(playBlock('no', true, 'avi')).toEqual({ reason: 'formato', ext: 'avi' });
     expect(playBlock('yes', false)).toBeNull();
     expect(playBlock('unknown', false)).toBeNull();
+  });
+
+  it('sin `container` (o vacío), el formato queda sin nombre: nunca «desconocido»', () => {
+    expect(playBlock('no', true)).toEqual({ reason: 'formato', ext: null });
+    expect(playBlock('no', true, undefined)).toEqual({ reason: 'formato', ext: null });
+    expect(playBlock('no', true, '  ')).toEqual({ reason: 'formato', ext: null });
+    expect(formatBlocked('avi', 'episode')).toBe(
+      'Este formato (AVI) no se puede reproducir en Ace Player.',
+    );
+    expect(formatBlocked(null, 'episode')).toBe(
+      'Este episodio no se puede reproducir en este navegador.',
+    );
+    expect(formatBlocked(undefined, 'movie')).toBe(
+      'Esta película no se puede reproducir en este navegador.',
+    );
+  });
+});
+
+describe('números (§12.4 y §12.10)', () => {
+  it('«1.234»: es-ES agrupa también las cifras de 4 dígitos', () => {
+    expect(formatCount(1234)).toBe('1.234');
+    expect(formatCount(12_345)).toBe('12.345');
+    expect(formatCount(999)).toBe('999');
+    expect(titlesText(1234, 'movie')).toBe('1.234 películas');
   });
 });

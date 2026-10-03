@@ -5,9 +5,13 @@
 
 import type { VodKind, VodTag } from '@ace/shared';
 
-/** «27.687»: el número como se escribe en España. */
+/**
+ * «1.234» y «27.687»: el número como se escribe en España. `es-ES` no agrupa
+ * las cifras de 4 dígitos por defecto («1234»); `useGrouping: 'always'` sí,
+ * como piden §12.4 y §12.10.
+ */
 export function formatCount(value: number): string {
-  return value.toLocaleString('es-ES');
+  return value.toLocaleString('es-ES', { useGrouping: 'always' });
 }
 
 export const CINE_TEXT = {
@@ -140,9 +144,17 @@ export function truncatedText(
   return `Tu IPTV tiene más de ${formatCount(limits.maxMovies)} películas; se ven las primeras ${formatCount(limits.maxMovies)}.`;
 }
 
-/** «Este formato (AVI) no se puede reproducir en Ace Player.» */
-export function formatBlocked(ext: string | null): string {
-  return `Este formato (${(ext ?? 'desconocido').toUpperCase()}) no se puede reproducir en Ace Player.`;
+/**
+ * «Este formato (AVI) no se puede reproducir en Ace Player.» Si el servidor no
+ * sabe el formato (sin `container`), un texto genérico según lo que sea, nunca
+ * «(DESCONOCIDO)» (vod-estado.md §4.2, arreglo 1).
+ */
+export function formatBlocked(ext: string | null | undefined, kind: 'movie' | 'episode'): string {
+  const name = (ext ?? '').trim();
+  if (name) return `Este formato (${name.toUpperCase()}) no se puede reproducir en Ace Player.`;
+  return kind === 'episode'
+    ? 'Este episodio no se puede reproducir en este navegador.'
+    : 'Esta película no se puede reproducir en este navegador.';
 }
 
 /** «Continuar · quedan 43 min». */

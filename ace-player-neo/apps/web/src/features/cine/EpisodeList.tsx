@@ -43,7 +43,7 @@ function EpisodeRow({
   const context = useContextMenu();
   const watched = episode.progress?.watched === true;
   const ratio = watched ? null : progressRatio(episode.progress);
-  const block = playBlock(episode.playable, canPlayHevc());
+  const block = playBlock(episode.playable, canPlayHevc(), episode.container);
   const name = `${episode.n}. ${episode.title}`;
   const code = season === 0 ? CINE_TEXT.specials : `T${season} · E${episode.n}`;
   const run = async (event: 'mark' | 'unmark' | 'mark-through') => {
@@ -79,7 +79,7 @@ function EpisodeRow({
   const reason = block
     ? block.reason === 'hevc'
       ? CINE_TEXT.hevcBlocked
-      : formatBlocked(block.ext)
+      : formatBlocked(block.ext, 'episode')
     : null;
   return (
     <li className="cine-episode" data-watched={watched || undefined} {...context.bind}>

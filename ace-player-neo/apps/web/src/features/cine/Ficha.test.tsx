@@ -3,6 +3,7 @@
 import type { VodMovie, VodSeries } from '@ace/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import seriesAviFixture from '@fixtures/variantes/vodTitle.episodio-avi.json';
 import seriesFixture from '@fixtures/variantes/vodTitle.series.json';
 import movieFixture from '@fixtures/web/v1/vodTitle.json';
 import { resetMode, setMode } from '../../api/mode.ts';
@@ -17,6 +18,7 @@ let net: ReturnType<typeof mockFetch>;
 
 const MOVIE = movieFixture as VodMovie;
 const SERIES = seriesFixture as VodSeries;
+const SERIES_AVI = seriesAviFixture as VodSeries;
 
 beforeEach(() => {
   resetMode();
@@ -163,6 +165,26 @@ describe('serie', () => {
     expect(
       screen.getByRole('button', { name: new RegExp(`^${episode.n}\\. `) }),
     ).toBeInTheDocument();
+  });
+
+  it('un episodio que no se puede reproducir: su formato si se sabe; si no, un texto genérico', async () => {
+    serveTitle(SERIES_AVI, {});
+    expect(
+      await screen.findAllByText('Este formato (AVI) no se puede reproducir en Ace Player.'),
+    ).not.toHaveLength(0);
+    net.restore();
+    const unknown: VodSeries = {
+      ...SERIES_AVI,
+      seasons: SERIES_AVI.seasons.map((season) => ({
+        ...season,
+        episodes: season.episodes.map(({ container: _container, ...episode }) => episode),
+      })),
+    };
+    serveTitle(unknown);
+    expect(
+      await screen.findAllByText('Este episodio no se puede reproducir en este navegador.'),
+    ).not.toHaveLength(0);
+    expect(screen.queryByText(/DESCONOCIDO/)).toBeNull();
   });
 
   it('«Marcar hasta aquí como visto» desde el menú de un episodio', async () => {

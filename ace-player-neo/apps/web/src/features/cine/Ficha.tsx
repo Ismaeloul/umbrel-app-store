@@ -38,9 +38,9 @@ import { canPlayHevc, playVod } from './play.ts';
 import { Seasons } from './Seasons.tsx';
 import { CINE_TEXT, continueLabel, formatBlocked, TAG_LABEL } from './texts.ts';
 
-function blockText(block: PlayBlock): string | null {
+function blockText(block: PlayBlock, kind: 'movie' | 'episode'): string | null {
   if (!block) return null;
-  return block.reason === 'hevc' ? CINE_TEXT.hevcBlocked : formatBlocked(block.ext);
+  return block.reason === 'hevc' ? CINE_TEXT.hevcBlocked : formatBlocked(block.ext, kind);
 }
 
 /** «1080p · H.264 · Audio: Castellano, Inglés». */
@@ -102,7 +102,7 @@ function MovieActions({ movie }: { movie: VodMovie }) {
   const mark = useProgressMark();
   const [busy, setBusy] = useState(false);
   const block = playBlock(movie.playable, canPlayHevc(), movie.tech.container);
-  const reason = blockText(block);
+  const reason = blockText(block, 'movie');
   const progress = movie.progress;
   const watched = progress?.watched === true;
   const resume = progress ? resumeAt(progress.posS, watched) : 0;
@@ -159,8 +159,10 @@ function SeriesActions({ series }: { series: VodSeries }) {
   const episode = series.seasons
     .flatMap((season) => season.episodes.map((item) => ({ season: season.n, item })))
     .find((entry) => entry.item.id === main.episodeId);
-  const block = episode ? playBlock(episode.item.playable, canPlayHevc()) : null;
-  const reason = blockText(block);
+  const block = episode
+    ? playBlock(episode.item.playable, canPlayHevc(), episode.item.container)
+    : null;
+  const reason = blockText(block, 'episode');
   return (
     <div className="cine-actions">
       <Button
