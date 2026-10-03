@@ -482,9 +482,12 @@ punto 12); diseño completo en docs/iptv.md §4.7.
 - **Qué hace**: días 1-14, futbolenlatv como siempre. Hoy y mañana, la guía
   de la IPTV **confirma** el partido y su canal exacto («Confirmado en tu
   guía: M+ LaLiga TV 2 · 21:00» en la tarjeta de la agenda y en «Dónde se
-  emite» del partido), **mueve la hora** si la de futbolenlatv no cuadra y
-  **añade** el partido que futbolenlatv no trae. El canal de la guía va el
-  primero en `channels` y guía también la búsqueda de AceStream.
+  emite» del partido), **mueve la hora** si la de futbolenlatv no cuadra
+  («Hora de tu guía: DAZN LaLiga 2 · 21:30 · antes 21:00») y **añade** el
+  partido que futbolenlatv no trae («Añadido por tu guía: …»). Lo de la
+  hora movida y el partido añadido se ve en la tarjeta, también en el móvil.
+  El canal de la guía va el primero en `channels` y guía también la
+  búsqueda de AceStream.
 - **Las mismas reglas que la resolución**: la confirmación es
   `confirmByGuide` (§4.5) sobre los mismos candidatos (`guideCandidates`),
   así lo que se enseña en la agenda es lo que luego suena primero.
@@ -493,16 +496,24 @@ punto 12); diseño completo en docs/iptv.md §4.7.
   comunes en las guías reales (§15) y sin la hora de futbolenlatv no hay
   otra forma segura de distinguirlas. Si la guía de Isma no marca el
   directo, la guía solo confirma (que no necesita la marca: la ancla es la
-  hora de futbolenlatv). Mover la hora: solo el mismo día y si a la hora de
-  futbolenlatv la guía no confirma nada; manda el primer programa en directo
-  del día; el saque es el inicio del programa redondeado al cuarto de hora
-  siguiente (20:50 → 21:00) si así el programa cubre el partido entero.
-- **Añadir, con cuidado**: solo de una competición conocida (familia del
-  texto o, si no nombra ninguna, del canal), en un canal de España, con los
-  dos equipos claros en el título o el subtítulo, sin filiales, cantera ni
-  femenino (salvo Liga F), y solo si ninguno de los dos equipos juega en la
-  agenda ese día, el anterior o el siguiente (así un nombre escrito de otra
-  forma no duplica un partido). Id `guia-<fecha>-<hash>`.
+  hora de futbolenlatv). `scripts/epg-sondeo.mjs` lo mide con la misma regla
+  (`pareceUnPartidoConDirecto`). Mover la hora: solo el mismo día y si a la
+  hora de futbolenlatv la guía no confirma nada (o solo el partido sin marca
+  y la guía lo tiene en directo antes ese día: una repetición va siempre
+  después del directo); manda el primer programa en directo del día; el
+  saque es el inicio del programa redondeado al cuarto de hora siguiente
+  (20:50 → 21:00) si así el programa cubre el partido entero.
+- **Añadir, con cuidado** (mejor no añadir uno que añadirlo dos veces):
+  solo de una competición conocida (familia del texto o, si no nombra
+  ninguna, del canal), en un canal de España, con los dos equipos claros en
+  el título o el subtítulo, sin filiales, cantera, femenino (salvo Liga F),
+  leyendas, benéficos ni otros deportes que se llaman como una competición de
+  fútbol («EHF Champions League», «Premier League Darts», «eLaLiga»), con
+  alguna categoría de deportes si el programa trae categorías, y solo si no
+  está ya en la agenda escrito de otra forma: ninguno de los dos equipos
+  juega en la agenda ese día, el anterior o el siguiente, y a esa misma hora
+  no hay un partido de la agenda de la misma competición, en ese canal o con
+  un nombre que se parece. Id `guia-<fecha>-<hash>`.
 - **Preferir la guía**: las fuentes del canal confirmado van delante de
   todas (IPTV y AceStream; dentro, el orden de siempre), también por delante
   de la IPTV por nombre de otro canal que anuncie futbolenlatv. Una AceStream
@@ -513,7 +524,10 @@ punto 12); diseño completo en docs/iptv.md §4.7.
   preferir la guía.
 - **Tolerancia de hora de la guía**: el programa puede empezar hasta 60 min
   antes del saque (antes, 30): hay guías que meten la previa en el mismo
-  programa; las dos reglas de la duración siguen impidiendo que cuele otro.
+  programa. Si empieza más de 30 min antes, tiene que cubrir el partido
+  entero (acabar 105 min después del saque); si no, no es un partido de esa
+  hora y, con la marca de directo, la guía mueve la hora. Vale también para
+  la resolución IPTV de la 0.8.3.
 - **Sin IPTV, en pausa, sin guía o sin datos de ese partido**: exactamente
   como antes (la misma agenda, el mismo objeto; consultas y orden de
   siempre). La ruta antigua `/api/football` lleva la agenda híbrida sin el

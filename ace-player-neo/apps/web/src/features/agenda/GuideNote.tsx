@@ -1,9 +1,9 @@
 /* Agenda híbrida (docs/iptv.md §4.7): lo que dice la guía de tu IPTV de un
    partido de hoy o mañana. Una línea pequeña y aparte, para que la tarjeta y
    «Dónde se emite» solo tengan que ponerla:
-   - confirmado: «✓ Confirmado en tu guía: M+ LaLiga TV 2 · 21:00»;
-   - hora movida: «🕒 Hora de tu guía: DAZN LaLiga 2 · 21:30 · antes 21:00»;
-   - añadido: «+ Añadido por tu guía: M+ LaLiga TV · 19:00».
+   - confirmado (icono check): «Confirmado en tu guía: M+ LaLiga TV 2 · 21:00»;
+   - hora movida (icono reloj): «Hora de tu guía: DAZN LaLiga 2 · 21:30 · antes 21:00»;
+   - añadido (icono más): «Añadido por tu guía: M+ LaLiga TV · 19:00».
    Lo de la hora movida y el partido añadido se VE (también en el móvil, sin
    ratón), no solo en el `title`.
    - `row`: la tarjeta de la agenda; dos líneas como mucho. El canal se
