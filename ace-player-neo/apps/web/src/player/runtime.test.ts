@@ -4,12 +4,13 @@
    presupuesto y espera exponencial, paso de fuente, traspaso, cambio de
    modo del motor por SSE, latido, soltar la sesión y métricas. */
 
-import { PLAYBACK_PROFILES, type PlaybackMode } from '@ace/shared';
+import { classifyCode, classifyWebEntry, PLAYBACK_PROFILES, type PlaybackMode } from '@ace/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { api } from '../api/client.ts';
 import { ApiError } from '../api/errors.ts';
 import { resetMode, setMode } from '../api/mode.ts';
 import { dispatchSse } from '../api/sse.ts';
+import { clearWebLog, webLogSnapshot } from '../lib/web-log.ts';
 import { mockFetch } from '../test/fetch.ts';
 import { INITIAL_PLAYER_STATE, type PlayerState, type SourceFailure } from './api.ts';
 import type { Platform } from './engines/index.ts';
@@ -1415,6 +1416,20 @@ describe('IPTV', () => {
     expect(t.notices.at(-1)).toBe('La señal se ha cortado: reconectando (1/3)…');
   });
 
+  it('Descargar fallos · el trozo dañado que se salta en el sitio cuenta como decodificación', async () => {
+    clearWebLog();
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    engine.recoverInPlace = () => true;
+    t.video.dispatchEvent(new Event('error'));
+    await flush();
+    expect(t.state.conn).toBe('activa');
+    const entry = webLogSnapshot().find((line) => line.code === 'player_decode_skipped');
+    expect(entry).toMatchObject({ kind: 'player', level: 'warn' });
+    expect(classifyWebEntry(entry!)).toEqual({ side: 'nuestro', piece: 'decodificacion' });
+    clearWebLog();
+  });
+
   it('C3 · sin presupuesto en el sitio, la instancia nueva sigue DESPUÉS del roto y con el presupuesto gastado', async () => {
     const t = iptvSetup();
     const engine = await iptvPlaying(t);
@@ -1588,5 +1603,131 @@ describe('IPTV', () => {
     await flush();
     expect(t.engines.created).toHaveLength(2);
     expect(t.failures).toHaveLength(0);
+  });
+});
+
+describe('Descargar fallos: con qué código se da una fuente por perdida', () => {
+  /** Cuatro fallos seguidos con la espera de cada reconexión (1-2-4 s): la fuente se agota. */
+  async function exhaustWith(t: Harness, fire: () => void) {
+    for (const wait of [1_000, 2_000, 4_000]) {
+      fire();
+      await vi.advanceTimersByTimeAsync(wait);
+    }
+    fire();
+  }
+  const lastReport = (t: Harness) => t.callsTo('diagnosticsReport').at(-1)?.input.body;
+
+  beforeEach(() => clearWebLog());
+  afterEach(() => clearWebLog());
+
+  it('mpegts.js con un error de MSE: decodificación (causa codec), no «una fuente que no va»', async () => {
+    const t = setup();
+    await startPlaying(t);
+    await exhaustWith(t, () =>
+      t.engines
+        .last()
+        .args.callbacks.onFatal(
+          'La señal se ha cortado: reconectando',
+          'MediaError · MediaMSEError',
+        ),
+    );
+    expect(t.state.phase).toBe('error');
+    expect(lastReport(t)).toMatchObject({ cause: 'codec', code: 'player_decode_failed' });
+    // Quien decide la siguiente fuente sigue sin código (no viene del servidor).
+    expect(t.failures[0]?.code).toBeUndefined();
+    const entry = webLogSnapshot().find((line) => line.code === 'player_decode_failed');
+    expect(entry).toMatchObject({ level: 'warn', detail: 'MediaError · MediaMSEError' });
+    expect(classifyWebEntry(entry!).side).toBe('nuestro');
+  });
+
+  it('hls.js que no puede añadir un trozo: también decodificación', async () => {
+    const t = setup();
+    await startPlaying(t);
+    await exhaustWith(t, () =>
+      t.engines
+        .last()
+        .args.callbacks.onFatal('HLS no pudo recuperarse (bufferAppendError)', 'bufferAppendError'),
+    );
+    expect(lastReport(t)).toMatchObject({ cause: 'codec', code: 'player_decode_failed' });
+  });
+
+  it('el <video> con MEDIA_ERR_DECODE lo dice en el detalle y cuenta como decodificación', async () => {
+    const t = setup();
+    await startPlaying(t);
+    t.video.error = { code: 3, message: 'PIPELINE_ERROR_DECODE' };
+    await exhaustWith(t, () => t.video.dispatchEvent(new Event('error')));
+    expect(lastReport(t)).toMatchObject({ cause: 'codec', code: 'player_decode_failed' });
+    expect(webLogSnapshot().find((line) => line.code === 'player_decode_failed')?.detail).toBe(
+      'evento del vídeo (MEDIA_ERR_DECODE: PIPELINE_ERROR_DECODE)',
+    );
+  });
+
+  it('un corte de red de mpegts.js sigue siendo de la fuente', async () => {
+    const t = setup();
+    await startPlaying(t);
+    await exhaustWith(t, () =>
+      t.engines
+        .last()
+        .args.callbacks.onFatal(
+          'La señal se ha cortado: reconectando',
+          'NetworkError · NetworkException',
+        ),
+    );
+    expect(lastReport(t)).toMatchObject({ cause: 'source', code: 'player_source_failed' });
+  });
+
+  it('un código del servidor en el cierre (stream.closed) va tal cual: el remux que muere es nuestro', async () => {
+    const t = setup();
+    await startPlaying(t);
+    await exhaustWith(t, () =>
+      dispatchSse(
+        'stream.closed',
+        { sessionId: SID, viewerIds: ['v_prueba'], reason: 'remux_failed', code: 'remux_died' },
+        META,
+      ),
+    );
+    expect(t.state.phase).toBe('error');
+    expect(lastReport(t)).toMatchObject({ cause: 'source', code: 'remux_died' });
+    expect(classifyCode('remux_died', 'source').piece).toBe('remux');
+  });
+
+  it('Safari/iOS · imagen parada con búfer de sobra hasta agotar: el reproductor (player_stalled)', async () => {
+    const t = setup({ platform: IPHONE });
+    t.runtime.play({ hash: HASH, title: 'Canal' });
+    await flush();
+    for (let round = 0; round < 4; round += 1) {
+      t.engines.last().args.callbacks.onReady();
+      t.video.advance(0.1);
+      await flush();
+      expect(t.state.conn).toBe('activa');
+      // 4 s cargados: de sobra para que no sea la señal, y sin retraso para saltar al directo.
+      t.video.setBuffered([[t.video.currentTime - 0.5, t.video.currentTime + 4]]);
+      // Gracia (4 tics) + 16 tics parada → reconexión; la última agota la fuente.
+      await vi.advanceTimersByTimeAsync(1_500 * 24);
+      if (round < 3) {
+        expect(t.notices).toContain(
+          `La imagen se ha quedado parada: reconectando (${round + 1}/3)…`,
+        );
+        await vi.advanceTimersByTimeAsync(4_000);
+      }
+    }
+    expect(t.state.phase).toBe('error');
+    expect(lastReport(t)).toMatchObject({ cause: 'client', code: 'player_stalled' });
+  });
+
+  it('Safari/iOS · imagen parada SIN búfer: no llega señal, es de la fuente', async () => {
+    const t = setup({ platform: IPHONE });
+    t.runtime.play({ hash: HASH, title: 'Canal' });
+    await flush();
+    for (let round = 0; round < 4; round += 1) {
+      t.engines.last().args.callbacks.onReady();
+      t.video.advance(0.1);
+      await flush();
+      t.video.setBuffered([]);
+      await vi.advanceTimersByTimeAsync(1_500 * 24);
+      if (round < 3) await vi.advanceTimersByTimeAsync(4_000);
+    }
+    expect(t.state.phase).toBe('error');
+    expect(lastReport(t)).toMatchObject({ cause: 'source', code: 'player_source_failed' });
   });
 });
