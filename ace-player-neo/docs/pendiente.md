@@ -127,3 +127,32 @@ la otra**: títulos «Buscar» y «Canales» superpuestos, el buscador de Buscar
 ahora» sobre «En el motor AceStream». Captura: `capturas/pendiente/transicion-solapada-iphone.png`. Viene casi
 seguro de las transiciones nuevas por vista (`fix/navegacion`, `<ViewTransition enter/exit>` en Shell.tsx) en
 WebKit/iOS: la vista que sale no se retira (o la animación de salida no termina). Isma pide meterlo en la 0.9.0.
+
+## Para la 0.9.0 — lo que pide Isma tras ver la vista previa de la 0.8.4 (3-oct)
+
+(El fundido de las pestañas en el móvil y las vistas solapadas del iPhone van en la 0.8.4: se están arreglando.)
+
+1. **Escudos en la columna de la derecha de Canales.** Donde pone «Girona 1-1 Sevilla» con dos círculos rojos,
+   poner los escudos de los equipos.
+2. **Agenda en PC: quitar el partido destacado** (la tarjeta de arriba) y subir el calendario: que toda la página
+   sea el calendario. El partido de **sus equipos favoritos** (solo equipos, no ligas) se destaca dentro de la
+   lista con el aura amarilla que ya tiene la tarjeta seleccionada (o verde), en vez de en una tarjeta aparte.
+3. **Deslizar en la agenda del móvil** (sobre el título de la liga / la lista: derecha = día siguiente,
+   izquierda = anterior) funciona a veces sí y a veces no. O quitarlo o hacerlo bien; a Isma le da igual (en la
+   app de iPhone sí lo quiere). Si se deja, que funcione siempre.
+4. **Abrir un partido: quitar la animación del escudo que «baja»** (Real Sociedad–Villarreal se amplía y baja; se
+   ve a ~3 FPS). En la web, que se abra como cuando cambias de pestaña (el mismo fundido), sin animación
+   compartida. La animación «chula» queda para la app de iPhone.
+5. **Columna derecha «En directo» de la agenda:**
+   - poner también el **marcador** junto al minuto (RSO 1-0 VIL · 33');
+   - al tocar cualquiera de los partidos en directo, que pase lo mismo que con Girona–Sevilla (abajo sale su
+     canal y «Ver canal»); con Real Sociedad–Villarreal salen los de «Luego» (RMA–MCI, ESP–MAR), que no tiene
+     sentido;
+   - «Luego» se queda (sirve para ver el partido de su equipo), pero **destacar en amarillo/verde** el partido de
+     sus equipos favoritos, como el destacado.
+6. **Mejorar más la búsqueda de canales IPTV:** los nombres reales son raros («ES 4K LA 1», «ES: LA 1 4K», «|ES|
+   LA 1 FHD»…) y buscar «la 1» debe dar La 1 la primera. Probar con la lista real (nombres de su proveedor).
+7. **La misma mejora en el buscador de Pelis y series** (títulos con prefijos de país/calidad).
+8. **Salud: botón «Descargar fallos».** Un fichero con los errores y el registro (sin contraseñas ni URLs con
+   credenciales: redactado) para que Isma me lo pase y yo distinga lo que es nuestro (motor caído, decodificación
+   de vídeo, cortes del relé, errores de la web…) de lo que no (una fuente que no va).
