@@ -13,8 +13,8 @@
      canales y `guide.added`.
    Sin nada de la guía, la agenda sale tal cual (el MISMO objeto). */
 
-import type { FootballMatch, FootballSchedule } from '@ace/shared';
-import { competitionFamily } from '../iptv/guide-match.js';
+import { footballCompetitionIsMinor, type FootballMatch, type FootballSchedule } from '@ace/shared';
+import { competitionFamily, matchEventKind } from '../iptv/guide-match.js';
 import type {
   GuideAgendaAddition,
   GuideAgendaConfirmation,
@@ -120,11 +120,21 @@ function confirmMatch(
   };
 }
 
-/** Rótulo de la competición: el que ya usa la agenda para esa familia («La Liga EA Sports») o el de la guía. */
+/**
+ * Rótulo de la competición: el que ya usa la agenda para esa familia («La
+ * Liga EA Sports») o el de la guía. Nunca el de la femenina o la cantera de
+ * esa familia («Liga de Campeones Femenina», «Mundial Sub-20», «Copa del Rey
+ * Juvenil»): un partido que añade la guía es del primer equipo (salvo Liga F,
+ * que ya es femenina).
+ */
 function competitionLabel(payload: FootballSchedule, addition: GuideAgendaAddition): string {
   for (const day of payload.days) {
     for (const match of day.matches) {
-      if (competitionFamily(match.competition) === addition.family) return match.competition;
+      if (competitionFamily(match.competition) !== addition.family) continue;
+      const kind = matchEventKind({ competition: match.competition });
+      const minor = footballCompetitionIsMinor(match.competition) || kind.women || kind.youth;
+      if (minor && addition.family !== 'ligaf') continue;
+      return match.competition;
     }
   }
   return addition.competition;

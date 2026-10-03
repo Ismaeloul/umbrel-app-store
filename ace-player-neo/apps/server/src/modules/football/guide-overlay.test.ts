@@ -209,6 +209,68 @@ describe('applyGuideAgenda', () => {
     );
     expect(day(result, '2026-10-04')[0]?.competition).toBe('Serie A');
   });
+
+  it('nunca el rótulo de la femenina o de la cantera de esa competición (salvo en Liga F)', () => {
+    const champions = (competition: string) =>
+      schedule([
+        fltv('fltv-fem', 'Barcelona', 'Lyon', at(18, 45), ['DAZN'], competition),
+        fltv(
+          'fltv-cl',
+          'Arsenal',
+          'PSG',
+          at(21, 0, 4),
+          ['M+ Liga de Campeones'],
+          'Liga de Campeones',
+        ),
+      ]);
+    const addition = {
+      home: 'Real Madrid',
+      away: 'Inter',
+      family: 'champions' as const,
+      competition: 'Champions League',
+      date: '2026-10-03',
+      start: at(21),
+      channels: ['M+ Liga de Campeones 2'],
+    };
+    for (const competition of [
+      'Liga de Campeones Femenina',
+      'UEFA Champions League Femenina',
+      'UEFA Youth League',
+      'Liga de Campeones Sub-19',
+    ]) {
+      const result = applyGuideAgenda(
+        champions(competition),
+        { confirmations: [], additions: [addition] },
+        options,
+      );
+      const added = day(result, '2026-10-03').find((m) => m.home === 'Real Madrid');
+      /* El de la agenda para el primer equipo, aunque salga después. */
+      expect(added?.competition, competition).toBe('Liga de Campeones');
+    }
+    /* Sin otro de esa familia en la agenda: el rótulo de la guía. */
+    const alone = applyGuideAgenda(
+      schedule([
+        fltv('fltv-fem', 'Barcelona', 'Lyon', at(18, 45), ['DAZN'], 'Liga de Campeones Femenina'),
+      ]),
+      { confirmations: [], additions: [addition] },
+      options,
+    );
+    expect(day(alone, '2026-10-03').find((m) => m.home === 'Real Madrid')?.competition).toBe(
+      'Champions League',
+    );
+    /* Un partido de Liga F que añade la guía sí lleva el rótulo de Liga F de la agenda. */
+    const ligaF = applyGuideAgenda(
+      schedule([fltv('fltv-lf', 'Levante', 'Sevilla', at(12), ['DAZN'], 'Liga F Moeve')]),
+      {
+        confirmations: [],
+        additions: [{ ...addition, family: 'ligaf', competition: 'Liga F', home: 'Barcelona' }],
+      },
+      options,
+    );
+    expect(day(ligaF, '2026-10-03').find((m) => m.home === 'Barcelona')?.competition).toBe(
+      'Liga F Moeve',
+    );
+  });
 });
 
 describe('guideAgendaRequest', () => {
