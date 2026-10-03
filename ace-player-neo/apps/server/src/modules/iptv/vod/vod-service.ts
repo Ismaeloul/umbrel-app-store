@@ -50,6 +50,7 @@ import type { XtreamCredentials } from '../xtream.js';
 import { VodArtCache, type ArtReply } from './art.js';
 import {
   loadVodCatalog,
+  removeVodCatalogFile,
   saveVodCatalog,
   syncVodCatalog,
   VOD_AT_START_MS,
@@ -94,6 +95,7 @@ import {
   type VodFilter,
 } from './search.js';
 import type { VodTable } from './table.js';
+import type { VodSyncMode } from './table-codec.js';
 import { tagBit, tagsOf } from './titles.js';
 import { xtreamVodInfo } from './xtream-vod.js';
 
@@ -138,8 +140,25 @@ export interface VodHost {
 
 type TimerName = 'sync';
 
+/** Por qué se sincroniza (para el registro). */
+export type VodSyncReason = 'periodic' | 'manual' | 'vista';
+
+/**
+ * Motivo del aborto de una sincronización VOD que cede el cerrojo a la del
+ * directo o a la guía (fallo 8): no es un fallo del proveedor ni una
+ * cancelación, y la sincronización se vuelve a pedir sola, detrás.
+ */
+export class VodPreemptedError extends Error {
+  constructor() {
+    super('el VOD cede el sitio al directo o a la guía');
+    this.name = 'VodPreemptedError';
+  }
+}
+
 const HOME_ROWS = 20;
 const CATEGORY_MAX = 2_000;
+/** Tras un fallo, la vista no vuelve a lanzar una sincronización antes de esto. */
+export const VOD_VIEW_RETRY_MS = 30_000;
 
 /** Etiquetas de lengua (§9.9). */
 const LANGUAGE_LABEL: Readonly<Record<string, string>> = {
@@ -228,6 +247,12 @@ export class VodService {
   private catalog: VodCatalog | null = null;
   private loading: Promise<VodCatalog | null> | null = null;
   private syncPromise: Promise<void> | null = null;
+  /** La sincronización en curso ha cedido el sitio: al soltar el cerrojo se vuelve a pedir. */
+  private requeue = false;
+  /** Modo de la última sincronización con éxito (para empezar por él, §4.7). */
+  private lastMode: VodSyncMode = 'completo';
+  /** Cuándo acabó la última sincronización (bien o mal). */
+  private lastSyncEndAt = Number.NEGATIVE_INFINITY;
   private failures = 0;
   private delayedOnce = false;
   private readonly timers = new Map<TimerName, TimerHandle>();
@@ -377,12 +402,18 @@ export class VodService {
     this.schedule('sync', VOD_FIRST_AFTER_LIVE_MS, () => this.due());
   }
 
-  /** Ajustes → IPTV → «Actualizar»: también el VOD si tiene más de 1 h (§4.7). */
+  /**
+   * Ajustes → IPTV → «Actualizar» (y «Comprobar de nuevo» de Pelis y series,
+   * que llama a la misma ruta): también el VOD si tiene más de 1 h (§4.7).
+   * Con el catálogo en `none` o `error` (o sin sincronizar nunca), SIEMPRE:
+   * es justo lo que pide «Comprobar de nuevo» (docs/vod-estado.md §4.1).
+   */
   refreshIfOlder(minAgeMs: number = VOD_MANUAL_MIN_AGE_MS): void {
     if (!this.xtream()) return;
     const summary = this.summary();
+    const forced = !summary || summary.state === 'none' || summary.state === 'error';
     const builtAt = summary?.builtAt ? Date.parse(summary.builtAt) : null;
-    if (builtAt !== null && this.host.clock.now() - builtAt < minAgeMs) return;
+    if (!forced && builtAt !== null && this.host.clock.now() - builtAt < minAgeMs) return;
     void this.requestSync('manual');
   }
 
@@ -405,6 +436,8 @@ export class VodService {
     this.homeCache = null;
     this.failures = 0;
     this.delayedOnce = false;
+    this.lastMode = 'completo';
+    this.requeue = false;
     this.details.clear();
     this.art.reset();
     this.docFp = null;
@@ -414,7 +447,7 @@ export class VodService {
   // --- Sincronización ---
 
   /** Sincroniza el catálogo (se engancha a la que esté en marcha). */
-  requestSync(reason: 'periodic' | 'manual' | 'vista'): Promise<void> {
+  requestSync(reason: VodSyncReason): Promise<void> {
     const provider = this.xtream();
     const credentials = this.host.credentials();
     if (!provider || !credentials) return Promise.resolve();
@@ -426,6 +459,12 @@ export class VodService {
       .catch(() => undefined)
       .finally(() => {
         if (this.syncPromise === promise) this.syncPromise = null;
+        this.lastSyncEndAt = this.host.clock.now();
+        /* Ha cedido el sitio al directo o a la guía (fallo 8): se vuelve a
+           pedir, y `runHeavy` la pone detrás de lo que la ha echado. */
+        const again = this.requeue && !this.stopped;
+        this.requeue = false;
+        if (again) void this.requestSync(reason);
         this.host.emitStatus();
       });
     this.syncPromise = promise;
@@ -433,10 +472,26 @@ export class VodService {
     return promise;
   }
 
+  /**
+   * La sincronización VOD en marcha o en cola se ha abortado para que pase
+   * delante el directo o la guía (`runHeavy` en service.ts): al soltar el
+   * cerrojo se vuelve a pedir sola.
+   */
+  onPreempted(): void {
+    if (this.syncPromise) this.requeue = true;
+  }
+
+  /**
+   * ¿Sigue valiendo lo que se está sincronizando? Mismo proveedor y revisión,
+   * y nadie lo ha cancelado (guardar, pausar o eliminar la IPTV). Ceder el
+   * sitio al directo NO cancela lo ya descargado (`VodPreemptedError`): solo
+   * queda guardarlo, que es cosa de un momento.
+   */
   private stillCurrent(snapshot: { id: string; revision: number }, signal: AbortSignal): boolean {
     const provider = this.xtream();
+    const cancelled = signal.aborted && !(signal.reason instanceof VodPreemptedError);
     return Boolean(
-      provider && provider.id === snapshot.id && provider.revision === snapshot.revision && !signal.aborted,
+      provider && provider.id === snapshot.id && provider.revision === snapshot.revision && !cancelled,
     );
   }
 
@@ -447,9 +502,10 @@ export class VodService {
     reason: string,
   ): Promise<void> {
     const { clock, logger } = this.host;
-    if (!this.stillCurrent(snapshot, signal)) return;
+    if (signal.aborted || !this.stillCurrent(snapshot, signal)) return;
     const startedAt = clock.now();
-    const mode = this.catalog?.meta.mode ?? 'completo';
+    /* El modo de la última vez (§4.7): el del catálogo en memoria o el de la última sincronización. */
+    const mode = this.catalog?.meta.mode ?? this.lastMode;
     try {
       const result = await syncVodCatalog(
         { net: this.host.net, clock, logger, credentials, policy: this.host.policy(), signal },
@@ -460,6 +516,8 @@ export class VodService {
       if (result.state === 'none') {
         this.catalog = null;
         this.homeCache = null;
+        /* Un `vod.enc` de cuando sí tenía VOD ya no sirve. */
+        await removeVodCatalogFile(this.host.paths.vodCatalogFile);
         await this.doc.setCatalog({
           state: 'none',
           movies: 0,
@@ -471,10 +529,19 @@ export class VodService {
         logger.info({ reason, ms: clock.now() - startedAt }, 'VOD: el proveedor no ofrece películas ni series');
       } else {
         const { catalog } = result;
-        await saveVodCatalog(this.host.paths.vodCatalogFile, this.host.keys(), catalog).catch(
-          (error: unknown) => logger.warn({ err: error }, 'VOD: no se pudo guardar vod.enc'),
+        const file = this.host.paths.vodCatalogFile;
+        await saveVodCatalog(file, this.host.keys(), catalog).catch((error: unknown) =>
+          logger.warn({ err: error }, 'VOD: no se pudo guardar vod.enc'),
         );
-        if (!this.stillCurrent(snapshot, signal)) return;
+        if (!this.stillCurrent(snapshot, signal)) {
+          /* Quitada la IPTV (u otro proveedor) MIENTRAS se guardaba (fallo 4):
+             `removeAll` ya pasó, así que el fichero recién escrito se borra
+             aquí (§10.5 y §14.6). Con el mismo proveedor (pausa, otra
+             revisión) se queda: es un catálogo válido de ese proveedor. */
+          if (this.host.provider()?.id !== snapshot.id) await removeVodCatalogFile(file);
+          return;
+        }
+        this.lastMode = catalog.meta.mode;
         this.catalog = catalog;
         this.homeCache = null;
         this.details.clear();
@@ -504,7 +571,9 @@ export class VodService {
       }
       this.schedule('sync', vodPeriodicDelay(clock.now(), clock.now()), () => this.due());
     } catch (error) {
-      if (!this.stillCurrent(snapshot, signal)) return;
+      /* Abortada (cede el sitio al directo, o se ha guardado, pausado o
+         quitado la IPTV): no es un fallo del proveedor. */
+      if (signal.aborted || !this.stillCurrent(snapshot, signal)) return;
       this.failures += 1;
       logger.warn(
         { reason, errorCode: errorCodeOf(error) ?? 'desconocido', failures: this.failures },
@@ -539,8 +608,12 @@ export class VodService {
     this.catalog = null;
     const summary = this.summary();
     if (summary?.state !== 'ready') {
-      /* Nunca sincronizado (o falló): la primera petición a la vista la lanza. */
-      if (!summary || summary.state === 'error') void this.requestSync('vista');
+      /* Nunca sincronizado (o falló): la primera petición a la vista la lanza.
+         Tras un fallo, como mucho una cada 30 s: si no, con la vista abierta
+         sería un bucle (error → `iptv.status` → la web vuelve a pedir la
+         portada → otra sincronización → error…) contra el panel. */
+      const calm = this.host.clock.now() - this.lastSyncEndAt >= VOD_VIEW_RETRY_MS;
+      if (!summary || (summary.state === 'error' && calm)) void this.requestSync('vista');
       return null;
     }
     this.loading ??= (async () => {
