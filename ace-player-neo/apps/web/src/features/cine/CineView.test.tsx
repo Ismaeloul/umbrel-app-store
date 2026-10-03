@@ -85,12 +85,20 @@ describe('portada en filas, como la agenda', () => {
     // La portada no pide la rejilla: esa es otra pantalla.
     expect(gridCalls()).toHaveLength(0);
     expect(screen.queryByRole('list', { name: 'Todas las películas' })).toBeNull();
-    // «Seguir viendo»: el siguiente episodio y lo que queda.
-    expect(
-      screen.getByRole('button', { name: /^The Office\. Siguiente: T2 · E6/ }),
-    ).toBeInTheDocument();
+    // «Seguir viendo» de Películas: solo películas, con lo que queda (los
+    // episodios van en el de Series).
     expect(screen.getByRole('button', { name: /^Dune\. Quedan 1 h 53 min$/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^The Office\./ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Ver las 73 películas' })).toBeInTheDocument();
+  });
+
+  it('«Seguir viendo» de Series: los episodios (y ninguna película)', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine({ search: '?vista=cine&cine=series' });
+    expect(
+      await screen.findByRole('button', { name: /^The Office\. Siguiente: T2 · E6/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Dune\./ })).toBeNull();
   });
 
   it('las filas se piden al acercarse a la pantalla, no todas de golpe', async () => {
