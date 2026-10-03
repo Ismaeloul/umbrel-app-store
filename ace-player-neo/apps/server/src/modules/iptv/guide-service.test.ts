@@ -87,6 +87,10 @@ interface GuideNet {
 
 const SHORT_TITLE = 'Partido del respaldo: Betis - Sevilla';
 
+/** Lo que escribe PHP cuando un xmltv.php se pasa de tiempo: la respuesta acaba ahí, sin `</tv>`. */
+const PHP_FATAL =
+  '<br />\n<b>Fatal error</b>:  Maximum execution time of 30 seconds exceeded in <b>xmltv.php</b> on line <b>58</b><br />\n';
+
 function patchGuideNet(r: IptvTestRig): GuideNet {
   const net = netOf(r.service);
   const openStream = net.openStream.bind(net);
@@ -352,6 +356,81 @@ describe('Guía TV en el servicio (§20.5)', () => {
     const again = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
     expect(again.version).not.toBe(before.version);
     expect(again).toMatchObject({ failedAt: null, partial: false, all: before.all });
+  });
+
+  it('un xmltv.php que se corta SIN error (PHP se pasa de tiempo: 200, sin </tv>) no cambia la guía completa: se queda la de antes, queda dicho y se reintenta a los 30 min', async () => {
+    const r = await rig({ fake: { guiaCompleta: true } });
+    const net = patchGuideNet(r);
+    await saveXtream(r);
+    await downloadGuide(r);
+    const before = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(before).toMatchObject({ state: 'ready', failedAt: null });
+    expect(before.all).toBeGreaterThan(10);
+    /* Llegan La 1 y Antena 3, y PHP corta con su «Fatal error» (sin error de red). */
+    const now = r.core.clock.now();
+    net.xmltv = () =>
+      smallGuide({ 'La1.es': 'Telediario', 'Antena3.es': 'Noticias' }, now - HOUR, now + 5 * HOUR, {
+        close: false,
+      }) + PHP_FATAL;
+    r.core.clock.advance(60_000);
+    await downloadGuide(r);
+    const after = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(after).toMatchObject({
+      state: 'ready',
+      version: before.version,
+      all: before.all,
+      partial: false,
+      updatedAt: before.updatedAt,
+    });
+    expect(after.failedAt).not.toBe(null);
+    /* La ventana de partidos de antes también se queda (get_short_epg del falso no da nada). */
+    expect(windowTitles(r.service)).toContain(
+      'LaLiga EA Sports. Jornada 7: Real Sociedad - Villarreal',
+    );
+    /* Ajustes: «no se pudo actualizar; se usa la del…» con los canales de la completa. */
+    const guide = (await r.service.view()).provider?.guide;
+    expect(guide).toMatchObject({
+      available: true,
+      channelsWithGuide: before.all,
+      updatedAt: before.updatedAt,
+    });
+    expect(Date.parse(guide?.failedAt ?? '')).toBeGreaterThan(Date.parse(guide?.updatedAt ?? ''));
+    /* Se reintenta a los 30 min (no a las 8 h) y, si llega entera, se quita el aviso. */
+    net.xmltv = 'falso';
+    const calls = net.calls.xmltv;
+    r.core.clock.advance(IPTV_REFRESH.guideBackoffMinMs - 60_000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(net.calls.xmltv).toBe(calls);
+    r.core.clock.advance(61_000);
+    await waitFor('reintento de la guía', () => net.calls.xmltv > calls);
+    await r.service.idle();
+    const again = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(again.version).not.toBe(before.version);
+    expect(again).toMatchObject({ failedAt: null, all: before.all });
+  });
+
+  it('sin guía completa que sirva, una que llega cortada sin error se usa (mejor que nada, como antes) y se reintenta antes de 8 h', async () => {
+    const r = await rig({ fake: { guiaCompleta: true } });
+    const net = patchGuideNet(r);
+    const now = r.core.clock.now();
+    net.xmltv = () =>
+      smallGuide({ 'La1.es': 'Telediario', 'Antena3.es': 'Noticias' }, now - HOUR, now + 5 * HOUR, {
+        close: false,
+      }) + PHP_FATAL;
+    await saveXtream(r);
+    await downloadGuide(r);
+    const first = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(first).toMatchObject({ state: 'ready', partial: false, failedAt: null, all: 2 });
+    expect(await rowTitles(r, 'La 1')).toContain('Telediario');
+    /* Reintento con espera creciente: a los 30 min ya llega entera. */
+    net.xmltv = 'falso';
+    const calls = net.calls.xmltv;
+    r.core.clock.advance(IPTV_REFRESH.guideBackoffMinMs + 1000);
+    await waitFor('reintento de la guía', () => net.calls.xmltv > calls);
+    await r.service.idle();
+    const full = await r.service.tvGuide.channels({ scope: 'all', limit: 0 });
+    expect(full).toMatchObject({ failedAt: null, partial: false });
+    expect(full.all).toBeGreaterThan(first.all);
   });
 
   it('sin guía completa que sirva (la primera vez, o la de antes ya se acabó), el respaldo sí va a la Guía TV (partial) y el XMLTV se reintenta antes de 8 h', async () => {

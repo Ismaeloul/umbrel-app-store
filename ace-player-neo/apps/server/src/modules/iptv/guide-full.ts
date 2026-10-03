@@ -64,6 +64,8 @@ export interface FullGuideResult {
   readonly window: GuideWindow;
   /** Programas que trae la guía (todos, antes de filtrar). */
   readonly parsed: number;
+  /** Llegó entera (con su `</tv>`); false si se cortó sin error de red (xmltv.ts). */
+  readonly complete: boolean;
   /**
    * El disco falló al escribir la guía completa: se dejó de escribir (quien
    * llama la deshace) pero la ventana de partidos se terminó igual.
@@ -184,7 +186,7 @@ export async function buildFullGuide(
       writer = null;
     }
   };
-  const { programmes } = await parseXmltvStream(
+  const { programmes, complete } = await parseXmltvStream(
     body,
     {
       onChannel(channel) {
@@ -208,7 +210,7 @@ export async function buildFullGuide(
       sliceMs: IPTV_GUIDE_STORE.sliceMs,
     },
   );
-  return { window: collector.finish(), parsed: programmes, writerError };
+  return { window: collector.finish(), parsed: programmes, complete, writerError };
 }
 
 /**

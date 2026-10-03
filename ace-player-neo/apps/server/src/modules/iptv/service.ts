@@ -165,6 +165,8 @@ interface XmltvRead {
   readonly full: GuideMeta | null;
   /** Código del último fallo de una URL (solo cuenta si ninguna trajo nada). */
   readonly failure: string | null;
+  /** Se usó una guía que llegó cortada (sin `</tv>`) porque no había otra que sirviera. */
+  readonly incomplete: boolean;
 }
 
 const NO_IPTV: IptvView = { provider: null, refreshHours: IPTV_REFRESH_HOURS };
@@ -1522,6 +1524,7 @@ export class IptvServiceImpl implements IptvService {
     let window: GuideWindow | null = null;
     let empty: GuideWindow | null = null;
     let failure: string | null = null;
+    let incomplete = false;
     /* En una caja: se cambia desde `drop`. */
     const out: { writer: GuideWriter | null; tried: boolean } = { writer: null, tried: false };
     /* El disco falló: se deja de escribir la completa y la de partidos sigue (§20.3). */
@@ -1567,9 +1570,16 @@ export class IptvServiceImpl implements IptvService {
             acceptImage,
             signal,
           });
-          reading = false;
           if (built.writerError) drop(built.writerError);
-          else {
+          /* Se cortó SIN error de red: un xmltv.php que se pasa de tiempo o de memoria (PHP,
+             «Fatal error») cierra la respuesta como si nada, sin `</tv>`. Si hay una guía
+             completa de antes que aún sirve, es un fallo como un corte a medias: lo de esta
+             guía se deshace (catch) y se queda la de antes, con aviso y reintento (§20.3). */
+          if (!built.complete && !signal.aborted && this.usableFullGuide(providerId)) {
+            throw new AppError('iptv_unreachable', { detail: 'xmltv_cortada' });
+          }
+          reading = false;
+          if (!built.writerError) {
             try {
               out.writer?.endSource();
             } catch (error) {
@@ -1577,6 +1587,15 @@ export class IptvServiceImpl implements IptvService {
             }
           }
           if (signal.aborted) return null;
+          if (!built.complete) {
+            /* Sin otra que sirva (la primera vez, o la de antes ya se acabó): mejor lo que
+               llegó que nada, como antes de la Guía TV, y se reintenta antes de 8 h. */
+            incomplete = true;
+            this.logger.warn(
+              { host: guideHost(url), programmes: built.parsed },
+              'IPTV: guía cortada (sin </tv>); se usa lo que llegó y se reintenta antes',
+            );
+          }
           const wrote = out.writer ? out.writer.programmes - before : 0;
           if (built.window.programmes > 0) window ??= built.window;
           else empty ??= built.window;
@@ -1595,7 +1614,7 @@ export class IptvServiceImpl implements IptvService {
       out.writer = null;
       const full = await this.finishFullGuide(writer, null, signal);
       if (signal.aborted) return null;
-      return { window, empty, full, failure };
+      return { window, empty, full, failure, incomplete };
     } finally {
       out.writer?.abort();
     }
@@ -1786,8 +1805,9 @@ export class IptvServiceImpl implements IptvService {
       'IPTV: guía actualizada',
     );
     this.emitStatus();
-    /* Si la guía completa salió del respaldo porque el XMLTV falló, se reintenta antes de 8 h. */
-    if (xmltvFailed) {
+    /* Si la guía completa salió del respaldo porque el XMLTV falló, o es una que llegó cortada
+       (sin otra que sirviera), se reintenta antes de 8 h. */
+    if (xmltvFailed || read.incomplete) {
       this.guideFailures += 1;
       this.schedule(
         'guide',

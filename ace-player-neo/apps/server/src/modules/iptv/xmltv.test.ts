@@ -93,6 +93,28 @@ describe('parseXmltvStream', () => {
     expect(list.map((item) => item.title)).toEqual(['sí']);
   });
 
+  it('dice si llegó entera (con su </tv>) o se cortó sin error, como un xmltv.php que se pasa de tiempo', async () => {
+    const complete = async (text: string, size = 0): Promise<boolean> =>
+      (await parseXmltvStream(body(text, size), {})).complete;
+    const programme = (channel: string) =>
+      `<programme start="20260926183000 +0000" stop="20260926203000 +0000" channel="${channel}"><title>T</title></programme>`;
+    const fatal =
+      '<br />\n<b>Fatal error</b>:  Maximum execution time of 30 seconds exceeded in <b>/home/xtreamcodes/iptv_xtream_codes/wwwdir/xmltv.php</b> on line <b>58</b><br />\n';
+    for (const size of [0, 1, 7]) {
+      expect(await complete(GUIDE, size)).toBe(true);
+      /* Cortada a mitad de un programa y PHP escribe su error: falta el </tv>. */
+      expect(await complete(`<tv>${programme('a')}<programme start="2026092`, size)).toBe(false);
+      expect(await complete(`<tv>${programme('a')}${programme('b')}\n${fatal}`, size)).toBe(false);
+      /* Entera y con un aviso de PHP detrás: cuenta como entera. */
+      expect(await complete(`<tv>${programme('a')}</tv>\n${fatal}`, size)).toBe(true);
+    }
+    expect(await complete('<?xml version="1.0"?><tv generator-info-name="x"/>')).toBe(true);
+    expect(await complete('')).toBe(false);
+    expect(await complete('<html><body>Error 500</body></html>')).toBe(false);
+    /* Un </tv> suelto a mitad no basta si detrás siguen programas y luego se corta. */
+    expect(await complete(`<tv>${programme('a')}</tv><tv>${programme('b')}`)).toBe(false);
+  });
+
   it('fechas y entidades', () => {
     expect(parseXmltvDate('202609261830 +0100')?.at).toBe(Date.UTC(2026, 8, 26, 17, 30));
     expect(parseXmltvDate('20260926183000', 2)).toEqual({

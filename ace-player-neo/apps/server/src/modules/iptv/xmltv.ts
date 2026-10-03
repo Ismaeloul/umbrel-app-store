@@ -77,6 +77,17 @@ export interface XmltvHandlers {
   onProgramme?(programme: XmltvProgramme): void;
 }
 
+export interface XmltvStreamResult {
+  readonly programmes: number;
+  readonly channels: number;
+  /**
+   * Llegó entera: se vio el cierre `</tv>`. Un `xmltv.php` que se pasa de
+   * tiempo o de memoria (PHP: «Fatal error: Maximum execution time…») cierra
+   * la respuesta como si nada, sin error de red y sin `</tv>`: false.
+   */
+  readonly complete: boolean;
+}
+
 export interface XmltvOptions {
   readonly maxTextBytes?: number;
   readonly maxDepth?: number;
@@ -295,7 +306,7 @@ export async function parseXmltvStream(
   body: Readable,
   handlers: XmltvHandlers,
   options: XmltvOptions = {},
-): Promise<{ readonly programmes: number; readonly channels: number }> {
+): Promise<XmltvStreamResult> {
   const maxText = options.maxTextBytes ?? IPTV_GUIDE_LIMITS.maxTextBytes;
   const maxDepth = options.maxDepth ?? IPTV_GUIDE_LIMITS.maxDepth;
   const maxAttributes = options.maxAttributes ?? IPTV_GUIDE_LIMITS.maxAttributes;
@@ -314,6 +325,8 @@ export async function parseXmltvStream(
   let firstChunk = true;
   /* Resto de una etiqueta gigante que empezó en un trozo anterior. */
   let skipTagTail = false;
+  /* Se vio el cierre `</tv>` (o un `<tv/>` vacío) y ningún canal ni programa detrás. */
+  let ended = false;
 
   const top = (): Frame | undefined => stack[stack.length - 1];
 
@@ -587,7 +600,9 @@ export async function parseXmltvStream(
       const tag = buffer.slice(index + 1, end);
       index = end + 1;
       if (tag.startsWith('/')) {
-        closeElement(tag.slice(1).trim().toLowerCase());
+        const closing = tag.slice(1).trim().toLowerCase();
+        if (closing === 'tv') ended = true;
+        closeElement(closing);
         continue;
       }
       const selfClosing = tag.endsWith('/');
@@ -595,6 +610,10 @@ export async function parseXmltvStream(
       const nameMatch = /^([A-Za-z_:][A-Za-z0-9_.:-]*)/.exec(inner);
       if (!nameMatch) continue;
       const name = (nameMatch[1] as string).toLowerCase();
+      /* Lo que venga tras el cierre (avisos de PHP: `<br />`, `<b>`) no cuenta; otra guía, sí. */
+      if (name === 'tv' || name === 'programme' || name === 'channel') {
+        ended = name === 'tv' && selfClosing;
+      }
       openElement(name, inner.slice(name.length), selfClosing);
     }
     buffer = final ? '' : buffer.slice(index);
@@ -670,7 +689,7 @@ export async function parseXmltvStream(
   } finally {
     body.destroy();
   }
-  return { programmes, channels };
+  return { programmes, channels, complete: ended };
 }
 
 /** Pedazo máximo que se procesa de una vez. */
