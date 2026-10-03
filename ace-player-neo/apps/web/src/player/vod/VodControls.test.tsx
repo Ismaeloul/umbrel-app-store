@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { INITIAL_PLAYER_STATE, type PlayerState, type VodPlayback } from '../api.ts';
 import type { PlayerActions, PlayerContextValue } from '../context.ts';
 import { VodEndCards } from './NextUp.tsx';
-import { VodControls } from './VodControls.tsx';
+import { timeAtPointer, VodControls } from './VodControls.tsx';
 
 const VOD: VodPlayback = {
   id: 'c1d2e3f4a5b60718293a4b5c6d7e8f9012345678',
@@ -94,16 +94,67 @@ const playing: PlayerState = {
 };
 
 describe('VodControls', () => {
+  /** La pista pintada mide 400 px desde x = 100 (jsdom no maqueta). */
+  function placeTrack(container: HTMLElement) {
+    const track = container.querySelector<HTMLElement>('.vod-bar__track');
+    if (!track) throw new Error('sin pista');
+    track.getBoundingClientRect = () =>
+      ({
+        left: 100,
+        width: 400,
+        top: 0,
+        height: 4,
+        right: 500,
+        bottom: 4,
+        x: 100,
+        y: 0,
+      }) as DOMRect;
+    return container.querySelector<HTMLElement>('.vod-bar') as HTMLElement;
+  }
+
   it('barra «Posición» con «12:34 de 1:45:20»; arrastrar no salta, soltar sí', () => {
     const a = actions();
-    render(<VodControls state={playing} ctx={ctxWith(a)} />);
-    const bar = screen.getByRole('slider', { name: 'Posición' });
-    expect(bar).toHaveAttribute('aria-valuetext', '12:34 de 1:45:20');
-    fireEvent.pointerDown(bar);
-    fireEvent.change(bar, { target: { value: '3000' } });
+    const { container } = render(<VodControls state={playing} ctx={ctxWith(a)} />);
+    const slider = screen.getByRole('slider', { name: 'Posición' });
+    expect(slider).toHaveAttribute('aria-valuetext', '12:34 de 1:45:20');
+    const bar = placeTrack(container);
+    fireEvent.pointerDown(bar, { clientX: 200, pointerType: 'mouse', button: 0, pointerId: 1 });
+    fireEvent.pointerMove(bar, { clientX: 300, pointerType: 'mouse', pointerId: 1 });
     expect(a.seekTo).not.toHaveBeenCalled();
-    fireEvent.pointerUp(bar);
-    expect(a.seekTo).toHaveBeenCalledWith(3000);
+    fireEvent.pointerUp(bar, { clientX: 300, pointerType: 'mouse', pointerId: 1 });
+    // La mitad de la pista: la mitad de 6320 s.
+    expect(a.seekTo).toHaveBeenCalledTimes(1);
+    expect(a.seekTo).toHaveBeenCalledWith(3160);
+  });
+
+  it('el tiempo flotante y el salto caen en el mismo punto de la pista (y en los bordes)', () => {
+    const a = actions();
+    const { container } = render(<VodControls state={playing} ctx={ctxWith(a)} />);
+    const bar = placeTrack(container);
+    // Pasar el ratón: el tiempo flotante dice 26:20 (un cuarto de 1:45:20).
+    fireEvent.pointerMove(bar, { clientX: 200, pointerType: 'mouse' });
+    expect(container.querySelector('.vod-bar__tip')).toHaveTextContent('26:20');
+    expect(
+      (container.querySelector('.vod-bar__tip') as HTMLElement).style.getPropertyValue('--x'),
+    ).toBe('0.25');
+    // Clic ahí mismo: salta a 26:20, ni medio pulgar más ni menos.
+    fireEvent.pointerDown(bar, { clientX: 200, pointerType: 'mouse', button: 0, pointerId: 1 });
+    fireEvent.pointerUp(bar, { clientX: 200, pointerType: 'mouse', pointerId: 1 });
+    expect(a.seekTo).toHaveBeenLastCalledWith(1580);
+    // Con el dedo más allá del borde, el final (y no más).
+    fireEvent.pointerDown(bar, { clientX: 640, pointerType: 'touch', pointerId: 2 });
+    fireEvent.pointerUp(bar, { clientX: 640, pointerType: 'touch', pointerId: 2 });
+    expect(a.seekTo).toHaveBeenLastCalledWith(6320);
+  });
+
+  it('timeAtPointer: misma fórmula para todo, sin márgenes', () => {
+    const track = { left: 10, width: 200 };
+    expect(timeAtPointer(10, track, 100)).toBe(0);
+    expect(timeAtPointer(110, track, 100)).toBe(50);
+    expect(timeAtPointer(210, track, 100)).toBe(100);
+    expect(timeAtPointer(-50, track, 100)).toBe(0);
+    expect(timeAtPointer(110, { left: 0, width: 0 }, 100)).toBeNull();
+    expect(timeAtPointer(110, track, 0)).toBeNull();
   });
 
   it('← → en la barra saltan 10 s; los botones ±10 y «Siguiente episodio»', () => {

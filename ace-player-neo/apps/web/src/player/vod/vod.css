@@ -64,7 +64,35 @@
   background: var(--accent);
   transform: scaleX(var(--p));
 }
-/* El deslizador de verdad, transparente encima (teclado, lector, arrastre). */
+.vod-bar {
+  cursor: pointer;
+}
+.vod-bar:has(.vod-bar__input:disabled) {
+  cursor: default;
+}
+/* El pulgar, pintado sobre la pista con la misma geometría (`--p` × su ancho):
+   el del deslizador nativo va con medio pulgar de margen a cada lado y no
+   coincidía con el punto del salto ni con el tiempo flotante. */
+.vod-bar__thumb {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--p) * 100%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
+  translate: -50% -50%;
+  pointer-events: none;
+}
+.vod-bar:has(.vod-bar__input:disabled) .vod-bar__thumb {
+  display: none;
+}
+.vod-bar:has(.vod-bar__input:focus-visible) .vod-bar__thumb {
+  box-shadow: 0 0 0 3px var(--accent);
+}
+/* El deslizador de verdad, invisible encima: teclado y lector de pantalla.
+   El ratón y el dedo los atiende la barra (VodControls.tsx, `timeAtPointer`). */
 .vod-bar__input {
   position: absolute;
   inset: 0;
@@ -72,41 +100,13 @@
   height: 100%;
   margin: 0;
   background: transparent;
+  opacity: 0;
   -webkit-appearance: none;
   appearance: none;
-  cursor: pointer;
-}
-.vod-bar__input:disabled {
-  cursor: default;
-}
-.vod-bar__input::-webkit-slider-runnable-track {
-  height: 100%;
-  background: transparent;
-}
-.vod-bar__input::-webkit-slider-thumb {
-  width: 14px;
-  height: 14px;
-  margin-top: 7px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
-  -webkit-appearance: none;
-}
-.vod-bar__input::-moz-range-track {
-  background: transparent;
-}
-.vod-bar__input::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border: 0;
-  border-radius: 50%;
-  background: #fff;
+  pointer-events: none;
 }
 .vod-bar__input:focus-visible {
   outline: none;
-}
-.vod-bar__input:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px var(--accent);
 }
 .vod-bar__tip {
   --x: 0;
