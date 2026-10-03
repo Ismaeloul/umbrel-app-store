@@ -10,7 +10,9 @@ import {
   extractGuideMatchup,
   isNotLive,
   kickoffFromProgramme,
+  programmeHasTeams,
   teamAliases,
+  teamCache,
   type GuideChannelCandidate,
   type GuideMatchInput,
   type GuideProgramme,
@@ -198,6 +200,34 @@ describe('confirmByGuide', () => {
     expect(champions('Sporting de Portugal', 'Benfica', 'Sporting CP - SL Benfica')).toEqual([
       'M+ Liga de Campeones',
     ]);
+  });
+
+  it('la tabla de alias vale en los dos sentidos: futbolenlatv en castellano y la guía como en su país (y al revés)', () => {
+    const champions = (home: string, away: string, title: string): string[] =>
+      confirmed([channel('M+ Liga de Campeones', [programme(`Champions League: ${title}`)])], {
+        ...MATCH,
+        home,
+        away,
+        competition: 'Champions League',
+        channels: ['M+ Liga de Campeones'],
+      });
+    for (const [home, away, title] of [
+      ['Nápoles', 'Barcelona', 'Napoli - Barcelona'],
+      ['Oporto', 'Benfica', 'FC Porto - SL Benfica'],
+      ['Club Brujas', 'Real Madrid', 'Club Brugge - Real Madrid'],
+      ['Estrella Roja', 'Olympiacos', 'Crvena Zvezda - Olympiakos'],
+      ['Crvena Zvezda', 'Olympiakos', 'Estrella Roja - Olympiacos'],
+      ['Sparta de Praga', 'Salzburgo', 'Sparta Praha - Red Bull Salzburg'],
+      ['Copenhague', 'Marsella', 'FC Copenhagen - Marseille'],
+      /* Como abrevia futbolenlatv (football/scores.ts). */
+      ['O. Lyonnais', 'B. Dortmund', 'Olympique de Lyon - Borussia Dortmund'],
+    ] as const) {
+      expect(champions(home, away, title), `${home} - ${away}`).toEqual(['M+ Liga de Campeones']);
+    }
+    /* Y sin inventar: un club que no es el de la tabla sigue sin casar. */
+    expect(champions('Sparta Rotterdam', 'Salzburgo', 'Sparta Praha - Red Bull Salzburg')).toEqual(
+      [],
+    );
   });
 
   it('las formas cortas y los nombres en castellano de la Premier y la Bundesliga (casos reales de la revisión)', () => {
@@ -570,8 +600,39 @@ describe('piezas', () => {
       ['LaLiga EA Sports', null],
       ['Telediario', null],
       ['Fútbol - Jornada 7', null],
+      /* Casos de la revisión: dos enfrentamientos, otro enfrentamiento dentro de un nombre,
+         equipos por decidir y el mismo nombre a los dos lados. */
+      ['Liga de Campeones: Real Madrid - Juventus y Liverpool - Bayern (Directo)', null],
+      ['LaLiga EA Sports: Real Madrid - Barcelona / Sevilla - Betis (Directo)', null],
+      [
+        'Directo LaLiga EA Sports: El Clásico - Real Madrid vs Barcelona',
+        { home: 'Real Madrid', away: 'Barcelona' },
+      ],
+      ['Liga de Campeones: Por confirmar - Por confirmar (Directo)', null],
+      ['Liga de Campeones: Ganador A - Ganador B (Directo)', null],
+      ['Copa del Rey: Real Madrid - Real Madrid', null],
+      [
+        'Premier League: Brighton & Hove Albion - Spurs',
+        { home: 'Brighton & Hove Albion', away: 'Spurs' },
+      ],
     ];
-    for (const [text, expected] of cases) expect(extractGuideMatchup(text)).toEqual(expected);
+    for (const [text, expected] of cases) expect(extractGuideMatchup(text), text).toEqual(expected);
+  });
+
+  it('los equipos solo en el título o el subtítulo (para mover la hora en la agenda híbrida)', () => {
+    const cache = teamCache({ home: 'Real Madrid', away: 'Barcelona' });
+    const inDesc = programme('LaLiga EA Sports: Sevilla - Betis (Directo)', {
+      desc: 'Esta noche, Real Madrid - Barcelona en M+ LaLiga TV.',
+    });
+    expect(programmeHasTeams(inDesc, cache)).toBe(true);
+    expect(programmeHasTeams(inDesc, cache, 'title')).toBe(false);
+    expect(
+      programmeHasTeams(
+        programme('Fútbol', { subTitle: 'Real Madrid vs. Barcelona' }),
+        cache,
+        'title',
+      ),
+    ).toBe(true);
   });
 
   it('el saque que se deduce de un programa: al cuarto de hora siguiente si cubre el partido', () => {

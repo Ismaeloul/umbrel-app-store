@@ -232,8 +232,9 @@ export const EPG_TEAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
   'sl benfica': ['benfica', 'sl benfica'],
   'olympique marseille': ['olympique de marsella', 'marsella', 'olympique marseille', 'marseille'],
   marseille: ['olympique de marsella', 'marsella', 'olympique marseille', 'marseille'],
-  'olympique lyonnais': ['olympique de lyon', 'olympique lyonnais', 'lyon'],
-  lyon: ['olympique de lyon', 'olympique lyonnais', 'lyon'],
+  /* «O. Lyonnais», como lo abrevia futbolenlatv (football/scores.ts). */
+  'olympique lyonnais': ['olympique de lyon', 'olympique lyonnais', 'lyon', 'o lyonnais'],
+  lyon: ['olympique de lyon', 'olympique lyonnais', 'lyon', 'o lyonnais'],
   'club brugge': ['club brugge', 'brujas', 'club brujas'],
   'borussia dortmund': ['borussia dortmund', 'dortmund', 'b dortmund'],
   'bayer leverkusen': ['bayer leverkusen', 'leverkusen'],
@@ -282,7 +283,66 @@ export const EPG_TEAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
   'atalanta bc': ['atalanta', 'atalanta bc'],
   fiorentina: ['fiorentina', 'acf fiorentina'],
   'acf fiorentina': ['fiorentina', 'acf fiorentina'],
+  /* La Champions: futbolenlatv los escribe en castellano y las guías, muchas veces, como en su país
+     (revisión de la agenda híbrida; football/scores.ts tiene los mismos con ESPN). */
+  'crvena zvezda': [
+    'crvena zvezda',
+    'estrella roja',
+    'estrella roja de belgrado',
+    'red star belgrade',
+    'red star belgrado',
+  ],
+  olympiacos: ['olympiacos', 'olympiakos', 'olympiacos pireo', 'olympiakos pireo'],
+  'sparta praha': ['sparta praha', 'sparta de praga', 'sparta praga', 'sparta prague'],
+  'slavia praha': ['slavia praha', 'slavia de praga', 'slavia praga', 'slavia prague'],
+  'red bull salzburg': [
+    'red bull salzburg',
+    'rb salzburg',
+    'salzburg',
+    'salzburgo',
+    'red bull salzburgo',
+    'rb salzburgo',
+  ],
+  copenhagen: ['copenhagen', 'fc copenhagen', 'copenhague', 'fc copenhague'],
 };
+
+/* Forma de búsqueda de una entrada de la tabla (sin puntos ni partículas: «at. madrid» → «at madrid»). */
+function aliasLookupKeys(value: string): string[] {
+  const raw = normalizeGuideText(value)
+    .replace(/[()[\]/:.]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const bare = raw
+    .split(' ')
+    .filter((word) => !['de', 'del', 'la', 'el'].includes(word))
+    .join(' ');
+  return [...new Set([raw, bare])].filter(Boolean);
+}
+
+/*
+ * La tabla vale en los dos sentidos: cualquier forma de un grupo trae el grupo
+ * entero. Así «Nápoles», «Oporto», «Brujas» o «Estrella Roja» (como escribe
+ * futbolenlatv) encuentran «Napoli», «Porto», «Club Brugge» o «Crvena Zvezda»
+ * (como escriben muchas guías), y al revés.
+ */
+const EPG_ALIAS_GROUPS: ReadonlyMap<string, readonly string[]> = (() => {
+  const groups = new Map<string, Set<string>>();
+  for (const [key, aliases] of Object.entries(EPG_TEAM_ALIASES)) {
+    for (const form of [key, ...aliases]) {
+      for (const lookup of aliasLookupKeys(form)) {
+        const group = groups.get(lookup) ?? new Set<string>();
+        for (const alias of aliases) group.add(alias);
+        groups.set(lookup, group);
+      }
+    }
+  }
+  return new Map([...groups].map(([lookup, group]) => [lookup, [...group]]));
+})();
+
+/** Las formas de la tabla curada para un nombre (en cualquiera de sus formas). */
+function epgAliases(base: string): readonly string[] {
+  return EPG_ALIAS_GROUPS.get(base) ?? [];
+}
 
 /*
  * La forma corta con la que las guías escriben el primer nombre de un club:
@@ -348,14 +408,14 @@ export function teamAliases(name: string, extra: readonly string[] = []): string
     const words = base.split(' ').filter(Boolean);
     const stripped = words.filter((word) => !TEAM_PREFIXES.has(word)).join(' ');
     if (stripped.replace(/\s/g, '').length >= 5) add(stripped);
-    for (const alias of EPG_TEAM_ALIASES[base] ?? []) add(alias);
+    for (const alias of epgAliases(base)) add(alias);
     /* «R. Madrid», «At. Madrid», «Ath. Club»: la forma corta del primer nombre
        (con lo de detrás, «r madrid» ya no es la palabra débil «madrid»). */
     const [first = '', ...rest] = words;
     const tail = rest.filter((word) => !['de', 'del', 'la', 'el'].includes(word)).join(' ');
     if (tail) for (const short of SHORT_PREFIXES[first] ?? []) add(`${short} ${tail}`);
   }
-  for (const alias of EPG_TEAM_ALIASES[key] ?? []) add(alias);
+  for (const alias of epgAliases(key)) add(alias);
   for (const value of extra) {
     const clean = normalizeGuideText(value);
     /* Las abreviaturas de 3 letras van aparte (solo en el patrón compacto). */
@@ -795,10 +855,22 @@ export function teamCache(
   };
 }
 
-/** Regla 2: los dos equipos en el mismo campo (título, subtítulo o descripción). */
-export function programmeHasTeams(programme: GuideProgramme, cache: TeamCache): boolean {
+/**
+ * Regla 2: los dos equipos en el mismo campo (título, subtítulo o
+ * descripción). Con `'title'`, solo en el título o el subtítulo: lo que pide
+ * la agenda híbrida para MOVER la hora de un partido (la descripción de un
+ * partido nombra a menudo otro: «Esta noche, Real Madrid - Barcelona»).
+ */
+export function programmeHasTeams(
+  programme: GuideProgramme,
+  cache: TeamCache,
+  where: 'all' | 'title' = 'all',
+): boolean {
   const texts = programmeTeamTexts(programme);
-  const fields = [programme.title, programme.subTitle, programme.desc];
+  const fields =
+    where === 'title'
+      ? [programme.title, programme.subTitle]
+      : [programme.title, programme.subTitle, programme.desc];
   for (let index = 0; index < fields.length; index += 1) {
     const field = fields[index];
     const text = texts[index] ?? '';
@@ -963,7 +1035,11 @@ const LIVE_SUFFIX_RE =
   /(?:\s+(?:en\s+)?(?:directo|vivo|live)|\s*\(\s*(?:en\s+)?(?:directo|vivo|live|l)\s*\))\s*$/iu;
 /* Palabras que no forman parte del nombre de un equipo. */
 const NOT_A_TEAM_RE =
-  /\b(?:jornada|futbol|liga|copa|partido|partidos|temporada|grupo|final|semifinal|semifinales|cuartos|octavos|dieciseisavos|directo|resumen|previa|programa|especial|highlights|league|serie|campeonato|torneo|amistoso|sports|deportes)\b/;
+  /\b(?:jornada|futbol|liga|copa|partido|partidos|temporada|grupo|final|semifinal|semifinales|cuartos|octavos|dieciseisavos|directo|resumen|previa|programa|especial|highlights|league|serie|campeonato|torneo|amistoso|sports|deportes|confirmar|determinar|definir|tbd|tba|ganador|perdedor|vencedor|winner|loser)\b/;
+/* Otro enfrentamiento dentro de un nombre: «Real Madrid vs Barcelona» no es un equipo. */
+const INNER_SEPARATOR_RE = /\s(?:-|–|—|vs\.?|v\.?|contra|\/)\s/iu;
+/* En un título con varios enfrentamientos, «Juventus y Liverpool» tampoco. */
+const INNER_LIST_RE = /\s(?:y|e|and|&)\s|,/iu;
 
 function withoutLiveWords(value: string): string {
   return value.replace(LIVE_PREFIX_RE, '').replace(LIVE_SUFFIX_RE, '').trim();
@@ -987,10 +1063,11 @@ function tidyTeamName(value: string): string {
     .join(' ');
 }
 
-function plausibleTeam(name: string): boolean {
+function plausibleTeam(name: string, severalMatchups = false): boolean {
   if (name.length < 3 || name.length > 40) return false;
   if (!/\p{L}{2}/u.test(name)) return false;
   if (name.split(/\s+/).length > 5) return false;
+  if (INNER_SEPARATOR_RE.test(name) || (severalMatchups && INNER_LIST_RE.test(name))) return false;
   const text = normalizeGuideText(name);
   if (!text || WEAK_TEAM_WORDS.has(text)) return false;
   return !NOT_A_TEAM_RE.test(text) && competitionFamily(text) === null;
@@ -1000,20 +1077,27 @@ function plausibleTeam(name: string): boolean {
  * Los dos equipos de un texto de la guía («LaLiga EA Sports. Jornada 7: Real
  * Sociedad - Villarreal», «Fútbol: Real Madrid vs. Barcelona (Directo)»), con
  * sus nombres tal cual (sin las mayúsculas de guía), o null si no hay un
- * enfrentamiento claro. Prueba cada separador, de izquierda a derecha.
+ * enfrentamiento claro. Prueba cada separador, de izquierda a derecha. Nada
+ * de dos enfrentamientos en un título («Real Madrid - Juventus y Liverpool -
+ * Bayern»), equipos por decidir («Por confirmar», «Ganador A») ni el mismo
+ * nombre a los dos lados.
  */
 export function extractGuideMatchup(value: string): { home: string; away: string } | null {
   const text = withoutLiveWords(String(value ?? '').replace(/\s+/g, ' '));
   if (!text) return null;
-  for (const separator of text.matchAll(MATCHUP_SEPARATOR_RE)) {
+  const separators = [...text.matchAll(MATCHUP_SEPARATOR_RE)];
+  const several = separators.length > 1;
+  for (const separator of separators) {
     const at = separator.index ?? 0;
     const left = text.slice(0, at).replace(BEFORE_HOME_RE, '');
     const right = text.slice(at + separator[0].length).replace(AFTER_AWAY_RE, '');
     const home = tidyTeamName(withoutLiveWords(left));
     let away = tidyTeamName(withoutLiveWords(right));
-    if (!plausibleTeam(away))
+    if (!plausibleTeam(away, several))
       away = tidyTeamName(withoutLiveWords(right.replace(AFTER_AWAY_LOOSE_RE, '')));
-    if (plausibleTeam(home) && plausibleTeam(away)) return { home, away };
+    if (!plausibleTeam(home, several) || !plausibleTeam(away, several)) continue;
+    if (normalizeGuideText(home) === normalizeGuideText(away)) continue;
+    return { home, away };
   }
   return null;
 }
