@@ -11,7 +11,7 @@
    Todos los esquemas son `strictObject`. */
 
 import { z } from 'zod';
-import { HashSchema, IsoDateTimeSchema } from '../../primitives.js';
+import { DateOnlySchema, HashSchema, IsoDateTimeSchema } from '../../primitives.js';
 import { VOD_SEARCH } from '../../constants/vod.js';
 import { VodCatalogStateSchema } from '../../state/v2.js';
 import { CursorSchema, IptvCategoryIdSchema } from './iptv.js';
@@ -175,6 +175,14 @@ export const VodProgressSchema = z.strictObject({
 });
 export type VodProgress = z.infer<typeof VodProgressSchema>;
 
+/**
+ * Id de un vídeo de YouTube (11 caracteres), el tráiler de `youtube_trailer`.
+ * El servidor lo saca también de una URL completa y descarta lo que no cumpla;
+ * la web abre `https://www.youtube.com/watch?v=<id>` en otra pestaña (no se
+ * incrusta: la CSP no lo deja y no gasta la única conexión IPTV).
+ */
+export const VodTrailerSchema = z.string().regex(/^[\w-]{11}$/, 'id de YouTube de 11 caracteres');
+
 /** La ficha del proveedor llegó (`ok`), está en cola (`pending`) o falló (`failed`): la ficha nunca queda en blanco (§7.3). */
 export const VodInfoSchema = z.enum(['ok', 'pending', 'failed']);
 export type VodInfo = z.infer<typeof VodInfoSchema>;
@@ -212,6 +220,14 @@ export const VodMovieSchema = z.strictObject({
   playable: VodPlayableSchema,
   progress: VodProgressSchema.nullable(),
   category: VodTitleCategorySchema,
+  /**
+   * Opcionales (0.9.0, «toda la información que dé la IPTV»): un servidor que
+   * no los sepa no los manda y la web no pinta el hueco.
+   * - `trailer`: el tráiler de YouTube (botón «Tráiler»).
+   * - `released`: fecha de estreno de `releasedate` («12 de mayo de 2023»).
+   */
+  trailer: VodTrailerSchema.nullable().optional(),
+  released: DateOnlySchema.nullable().optional(),
 });
 export type VodMovie = z.infer<typeof VodMovieSchema>;
 
@@ -274,6 +290,16 @@ export const VodSeriesSchema = z.strictObject({
   main: VodSeriesMainSchema.nullable(),
   /** Pasó de 100 temporadas, 500 episodios por temporada o 3 000 en total. */
   truncated: z.boolean(),
+  /**
+   * Opcionales (0.9.0), como en la película:
+   * - `trailer`: el tráiler de YouTube;
+   * - `released`: fecha del estreno de la serie (`releaseDate`);
+   * - `episodeRunTimeS`: duración típica de un episodio (`episode_run_time`,
+   *   en minutos en Xtream), para «Episodios de unos 45 min».
+   */
+  trailer: VodTrailerSchema.nullable().optional(),
+  released: DateOnlySchema.nullable().optional(),
+  episodeRunTimeS: z.number().int().positive().max(86_400).nullable().optional(),
 });
 export type VodSeries = z.infer<typeof VodSeriesSchema>;
 

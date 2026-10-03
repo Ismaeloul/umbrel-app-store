@@ -67,5 +67,8 @@
     "label": "Siguiente: T2:E6",
     "posS": 0
   },
-  "truncated": false
+  "truncated": false,
+  "trailer": null,
+  "released": "2005-03-24",
+  "episodeRunTimeS": 1320
 }
