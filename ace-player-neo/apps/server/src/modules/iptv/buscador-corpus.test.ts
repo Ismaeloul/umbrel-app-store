@@ -14,7 +14,14 @@ import {
 import { ESPERADOS, checkEsperado } from '../../../../../packages/shared/test/corpus/esperados.js';
 import { browseIndex, buildBrowseIndex, type BrowseIndex } from './browse.js';
 import { Catalog, channelIdOf, type RawChannel } from './catalog.js';
-import { compareRankedHits, packRankedHit, searchCatalog, type RankedHit } from './search.js';
+import {
+  NAME_CACHE_MAX,
+  cachedKeyNames,
+  compareRankedHits,
+  packRankedHit,
+  searchCatalog,
+  type RankedHit,
+} from './search.js';
 
 function catalogOf(corpus: readonly CanalCorpus[]): Catalog {
   const raws: RawChannel[] = corpus.map((channel, i) => ({
@@ -243,6 +250,20 @@ describe('tus favoritos desempatan, nunca delante de lo igual', () => {
     const favorites = new Set([channelOf('dazn f1')]);
     expect(searchLabels('dazn', favorites)[0]).toBe('dazn f1');
     expect(browseLabels(browse, 'dazn', favorites)[0]).toBe('dazn f1');
+  });
+});
+
+describe('la caché de nombres de un índice', () => {
+  it('llena, no se vacía: una consulta amplia no obliga a recalcularlo todo en la siguiente', () => {
+    const cache = new Map<string, ReturnType<typeof cachedKeyNames>>();
+    for (let i = 0; i < NAME_CACHE_MAX; i += 1) cachedKeyNames(cache, `canal ${i}`);
+    expect(cache.size).toBe(NAME_CACHE_MAX);
+    const extra = cachedKeyNames(cache, 'canal extra');
+    expect(extra[0]?.words).toEqual(['canal', 'extra']);
+    expect(cache.size).toBe(NAME_CACHE_MAX);
+    /* Lo guardado sigue ahí (antes se vaciaba entera al llegar al tope). */
+    expect(cache.has('canal 0')).toBe(true);
+    expect(cache.has('canal extra')).toBe(false);
   });
 });
 

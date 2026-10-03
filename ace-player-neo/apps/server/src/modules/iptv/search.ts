@@ -169,16 +169,20 @@ interface SearchIndex {
 /** Cuántos nombres calculados guarda un índice antes de empezar de cero. */
 export const NAME_CACHE_MAX = 20_000;
 
-/** Los nombres de una clave, de la caché de un índice (o calculados y guardados). */
+/**
+ * Los nombres de una clave, de la caché de un índice (o calculados y guardados). Llena, ya no guarda más (sin
+ * vaciarla): antes se vaciaba entera al llegar al tope, y una consulta amplia («canal», 27 000 candidatas con
+ * 30 000 canales) la vaciaba en cada búsqueda y lo recalculaba todo cada vez. Las claves no cambian mientras vive el
+ * índice (es de un catálogo), así que lo guardado sigue valiendo.
+ */
 export function cachedKeyNames(
   cache: Map<string, readonly NameFacts[]>,
   key: string,
 ): readonly NameFacts[] {
   const known = cache.get(key);
   if (known) return known;
-  if (cache.size >= NAME_CACHE_MAX) cache.clear();
   const names = keyNames(key);
-  cache.set(key, names);
+  if (cache.size < NAME_CACHE_MAX) cache.set(key, names);
   return names;
 }
 

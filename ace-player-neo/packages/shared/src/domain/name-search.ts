@@ -704,6 +704,20 @@ function factsWordMatch(spelled: SpelledNumbers, token: string, word: string): n
   return byWord >= 2 ? byWord : 0;
 }
 
+/* ¿Casa `word` con alguna palabra del nombre con `factsWordMatch` ≥ `min`? (sin funciones de por medio: se llama
+   decenas de miles de veces en una consulta amplia). */
+function someWordMatch(
+  spelled: SpelledNumbers,
+  tokens: readonly string[],
+  word: string,
+  min: number,
+): boolean {
+  for (let i = 0; i < tokens.length; i += 1) {
+    if (factsWordMatch(spelled, tokens[i] as string, word) >= min) return true;
+  }
+  return false;
+}
+
 /*
  * ¿Vale lo escrito pegado («antena3», «la1») a partir de la palabra `from`
  * del nombre? Si se queda dentro de esa palabra, sí. Si pasa a la siguiente,
@@ -758,10 +772,9 @@ export function nameTier(query: NameQueryWords, facts: NameFacts): number {
     : facts.sigWords;
   /* Los números escritos con letra del nombre («BBC ONE»: «one» u «on» casan con su «1»). */
   const { spelled } = facts;
-  const match = (token: string, word: string): number => factsWordMatch(spelled, token, word);
   /* Cada palabra escrita casa con alguna del nombre (en cualquier orden). */
   for (const word of query.required) {
-    if (!facts.words.some((token) => match(token, word) > 0)) {
+    if (!someWordMatch(spelled, facts.words, word, 1)) {
       return byCompact >= 0 ? byCompact : brandlessTier(query, facts);
     }
   }
@@ -783,7 +796,7 @@ export function nameTier(query: NameQueryWords, facts: NameFacts): number {
     let found = -1;
     let how = 0;
     for (let j = from; j < words.length; j += 1) {
-      how = match(words[j] as string, word);
+      how = factsWordMatch(spelled, words[j] as string, word);
       if (how) {
         found = j;
         break;
@@ -803,9 +816,7 @@ export function nameTier(query: NameQueryWords, facts: NameFacts): number {
   let tier: number;
   if (!ordered) {
     /* En otro orden: por dentro de una palabra es lo más flojo. */
-    const anyInside = query.required.some(
-      (word) => !facts.words.some((token) => match(token, word) >= 2),
-    );
+    const anyInside = query.required.some((word) => !someWordMatch(spelled, facts.words, word, 2));
     tier = anyInside ? NAME_TIER.inside : NAME_TIER.partial;
   } else if (inside) tier = NAME_TIER.inside;
   else if (start === 0 && together && whole) tier = NAME_TIER.prefix;
@@ -824,10 +835,7 @@ function brandlessTier(query: NameQueryWords, facts: NameFacts): number {
   const rest = query.required.filter((word) => !MOVISTAR_SEARCH_WORDS.has(word));
   if (rest.length === query.required.length) return -1;
   if (!rest.some((word) => word.length >= 3 && !NUMBER_RE.test(word))) return -1;
-  const { spelled } = facts;
-  const all = rest.every((word) =>
-    facts.words.some((token) => factsWordMatch(spelled, token, word) >= 2),
-  );
+  const all = rest.every((word) => someWordMatch(facts.spelled, facts.words, word, 2));
   return all ? NAME_TIER.brandless : -1;
 }
 

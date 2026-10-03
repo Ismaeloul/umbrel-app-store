@@ -669,11 +669,12 @@ function rankRows(
     const keyRow = index.keyRow[item] as number;
     const family = index.keyFamily[item] as number;
     const best = index.best[row] as CatalogEntry;
+    const home = regionRank(country);
     const [a, b] = packRankedHit({
       rank: {
         tier: rankTier(context, tier),
         lead,
-        region: regionRank(country, q.country),
+        region: q.country ? regionRank(country, q.country) : home,
         favorite: withFavorites && favorites.has(channelIdOf(best)),
       },
       penalty: rowPenalty(index, row, main.words),
@@ -684,7 +685,7 @@ function rankRows(
       quality: rowQuality(index.qualities[row] as number),
       keyLength: (index.keyText[item] as string).length,
       keyOrder: keyRow,
-      abroad: regionRank(country) === 0 ? 0 : 1,
+      abroad: home === 0 ? 0 : 1,
       /* El orden del catálogo de su mejor variante, como el buscador. */
       order: best.order,
     });
