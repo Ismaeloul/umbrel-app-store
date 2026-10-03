@@ -105,9 +105,38 @@ export function IptvFilterLines({ facets, filters, onChange }: IptvFiltersProps)
         onSelect: () => onChange(toggleFilter(filters, menu.facet, value.value)),
       }))
     : [];
+  /* Las facetas de un solo valor («Idioma: Español», «Deporte: Fútbol») van
+     juntas en una línea, donde estaba la primera: una línea entera para un
+     chip ocupaba mucho para nada. */
+  const singles = lines.filter((line) => line.values.length === 1);
+  const groupSingles = singles.length > 1;
+  const firstSingle = singles[0]?.facet;
+  const singlesLine = groupSingles ? (
+    <div key="solos" className="iptv-line iptv-line--solos">
+      {singles.map(({ facet, values }) => {
+        const titleId = `${baseId}-${facet}`;
+        const [value] = values;
+        return (
+          <div key={facet} className="iptv-solo" role="group" aria-labelledby={titleId}>
+            <span id={titleId} className="iptv-line__title">
+              {FACET_TITLE[facet]}
+            </span>
+            {value ? (
+              <FacetChip
+                facet={facet}
+                value={value}
+                onToggle={() => onChange(toggleFilter(filters, facet, value.value))}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
   return (
     <div className="iptv-lines">
       {lines.map(({ facet, values }) => {
+        if (groupSingles && values.length === 1) return facet === firstSingle ? singlesLine : null;
         const titleId = `${baseId}-${facet}`;
         const { shown, hidden } = visibleFacetValues(values, DESKTOP_SHOWN[facet]);
         return (
