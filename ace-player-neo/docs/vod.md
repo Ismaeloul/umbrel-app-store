@@ -792,9 +792,11 @@ tapa.
   4. solo entonces abre `Range: bytes=<inicio>-[fin]` por `relay.connect()` (SSRF, redirecciones, reintento por
      ocupado).
   - **Nunca 409:** ffmpeg abre la segunda petición antes de cerrar la primera en cada salto (hallazgo 1).
-- **Salto corto hacia delante sin reabrir.** Si el nuevo inicio está como mucho `forwardSkipBytes` (**32 MiB**) por
-  delante de la posición de la conexión abierta, se lee y se tira hasta ahí en vez de reabrir. Ahorra un ciclo de
-  conexión, que es lo caro con paneles que siguen contando el cierre 30-120 s.
+- **Salto corto hacia delante sin reabrir.** Si el nuevo inicio está poco por delante de la posición de la conexión
+  abierta, se lee y se tira hasta ahí en vez de reabrir. Ahorra un ciclo de conexión, que es lo caro con paneles que
+  siguen contando el cierre 30-120 s. «Poco» (auditoría 0.9.0) es lo que se lee en `forwardSkipS` (1,5 s) con el
+  caudal medido, entre 512 KiB y 32 MiB; sin caudal medido, `forwardSkipBytes` (**2 MiB**). Con 32 MiB fijos, un
+  salto leía y tiraba hasta 6-7 s antes de dar el primer byte.
 - **Qué recibe ffmpeg:** `206` con el `Content-Range` y el `Content-Length` de arriba, `Accept-Ranges: bytes` y
   `Content-Type: application/octet-stream`. `HEAD` devuelve el tamaño cuando se conoce. Varios rangos → 416. Si el
   proveedor responde **200 a una petición con inicio > 0**, la sesión pasa a `rangeless`, se devuelve 416 y el
@@ -889,7 +891,7 @@ ffmpeg -hide_banner -loglevel warning -nostdin
 
 - **Nunca `first_pts=0`** (T11, hallazgo 7). Nada se comparte con los `hlsFlags` del directo: fichero aparte, y así
   `remux/args.ts` (zona del diagnóstico) no se toca.
-- `-rw_timeout` 55 s (`IPTV_FFMPEG_RW_TIMEOUT_US`), por encima del peor caso de reapertura del relé (≈ 31 s) y de los
+- `-rw_timeout` 55 s (`VOD_FFMPEG_RW_TIMEOUT_US`; el directo va a 75 s), por encima del peor caso de reapertura del relé (≈ 31 s) y de los
   reintentos por ocupado.
 - **Probado junto en el navegador:** todo menos `-protocol_whitelist`, `-rw_timeout`, `-threads` y `-metadata` (vienen
   del remux del directo) y `-tag:v hvc1` (probado aparte: la salida sale como `hvc1`).
@@ -1053,7 +1055,7 @@ búfer).
 | Índices | 8 × ~50 KB | LRU |
 | Caché del relé | ≤ 40 MiB por sesión | una sesión a la vez |
 | ffmpeg VOD | 55-70 MB, 0,05 núcleos (AC-3 → AAC) | uno en todo el servidor, `nice 10`, `-threads 2` |
-| Disco de la sesión | ~150 MB a 6 Mb/s, ~600 MB a 25 Mb/s (estimado) | 256 MiB por detrás + 60 s por delante; tope de 1,5 GiB; ≥ 2 GiB libres |
+| Disco de la sesión | ~150 MB a 6 Mb/s, ~600 MB a 25 Mb/s (estimado) | 256 MiB por detrás + 120 s por delante (0.9.0); tope de 1,5 GiB; ≥ 2 GiB libres |
 | Disco de carteles | ≤ 256 MiB, 5 000 ficheros | LRU |
 
 **La caché de páginas cuenta.** `remuxDir` es `/data/remux`, en disco, pero lo que se escribe pasa por la caché de
@@ -1401,15 +1403,19 @@ export const VOD_PLAY = {
   segmentMinS: 6,
   restartAheadS: 30,          // el segmento pedido empieza > 30 s después de lo producido → reinicio allí
   restartMinGapMs: 1_500,     // reinicios agrupados: gana el último pedido
-  aheadMaxS: 60,              // contrapresión: se deja de leer pipe:1 por encima de +60 s…
-  aheadResumeS: 30,           // …y se sigue por debajo de +30 s
+  aheadMaxS: 120,             // contrapresión: se deja de leer pipe:1 por encima de +120 s… (0.9.0; antes 60)
+  aheadResumeS: 60,           // …y se sigue por debajo de +60 s (0.9.0; antes 30)
+  warmupS: 25,                // arranque y tras un salto: el segmento sale con 25 s producidos (0.9.0)
+  paceFloorS: 30, paceFloorUntilS: 60, // suelo del ritmo: bajo 30 s por delante, sin freno hasta 60 (0.9.0)
+  firstFragmentMs: 8 * SECOND, firstFragmentRetries: 2, // ejecución a mitad sin nada: se relanza (0.9.0)
   keepBehindS: 120,
   keepBehindMaxBytes: 256 * MIB,
   sessionDiskMaxBytes: 1.5 * GIB,
   diskFreeMinBytes: 2 * GIB,
   segmentWaitMs: 15 * SECOND, // después, 503 Retry-After: 1
   idleReleaseMs: 5 * MINUTE,  // pausa larga: se suelta el proveedor (lo ajusta el Paso 0)
-  forwardSkipBytes: 32 * MIB, // salto corto hacia delante sin reabrir
+  forwardSkipBytes: 2 * MIB,  // salto corto hacia delante sin reabrir (sin caudal medido; 0.9.0)
+  forwardSkipMinBytes: 512 * KIB, forwardSkipMaxBytes: 32 * MIB, forwardSkipS: 1.5, // con caudal medido
   relayHeadBytes: 2 * MIB,
   relayCacheMaxBytes: 40 * MIB,
   moovMaxBytes: 32 * MIB,

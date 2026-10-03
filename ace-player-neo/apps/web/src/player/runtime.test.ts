@@ -1227,6 +1227,69 @@ describe('IPTV', () => {
     expect(t.state.rebuffering).toEqual({ targetS: 8 });
   });
 
+  const iptvStats = (cadenceMs: number | null, extra: Record<string, unknown> = {}) =>
+    dispatchSse(
+      'stream.stats',
+      {
+        sessionId: IPTV_SID,
+        viewerIds: ['v_prueba'],
+        status: 'iptv',
+        peers: 0,
+        speedDown: 900,
+        speedUp: 0,
+        downloaded: 1,
+        cadenceMs,
+        ...extra,
+        at: new Date().toISOString(),
+      },
+      META,
+    );
+
+  it('auditoría 0.9.0 · entrega a golpes cada 10 s: latencia y colchón a 15 s sin reconectar', async () => {
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    iptvStats(10_000);
+    /* Objetivo 1,5×10 = 15 s, máxima 15 + 10 + 4 = 29 s (un golpe cabe sin saltar adelante). */
+    expect(engine.liveLatency).toEqual([15, 29, 60]);
+    expect(t.engines.created).toHaveLength(1);
+    expect(t.state.stats).toMatchObject({ cadenceMs: 10_000 });
+    /* El parón siguiente retiene hasta 15 s, no 8. */
+    t.video.setBuffered([[0, 10.2]]);
+    t.video.stall();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(t.state.rebuffering).toEqual({ targetS: 15 });
+    /* Una cadencia menor después no baja nada. */
+    iptvStats(6_000);
+    expect(engine.liveLatency).toEqual([15, 29, 60]);
+  });
+
+  it('auditoría 0.9.0 · un canal que llega seguido no cambia nada', async () => {
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    iptvStats(null);
+    iptvStats(2_000);
+    expect(engine.liveLatency).toBeNull();
+    t.video.setBuffered([[0, 10.2]]);
+    t.video.stall();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(t.state.rebuffering).toEqual({ targetS: 8 });
+  });
+
+  it('auditoría 0.9.0 · la conexión siguiente nace ya con el perfil de la cadencia', async () => {
+    const t = iptvSetup();
+    await iptvPlaying(t);
+    iptvStats(12_000);
+    reopened();
+    await flush();
+    const next = t.engines.last();
+    expect(t.engines.created.length).toBeGreaterThan(1);
+    expect(next.args.profile.hls).toMatchObject({
+      liveSyncDuration: 18,
+      liveMaxLatencyDuration: 34,
+    });
+    expect(next.args.profile.initial).toBe(18);
+  });
+
   it('C2 · un hueco en el búfer ([0, 20] y [20,6, 40]) se salta a ~20,7 en vez de retener (E2)', async () => {
     const t = iptvSetup();
     await iptvPlaying(t);

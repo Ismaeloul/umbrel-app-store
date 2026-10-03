@@ -127,20 +127,51 @@ export const VOD_PLAY = {
   restartAheadS: 30,
   /** Reinicios agrupados: gana el último pedido. */
   restartMinGapMs: 1_500,
-  /** Contrapresión: se deja de leer `pipe:1` por encima de +60 s… */
-  aheadMaxS: 60,
-  /** …y se sigue por debajo de +30 s. */
-  aheadResumeS: 30,
+  /**
+   * Contrapresión: se deja de leer `pipe:1` por encima de +120 s… (auditoría 0.9.0: el
+   * criterio de Isma es que tarde lo que tenga que tardar al arrancar o tras un salto,
+   * pero que NO se pare mientras ve; antes, 60 y 30 s).
+   */
+  aheadMaxS: 120,
+  /** …y se sigue por debajo de +60 s. */
+  aheadResumeS: 60,
+  /**
+   * Arranque y tras un salto: el segmento pedido no se entrega hasta tener al menos esto
+   * producido desde él (o el final del título), con el plazo de `segmentWaitMs`.
+   */
+  warmupS: 25,
+  /**
+   * Suelo del ritmo del relé: si lo producido por delante de lo pedido baja de
+   * `paceFloorS`, se lee sin freno hasta volver a tener `paceFloorUntilS`.
+   */
+  paceFloorS: 30,
+  paceFloorUntilS: 60,
   keepBehindS: 120,
   keepBehindMaxBytes: 256 * MIB,
   sessionDiskMaxBytes: 1.5 * GIB,
   diskFreeMinBytes: 2 * GIB,
   /** Después, 503 con `Retry-After: 1`. */
   segmentWaitMs: 15 * SECOND,
+  /**
+   * Una ejecución que empieza a mitad (segmento > 0) y no saca ni un fragmento en
+   * este rato se mata y se relanza en el mismo sitio, `firstFragmentRetries` veces
+   * como mucho (auditoría 0.9.0: una petición al relé colgada, la de los Cues, dejaba
+   * a ffmpeg esperando los 55 s de `-rw_timeout`).
+   */
+  firstFragmentMs: 8 * SECOND,
+  firstFragmentRetries: 2,
   /** Pausa larga: se suelta el proveedor (lo ajusta el Paso 0, §3.5). */
   idleReleaseMs: 5 * MINUTE,
-  /** Salto corto hacia delante sin reabrir. */
-  forwardSkipBytes: 32 * MIB,
+  /**
+   * Salto corto hacia delante sin reabrir (auditoría 0.9.0): solo si leer y tirar el hueco cuesta
+   * como mucho `forwardSkipS` con el caudal medido de la conexión (y al menos `forwardSkipMinBytes`,
+   * `forwardSkipMaxBytes` como mucho); sin caudal medido, `forwardSkipBytes`. Con los 32 MiB fijos de
+   * antes, un salto leía y tiraba hasta 32 MiB (6-7 s a 40 Mb/s) antes de dar el primer byte.
+   */
+  forwardSkipBytes: 2 * MIB,
+  forwardSkipMinBytes: 512 * KIB,
+  forwardSkipMaxBytes: 32 * MIB,
+  forwardSkipS: 1.5,
   relayHeadBytes: 2 * MIB,
   relayCacheMaxBytes: 40 * MIB,
   moovMaxBytes: 32 * MIB,
@@ -152,6 +183,13 @@ export const VOD_PLAY = {
   /** true solo si el Paso 0 valida que el destino de la redirección admite Range y su token dura (§3.3). */
   reuseRedirect: false,
 } as const;
+
+/**
+ * `-rw_timeout` de ffmpeg en el VOD, en MICROsegundos (docs/vod.md §9.6): por
+ * encima del peor caso de reapertura del relé VOD (≈ 31 s). Aparte del directo
+ * (`IPTV_FFMPEG_RW_TIMEOUT_US`, 75 s desde la 0.9.0).
+ */
+export const VOD_FFMPEG_RW_TIMEOUT_US = 55_000_000;
 
 /**
  * Presupuesto de `vodStream` (§9.12). La suma de los cuatro primeros cabe

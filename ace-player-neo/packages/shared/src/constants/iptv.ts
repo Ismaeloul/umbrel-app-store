@@ -194,8 +194,36 @@ export const IPTV_REFRESH = {
 
 /** Relé local y reconexión (§6.1 y §6.6). */
 export const IPTV_RELAY = {
-  /** Sin bytes del proveedor en este rato, se reconecta. */
+  /**
+   * Sin bytes del proveedor en este rato, se reconecta. Con un proveedor que
+   * entrega a golpes (cadencia por encima de `cadenceBurstyMs`), el plazo es
+   * 2× su cadencia, entre esto e `idleMaxMs`.
+   */
   idleMs: 10 * SECOND,
+  idleMaxMs: 30 * SECOND,
+  /**
+   * Plazo sin bytes mientras se aprende la cadencia: el primer minuto de la
+   * sesión, sin cadencia medida todavía (el primer silencio de un proveedor a
+   * golpes puede pasar de 10 s antes de haber visto ninguno).
+   */
+  idleLearningMs: 15 * SECOND,
+  /**
+   * Cadencia de entrega (auditoría 0.9.0: el proveedor de Isma manda lo
+   * retenido de golpe cada 8-11 s, alguna vez 15 s, sin perder nada): los
+   * huecos sin bytes de al menos `cadenceGapMs`, su p90 en `cadenceWindowMs`.
+   * Por debajo de `cadenceBurstyMs` la entrega es «seguida» y nada cambia.
+   */
+  cadenceGapMs: 1 * SECOND,
+  cadenceWindowMs: 60 * SECOND,
+  cadenceBurstyMs: 4 * SECOND,
+  /**
+   * Puerta TS: si pasa más de esta parte del tiempo esperando un punto de
+   * acceso en `gateWindowMs`, modo tolerante (las costuras por pérdida pasan
+   * sin esperar); se sale tras `gateTolerantHoldMs` sin dejar pasar ninguna.
+   */
+  gateTolerantRatio: 0.3,
+  gateWindowMs: 20 * SECOND,
+  gateTolerantHoldMs: 120 * SECOND,
   /** Esperas antes de cada intento de reconexión. */
   backoffMs: [1 * SECOND, 2 * SECOND, 4 * SECOND],
   /** Plazo para las cabeceras en cada apertura o reconexión. */
@@ -239,11 +267,14 @@ export const IPTV_RELAY = {
 export const IPTV_BUSY_STATUSES: readonly number[] = [403, 429, 456, 458, 509];
 
 /**
- * `-rw_timeout` de ffmpeg con origen IPTV, en MICROsegundos (§6.3): por encima
- * del peor caso del relé, 41 s de reconexiones más los 8 s de abrir otra
- * variante (49 s). Si ffmpeg muriera antes, la sesión se cerraría sin probarla.
+ * `-rw_timeout` de ffmpeg con origen IPTV (el directo), en MICROsegundos
+ * (§6.3): por encima del peor caso del relé. Con un proveedor a golpes el plazo
+ * sin bytes llega a 30 s (auditoría 0.9.0): 30 + (1 + 8) + (2 + 8) + (4 + 8) =
+ * 61 s de reconexiones, más los 8 s de abrir otra variante (69 s). Si ffmpeg
+ * muriera antes, la sesión se cerraría sin probarla. (El VOD va con el suyo,
+ * `VOD_FFMPEG_RW_TIMEOUT_US`.)
  */
-export const IPTV_FFMPEG_RW_TIMEOUT_US = 55_000_000;
+export const IPTV_FFMPEG_RW_TIMEOUT_US = 75_000_000;
 /** Espera del remux IPTV: 2 segmentos o este tope (`iptv_timeout`, §6.3). */
 export const IPTV_REMUX_READY_MS = 20 * SECOND;
 

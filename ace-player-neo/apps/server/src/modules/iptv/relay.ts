@@ -31,6 +31,15 @@
    acabar (nunca queda el relé sin proveedor y sin nadie reconectando).
    Agotado: otra variante una vez (con reinicio) y, si no, `onDropped`.
 
+   Cadencia (auditoría 0.9.0): hay proveedores que entregan A GOLPES (lo
+   retenido de una vez cada 8-11 s, sin perder nada). El relé mide sus huecos
+   sin bytes (p90 en 60 s) y, por encima de 4 s, el plazo sin bytes pasa a 2×
+   la cadencia (30 s como mucho; ese vigilante es de la sesión, el de `net` va
+   a 30 s), la sonda de la reconexión usa el mismo plazo y el de la puerta
+   suma la cadencia. Se publica en `stats()` (la web sube su colchón y el
+   vigilante del remux su umbral). Si la puerta pasa más del 30 % de 20 s
+   esperando, se pone tolerante: las costuras por pérdida pasan sin esperar.
+
    Todo lo que va a ffmpeg pasa por la puerta TS (ts-gate.ts): al abrir, en
    cada empalme o reinicio tras reconectar y en cada costura dentro de una
    conexión (contador de continuidad, `discontinuity_indicator` o salto del PTS
@@ -129,6 +138,79 @@ export interface RelayStats {
   /** KB/s de los últimos segundos. */
   readonly kbps: number;
   readonly lastByteAt: number | null;
+  /**
+   * Cadencia de entrega del proveedor en ms (p90 de sus huecos sin bytes en
+   * el último minuto) si entrega a golpes; null si llega seguido (o es HLS).
+   */
+  readonly cadenceMs: number | null;
+  /** La puerta TS está en modo tolerante (deja pasar las costuras por pérdida). */
+  readonly gateTolerant: boolean;
+}
+
+/**
+ * Cadencia de entrega (auditoría 0.9.0): huecos sin bytes de al menos
+ * `cadenceGapMs` entre dos trozos de la MISMA conexión y con el cuerpo sin
+ * pararlo nosotros (ni una reconexión ni la contrapresión de ffmpeg cuentan).
+ */
+export class CadenceMeter {
+  private gaps: { readonly at: number; readonly ms: number }[] = [];
+  private lastAt: number | null = null;
+  private pausedSince: number | null = null;
+
+  /** Llega un trozo. */
+  note(now: number): void {
+    if (this.lastAt !== null && this.pausedSince === null) {
+      const gap = now - this.lastAt;
+      if (gap >= IPTV_RELAY.cadenceGapMs) this.add(now, gap);
+    }
+    this.lastAt = now;
+  }
+
+  /** Lo paramos nosotros (ffmpeg no lee): ese rato no cuenta como hueco. */
+  pause(now: number): void {
+    this.pausedSince ??= now;
+  }
+
+  resume(now: number): void {
+    if (this.pausedSince === null) return;
+    if (this.lastAt !== null) this.lastAt += now - this.pausedSince;
+    this.pausedSince = null;
+  }
+
+  /** Un hueco que no se ha visto acabar (el plazo de inactividad lo cortó). */
+  add(now: number, ms: number): void {
+    this.gaps.push({ at: now, ms });
+    this.prune(now);
+  }
+
+  /** El siguiente trozo no cierra un hueco (conexión nueva). */
+  interrupt(): void {
+    this.lastAt = null;
+    this.pausedSince = null;
+  }
+
+  /** p90 de los huecos de la ventana si pasa de `cadenceBurstyMs`; si no, null. */
+  cadenceMs(now: number): number | null {
+    this.prune(now);
+    if (!this.gaps.length) return null;
+    const sorted = this.gaps.map((gap) => gap.ms).sort((a, b) => a - b);
+    const p90 = sorted[Math.max(0, Math.ceil(sorted.length * 0.9) - 1)] as number;
+    return p90 >= IPTV_RELAY.cadenceBurstyMs ? p90 : null;
+  }
+
+  private prune(now: number): void {
+    while (
+      this.gaps.length &&
+      now - (this.gaps[0] as { at: number }).at > IPTV_RELAY.cadenceWindowMs
+    )
+      this.gaps.shift();
+  }
+}
+
+/** Plazo sin bytes antes de reconectar: 10 s, o 2× la cadencia (30 s como mucho). */
+export function relayIdleMs(cadenceMs: number | null): number {
+  if (cadenceMs === null) return IPTV_RELAY.idleMs;
+  return Math.min(IPTV_RELAY.idleMaxMs, Math.max(IPTV_RELAY.idleMs, 2 * cadenceMs));
 }
 
 export interface RelaySession {
@@ -139,6 +221,12 @@ export interface RelaySession {
   stats(): RelayStats;
   onDropped(listener: (code: IptvReason) => void): void;
   onRestart(listener: () => void): void;
+  /**
+   * La salida no avanza pero el proveedor sigue mandando (auditoría 0.9.0):
+   * si la puerta TS está esperando un punto de acceso, lo deja pasar todo ya
+   * (sin reiniciar el remux). true si estaba esperando.
+   */
+  releaseGate(): boolean;
   /** Aborta la conexión con el proveedor y espera a que se suelte. Idempotente. */
   close(): Promise<void>;
 }
@@ -285,7 +373,13 @@ abstract class BaseSession implements RelaySession {
   }
 
   stats(): RelayStats {
-    return { bytes: this.meter.total, kbps: this.meter.kbps(), lastByteAt: this.meter.lastAt };
+    return {
+      bytes: this.meter.total,
+      kbps: this.meter.kbps(),
+      lastByteAt: this.meter.lastAt,
+      cadenceMs: null,
+      gateTolerant: false,
+    };
   }
 
   onDropped(listener: (code: IptvReason) => void): void {
@@ -294,6 +388,10 @@ abstract class BaseSession implements RelaySession {
 
   onRestart(listener: () => void): void {
     this.restarts.push(listener);
+  }
+
+  releaseGate(): boolean {
+    return false;
   }
 
   protected emitDropped(code: IptvReason): void {
@@ -366,6 +464,18 @@ class TsSession extends BaseSession {
   private gateTimerWait = -1;
   /** La conexión adoptada se cayó mientras reconnect() aún no había acabado. */
   private lostWhileReconnecting = false;
+  /** Cadencia de entrega del proveedor (auditoría 0.9.0). */
+  private readonly cadence = new CadenceMeter();
+  /** Vigilante de inactividad propio (el de `net` va a `idleMaxMs`): sigue a la cadencia. */
+  private idleTimer: TimerHandle | null = null;
+  private lastDataAt: number;
+  /** Desde cuándo espera la puerta (null si deja pasar) y sus esperas recientes. */
+  private gateWaitSince: number | null = null;
+  private gateWaitLog: { readonly from: number; readonly to: number }[] = [];
+  private readonly openedAt: number;
+  /** Cuándo pasó la puerta a tolerante, y la última pérdida que dejó pasar en ese modo. */
+  private tolerantAt = 0;
+  private toleratedSeen = 0;
 
   constructor(
     ticket: string,
@@ -377,25 +487,157 @@ class TsSession extends BaseSession {
     head: Buffer | null,
   ) {
     super(ticket, inputUrl, false, relay, variants, controller);
-    this.adoptedAt = relay.deps.clock.now();
+    const now = relay.deps.clock.now();
+    this.adoptedAt = now;
+    this.openedAt = now;
+    this.lastDataAt = now;
     this.upstream = first;
     /* Desde el principio: ffmpeg empieza en un fotograma clave (sin segmento 0 sin clave). */
     this.gate.wait({ forward: false, fresh: true });
-    if (head) this.feed(head);
+    if (head) {
+      this.cadence.note(now);
+      this.feed(head);
+    }
     this.wire(first);
+  }
+
+  override stats(): RelayStats {
+    return {
+      ...super.stats(),
+      cadenceMs: this.cadence.cadenceMs(this.relay.deps.clock.now()),
+      gateTolerant: this.gate.tolerant,
+    };
+  }
+
+  /**
+   * Plazo sin bytes de ahora (sigue a la cadencia del proveedor). El primer minuto, sin cadencia
+   * medida aún, `idleLearningMs`: el primer silencio de un proveedor a golpes llega antes de saberlo.
+   */
+  idleMs(): number {
+    const now = this.relay.deps.clock.now();
+    const cadence = this.cadence.cadenceMs(now);
+    if (cadence === null && now - this.openedAt < IPTV_RELAY.cadenceWindowMs) {
+      return IPTV_RELAY.idleLearningMs;
+    }
+    return relayIdleMs(cadence);
+  }
+
+  override releaseGate(): boolean {
+    if (this.closed || this.gate.mode !== 'waitRap' || this.restartPending) return false;
+    this.relay.deps.logger.info(
+      { ticket: '•••' },
+      'relé IPTV: la salida no avanza con la puerta esperando; se deja pasar todo',
+    );
+    this.relay.deps.clock.clearTimeout(this.gateTimer);
+    this.gateTimer = null;
+    for (const part of this.gate.release()) this.deliver(part);
+    this.noteGate();
+    return true;
   }
 
   /* Un trozo del proveedor, por la puerta. */
   private feed(chunk: Buffer): void {
     const seams = this.gate.seams;
+    const tolerated = this.gate.tolerated;
+    this.noteGate();
     for (const part of this.gate.push(chunk)) this.deliver(part);
-    if (this.gate.seams !== seams) {
+    if (this.gate.seams !== seams && this.gate.tolerated === tolerated) {
       this.relay.deps.logger.info(
         { ticket: '•••', lossSeam: this.gate.lossSeam },
         'relé IPTV: costura en la emisión; se espera a un fotograma clave',
       );
     }
+    this.noteGate();
     this.watchGate();
+  }
+
+  /*
+   * Lleva la cuenta del tiempo que la puerta pasa esperando (auditoría 0.9.0):
+   * más de `gateTolerantRatio` en `gateWindowMs` la pone tolerante (las
+   * costuras por pérdida pasan sin esperar), y `gateTolerantHoldMs` sin dejar
+   * pasar ninguna la devuelve a la normal.
+   */
+  private noteGate(): void {
+    const now = this.relay.deps.clock.now();
+    const waiting = this.gate.mode === 'waitRap';
+    if (waiting && this.gateWaitSince === null) this.gateWaitSince = now;
+    if (!waiting && this.gateWaitSince !== null) {
+      this.gateWaitLog.push({ from: this.gateWaitSince, to: now });
+      this.gateWaitSince = null;
+    }
+    const windowMs = IPTV_RELAY.gateWindowMs;
+    const since = now - windowMs;
+    this.gateWaitLog = this.gateWaitLog.filter((wait) => wait.to > since);
+    if (this.gate.tolerant) {
+      if (this.gate.tolerated !== this.toleratedSeen) {
+        this.toleratedSeen = this.gate.tolerated;
+        this.tolerantAt = now;
+      }
+      if (now - this.tolerantAt > IPTV_RELAY.gateTolerantHoldMs) {
+        this.gate.tolerant = false;
+        this.relay.deps.logger.info({ ticket: '•••' }, 'relé IPTV: la puerta vuelve a esperar');
+      }
+      return;
+    }
+    if (now - this.openedAt < windowMs) return;
+    let waited = this.gateWaitSince === null ? 0 : now - Math.max(this.gateWaitSince, since);
+    for (const wait of this.gateWaitLog) waited += wait.to - Math.max(wait.from, since);
+    if (waited > IPTV_RELAY.gateTolerantRatio * windowMs) {
+      this.gate.tolerant = true;
+      this.tolerantAt = now;
+      this.toleratedSeen = this.gate.tolerated;
+      this.relay.deps.logger.warn(
+        { ticket: '•••', waitedMs: waited },
+        'relé IPTV: la puerta pasa demasiado tiempo esperando; modo tolerante',
+      );
+    }
+  }
+
+  /* Vigilante de inactividad: sin bytes (con el cuerpo leyéndose) en `idleMs()`, se reconecta. */
+  private armIdle(): void {
+    if (this.idleTimer || this.closed || !this.upstream) return;
+    const { clock } = this.relay.deps;
+    const due = Math.max(0, this.lastDataAt + this.idleMs() - clock.now());
+    this.idleTimer = clock.setTimeout(() => this.checkIdle(), due);
+  }
+
+  private checkIdle(): void {
+    this.idleTimer = null;
+    const upstream = this.upstream;
+    if (this.closed || !upstream) return;
+    const now = this.relay.deps.clock.now();
+    /* Parado por nosotros (ffmpeg no lee o se espera a un reinicio): no cuenta. */
+    if (upstream.body.isPaused()) {
+      this.lastDataAt = now;
+      this.armIdle();
+      return;
+    }
+    const quiet = now - this.lastDataAt;
+    const limit = this.idleMs();
+    if (quiet < limit) {
+      this.armIdle();
+      return;
+    }
+    /* El hueco que no se ha visto acabar también enseña la cadencia (la siguiente vez, más plazo). */
+    this.cadence.add(now, quiet);
+    this.relay.deps.logger.info(
+      { ticket: '•••', quietMs: quiet, limitMs: limit },
+      'relé IPTV: el proveedor no manda nada; se reconecta',
+    );
+    upstream.body.destroy();
+  }
+
+  /* Para el cuerpo del proveedor: mientras está parado, el silencio no es suyo (no cuenta para la cadencia). */
+  private pauseUpstream(body: Readable | undefined): void {
+    if (!body) return;
+    body.pause();
+    this.cadence.pause(this.relay.deps.clock.now());
+  }
+
+  private resumeUpstream(body: Readable | undefined): void {
+    if (!body) return;
+    this.cadence.resume(this.relay.deps.clock.now());
+    body.resume();
   }
 
   /*
@@ -424,7 +666,16 @@ class TsSession extends BaseSession {
     this.gateTimer = clock.setTimeout(() => {
       this.gateTimer = null;
       if (!this.closed && this.gate.mode === 'waitRap') this.giveUpRap();
-    }, IPTV_RELAY.rapWaitMs);
+    }, this.rapWaitMs());
+  }
+
+  /*
+   * Plazo de la puerta: 4 s, más la cadencia si el proveedor entrega a golpes
+   * (si no, una espera que empieza al final de un golpe vence en el silencio
+   * de después, sin haber visto llegar ni un cuadro).
+   */
+  private rapWaitMs(): number {
+    return IPTV_RELAY.rapWaitMs + (this.cadence.cadenceMs(this.relay.deps.clock.now()) ?? 0);
   }
 
   /*
@@ -447,6 +698,7 @@ class TsSession extends BaseSession {
         );
       }
       for (const part of head) this.deliver(part);
+      this.noteGate();
       return;
     }
     this.relay.deps.logger.warn(
@@ -455,6 +707,7 @@ class TsSession extends BaseSession {
     );
     this.restartPending = true;
     for (const part of head) this.queue(part);
+    this.noteGate();
     this.armReattach();
     this.emitRestart();
   }
@@ -474,7 +727,7 @@ class TsSession extends BaseSession {
     this.pendingBytes += chunk.length;
     if (this.pendingBytes > (this.relay.deps.pendingMaxBytes ?? PENDING_MAX)) {
       /* ffmpeg no lee: se deja de pedir al proveedor (el relé no acumula más). */
-      this.upstream?.body.pause();
+      this.pauseUpstream(this.upstream?.body);
     }
   }
 
@@ -502,6 +755,10 @@ class TsSession extends BaseSession {
     body.on('data', (value: Buffer | string) => {
       if (this.upstream !== opened || this.closed) return;
       const chunk = typeof value === 'string' ? Buffer.from(value) : value;
+      const now = this.relay.deps.clock.now();
+      this.cadence.note(now);
+      this.lastDataAt = now;
+      this.armIdle();
       this.meter.add(chunk.length);
       this.noteStable(chunk.length);
       this.notePcr(chunk);
@@ -520,7 +777,8 @@ class TsSession extends BaseSession {
     body.once('end', lost);
     body.once('error', lost);
     body.once('close', lost);
-    if (!this.downstream) body.pause();
+    if (!this.downstream) this.pauseUpstream(body);
+    this.armIdle();
     /* Si ya había terminado antes de engancharse, sus eventos no vuelven a llegar. */
     if (body.destroyed || body.readableEnded) queueMicrotask(lost);
   }
@@ -533,9 +791,9 @@ class TsSession extends BaseSession {
     }
     this.delivered += chunk.length;
     if (!res.write(chunk)) {
-      this.upstream?.body.pause();
+      this.pauseUpstream(this.upstream?.body);
       res.once('drain', () => {
-        if (!this.restartPending) this.upstream?.body.resume();
+        if (!this.restartPending) this.resumeUpstream(this.upstream?.body);
       });
     }
   }
@@ -578,7 +836,7 @@ class TsSession extends BaseSession {
     };
     res.once('close', onClose);
     req.once('close', onClose);
-    if (this.upstream) this.upstream.body.resume();
+    if (this.upstream) this.resumeUpstream(this.upstream.body);
     else if (!this.reconnecting) void this.reconnect({ immediate: true });
     this.watchGate();
   }
@@ -621,7 +879,9 @@ class TsSession extends BaseSession {
         }
         first = false;
         try {
-          const opened = await this.relay.connect(this.variant(), this.controller.signal, []);
+          const opened = await this.relay.connect(this.variant(), this.controller.signal, [], {
+            idleMs: IPTV_RELAY.idleMaxMs,
+          });
           if (this.closed) {
             opened.body.destroy();
             return;
@@ -657,7 +917,9 @@ class TsSession extends BaseSession {
     this.attempts = [];
     this.reconnects = [];
     try {
-      const opened = await this.relay.connect(this.variant(), this.controller.signal, []);
+      const opened = await this.relay.connect(this.variant(), this.controller.signal, [], {
+        idleMs: IPTV_RELAY.idleMaxMs,
+      });
       if (this.closed) {
         opened.body.destroy();
         return true;
@@ -680,8 +942,10 @@ class TsSession extends BaseSession {
     const head: Buffer[] = [];
     let headBytes = 0;
     let firstPcr: number | null = null;
-    /* Un solo plazo para toda la sonda: reconnect() siempre acaba (y `reconnecting` vuelve a false). */
-    const deadline = clock.now() + IPTV_RELAY.idleMs;
+    /* Un solo plazo para toda la sonda: reconnect() siempre acaba (y `reconnecting` vuelve a false).
+       El de inactividad, que sigue a la cadencia: un proveedor que entrega a golpes puede tardar en
+       mandar el primero. */
+    const deadline = clock.now() + relayIdleMs(this.cadence.cadenceMs(clock.now()));
     while (firstPcr === null && headBytes < PCR_PROBE_BYTES) {
       const left = deadline - clock.now();
       if (left <= 0) break;
@@ -715,6 +979,9 @@ class TsSession extends BaseSession {
     this.upstream = opened;
     this.adoptedAt = clock.now();
     this.stableBytes = 0;
+    /* El hueco de la reconexión no es de la cadencia del proveedor. */
+    this.cadence.interrupt();
+    this.lastDataAt = clock.now();
     /* Otra variante: su PAT/PMT puede ser otra. */
     if (forceRestart) this.gate.resetPsi();
     if (jump) {
@@ -730,7 +997,7 @@ class TsSession extends BaseSession {
         this.feed(chunk);
       }
       this.wire(opened);
-      opened.body.pause();
+      this.pauseUpstream(opened.body);
       this.armReattach();
       this.emitRestart();
       return;
@@ -743,13 +1010,15 @@ class TsSession extends BaseSession {
       this.feed(chunk);
     }
     this.wire(opened);
-    if (this.downstream) opened.body.resume();
+    if (this.downstream) this.resumeUpstream(opened.body);
   }
 
   protected teardown(): void {
     this.relay.deps.clock.clearTimeout(this.reattachTimer);
     this.relay.deps.clock.clearTimeout(this.gateTimer);
     this.gateTimer = null;
+    this.relay.deps.clock.clearTimeout(this.idleTimer);
+    this.idleTimer = null;
     const upstream = this.upstream;
     this.upstream = null;
     upstream?.body.destroy();
@@ -1114,6 +1383,12 @@ export interface ConnectLimits {
   readonly range?: { readonly start: number; readonly end: number | null };
   /** Plazo de las cabeceras (por defecto `IPTV_RELAY.headersMs`). */
   readonly headersMs?: number;
+  /**
+   * Plazo de inactividad de `net` (por defecto `IPTV_RELAY.idleMs`). El TS del
+   * directo va con `idleMaxMs`: su inactividad la vigila la sesión, que sigue
+   * a la cadencia del proveedor.
+   */
+  readonly idleMs?: number;
 }
 
 /** Lo que pide `openVod` (la URL del proveedor la monta `iptv` y nunca sale del relé). */
@@ -1229,7 +1504,7 @@ export class IptvRelayImpl implements IptvRelay {
     for (;;) {
       try {
         return await this.deps.net.openStream(url, {
-          idleMs: IPTV_RELAY.idleMs,
+          idleMs: limits.idleMs ?? IPTV_RELAY.idleMs,
           headersMs: limits.headersMs ?? IPTV_RELAY.headersMs,
           headers: limits.range
             ? {
@@ -1328,10 +1603,12 @@ export class IptvRelayImpl implements IptvRelay {
         const variant = variants[index] as RelayVariant;
         let opened: OpenedStream;
         try {
+          /* El TS del directo: la inactividad la vigila la sesión (sigue a la cadencia). */
           opened = await this.connect(
             variant,
             controller.signal,
             index === 0 ? (options.busyRetryMs ?? []) : [],
+            { idleMs: IPTV_RELAY.idleMaxMs },
           );
         } catch (error) {
           lastError = error;

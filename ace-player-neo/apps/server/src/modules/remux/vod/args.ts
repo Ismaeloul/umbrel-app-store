@@ -4,6 +4,7 @@
 
      ffmpeg -hide_banner -loglevel warning -nostdin
        -protocol_whitelist http,tcp -rw_timeout 55000000
+       -reconnect 1 -reconnect_on_network_error 1 -reconnect_delay_max 1
        [N>0: -noaccurate_seek -ss <K+0.200>]
        -probesize 5000000 -analyzeduration 5000000
        -i http://127.0.0.1:<relé>/r/<ticket>/vod.<ext>
@@ -27,7 +28,7 @@
    - `-threads 2` solo con el audio transcodificado (P12): copiándolo todo
      ffmpeg apenas trabaja. */
 
-import { IPTV_FFMPEG_RW_TIMEOUT_US, VOD_PLAY } from '@ace/shared';
+import { VOD_FFMPEG_RW_TIMEOUT_US, VOD_PLAY } from '@ace/shared';
 import { AppError } from '../../../core/errors.js';
 import { ACE_SESSION_MARK } from '../args.js';
 import { isRelayUrl } from './reader.js';
@@ -68,7 +69,10 @@ export function buildVodArgs(input: VodArgsInput): string[] {
         ];
   return [
     ...['-hide_banner', '-loglevel', 'warning', '-nostdin'],
-    ...['-protocol_whitelist', 'http,tcp', '-rw_timeout', String(IPTV_FFMPEG_RW_TIMEOUT_US)],
+    ...['-protocol_whitelist', 'http,tcp', '-rw_timeout', String(VOD_FFMPEG_RW_TIMEOUT_US)],
+    /* Auditoría 0.9.0: si una petición al relé se corta (la de los Cues, sobre todo), ffmpeg la
+       repite en vez de dar el índice por perdido y leer la película de corrido desde el principio. */
+    ...['-reconnect', '1', '-reconnect_on_network_error', '1', '-reconnect_delay_max', '1'],
     ...seek,
     ...['-probesize', '5000000', '-analyzeduration', '5000000'],
     ...['-i', input.inputUrl],

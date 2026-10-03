@@ -26,6 +26,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   DEFAULT_PLAYBACK_MODE,
+  IPTV_RELAY,
   IPTV_SESSION,
   LEGACY_DEVICE_NAME,
   SHUTDOWN_TIMINGS,
@@ -57,6 +58,8 @@ import { SerialLock } from '../remux/lock.js';
 import type { IptvInput, VodInput } from '../iptv/types.js';
 import type { RemuxCloseReason, RemuxHandle, RemuxSource, RemuxVodHandle } from '../remux/types.js';
 import { vodAudioLabel } from '../remux/vod/audio.js';
+import { bitrateNear } from '../remux/vod/rate.js';
+import type { VodIndex } from '../remux/vod/types.js';
 import {
   codecFor,
   directProtocol,
@@ -87,6 +90,14 @@ const REOPEN_MAX = 3;
 const STAT_FAILURES_TO_REOPEN = 3;
 /** Ids de sesiones cerradas que se recuerdan (410 en vez de 404). */
 const RECENTLY_CLOSED_MAX = 256;
+/**
+ * Vigilante de salida de la IPTV (auditoría 0.9.0): el proveedor «sigue mandando» si su último byte
+ * llegó hace menos de max(5 s, cadencia + 3 s). Una puerta soltada por un atasco se olvida a los 60 s
+ * (un atasco de después es otro y vuelve a probarse sin reiniciar).
+ */
+const STALL_FLOWING_MIN_MS = 5_000;
+const STALL_FLOWING_MARGIN_MS = 3_000;
+const STALL_NUDGE_FORGET_MS = 60_000;
 
 type Consumption = 'direct' | 'remux' | 'none';
 type DropReason =
@@ -160,6 +171,18 @@ interface VodRec {
   /** Pista pedida (`audio=<n>`) con la que se abrió, o undefined. */
   readonly requestedAudio: number | undefined;
   readonly hevc: boolean;
+  /** Tasa del título con la que va el ritmo del relé ahora (bytes/s), o null sin ritmo. */
+  paceBytesPerS: number | null;
+}
+
+/** El ritmo del relé VOD se cambia si la tasa cerca del cabezal se aparta más de esto de la de ahora. */
+const VOD_PACE_RETUNE_RATIO = 0.15;
+
+/** Tasa del título cerca de `fromS` (la ventana del índice) o, si no se sabe, la media del fichero. */
+function vodPaceNear(index: VodIndex, fromS: number): number | null {
+  const near = bitrateNear(index, fromS);
+  if (near !== null) return near;
+  return index.sizeBytes > 0 && index.durationS > 0 ? index.sizeBytes / index.durationS : null;
 }
 
 /** Lo que pide `vodStream` (docs/vod.md §9.8). */
@@ -286,6 +309,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   const statAborts = new Set<AbortController>();
   /* Sesiones IPTV cuya salida atascada ya se está recuperando (B3): un aviso a la vez. */
   const stallRecoveries = new Set<string>();
+  /** Cuándo se soltó la puerta del relé por un atasco con bytes entrando (sin reiniciar), por sesión. */
+  const stallNudges = new Map<string, number>();
   let ticker: TimerHandle | null = null;
   /* «Arranque instantáneo» (D24): la preparación en curso y cómo acabó la última. */
   let warm: WarmState | null = null;
@@ -376,11 +401,14 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       mode: session.mode,
     };
     if (session.source !== 'iptv' || !session.input) return base;
+    const input = session.input;
     return {
       ...base,
-      inputUrl: session.input.inputUrl,
+      inputUrl: input.inputUrl,
       origin: 'iptv',
-      ...(session.input.isHls ? { isHls: true } : {}),
+      ...(input.isHls ? { isHls: true } : {}),
+      /* El vigilante de salida y el plazo del reinicio siguen a la cadencia del proveedor. */
+      inputCadenceMs: () => input.stats().cadenceMs ?? null,
     };
   }
 
@@ -832,10 +860,12 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       throw error;
     }
     const index = handle.index;
-    /* Ritmo (Paso 0): la tasa media del título; el relé no lee más de 3 veces eso. */
-    if (index.sizeBytes > 0 && index.durationS > 0) {
-      input.setPace(index.sizeBytes / index.durationS);
-    }
+    /* Ritmo (Paso 0): el relé no lee más de 3 veces la tasa del título; desde la auditoría 0.9.0, la de
+       cerca de donde se empieza (la ventana del índice), y con suelo: si lo producido por delante baja de
+       30 s, sin freno hasta 60. */
+    const pace = vodPaceNear(index, handle.startS);
+    if (pace !== null) input.setPace(pace);
+    input.setAheadProbe?.(() => remux.vodStats(id)?.aheadS ?? null);
     input.noteDuration(index.durationS);
     session = {
       id,
@@ -861,7 +891,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       pendingDetach: [],
       lastWorkingAt: 0,
       warm: false,
-      vod: { input, handle, requestedAudio: vod.audio, hevc: vod.hevc },
+      vod: { input, handle, requestedAudio: vod.audio, hevc: vod.hevc, paceBytesPerS: pace },
     };
     sessions.set(session.id, session);
     const opened = session;
@@ -937,6 +967,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     session.closed = true;
     onWarmClosed(session);
     sessions.delete(session.id);
+    stallNudges.delete(session.id);
     rememberClosed(session.id);
     clock.clearTimeout(session.graceTimer);
     session.graceTimer = null;
@@ -1136,11 +1167,51 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
    * reconecta cuando el ffmpeg nuevo se engancha. Si la generación nueva no escribe ni un segmento en
    * `max(10 s, 3×TD)` (el remux mide que avance, no que esté lista), `iptv_dropped`: la web pasa a
    * AceStream en unos 20 s y no en 65.
+   *
+   * Auditoría 0.9.0: si el proveedor SIGUE mandando bytes (el último hace menos de su cadencia + 3 s),
+   * reconectar no arregla nada (y corta una conexión buena: el «para → reconectando» de Isma). La primera
+   * vez se suelta la puerta TS (lo que estuviera esperando un punto de acceso pasa ya) y no se reinicia;
+   * si el remux vuelve a avisar del mismo atasco (otro umbral entero sin moverse), entonces sí.
    */
   function onRemuxStalled(sessionId: string): void {
     const session = sessions.get(sessionId);
     if (!session || session.closed || session.source !== 'iptv') return;
     if (stallRecoveries.has(session.id)) return;
+    const input = session.input;
+    if (input) {
+      const now = clock.now();
+      const stats = input.stats();
+      const marginMs = Math.max(
+        STALL_FLOWING_MIN_MS,
+        (stats.cadenceMs ?? 0) + STALL_FLOWING_MARGIN_MS,
+      );
+      const quietMs = stats.lastByteAt === null ? Infinity : now - stats.lastByteAt;
+      const flowing = quietMs < marginMs;
+      const nudgedAt = stallNudges.get(session.id);
+      if (flowing && (nudgedAt === undefined || now - nudgedAt > STALL_NUDGE_FORGET_MS)) {
+        stallNudges.set(session.id, now);
+        const released = input.releaseGate?.() ?? false;
+        logger.warn(
+          { sessionId: session.id, released, cadenceMs: stats.cadenceMs ?? null },
+          'IPTV: la salida no avanza pero el proveedor sigue mandando; no se reconecta',
+        );
+        return;
+      }
+      /* Un proveedor que entrega a golpes y lleva un silencio más largo que de costumbre (el de 15 s de
+         Isma), pero aún dentro del plazo del relé (2× su cadencia): reconectar aquí corta una conexión que
+         sigue viva. Si de verdad se ha caído, el propio relé reconecta al vencer su plazo. */
+      const cadence = stats.cadenceMs ?? 0;
+      const relayIdleMs =
+        cadence > 0 ? Math.min(IPTV_RELAY.idleMaxMs, Math.max(IPTV_RELAY.idleMs, 2 * cadence)) : 0;
+      if (!flowing && quietMs < relayIdleMs) {
+        logger.info(
+          { sessionId: session.id, quietMs, cadenceMs: cadence },
+          'IPTV: la salida no avanza; el proveedor (a golpes) aún está en su plazo: se espera',
+        );
+        return;
+      }
+    }
+    stallNudges.delete(session.id);
     stallRecoveries.add(session.id);
     logger.warn({ sessionId: session.id }, 'IPTV: la salida no avanza; se reconecta el relé');
     track(
@@ -1528,13 +1599,29 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   }
 
   /**
+   * El ritmo del relé VOD sigue a la tasa del título cerca de lo que se pide (la ventana del índice,
+   * auditoría 0.9.0): se cambia sin volver a llenar el cubo si se aparta más de un 15 % de la de ahora.
+   */
+  function retuneVodPace(sessionId: string, vod: VodRec): void {
+    const stats = remux.vodStats(sessionId);
+    if (!stats || vod.paceBytesPerS === null) return;
+    const near = vodPaceNear(vod.handle.index, stats.requestedS);
+    if (near === null) return;
+    if (Math.abs(near - vod.paceBytesPerS) <= VOD_PACE_RETUNE_RATIO * vod.paceBytesPerS) return;
+    vod.paceBytesPerS = near;
+    vod.input.setPace(near, { refill: false });
+  }
+
+  /**
    * Estadísticas de una IPTV: las del relé (docs/iptv.md §5.5), y con bytes
    * entrando se apunta `working` por el reproductor cada 60 s (§7.3).
    */
   function iptvStats(session: SessionRec): void {
     if (session.vod) {
+      if (session.closed) return;
+      retuneVodPace(session.id, session.vod);
       /* VOD: las del relé, sin veredictos del comprobador (el id no es un canal). */
-      if (session.closed || !session.viewers.size) return;
+      if (!session.viewers.size) return;
       const stats = session.vod.input.stats();
       bus.emit('stream.stats', {
         sessionId: session.id,
@@ -1560,6 +1647,9 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       speedDown: stats.kbps,
       speedUp: 0,
       downloaded: stats.bytes,
+      /* La cadencia de entrega del proveedor: la web sube con ella su colchón (auditoría 0.9.0). */
+      cadenceMs: stats.cadenceMs ?? null,
+      ...(stats.gateTolerant ? { gateTolerant: true } : {}),
       at: clock.date().toISOString(),
     });
     const flowing = stats.lastByteAt !== null && now - stats.lastByteAt < 5_000;

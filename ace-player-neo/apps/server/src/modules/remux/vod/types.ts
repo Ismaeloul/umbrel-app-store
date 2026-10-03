@@ -60,6 +60,12 @@ export interface VodIndex {
   readonly durationS: number;
   /** Tiempos de presentación de los fotogramas clave del vídeo, en segundos, ordenados. */
   readonly keyframes: Float64Array;
+  /**
+   * Posición en el fichero de cada fotograma clave (alineada con `keyframes`, NaN si no se sabe):
+   * la del cluster de un MKV. Sirve para la tasa de bits cerca del cabezal (vod/rate.ts). Un MP4 no
+   * la trae (el ritmo usa la media del fichero).
+   */
+  readonly keyframeBytes?: Float64Array;
   readonly video: VodVideoInfo;
   readonly audio: readonly VodTrack[];
   readonly subtitles: readonly VodSubtitle[];

@@ -15429,6 +15429,14 @@ components:
                     - type: number
                       minimum: 0
                     - type: "null"
+                cadenceMs:
+                  anyOf:
+                    - type: integer
+                      minimum: 0
+                      maximum: 9007199254740991
+                    - type: "null"
+                gateTolerant:
+                  type: boolean
                 at:
                   type: string
                   format: date-time

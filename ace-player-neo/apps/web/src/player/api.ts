@@ -115,6 +115,10 @@ export interface PlayerStats {
   speedDown: number;
   speedUp: number;
   downloaded: number | null;
+  /** IPTV en directo: cada cuánto entrega el proveedor (ms) si va a golpes; null si llega seguido. */
+  cadenceMs?: number | null;
+  /** IPTV en directo: la puerta del relé deja pasar las costuras por pérdida. */
+  gateTolerant?: boolean;
   at: string;
 }
 

@@ -366,6 +366,8 @@ async function main(): Promise<void> {
       ACE_LOG_LEVEL: process.env.IPTV_LAB_LOG_LEVEL ?? 'debug',
       LAB_PROVIDER_PORT: String(provider.port),
       LAB_LOOPBACK: loop,
+      /* El relé de la IPTV en el mismo bucle local (en el PC de Isma 127.0.0.1 corta conexiones). */
+      ACE_LOOPBACK: loop,
     },
     backendLog,
   );
@@ -407,7 +409,8 @@ async function main(): Promise<void> {
   // Web (Vite, desarrollo) si hace falta.
   let webBase = '';
   if (args.mode === 'web') {
-    const webPort = await freePort('127.0.0.1');
+    /* La web también en el bucle elegido (IPTV_LAB_LOOPBACK=::1 en el PC de Isma). */
+    const webPort = await freePort(loop);
     launch(
       'web',
       process.execPath,
@@ -416,7 +419,7 @@ async function main(): Promise<void> {
         '--config',
         VITE_CONFIG,
         '--host',
-        '127.0.0.1',
+        loop,
         '--port',
         String(webPort),
         '--strictPort',
@@ -425,7 +428,7 @@ async function main(): Promise<void> {
       path.join(outDir, 'vite.log'),
       WEB_DIR,
     );
-    webBase = `http://127.0.0.1:${webPort}`;
+    webBase = `http://${urlHost(loop)}:${webPort}`;
     await waitFor(`${webBase}/`, 90_000);
     log(`web en ${webBase}`);
   }

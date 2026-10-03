@@ -54,6 +54,8 @@ export interface FakeFfmpegBehavior {
   readonly fragmentDelayMs?: number;
   /** Lo que escribe en stderr al empezar. */
   readonly stderr?: string;
+  /** Esa ejecución no saca nada (ffmpeg esperando una petición al relé que no contesta). */
+  readonly silent?: (run: number) => boolean;
 }
 
 export class FakeFfmpegLauncher implements VodProcessLauncher {
@@ -89,6 +91,7 @@ export class FakeFfmpegLauncher implements VodProcessLauncher {
     gop += this.behavior.lateGops?.(index) ?? 0;
     const failAfter = this.behavior.failAfter?.(index) ?? null;
     const codecTag = this.behavior.codecTag?.(index) ?? 'avc1';
+    const silent = this.behavior.silent?.(index) ?? false;
 
     let exitListener: ((code: number | null, signal: string | null) => void) | null = null;
     let exited = false;
@@ -107,7 +110,7 @@ export class FakeFfmpegLauncher implements VodProcessLauncher {
     const stdout = new Readable({
       highWaterMark: 16 * 1024,
       read: () => {
-        if (killed || timer) return;
+        if (killed || timer || silent) return;
         if (!sentInit) {
           sentInit = true;
           stdout.push(

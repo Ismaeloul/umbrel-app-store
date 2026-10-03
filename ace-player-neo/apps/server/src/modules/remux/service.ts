@@ -31,7 +31,15 @@
      (una vez por atasco) para que playback reconecte el relé; `ensure()` con
      un ffmpeg atascado va por el mismo camino en vez de relanzarlo por su
      cuenta, salvo que el aviso lleve mucho sin efecto o nunca llegara a estar
-     lista (entonces se relanza como antes). */
+     lista (entonces se relanza como antes).
+   - Cadencia (auditoría 0.9.0): con un proveedor que entrega a golpes, el
+     umbral es además 1,5× su cadencia (la lista no cambia entre golpe y
+     golpe), el aviso se repite cada umbral mientras siga atascada (playback
+     primero suelta la puerta y, si no basta, reinicia) y el plazo de la
+     generación nueva cuenta la conexión, la cadencia y el probe de ffmpeg.
+   - Windows (solo desarrollo): ffmpeg renombra index.m3u8.tmp encima de la
+     lista y el renombrado falla si el backend la tiene abierta: como mucho
+     una lectura cada 250 ms por carpeta. */
 
 /* Películas y series (docs/vod.md §9.7-§9.8, VOD-5): `openVod` lee el índice
    por el relé VOD (caché de 8 por título), elige el audio y abre un
@@ -48,6 +56,7 @@ import { mkdir, rm, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import {
   HASH_RE,
+  IPTV_RELAY,
   IPTV_REMUX_READY_MS,
   MAX_REMUX_SESSIONS,
   REMUX_TIMINGS,
@@ -104,6 +113,15 @@ export const IPTV_STALL_CHECK_MS = 2_000;
 /** Atasco de la IPTV: la lista sin cambiar en `max(IPTV_STALL_MIN_MS, IPTV_STALL_TD_FACTOR × TD)`. */
 export const IPTV_STALL_MIN_MS = 10_000;
 export const IPTV_STALL_TD_FACTOR = 3;
+/** …y `IPTV_STALL_CADENCE_FACTOR` × la cadencia de entrega del proveedor (si entrega a golpes). */
+export const IPTV_STALL_CADENCE_FACTOR = 1.5;
+/**
+ * Lo que tarda ffmpeg en sacar algo tras engancharse: `-analyzeduration 5000000` (5 s de vídeo).
+ * Cuenta en el plazo de la generación nueva tras un reinicio por atasco.
+ */
+export const IPTV_FFMPEG_PROBE_MS = 5_000;
+/** Windows (solo desarrollo): una lectura de la lista cada esto como mucho (ver arriba). */
+export const WIN32_PLAYLIST_READ_GAP_MS = 250;
 /**
  * `ensure()` sobre una IPTV avisada de atasco hace más de esto sin que la lista se haya movido: el aviso
  * no ha servido (nadie lo atiende, o el reinicio no llegó a nada) y se relanza ffmpeg como antes.
@@ -141,8 +159,10 @@ interface Entry {
   targetMs: number;
   /** Ya se avisó `onStalled` de este atasco (se rearma cuando la lista cambia). */
   stallNotified: boolean;
-  /** Cuándo se avisó (para relanzar en `ensure()` si el aviso no sirve). */
+  /** Cuándo se avisó por última vez (el aviso se repite cada umbral mientras siga atascada). */
   stallNotifiedAt: number;
+  /** Cuándo se avisó por primera vez de este atasco (para relanzar en `ensure()` si el aviso no sirve). */
+  stallSince: number;
   /** Generación en la carpeta: 1 el primer ffmpeg, +1 en cada reinicio continuo (B2). */
   readonly generation: number;
   /** Primer segmento de esta generación (0 en la primera). */
@@ -300,8 +320,10 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     }
   }
 
-  function emitStalled(entry: Entry): void {
-    if (entry.stallNotified) return;
+  /** Avisa `onStalled`. Con `again`, aunque ya se avisara de este atasco (sigue igual un umbral después). */
+  function emitStalled(entry: Entry, again = false): void {
+    if (entry.stallNotified && !again) return;
+    if (!entry.stallNotified) entry.stallSince = clock.now();
     entry.stallNotified = true;
     entry.stallNotifiedAt = clock.now();
     logger.warn(
@@ -359,9 +381,55 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     }
   }
 
-  /** Umbral del vigilante de la IPTV: `max(10 s, 3×TD)`, para no saltar con los GOP largos. */
+  /** Cadencia de entrega del proveedor de esta entrada (ms), o 0 si llega seguido. */
+  function cadenceOf(entry: Entry): number {
+    try {
+      return entry.source.inputCadenceMs?.() ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Umbral del vigilante de la IPTV: `max(10 s, 3×TD, 1,5×cadencia)`, para no saltar con los GOP largos
+   * ni entre dos golpes de un proveedor que entrega a golpes.
+   */
   function iptvStallMs(entry: Entry): number {
-    return Math.max(IPTV_STALL_MIN_MS, IPTV_STALL_TD_FACTOR * entry.targetMs);
+    return Math.max(
+      IPTV_STALL_MIN_MS,
+      IPTV_STALL_TD_FACTOR * entry.targetMs,
+      IPTV_STALL_CADENCE_FACTOR * cadenceOf(entry),
+    );
+  }
+
+  /**
+   * Plazo para ver avanzar la generación nueva tras un reinicio por atasco: lo de siempre, o lo que tarda
+   * en llegar algo de verdad (la conexión nueva con el proveedor, un golpe de su cadencia, el probe de
+   * ffmpeg y un segmento), lo que sea mayor. No 10 s fijos.
+   */
+  function iptvProgressMs(entry: Entry): number {
+    return Math.max(
+      iptvStallMs(entry),
+      IPTV_RELAY.headersMs + cadenceOf(entry) + IPTV_FFMPEG_PROBE_MS + entry.targetMs,
+    );
+  }
+
+  /* Windows (solo desarrollo): espera lo que falte para no leer la lista más de una vez cada 250 ms. Con
+     el reloj de verdad (no el del backend): es el del sistema de ficheros, y un reloj falso no avanza. */
+  const lastPlaylistRead = new Map<string, number>();
+  /* Por defecto solo con el ffmpeg de verdad (los tests con el falso no renombran nada). */
+  const pacePlatform = deps.platform ?? (deps.launcher ? null : process.platform);
+  async function paceRead(dir: string): Promise<void> {
+    if (pacePlatform !== 'win32') return;
+    const last = lastPlaylistRead.get(dir) ?? -Infinity;
+    const wait = last + WIN32_PLAYLIST_READ_GAP_MS - performance.now();
+    lastPlaylistRead.set(dir, performance.now() + Math.max(0, wait));
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  }
+
+  async function readInfo(dir: string): ReturnType<typeof readPlaylistInfo> {
+    await paceRead(dir);
+    return readPlaylistInfo(path.join(dir, 'index.m3u8'));
   }
 
   /**
@@ -374,7 +442,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     if (entry.origin !== 'iptv' || entry.closed || entry.exited || !entry.ready) return false;
     if (!(await observe(entry))) return false;
     if (clock.now() - entry.lastChangeAt <= IPTV_STALL_MIN_MS) return false;
-    const info = await readPlaylistInfo(path.join(entry.dir, 'index.m3u8'));
+    const info = await readInfo(entry.dir);
     if (info?.targetDuration) entry.targetMs = info.targetDuration * 1000;
     return clock.now() - entry.lastChangeAt > iptvStallMs(entry);
   }
@@ -386,7 +454,11 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   async function watchStalls(): Promise<void> {
     for (const entry of [...byHash.values()]) {
       if (entry.origin !== 'iptv' || !clientsCount(entry)) continue;
-      if (await isIptvStalled(entry)) emitStalled(entry);
+      if (!(await isIptvStalled(entry))) continue;
+      /* Avisado y sigue igual otro umbral entero: se repite (playback suelta primero la puerta del relé
+         y, si con eso no basta, reinicia). */
+      const again = entry.stallNotified && clock.now() - entry.stallNotifiedAt > iptvStallMs(entry);
+      emitStalled(entry, again);
     }
   }
 
@@ -512,6 +584,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       targetMs: 0,
       stallNotified: false,
       stallNotifiedAt: 0,
+      stallSince: 0,
       generation,
       startNumber: next?.startNumber ?? 0,
       initName: initFileName(generation),
@@ -734,7 +807,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     const t0 = clock.now();
     for (;;) {
       throwIfGone(entry);
-      const info = await readPlaylistInfo(path.join(entry.dir, 'index.m3u8'));
+      const info = await readInfo(entry.dir);
       throwIfGone(entry);
       /* Tras un reinicio continuo, la lista que hay puede ser aún la de la generación anterior (congelada):
          solo cuenta la que nombra el init de esta. */
@@ -749,7 +822,12 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         if (progressMs !== undefined && waited > progressMs && !(ready && ready.segments >= 1)) {
           throw new AppError('iptv_dropped', { detail: 'la salida no avanza tras reconectar' });
         }
-        if (waited > IPTV_REMUX_READY_MS) throw new AppError('iptv_timeout');
+        /* 20 s, o lo que tarda en llegar algo de verdad con un proveedor que entrega a golpes. */
+        const readyMs = Math.max(
+          IPTV_REMUX_READY_MS,
+          (progressMs ?? iptvProgressMs(entry)) + entry.targetMs,
+        );
+        if (waited > readyMs) throw new AppError('iptv_timeout');
         await waitChange(entry, READY_POLL_MS, signal);
         continue;
       }
@@ -916,7 +994,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
             if (await isIptvStalled(current)) {
               if (
                 current.stallNotified &&
-                clock.now() - current.stallNotifiedAt > IPTV_ENSURE_RELAUNCH_MS
+                clock.now() - current.stallSince > IPTV_ENSURE_RELAUNCH_MS
               ) {
                 reusable = false;
               } else {
@@ -980,7 +1058,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
           /* IPTV: reinicio continuo en la misma carpeta (B2). El resto, como siempre. */
           if (current.origin === 'iptv') {
             /* Por atasco (B3): el plazo para ver avanzar la generación nueva escala con el TD, como el umbral. */
-            if (options.stalled) progressMs = iptvStallMs(current);
+            if (options.stalled) progressMs = iptvProgressMs(current);
             return replaceLocked(current, carry);
           }
           await closeLocked(current, 'stopped', false);
@@ -1124,6 +1202,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       /* La lista de un remux que arranca o se reinicia puede no estar todavía: «aún no está» (503 con
          Retry-After), no un error (docs/iptv.md §18). */
       const playlist = file === 'index.m3u8';
+      if (playlist) await paceRead(entry.dir);
       const send = {
         rangeHeader: options.rangeHeader,
         head: options.head,

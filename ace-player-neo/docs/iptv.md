@@ -1267,8 +1267,17 @@ proveedor ──(net: SSRF, IP fijada, UA)──► relé 127.0.0.1:<p>/r/<ticke
   3. 403, 429, 456, 458 y 509 cuentan como «plaza ocupada» (el proveedor aún cuenta el socket viejo) y se reintentan
      igual, sin gastar variantes;
   4. mientras tanto **no cierra** la conexión con ffmpeg.
-  - El peor caso son 10 + (1 + 8) + (2 + 8) + (4 + 8) = **41 s** sin bytes (49 s si después abre otra variante),
-    por debajo del `-rw_timeout` de ffmpeg (55 s, §6.3). ffmpeg nunca muere antes de que el relé termine de
+  - **Cadencia (auditoría 0.9.0).** Hay proveedores que entregan **a golpes**: el de Isma manda lo retenido de una
+    vez cada 8-11 s (alguna vez 15 s), sin perder nada. El relé mide sus huecos sin bytes (los de 1 s o más dentro
+    de una conexión, sin contar las reconexiones ni el rato que el propio relé para el cuerpo; p90 en 60 s) y, por
+    encima de 4 s, el plazo de «no manda bytes» pasa a **2× la cadencia** (entre 10 y 30 s). El primer minuto, sin
+    cadencia medida aún, el plazo es de **15 s** (el primer silencio llega antes de haber visto ninguno). Ese
+    vigilante es de la sesión del relé; el de `net` va a 30 s. La cadencia sale en `stream.stats` (`cadenceMs`): el
+    vigilante de salida del remux pasa a `max(10 s, 3×TD, 1,5×cadencia)`, playback no reinicia mientras el último
+    byte esté dentro de ese plazo del relé (o siga llegando, y entonces solo suelta la puerta TS), y la web sube su
+    colchón y su latencia a ≥ 1,5× la cadencia (`apps/web/src/player/cadence.ts`).
+  - El peor caso son 30 + (1 + 8) + (2 + 8) + (4 + 8) = **61 s** sin bytes (69 s si después abre otra variante),
+    por debajo del `-rw_timeout` de ffmpeg (75 s, §6.3). ffmpeg nunca muere antes de que el relé termine de
     intentarlo.
 - **Otra base de tiempos tras reconectar.** El relé mira el primer PTS y el PCR de lo que llega tras reconectar. Si
   saltan más de **5 s** respecto a lo último que pasó (hacia delante o hacia atrás), **no empalma**: corta la entrada
@@ -1335,8 +1344,8 @@ HLS H.264 con AAC. No entra ahora.
   cumple `HASH_RE`.
 - **`buildRemuxArgs` con `origin: 'iptv'`:**
   - sin `-reconnect*` (reconecta el relé);
-  - con `-rw_timeout 55000000` (**en microsegundos**, como el `20000000` de hoy en `args.ts`; «15s» no es un valor
-    válido y haría fallar la apertura). 55 s es más que el peor caso del relé (41 s, y 49 s si además abre otra
+  - con `-rw_timeout 75000000` (**en microsegundos**, como el `20000000` de hoy en `args.ts`; «15s» no es un valor
+    válido y haría fallar la apertura). 75 s es más que el peor caso del relé (61 s con un proveedor a golpes, y 69 s si además abre otra
     variante, §6.1);
   - con `-protocol_whitelist http,tcp,crypto` (solo le llegan URLs del relé en `127.0.0.1`);
   - con `-live_start_index -3` si la entrada es HLS;
@@ -1437,9 +1446,9 @@ HLS H.264 con AAC. No entra ahora.
 | Cabeceras del proveedor (relé) | < 2 s | 8 s | `iptv_timeout` (o reintento si la plaza estaba recién cerrada) |
 | Lista lista (2 segmentos de 2 s) | 4–8 s | 20 s | `iptv_timeout` |
 | `channelStream` completo | 5–10 s | 60 s (el de hoy) | — |
-| Corte: sin bytes | — | 10 s | reconexión del relé |
+| Corte: sin bytes | — | 10 s (15 s el primer minuto; 2× la cadencia, hasta 30 s, con un proveedor a golpes) | reconexión del relé |
 | Reconexión del relé | < 3 s | esperas de 1, 2 y 4 s, 8 s de cabeceras cada una, 3 en 60 s (peor caso 41 s) | otra variante si la hay; si no, `stream.closed remux_failed` + `iptv_dropped` |
-| ffmpeg sin datos (`-rw_timeout`) | — | 55 s | nunca antes que el relé (41 s, 49 s con otra variante) |
+| ffmpeg sin datos (`-rw_timeout`) | — | 75 s | nunca antes que el relé (61 s, 69 s con otra variante) |
 | Base de tiempos distinta tras reconectar | — | salto > 5 s | reinicio del remux + `stream.reopened remux_restart` |
 | Del corte definitivo a pedir AceStream | inmediato | — | la web salta sin sus 3 reconexiones (§7.2) |
 

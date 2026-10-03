@@ -72,6 +72,11 @@ export interface Engine {
   /** Solo hls.js: la ventana de la lista (para el −30 s y los huecos). */
   liveWindow?(): LiveWindow | null;
   /**
+   * Solo hls.js en directo: sube la latencia objetivo y la máxima (y el búfer) sin
+   * reconectar, para una IPTV que entrega a golpes (player/cadence.ts).
+   */
+  setLiveLatency?(syncS: number, maxLatencyS: number, maxBufferS: number): void;
+  /**
    * Solo hls.js: en qué segmento va el cabezal (para seguir ahí con otra
    * instancia, C3). Si acaba por un vídeo que no se puede decodificar, el
    * segmento de después del roto.

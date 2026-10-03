@@ -57,6 +57,12 @@ export interface RemuxDeps extends CoreDeps {
    * defecto `NOT_YET_WAIT_MS` (2,5 s); los tests que miran el 503, menos.
    */
   readonly notYetWaitMs?: number;
+  /**
+   * Plataforma: en `win32` las lecturas de index.m3u8 van espaciadas 250 ms (el renombrado de ffmpeg
+   * falla con la lista abierta). Por defecto `process.platform` con el ffmpeg de verdad (sin `launcher`)
+   * y ninguna con un `launcher` de pega; los tests la fijan.
+   */
+  readonly platform?: NodeJS.Platform;
 }
 
 /** Proceso ffmpeg lanzado (el real o el falso de los tests). */
@@ -120,6 +126,11 @@ export interface RemuxSource {
   readonly origin?: 'engine' | 'iptv';
   /** La entrada del relé es una lista HLS. */
   readonly isHls?: boolean;
+  /**
+   * Cadencia de entrega del proveedor de la IPTV en ms (null si llega seguido): el vigilante de salida
+   * y el plazo de la generación nueva tras un reinicio la tienen en cuenta (auditoría 0.9.0).
+   */
+  readonly inputCadenceMs?: () => number | null;
 }
 
 export interface RemuxRestartOptions {

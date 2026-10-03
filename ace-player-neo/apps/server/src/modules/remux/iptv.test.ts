@@ -1,6 +1,6 @@
 /* Remux con origen IPTV (docs/iptv.md §6.3): argumentos con la URL del
    relé, sin credenciales ni `-reconnect*`, con `protocol_whitelist` y
-   `-rw_timeout 55000000`; espera de 20 s con `iptv_timeout`; reinicio en la
+   `-rw_timeout 75000000`; espera de 20 s con `iptv_timeout`; reinicio en la
    misma sesión con los mismos visores; la cola del registro, redactada.
 
    Reinicio continuo (diagnostico-iptv-0.8.2 B2): numeración seguida, init por
@@ -47,8 +47,8 @@ describe('buildRemuxArgs con IPTV', () => {
     expect(args.some((arg) => arg.startsWith('-reconnect'))).toBe(false);
     expect(args[args.indexOf('-protocol_whitelist') + 1]).toBe('http,tcp,crypto');
     expect(args[args.indexOf('-rw_timeout') + 1]).toBe(String(IPTV_FFMPEG_RW_TIMEOUT_US));
-    // Por encima del peor caso del relé: 41 s de reconexiones + 8 s de otra variante.
-    expect(IPTV_FFMPEG_RW_TIMEOUT_US).toBe(55_000_000);
+    // Por encima del peor caso del relé: 61 s de reconexiones (plazo de 30 s a golpes) + 8 s de otra variante.
+    expect(IPTV_FFMPEG_RW_TIMEOUT_US).toBe(75_000_000);
     expect(args).not.toContain('-live_start_index');
     expect(args).toContain(`ace_session=${SID}`);
     const hls = buildRemuxArgs({

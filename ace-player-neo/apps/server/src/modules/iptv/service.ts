@@ -2699,6 +2699,7 @@ export class IptvServiceImpl implements IptvService {
       stats: () => session.stats(),
       onDropped: (listener) => session.onDropped(listener),
       onRestart: (listener) => session.onRestart(listener),
+      releaseGate: () => session.releaseGate(),
       close: async () => {
         if (closed) return;
         closed = true;
@@ -2779,7 +2780,8 @@ export class IptvServiceImpl implements IptvService {
           pacedMs: stats.pacedMs,
         };
       },
-      setPace: (bytesPerS) => session.setPace(bytesPerS),
+      setPace: (bytesPerS, options) => session.setPace(bytesPerS, options),
+      setAheadProbe: (probe) => session.setAheadProbe(probe),
       release: () => session.release(),
       onDropped: (listener) => session.onDropped(listener),
       noteDuration: (durationS) => this.noteVodDuration(id, durationS),

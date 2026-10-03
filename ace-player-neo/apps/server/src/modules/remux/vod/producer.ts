@@ -19,12 +19,21 @@
      que salga y se arranca otra en ese segmento. Reinicios agrupados: entre
      dos pasan al menos 1,5 s y solo cuenta la última petición.
    - Contrapresión: se deja de leer `pipe:1` cuando lo producido va más de
-     60 s por delante del FINAL del último segmento pedido, y se sigue por
-     debajo de 30 s; nunca mientras ese segmento no esté hecho (se quedaría a
-     medias: solo se cierra con el fotograma clave del siguiente). También se
-     para mientras el disco no da abasto.
+     120 s por delante del FINAL del último segmento pedido, y se sigue por
+     debajo de 60 s (auditoría 0.9.0; antes 60/30); nunca mientras ese
+     segmento no esté hecho (se quedaría a medias: solo se cierra con el
+     fotograma clave del siguiente). También se para mientras el disco no da
+     abasto. `stats().aheadS` lo dice (el relé lo usa de suelo de su ritmo).
    - Espera de un segmento: 15 s como mucho; después, `not_yet` (503 con
      `Retry-After: 1`, hls.js reintenta).
+   - Arranque y tras un salto (auditoría 0.9.0, el criterio de Isma: que
+     tarde lo que tenga que tardar al empezar, pero que no se pare mientras
+     ve): el segmento pedido no sale hasta que la ejecución lleva `warmupS`
+     (25 s) producidos desde él, o el final, dentro del mismo plazo de 15 s.
+   - Primer fragmento (auditoría 0.9.0): una ejecución que empieza a mitad y
+     no saca ni un fragmento en 8 s (ffmpeg esperando una petición al relé
+     colgada, la de los Cues sobre todo, hasta los 55 s de `-rw_timeout`) se
+     mata y se relanza en el mismo sitio, 2 veces como mucho.
    - Ventana en disco: desde el último pedido − 120 s y como mucho 256 MiB
      por detrás; tope duro de 1,5 GiB por sesión, borrando primero lo más
      lejano. Al cerrar, la carpeta entera fuera.
@@ -75,6 +84,12 @@ export interface VodProducerLimits {
   readonly lateRetries: number;
   /** Ejecuciones fallidas seguidas que se reintentan. */
   readonly failureRetries: number;
+  /** Una ejecución a mitad sin ningún fragmento en este rato se relanza… */
+  readonly firstFragmentMs: number;
+  /** …estas veces como mucho por segmento querido. */
+  readonly firstFragmentRetries: number;
+  /** Arranque y tras un salto: el segmento pedido sale con al menos esto producido desde él (0 = sin espera). */
+  readonly warmupS: number;
 }
 
 export const DEFAULT_VOD_LIMITS: VodProducerLimits = {
@@ -90,6 +105,9 @@ export const DEFAULT_VOD_LIMITS: VodProducerLimits = {
   idleReleaseMs: VOD_PLAY.idleReleaseMs,
   lateRetries: 2,
   failureRetries: 1,
+  firstFragmentMs: VOD_PLAY.firstFragmentMs,
+  firstFragmentRetries: VOD_PLAY.firstFragmentRetries,
+  warmupS: VOD_PLAY.warmupS,
 };
 
 /** Caídas tardías de más (tras aceptar) que se aguantan antes de cerrar la sesión. */
@@ -140,6 +158,13 @@ export interface VodProducerStats {
   readonly segmentsOnDisk: number;
   readonly bytesOnDisk: number;
   readonly lastRequested: number;
+  /** Dónde empieza el último segmento pedido (s). */
+  readonly requestedS: number;
+  /**
+   * Segundos producidos por delante del final del último segmento pedido (lo que mira la
+   * contrapresión), o null si no hay ejecución que lo esté produciendo.
+   */
+  readonly aheadS: number | null;
 }
 
 interface Writer {
@@ -175,6 +200,10 @@ interface RunContext {
   finished: number;
   /** Se va a tirar (caída tardía, init incompatible o fallo de disco). */
   abandoned: boolean;
+  /** Vigilante del primer fragmento (solo las ejecuciones a mitad), o null. */
+  firstTimer: TimerHandle | null;
+  /** Ya lleva `warmupS` producidos desde lo que se pidió al lanzarla (o llegó al final). */
+  warmed: boolean;
   /** Se cumple cuando la ejecución ha acabado y su final está atendido. */
   settled: Promise<void>;
 }
@@ -216,8 +245,12 @@ export class VodProducer {
   private readonly onDisk = new Map<number, number>();
   private readonly waiters = new Map<number, Set<() => void>>();
   private readonly initWaiters = new Set<() => void>();
+  /** Quien espera a que la ejecución de ahora esté caliente (`warmupS`). */
+  private readonly warmWaiters = new Set<() => void>();
   /** Caídas tardías por segmento querido. */
   private readonly lateAttempts = new Map<number, number>();
+  /** Relanzamientos por no sacar ningún fragmento a tiempo, por segmento querido. */
+  private readonly slowStarts = new Map<number, number>();
   private init: Fmp4Init | null = null;
   private initPath: string | null = null;
   private current: RunContext | null = null;
@@ -276,15 +309,22 @@ export class VodProducer {
   stats(): VodProducerStats {
     let bytes = 0;
     for (const size of this.onDisk.values()) bytes += size;
+    const ctx = this.current;
+    const requested = this.plan.segments[this.lastRequested];
     return {
-      running: this.current !== null && !this.current.run.finished,
-      paused: this.current?.run.isPaused() ?? false,
-      pausedBy: this.current?.run.pauseReasons() ?? [],
+      running: ctx !== null && !ctx.run.finished,
+      paused: ctx?.run.isPaused() ?? false,
+      pausedBy: ctx?.run.pauseReasons() ?? [],
       runs: this.runs,
       restarts: this.restarts,
       segmentsOnDisk: this.onDisk.size,
       bytesOnDisk: bytes,
       lastRequested: this.lastRequested,
+      requestedS: requested?.startS ?? 0,
+      aheadS:
+        ctx && !ctx.run.finished && !ctx.abandoned && requested
+          ? Math.max(0, ctx.producedS - requested.endS)
+          : null,
     };
   }
 
@@ -307,19 +347,62 @@ export class VodProducer {
     this.armIdle();
     this.applyBackpressure();
     this.trimDisk();
+    const deadline = this.deps.clock.now() + this.limits.segmentWaitMs;
     const ready = this.segmentFile(segment);
     if (ready) {
       this.cancelRestart();
-      return ready;
+      if (!this.warming(segment)) return ready;
+      await this.waitWarm(segment, deadline, signal);
+      return (
+        this.segmentFile(segment) ?? { kind: this.closed || this.failure ? 'missing' : 'not_yet' }
+      );
     }
     /* Solo cuenta la última petición: si esta la cubre lo que ya hay (o se está
        terminando de escribir), el reinicio pendiente sobra. */
     if (this.finalizing.has(segment) || this.willProduce(segment)) this.cancelRestart();
     else this.requestRestart({ segment, wanted: segment });
     await this.waitFor(segment, signal);
+    if (this.segmentFile(segment) && this.warming(segment)) {
+      await this.waitWarm(segment, deadline, signal);
+    }
     return (
       this.segmentFile(segment) ?? { kind: this.closed || this.failure ? 'missing' : 'not_yet' }
     );
+  }
+
+  /*
+   * Arranque y tras un salto (auditoría 0.9.0): la ejecución de ahora aún no lleva `warmupS`
+   * producidos desde lo que se le pidió, y este segmento es de los suyos. Isma prefiere esperar
+   * unos segundos más al empezar que ver el vídeo pararse a los pocos segundos.
+   */
+  private warming(segment: number): boolean {
+    const ctx = this.current;
+    if (!ctx || ctx.warmed || ctx.abandoned || ctx.run.finished) return false;
+    if (this.closed || this.failure) return false;
+    return segment >= ctx.startSegment;
+  }
+
+  /** Espera a que la ejecución de ahora esté caliente (o acabe), hasta `deadline`. */
+  private async waitWarm(segment: number, deadline: number, signal?: AbortSignal): Promise<void> {
+    while (this.warming(segment) && !signal?.aborted) {
+      const left = deadline - this.deps.clock.now();
+      if (left <= 0) return;
+      await this.wait(this.warmWaiters, signal, left);
+    }
+  }
+
+  /** ¿La ejecución ya lleva `warmupS` producidos desde lo que se pidió (o el final del título)? */
+  private checkWarm(ctx: RunContext): void {
+    if (ctx.warmed || !ctx.opened) return;
+    const wanted = this.plan.segments[ctx.wanted];
+    const last = this.plan.segments[this.plan.segments.length - 1];
+    if (!wanted || !last) return;
+    /* Nunca más de lo que deja la contrapresión (si no, la espera se comería su plazo entero). */
+    const warmupS = Math.min(this.limits.warmupS, this.limits.aheadMaxS);
+    const want = Math.min(wanted.startS + warmupS, last.endS - 0.5);
+    if (ctx.producedS < want) return;
+    ctx.warmed = true;
+    for (const wake of [...this.warmWaiters]) wake();
   }
 
   /** ¿Está hecho (en disco o terminando de escribirse)? */
@@ -340,6 +423,7 @@ export class VodProducer {
     this.waiters.clear();
     for (const wake of [...this.initWaiters]) wake();
     this.initWaiters.clear();
+    for (const wake of [...this.warmWaiters]) wake();
     await this.fsChain.catch(() => undefined);
     await rm(this.options.dir, { recursive: true, force: true }).catch(() => undefined);
   }
@@ -371,8 +455,8 @@ export class VodProducer {
     });
   }
 
-  /** Espera a que alguien despierte el grupo, o al plazo, o a la señal. */
-  private wait(group: Set<() => void>, signal?: AbortSignal): Promise<void> {
+  /** Espera a que alguien despierte el grupo, o al plazo (`segmentWaitMs` o `ms`), o a la señal. */
+  private wait(group: Set<() => void>, signal?: AbortSignal, ms?: number): Promise<void> {
     return new Promise((resolve) => {
       const wake = (): void => {
         this.deps.clock.clearTimeout(timer);
@@ -380,7 +464,7 @@ export class VodProducer {
         group.delete(wake);
         resolve();
       };
-      const timer = this.deps.clock.setTimeout(wake, this.limits.segmentWaitMs);
+      const timer = this.deps.clock.setTimeout(wake, ms ?? this.limits.segmentWaitMs);
       if (signal?.aborted) {
         wake();
         return;
@@ -503,11 +587,19 @@ export class VodProducer {
       producedS: segment.startS,
       finished: 0,
       abandoned: false,
+      firstTimer: null,
+      warmed: this.limits.warmupS <= 0,
       settled: Promise.resolve(),
     };
     ctx.settled = run.ended.then((end) => this.onRunEnd(ctx, end));
     holder.ctx = ctx;
     this.current = ctx;
+    if (target.segment > 0) {
+      ctx.firstTimer = this.deps.clock.setTimeout(
+        () => this.onSlowStart(ctx),
+        this.limits.firstFragmentMs,
+      );
+    }
     this.deps.logger.debug(
       { sessionId: this.options.sessionId, segment: target.segment, keyframeS: segment.keyframeS },
       'VOD: arranca ffmpeg',
@@ -534,7 +626,40 @@ export class VodProducer {
     }
   }
 
+  /*
+   * Una ejecución a mitad que no ha sacado ni un fragmento en `firstFragmentMs` (auditoría 0.9.0):
+   * ffmpeg está esperando una petición al relé que no contesta (la de los Cues, sobre todo) y la
+   * esperaría los 55 s de `-rw_timeout`. Se mata y se relanza en el mismo sitio (unas pocas veces;
+   * después se le deja seguir).
+   */
+  private onSlowStart(ctx: RunContext): void {
+    ctx.firstTimer = null;
+    if (this.current !== ctx || ctx.abandoned || ctx.run.finished || this.closed || this.failure) {
+      return;
+    }
+    const attempts = (this.slowStarts.get(ctx.wanted) ?? 0) + 1;
+    this.slowStarts.set(ctx.wanted, attempts);
+    if (attempts > this.limits.firstFragmentRetries) {
+      this.deps.logger.warn(
+        { sessionId: this.options.sessionId, wanted: ctx.wanted, attempts },
+        'VOD: ffmpeg sigue sin sacar nada; se le deja seguir',
+      );
+      return;
+    }
+    this.deps.logger.warn(
+      { sessionId: this.options.sessionId, wanted: ctx.wanted, attempts },
+      'VOD: ffmpeg no saca nada a tiempo; se relanza en el mismo sitio',
+    );
+    this.abandon(ctx);
+    this.requestRestart({ segment: ctx.startSegment, wanted: ctx.wanted }, true);
+  }
+
   private onFragment(ctx: RunContext, info: Fmp4FragmentInfo): void {
+    if (ctx.firstTimer) {
+      this.deps.clock.clearTimeout(ctx.firstTimer);
+      ctx.firstTimer = null;
+      this.slowStarts.delete(ctx.wanted);
+    }
     if (ctx.abandoned || this.closed) return;
     const place =
       info.startS === null ? null : placeFragment(this.plan, this.keyframes, info.startS);
@@ -566,6 +691,7 @@ export class VodProducer {
     if (ctx.opened && info.startS !== null) {
       ctx.producedS = Math.max(ctx.producedS, info.startS + info.durationS);
     }
+    this.checkWarm(ctx);
     this.applyBackpressure();
   }
 
@@ -705,7 +831,11 @@ export class VodProducer {
   }
 
   private onRunEnd(ctx: RunContext, ended: VodRunEnd): void {
+    this.deps.clock.clearTimeout(ctx.firstTimer);
+    ctx.firstTimer = null;
     if (this.current === ctx) this.current = null;
+    /* Sin ejecución no hay nada que esperar: lo que haya en disco sale ya. */
+    for (const wake of [...this.warmWaiters]) wake();
     let end = ended;
     if (end.kind === 'complete' && !ctx.abandoned) {
       if (this.reachedEnd(ctx)) {
@@ -855,6 +985,7 @@ export class VodProducer {
     void this.stopRun();
     for (const set of [...this.waiters.values()]) for (const wake of [...set]) wake();
     for (const wake of [...this.initWaiters]) wake();
+    for (const wake of [...this.warmWaiters]) wake();
     try {
       this.deps.onDropped?.(error);
     } catch {}

@@ -83,6 +83,20 @@ export function vodNerdRows(state: PlayerState): Array<[string, string]> {
   ];
 }
 
+/**
+ * Cómo llega la IPTV en directo: «seguida» o «a golpes cada 10 s» (la cadencia que mide el relé), y
+ * « · sin esperar a la imagen» si la puerta del relé deja pasar las pérdidas (modo tolerante).
+ */
+export function iptvDeliveryText(stats: PlayerState['stats']): string {
+  if (!stats) return '—';
+  const cadence = stats.cadenceMs;
+  const base =
+    cadence && cadence > 0
+      ? `a golpes cada ${(cadence / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} s`
+      : 'seguida';
+  return stats.gateTolerant ? `${base} · sin esperar a la imagen (pierde paquetes)` : base;
+}
+
 export function nerdRows(state: PlayerState, engineText: string): Array<[string, string]> {
   if (state.kind === 'vod') return vodNerdRows(state);
   const stats = state.stats;
@@ -99,6 +113,8 @@ export function nerdRows(state: PlayerState, engineText: string): Array<[string,
     ['Entrega', state.protocol ? (DELIVERY[state.protocol] ?? state.protocol) : '—'],
     ['Pares', stats && !iptv ? String(stats.peers) : '—'],
     ['Bajada', formatSpeed(stats?.speedDown)],
+    // IPTV (auditoría 0.9.0): cómo entrega el proveedor y si la puerta del relé va tolerante.
+    ...(iptv ? ([['Llegada', iptvDeliveryText(stats)]] as Array<[string, string]>) : []),
     ['Subida', formatSpeed(stats?.speedUp)],
     ['Estado del motor', stats?.status || '—'],
     ['Colchón', seconds(state.bufferAheadS)],

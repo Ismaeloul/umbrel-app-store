@@ -136,6 +136,8 @@ export interface FakeEngine extends Engine {
   args: EngineArgs;
   started: boolean;
   destroyed: boolean;
+  /** Lo último que pidió `setLiveLatency` (objetivo, máxima y búfer), o null. */
+  liveLatency: [number, number, number] | null;
 }
 
 export function fakeEngines() {
@@ -147,8 +149,12 @@ export function fakeEngines() {
       args,
       started: false,
       destroyed: false,
+      liveLatency: null,
       start() {
         engine.started = true;
+      },
+      setLiveLatency(syncS, maxLatencyS, maxBufferS) {
+        engine.liveLatency = [syncS, maxLatencyS, maxBufferS];
       },
       destroy() {
         engine.destroyed = true;
