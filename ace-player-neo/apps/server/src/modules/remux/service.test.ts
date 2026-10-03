@@ -456,7 +456,7 @@ describe('recolector y huérfanos (B-226)', () => {
     const mark = vodLauncher.runs[0]?.args.find((arg) => arg.startsWith('ace_session='));
     expect(mark).toBe('ace_session=s_vod00000001');
     mkdirSync(path.join(procRoot, '777'));
-    writeFileSync(path.join(procRoot, '777', 'cmdline'), `ffmpeg -metadata ${mark} `);
+    writeFileSync(path.join(procRoot, '777', 'cmdline'), `ffmpeg\0-metadata\0${mark}\0`);
     await runtime.reap();
     await runtime.reap();
     expect(killed).toEqual([]);
