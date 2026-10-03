@@ -98,6 +98,39 @@ describe('cleanVodTitle', () => {
     expect(clean('FHD: Dune').title).toBe('Dune');
   });
 
+  it('prefijos de lengua y calidad encadenados no dejan el separador delante («ES - 4K - Dune»)', () => {
+    expect(clean('ES - 4K - Dune')).toEqual({
+      title: 'Dune',
+      year: null,
+      tags: ['castellano', '4k'],
+    });
+    expect(clean('ES | 4K | Dune').title).toBe('Dune');
+    expect(clean('LAT - UHD - Coco')).toEqual({
+      title: 'Coco',
+      year: null,
+      tags: ['latino', '4k'],
+    });
+    expect(clean('ES: 4K - Dune').title).toBe('Dune');
+    expect(clean('[ES] FHD | Dune').title).toBe('Dune');
+    expect(clean('ES - 4K-Dune').title).toBe('4K-Dune');
+  });
+
+  it('con el guion entre espacios vale cualquier código de país («UK - », «MX - »)', () => {
+    expect(clean('UK - The Crown').title).toBe('The Crown');
+    expect(clean('MX - Coco')).toEqual({ title: 'Coco', year: null, tags: ['latino'] });
+    expect(clean('AR - Batman').title).toBe('Batman');
+    expect(clean('NL - De Tweeling').title).toBe('De Tweeling');
+    expect(clean('TR - Kış Uykusu').title).toBe('Kış Uykusu');
+    expect(clean('AMZ - The Boys').title).toBe('The Boys');
+    /* Con dos puntos o barra, solo los de la lista (ahí estaban los falsos positivos). */
+    expect(clean('US: Dune').title).toBe('Dune');
+    expect(clean('UK| The Crown').title).toBe('The Crown');
+    expect(clean('JFK: Caso abierto').title).toBe('JFK: Caso abierto');
+    /* Sin espacios alrededor del guion, no: «AC-DC», «X-MEN». */
+    expect(clean('AC-DC Live').title).toBe('AC-DC Live');
+    expect(clean('X-MEN').title).toBe('X-MEN');
+  });
+
   it('la limpieza nunca deja un título vacío', () => {
     expect(clean('4K').title).toBe('4K');
     expect(clean('ES - ').title).toBe('ES');

@@ -4,9 +4,11 @@
    `cleanVodTitle(raw, categoryName)` NO reutiliza nada de la limpieza de
    canales (T8: `cleanIptvTitle` borra «Reserva», «Multi» o «España», cambia
    «M+» y tira los títulos no latinos). Es conservadora a propósito:
-   - quita prefijos de lengua o calidad SOLO al principio y de una LISTA
-     CERRADA («ES - », «|ES| », «LAT: », «[4K] », «4K - »): «CSI: Miami»,
-     «UP: Una aventura de altura» o «[REC] 2» se quedan como están;
+   - quita prefijos de lengua, país o calidad SOLO al principio y de una
+     LISTA CERRADA («ES - », «|ES| », «LAT: », «[4K] », «4K - »), salvo
+     entre barras o con el guion entre espacios, donde vale cualquier código
+     («|NL| », «UK - »): «CSI: Miami», «UP: Una aventura de altura» o
+     «[REC] 2» se quedan como están;
    - quita etiquetas SOLO al final («[4K]», «(MULTI)», «(VOSE)», «1080p»,
      «HEVC»…), entre corchetes o paréntesis o sueltas en mayúsculas;
    - el año sale de «(2023)» al final, o de «- 2023» al final;
@@ -52,8 +54,10 @@ export function tagsOf(bits: number): VodTag[] {
 export function detectTags(text: string): number {
   if (!text) return 0;
   let bits = 0;
+  /* «MX» (México) también: «MX - Coco», «MX | PELÍCULAS». «AR» no: en los
+     paneles multipaís suele ser árabe. */
   const latino =
-    /(?:^|[^A-Za-z])(?:LAT|LATAM)(?![A-Za-z])/.test(text) ||
+    /(?:^|[^A-Za-z])(?:LAT|LATAM|MX)(?![A-Za-z])/.test(text) ||
     /latino|latinoam[eé]rica|es-419/i.test(text);
   if (latino) bits |= TAG_BIT.latino;
   const castellano =
@@ -73,28 +77,39 @@ export function detectTags(text: string): number {
   return bits;
 }
 
-/* Prefijos al principio, con una LISTA CERRADA de códigos de lengua y
-   calidad: «CSI: Miami», «UP: Una aventura de altura», «ET: El
-   extraterrestre» o «SOS: Rescate» empiezan por mayúsculas y dos puntos y
-   son títulos, no prefijos. Entre barras («|XX|») vale cualquier código: un
-   título nunca empieza así. «IT» (Italia) no vale con dos puntos: «IT:
-   Capítulo 2» es la película; «IT - …» e «|IT| …» sí son prefijos.
-   Corchetes, igual: «[ES]» y «[4K]» sí, «[REC] 2» no. */
+/* Prefijos al principio, con una LISTA CERRADA de códigos de lengua, país y
+   calidad para los dos puntos y la barra: «CSI: Miami», «UP: Una aventura
+   de altura», «ET: El extraterrestre» o «SOS: Rescate» empiezan por
+   mayúsculas y dos puntos y son títulos, no prefijos. Entre barras
+   («|XX|») vale cualquier código: un título nunca empieza así. Con un
+   guion ENTRE ESPACIOS («UK - The Crown», «MX - Coco», «TR - …»), también
+   cualquier código de 2-3 mayúsculas: así no empieza un título, y los
+   paneles multipaís ponen ahí el suyo. «IT» (Italia) no vale con dos
+   puntos: «IT: Capítulo 2» es la película; «IT - …» e «|IT| …» sí son
+   prefijos. Corchetes, con la lista: «[ES]» y «[4K]» sí, «[REC] 2» no. */
 const PREFIX_CODES =
-  'ES|ESP|SPA|CAST|LAT|LATAM|EN|ENG|VOSE|VOS|SUB|MULTI|DUAL|FR|DE|PT|4K|UHD|FHD|HD|SD';
+  'ES|ESP|SPA|CAST|LAT|LATAM|EN|ENG|VOSE|VOS|SUB|MULTI|DUAL|FR|DE|PT|' +
+  'UK|US|MX|AR|CO|CL|PE|NL|TR|PL|BR|RU|GR|RO|4K|UHD|FHD|HD|SD';
 const PREFIX_PIPED = /^\|[A-Z0-9]{2,5}\|\s*(?:[-:|]\s*)?/;
 /* El guion, solo con espacio detrás («ES - Dune»): «DE-LOVELY» es un título. */
 const PREFIX_CODE = new RegExp(`^(?:${PREFIX_CODES})\\s*(?:[:|]|-(?=\\s))\\s*`);
+/* Cualquier código con el guion entre espacios («UK - », «AMZ - »). */
+const PREFIX_DASHED = /^[A-Z]{2,3}\s+[-–]\s+/;
 const PREFIX_ITALIAN = /^IT\s*(?:\||-(?=\s))\s*/;
 const PREFIX_BRACKET = new RegExp(`^\\[\\s*(?:${PREFIX_CODES}|IT)\\s*\\]\\s*`);
-const PREFIX_QUALITY = /^(?:4K|UHD|FHD)\s+/;
+/* La calidad, también con su separador: «ES - 4K - Dune» se quedaba en
+   «- Dune» (`PREFIX_CODE` quitaba «ES - » y esta solo «4K »). */
+const PREFIX_QUALITY = /^(?:4K|UHD|FHD)(?:\s*(?:[:|]|-(?=\s))|\s)\s*/;
 const PREFIXES: readonly RegExp[] = [
   PREFIX_BRACKET,
   PREFIX_PIPED,
   PREFIX_CODE,
+  PREFIX_DASHED,
   PREFIX_ITALIAN,
   PREFIX_QUALITY,
 ];
+/* Un separador que se queda delante tras quitar un prefijo («- Dune»). */
+const LEADING_SEPARATOR = /^[-–|:]\s+/;
 
 /* Palabras de etiqueta al final. Entre corchetes o paréntesis, en cualquier
    caja; sueltas, solo en mayúsculas (o `1080p`), para no comerse palabras
@@ -136,6 +151,8 @@ export function cleanVodTitle(raw: string, categoryName = ''): CleanVodTitle {
       }
     }
     if (title === before) break;
+    const orphan = LEADING_SEPARATOR.exec(title);
+    if (orphan && orphan[0].length < title.length) title = title.slice(orphan[0].length);
   }
 
   /* Final: etiquetas y año, hasta que no cambie nada (con tope). */
