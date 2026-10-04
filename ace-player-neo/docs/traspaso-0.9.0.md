@@ -5,6 +5,11 @@
 > ultracode. Este documento lo cuenta todo: dónde
 > está cada cosa, qué falta, cómo trabajar y cómo publicar. Léelo entero antes de empezar.
 
+> **4-oct-2026: la 0.9.0 está cortada** en `trabajo/union-1` (= `integracion/0.9.0` + el corte): «Pelis y series» ya
+> sin `?flag=cine`, `build: version 0.9.0` y `ismaeloul-ace-player-neo/releases/0.9.0/` montada en Linux (§8). Falta
+> el PR a `main` con el CI en verde, el merge commit, la etiqueta `ace-player-neo-v0.9.0` y que Isma actualice en su
+> Umbrel. Lo que queda después: `docs/pendiente.md` («Después de la 0.9.0»).
+
 ---
 
 ## 0. Lo primero: preparar el repositorio en el escritorio

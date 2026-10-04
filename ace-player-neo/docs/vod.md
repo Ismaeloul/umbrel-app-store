@@ -5,7 +5,9 @@ Lo pidió Isma el 29-sep-2026: su IPTV «viene con series y pelis», y quiere qu
 para elegir entre pelis o series. Parte de la 0.8.2 publicada. La web va primero; la app de iOS llega después y la API
 se diseña para las dos (§17).
 
-**Estado: propuesta (29-sep-2026), con las respuestas de Isma del 30-sep (§19.4).** Dónde está cada pieza, qué está
+**Estado: publicado en la 0.9.0 (4-oct-2026), ya sin `?flag=cine`: «Pelis y series» sale con `features.vod`.**
+Fuera de la 0.9.0 quedan los subtítulos (VOD-8), lo de `docs/vod-estado.md` §4.7 y la app de iOS (§17).
+Diseño original: propuesta del 29-sep-2026, con las respuestas de Isma del 30-sep (§19.4). Dónde está cada pieza, qué está
 hecho, qué falla y el plan hasta la 0.9.0: **`docs/vod-estado.md`** (manda sobre lo que diga aquí de ramas y
 paquetes). Hecho: el contrato (VOD-1: `packages/shared` y las 6 rutas como esqueleto que responde 501), el guion del
 Paso 0 (`scripts/vod-sondeo.mjs`, §3) y la web de navegar (VOD-3: §12.1-§12.6, §12.10 y §12.11, con «Reproducir»
@@ -37,7 +39,7 @@ empieza en ficheros nuevos; los enganches de una línea en esos ficheros se unen
 ## 0. En pocas palabras
 
 1. **Un destino nuevo en la navegación: «Pelis y series».** La vista se titula «Películas y series». Solo aparece si
-   la IPTV es Xtream Codes **y** su proveedor tiene VOD. Hasta que salga la 0.9.0, además, solo con `?flag=cine`.
+   la IPTV es Xtream Codes **y** su proveedor tiene VOD. (Hasta la 0.9.0 hacía falta además `?flag=cine`; ya no.)
    - Arriba, «Seguir viendo», «Novedades en películas» y «Series actualizadas», en **una sola petición**.
    - Un selector «Películas | Series», las categorías del proveedor, chips de lengua y calidad («Castellano»,
      «Latino», «VOSE», «Multi», «4K») y un buscador.
@@ -1509,7 +1511,7 @@ export const VOD_CLIENT = {
   Isma). **«Cine» es el respaldo** si `revision` muestra algún corte.
 - **Orden:** `['agenda', 'biblioteca', 'cine', 'buscar', 'ajustes']`.
 - **`navVistas(features, flags)`** sustituye a la constante `NAV_VISTAS` donde se pinta: `cine` solo con
-  `features.vod` **y**, hasta la 0.9.0, con `hasFlag('cine')` (`?flag=cine`).
+  `features.vod` (hasta la 0.9.0, también `?flag=cine`; ya no).
 - **T17:** `Nav.tsx:83` y `:125` ponen `--n` con la longitud de la lista **filtrada**, y el índice `--i` se busca en
   esa lista. Se quita el `--n: 4` de `shell.css:225` y `:308`: el valor en línea ya manda, y así no queda un 4 de
   recuerdo.
