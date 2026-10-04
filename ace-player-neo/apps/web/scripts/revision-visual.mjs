@@ -310,16 +310,16 @@ const VIEWS = [
     },
   },
   { name: 'sistema', search: '?vista=sistema&flag=sistema' },
-  // Películas y series (docs/vod.md §12.11): con `?flag=cine`; en vivo solo
+  // Películas y series (docs/vod.md §12.11): sin interruptor desde la 0.9.0; en vivo solo
   // salen si el servidor ya tiene películas y series. La portada va en filas
   // (`.cine-row`); la rejilla (`.cine-grid`) es otra pantalla.
   // La primera vez, el selector de idiomas (antes de pasarlo).
-  { name: 'cine-idiomas', search: '?vista=cine&flag=cine', ready: '.cine-welcome' },
-  { name: 'cine', search: '?vista=cine&flag=cine', cine: true, ready: '.cine-row .cine-card' },
+  { name: 'cine-idiomas', search: '?vista=cine', ready: '.cine-welcome' },
+  { name: 'cine', search: '?vista=cine', cine: true, ready: '.cine-row .cine-card' },
   {
     name: 'cine-categoria',
     cine: true,
-    search: '?vista=cine&flag=cine',
+    search: '?vista=cine',
     ready: '.cine-row .cine-card',
     prepare: async (page) => {
       // «Ver todo» de la fila de la categoría: abre su rejilla.
@@ -333,14 +333,14 @@ const VIEWS = [
   },
   {
     name: 'cine-busqueda',
-    search: '?vista=cine&flag=cine&cineq=dune',
+    search: '?vista=cine&cineq=dune',
     cine: true,
     ready: '.cine-grid',
   },
   {
     name: 'cine-pelicula',
     cine: true,
-    search: '?vista=cine&flag=cine',
+    search: '?vista=cine',
     ready: '.cine-row .cine-card',
     prepare: async (page) => {
       await page.locator('.cine-row .cine-card').first().click();
@@ -351,7 +351,7 @@ const VIEWS = [
   {
     name: 'cine-serie',
     cine: true,
-    search: '?vista=cine&flag=cine&cine=series',
+    search: '?vista=cine&cine=series',
     ready: '.cine-row .cine-card',
     prepare: async (page) => {
       await page.locator('.cine-row .cine-card').first().click();
@@ -362,7 +362,7 @@ const VIEWS = [
   // La sala de una película (`sala/<id>`, docs/vod.md §12.8) con ella sonando.
   {
     name: 'sala',
-    search: '?vista=cine&flag=cine',
+    search: '?vista=cine',
     cine: true,
     ready: '.cine-row .cine-card',
     player: true,

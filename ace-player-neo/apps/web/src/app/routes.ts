@@ -26,7 +26,7 @@
      conservan siempre.
    Funciones puras: se prueban solas. */
 
-import { hasFlag, isSystemPageEnabled } from '../lib/flags.ts';
+import { isSystemPageEnabled } from '../lib/flags.ts';
 
 export type Vista =
   'agenda' | 'biblioteca' | 'guia' | 'cine' | 'buscar' | 'ajustes' | 'partido' | 'sala' | 'sistema';
@@ -50,9 +50,9 @@ export type Route =
 
 /**
  * Los destinos de la navegación, en su orden. «Pelis y series» (`cine`) solo
- * se pinta si el servidor tiene películas y series (`features.vod`) y, hasta
- * la 0.9.0, con `?flag=cine` (docs/vod.md §12.1, D-VOD21): quien pinta la
- * barra usa `navVistas()`, nunca esta lista entera.
+ * se pinta si el servidor tiene películas y series (`features.vod`, docs/vod.md
+ * §12.1; desde la 0.9.0 ya sin `?flag=cine`): quien pinta la barra usa
+ * `navVistas()`, nunca esta lista entera.
  */
 export const NAV_VISTAS = [
   'agenda',
@@ -63,21 +63,13 @@ export const NAV_VISTAS = [
 ] as const satisfies readonly Vista[];
 export type NavVista = (typeof NAV_VISTAS)[number];
 
-/** ¿Está puesto el interruptor `?flag=cine`? Hasta la 0.9.0 hace falta para ver el destino. */
-export function cineFlagOn(search?: string): boolean {
-  return hasFlag('cine', search);
-}
-
 /**
  * Los destinos que se pintan (T17 de docs/vod.md): `cine` solo con
- * `features.vod` y el interruptor. La barra calcula `--n` y la píldora con
- * ESTA lista, no con la entera.
+ * `features.vod`. La barra calcula `--n` y la píldora con ESTA lista, no con
+ * la entera.
  */
-export function navVistas(
-  features: { vod?: boolean } | null | undefined,
-  flag: boolean = cineFlagOn(),
-): readonly NavVista[] {
-  const withCine = features?.vod === true && flag;
+export function navVistas(features: { vod?: boolean } | null | undefined): readonly NavVista[] {
+  const withCine = features?.vod === true;
   return NAV_VISTAS.filter((vista) => vista !== 'cine' || withCine);
 }
 

@@ -230,7 +230,7 @@ describe('versión del servidor', () => {
 });
 
 describe('manifiesto y accesos directos', () => {
-  it('«Agenda» y «Biblioteca» del icono abren esas vistas (?vista=…)', () => {
+  it('«Agenda», «Biblioteca» y «Pelis y series» del icono abren esas vistas (?vista=…)', () => {
     const manifest = JSON.parse(
       readFileSync(path.join(WEB, 'public', 'manifest.webmanifest'), 'utf8'),
     ) as {
@@ -243,11 +243,10 @@ describe('manifiesto y accesos directos', () => {
     const byName = Object.fromEntries(manifest.shortcuts.map((s) => [s.name, s.url]));
     expect(byName['Agenda de fútbol']).toBe('/?vista=agenda');
     expect(byName.Biblioteca).toBe('/?vista=biblioteca');
+    expect(byName['Películas y series']).toBe('/?vista=cine');
     for (const shortcut of manifest.shortcuts) {
       const search = new URL(shortcut.url, 'http://umbrel.local:7792').search;
-      expect(parseRoute(search).vista).toBe(
-        shortcut.url.endsWith('biblioteca') ? 'biblioteca' : 'agenda',
-      );
+      expect(parseRoute(search).vista).toBe(new URLSearchParams(search).get('vista'));
     }
   });
 

@@ -2,7 +2,7 @@
    Diminuto a propósito: solo REGISTRA los manejadores; el catálogo de
    muestra (demo-data.ts) se descarga con import() la primera vez que la demo
    lo pide. Lo importan index.tsx y aside.tsx (`import './demo.ts';`). Se ve
-   con `?demo=1&flag=cine`. Los idiomas (§4.10) se guardan en el navegador:
+   con `?demo=1`. Los idiomas (§4.10) se guardan en el navegador:
    la primera vez sale el selector. */
 
 import { ApiError, registerDemoHandlers } from '../../api/index.ts';

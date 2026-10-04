@@ -1,15 +1,13 @@
 /* Interruptores de desarrollo:
    - `sistema`: la página de muestra de componentes (?vista=sistema) sale
      siempre en desarrollo y, en producción, solo si se activa a mano.
-   - `cine`: el destino «Pelis y series» (docs/vod.md §12.1) hasta la 0.9.0;
-     además hace falta que el servidor tenga películas y series.
    Cómo se activan:
-   - una vez: ?vista=sistema&flag=sistema (o &flag=cine; se conserva al navegar)
-   - para siempre en ese navegador: localStorage['aceneo-flags'] = 'sistema,cine' */
+   - una vez: ?vista=sistema&flag=sistema (se conserva al navegar)
+   - para siempre en ese navegador: localStorage['aceneo-flags'] = 'sistema' */
 
 import { readItem, STORAGE_KEYS } from './storage.ts';
 
-export type Flag = 'sistema' | 'cine';
+export type Flag = 'sistema';
 
 export function hasFlag(flag: Flag, search: string = globalThis.location?.search ?? ''): boolean {
   try {

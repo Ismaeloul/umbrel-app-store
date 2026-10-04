@@ -24,6 +24,12 @@
       "short_name": "Biblioteca",
       "url": "/?vista=biblioteca",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Películas y series",
+      "short_name": "Pelis y series",
+      "url": "/?vista=cine",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ],
   "icons": [

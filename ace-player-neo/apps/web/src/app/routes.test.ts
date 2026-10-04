@@ -190,18 +190,11 @@ describe('Películas y series (docs/vod.md §12.1 y §12.2)', () => {
     expect(scrollKey({ vista: 'agenda' })).toBe('agenda');
   });
 
-  it('«Pelis y series» solo con features.vod y el interruptor, entre Canales y Buscar', () => {
+  it('«Pelis y series» solo con features.vod (sin interruptor desde la 0.9.0), entre Canales y Buscar', () => {
     const cuatro = ['agenda', 'biblioteca', 'buscar', 'ajustes'];
-    expect(navVistas(undefined, true)).toEqual(cuatro);
-    expect(navVistas({ vod: true }, false)).toEqual(cuatro);
-    expect(navVistas({ vod: false }, true)).toEqual(cuatro);
-    expect(navVistas({ vod: true }, true)).toEqual([
-      'agenda',
-      'biblioteca',
-      'cine',
-      'buscar',
-      'ajustes',
-    ]);
+    expect(navVistas(undefined)).toEqual(cuatro);
+    expect(navVistas({ vod: false })).toEqual(cuatro);
+    expect(navVistas({ vod: true })).toEqual(['agenda', 'biblioteca', 'cine', 'buscar', 'ajustes']);
   });
 
   it('el rótulo corto en la barra y el título entero en la vista', () => {

@@ -350,9 +350,9 @@ describe('armazón', () => {
     const labels = (bar: HTMLElement) =>
       [...bar.querySelectorAll('.tabbar__item, .topbar__item')].map((a) => a.textContent);
 
-    it('con features.vod y ?flag=cine, cinco destinos; --n y la píldora salen de esa lista', async () => {
-      history.replaceState(null, '', '/?vista=cine&flag=cine');
-      renderApp('?vista=cine&flag=cine', clientWithVod(true));
+    it('con features.vod, cinco destinos sin ?flag=cine; --n y la píldora salen de esa lista', async () => {
+      history.replaceState(null, '', '/?vista=cine');
+      renderApp('?vista=cine', clientWithVod(true));
       await screen.findAllByRole('heading', { level: 1 });
       for (const bar of nav()) {
         expect(labels(bar)).toEqual(
@@ -373,17 +373,16 @@ describe('armazón', () => {
       expect(tabbar.getAttribute('style')).toContain('--i: 3');
     });
 
-    it('sin el interruptor, o sin features.vod, los cuatro de siempre', async () => {
-      renderApp('', clientWithVod(true));
+    it('sin features.vod, los cuatro de siempre', async () => {
+      renderApp('', clientWithVod(false));
       await screen.findByRole('heading', { level: 1, name: 'Agenda' });
       for (const bar of nav())
         expect(labels(bar)).toEqual(['Agenda', 'Canales', 'Buscar', 'Ajustes']);
       expect(document.querySelector('.tabbar')?.getAttribute('style')).toContain('--n: 4');
     });
 
-    it('con el interruptor pero sin películas en el servidor, tampoco', async () => {
-      history.replaceState(null, '', '/?flag=cine');
-      renderApp('?flag=cine', clientWithVod(false));
+    it('sin películas en el servidor, Buscar sigue en la tercera columna', async () => {
+      renderApp('', clientWithVod(false));
       await screen.findByRole('heading', { level: 1, name: 'Agenda' });
       for (const bar of nav()) expect(labels(bar)).toHaveLength(4);
       // Buscar sigue en la tercera columna.

@@ -17,7 +17,7 @@
    - Películas y series (docs/vod.md §12.11): el bootstrap dice que las hay
      (`features.vod`) y la IPTV de ejemplo lleva su resumen; el catálogo de
      muestra lo contesta features/cine/demo.ts. El destino sale con
-     `?demo=1&flag=cine`.
+     `?demo=1`.
    - Una vista puede afinar cualquier respuesta con registerDemoHandler. */
 
 import type {

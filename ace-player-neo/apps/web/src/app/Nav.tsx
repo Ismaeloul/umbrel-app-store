@@ -1,7 +1,6 @@
 /* Navegación principal con cuatro destinos (Agenda · Canales · Buscar ·
    Ajustes) o cinco con «Pelis y series» entre Canales y Buscar (docs/vod.md
-   §12.1: solo si el servidor tiene películas y series y, hasta la 0.9.0, con
-   `?flag=cine`), en la forma de «Palco» (plan de la fase 2, decisión W3):
+   §12.1: solo si el servidor tiene películas y series), en la forma de «Palco» (plan de la fase 2, decisión W3):
 
    - Móvil (< 768 px): barra inferior FLOTANTE de cristal (márgenes de 12,
      radio 24, sombra Palco) con una píldora que se desliza hasta el destino
@@ -38,7 +37,6 @@ import type { IconName } from '../ui/icons.ts';
 import { EngineIndicator } from './EngineIndicator.tsx';
 import { rememberedViewParams, useNavigate } from './router.tsx';
 import {
-  cineFlagOn,
   navLabel,
   navParent,
   navVistas,
@@ -63,10 +61,10 @@ function navRoute(vista: NavVista): Route {
   return { vista };
 }
 
-/** Los destinos que se pintan ahora mismo (`cine` según `features.vod` y el interruptor). */
+/** Los destinos que se pintan ahora mismo (`cine` según `features.vod`). */
 function useNavVistas(): readonly NavVista[] {
   const vod = useVodActive();
-  return navVistas({ vod }, cineFlagOn());
+  return navVistas({ vod });
 }
 
 /**

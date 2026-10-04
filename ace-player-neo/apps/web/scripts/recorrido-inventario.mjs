@@ -729,12 +729,14 @@ async function escritorio(browser) {
 
   await punto(
     'D23',
-    'PWA: manifiesto con los accesos ?vista=agenda y ?vista=biblioteca; el acceso abre la vista',
+    'PWA: manifiesto con los accesos ?vista=agenda, ?vista=biblioteca y ?vista=cine; el acceso abre la vista',
     async () => {
       const manifest = await pedir(`${WEB}/manifest.webmanifest`).then((r) => r.json());
       const urls = (manifest.shortcuts ?? []).map((s) => s.url);
       esperar(
-        urls.some((u) => /vista=agenda/.test(u)) && urls.some((u) => /vista=biblioteca/.test(u)),
+        urls.some((u) => /vista=agenda/.test(u)) &&
+          urls.some((u) => /vista=biblioteca/.test(u)) &&
+          urls.some((u) => /vista=cine/.test(u)),
         `accesos: ${urls}`,
       );
       await ir(page, '/?vista=biblioteca');
