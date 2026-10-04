@@ -24285,7 +24285,7 @@ var init_guide2 = __esm({
 });
 
 // ../../packages/shared/src/api/v1/vod.ts
-var VOD_KINDS, VOD_TAGS, VOD_LANGS, VOD_ART_KINDS, VodKindSchema, VodTagSchema, VodArtKindSchema, VodArtStampSchema, VodPlayableSchema, VodTagCountSchema, VodLangSchema, VodTitleLangsSchema, VodLangCountSchema, VOD_LANG_ALT, VodLangsParamSchema, VodLangQuerySchema, VodLangHiddenSchema, VodLanguagesSchema, VodLanguagesBodySchema, VodCardSchema, VodCategorySchema, VodContinueSchema, VodHomeSchema, VodHomeQuerySchema, VodBrowseQuerySchema, VodBrowseResponseSchema, VodTitleParamsSchema, VodTitleQuerySchema, VodProgressSchema, VodInfoSchema, VodTitleCategorySchema, VodDateSchema, VodTrailerSchema, VodDetectedAudioSchema, VodMovieSchema, VodEpisodeSchema, VodSeriesMainSchema, VodSeriesSchema, VodTitleSchema, VodArtParamsSchema, VodArtQuerySchema, VodStreamQuerySchema, VodAudioTrackSchema, VodGrantSchema, VodProgressBodySchema;
+var VOD_KINDS, VOD_TAGS, VOD_LANGS, VOD_ART_KINDS, VodKindSchema, VodTagSchema, VodArtKindSchema, VodArtStampSchema, VodPlayableSchema, VodTagCountSchema, VodLangSchema, VodTitleLangsSchema, VodLangCountSchema, VOD_LANG_ALT, VodLangsParamSchema, VodLangQuerySchema, VodLanguagesSchema, VodLanguagesBodySchema, VodCardSchema, VodCategorySchema, VodContinueSchema, VodHomeSchema, VodHomeQuerySchema, VodBrowseQuerySchema, VodBrowseResponseSchema, VodTitleParamsSchema, VodTitleQuerySchema, VodProgressSchema, VodInfoSchema, VodTitleCategorySchema, VodDateSchema, VodTrailerSchema, VodDetectedAudioSchema, VodMovieSchema, VodEpisodeSchema, VodSeriesMainSchema, VodSeriesSchema, VodTitleSchema, VodArtParamsSchema, VodArtQuerySchema, VodStreamQuerySchema, VodAudioTrackSchema, VodGrantSchema, VodProgressBodySchema;
 var init_vod2 = __esm({
   "../../packages/shared/src/api/v1/vod.ts"() {
     "use strict";
@@ -24334,19 +24334,12 @@ var init_vod2 = __esm({
       langs: VodLangsParamSchema.optional(),
       unknown: external_exports.enum(["0", "1"]).optional()
     });
-    VodLangHiddenSchema = external_exports.strictObject({
-      /** Títulos que quedan fuera (uno MULTI cuenta una vez aquí y una vez en cada idioma suyo). */
-      total: external_exports.number().int().nonnegative(),
-      langs: external_exports.array(VodLangCountSchema).max(VOD_LANGS.length),
-      /** Sin idioma indicado (solo con `unknown=0`). */
-      unknown: external_exports.number().int().nonnegative()
-    });
     VodLanguagesSchema = external_exports.strictObject({
       /** false hasta que los elige la primera vez (la web enseña el selector). */
       chosen: external_exports.boolean(),
       /** Vacía = todos los idiomas (sin filtro). */
       langs: external_exports.array(VodLangSchema).max(VOD_LANGS.length),
-      /** También los títulos que no indican idioma. */
+      /** También los títulos que no indican idioma (por defecto, no: solo los idiomas elegidos). */
       unknown: external_exports.boolean(),
       updatedAt: IsoDateTimeSchema.nullable()
     });
@@ -24451,7 +24444,7 @@ var init_vod2 = __esm({
       limit: external_exports.coerce.number().int().min(1).max(VOD_SEARCH.pageMax).default(VOD_SEARCH.pageDefault),
       /** Filtro de idiomas (§4.10): `castellano,frances`. Sin él, todos. */
       langs: VodLangsParamSchema.optional(),
-      /** Con `langs`: `1` (por defecto) también los que no indican idioma. */
+      /** Con `langs`: `1` también los que no indican idioma (por defecto, `0`: no salen). */
       unknown: external_exports.enum(["0", "1"]).optional()
     });
     VodBrowseResponseSchema = external_exports.strictObject({
@@ -24468,13 +24461,7 @@ var init_vod2 = __esm({
       /** null = no hay más. */
       nextCursor: CursorSchema.nullable(),
       /** El cursor era de otro catálogo: esta es la primera página. */
-      stale: external_exports.boolean(),
-      /**
-       * Con filtro de idiomas: lo que casa (la búsqueda, la categoría) pero queda
-       * fuera por su idioma, para decir «3 en latino · Ver». null sin filtro.
-       * Opcional: un servidor anterior no lo manda.
-       */
-      otherLangs: VodLangHiddenSchema.nullable().optional()
+      stale: external_exports.boolean()
     });
     VodTitleParamsSchema = external_exports.strictObject({ id: HashSchema });
     VodTitleQuerySchema = external_exports.strictObject({ pre: external_exports.enum(["0", "1"]).default("0") });
@@ -92117,7 +92104,7 @@ function knownLangs(values) {
   const asked = new Set(values);
   return VOD_LANGS.filter((lang) => asked.has(lang));
 }
-var EMPTY = { version: 1, langs: [], unknown: true, updatedAt: null };
+var EMPTY = { version: 1, langs: [], unknown: false, updatedAt: null };
 function viewOf(file2) {
   return {
     chosen: file2.updatedAt !== null,
@@ -92194,22 +92181,6 @@ function langPasses(filter, bits) {
   if (!filter) return true;
   return bits ? (bits & filter.mask) !== 0 : filter.unknown;
 }
-function emptyHidden() {
-  return { total: 0, byLang: new Array(VOD_LANGS.length).fill(0), unknown: 0 };
-}
-function countHidden(hidden, bits) {
-  hidden.total += 1;
-  if (!bits) {
-    hidden.unknown += 1;
-    return;
-  }
-  for (let index = 0; index < VOD_LANGS.length; index += 1) {
-    if (bits & 1 << index) hidden.byLang[index] = hidden.byLang[index] + 1;
-  }
-}
-function hiddenLangs(hidden) {
-  return VOD_LANGS.map((lang, index) => ({ lang, count: hidden.byLang[index] })).filter((item) => item.count > 0).sort((a, b) => b.count - a.count);
-}
 var HIDDEN = 7;
 function bucketOf(table, row) {
   const value = table.cat[row];
@@ -92223,7 +92194,6 @@ function searchTable(table, query, bucket, lang = null) {
   const textWords = words.filter((_, index) => years[index] === null);
   const state = new Uint8Array(n);
   const matched = [];
-  const hidden = lang ? emptyHidden() : null;
   const single = words.length === 1 && !hasYears;
   const accept = (row) => {
     if (state[row]) return;
@@ -92244,7 +92214,6 @@ function searchTable(table, query, bucket, lang = null) {
     const bits = table.langs[row];
     if (!langPasses(lang, bits)) {
       state[row] = HIDDEN;
-      if (hidden) countHidden(hidden, bits);
       return;
     }
     state[row] = relevance(title, rankWords) + 2;
@@ -92252,7 +92221,7 @@ function searchTable(table, query, bucket, lang = null) {
   };
   const longest = [...textWords].sort((a, b) => b.length - a.length)[0];
   if (single && longest) {
-    singleWordLevels(table, longest, bucket, state, matched, lang, hidden);
+    singleWordLevels(table, longest, bucket, state, matched, lang);
   } else if (longest) {
     let hint = 0;
     for (let at = folded.indexOf(longest); at >= 0; ) {
@@ -92276,7 +92245,6 @@ function searchTable(table, query, bucket, lang = null) {
       const bits = table.langs[row];
       if (!langPasses(lang, bits)) {
         state[row] = HIDDEN;
-        if (hidden) countHidden(hidden, bits);
         continue;
       }
       state[row] = 6;
@@ -92313,9 +92281,9 @@ function searchTable(table, query, bucket, lang = null) {
       start = end;
     }
   }
-  return { rows: rows2, total: count, tagCounts: countTags(table, matched), hidden };
+  return { rows: rows2, total: count, tagCounts: countTags(table, matched) };
 }
-function singleWordLevels(table, word, bucket, state, matched, lang, hidden) {
+function singleWordLevels(table, word, bucket, state, matched, lang) {
   const { folded, offsets, n } = table;
   let row = -1;
   let rowEnd = -1;
@@ -92335,7 +92303,6 @@ function singleWordLevels(table, word, bucket, state, matched, lang, hidden) {
           matched.push(row);
         } else {
           state[row] = HIDDEN;
-          if (hidden) countHidden(hidden, bits);
         }
       }
       if (state[row] === HIDDEN) skip = true;
@@ -92447,8 +92414,7 @@ function searchPage(hits, table, filter, offset, limit) {
     total,
     capped: total > rows2.length || hits.total > VOD_SEARCH.rowsMax,
     tagCounts: hits.tagCounts,
-    more: offset + page.length < rows2.length,
-    hidden: hits.hidden
+    more: offset + page.length < rows2.length
   };
 }
 function listPage(table, filter, sort, offset, limit, options = {}) {
@@ -92458,17 +92424,13 @@ function listPage(table, filter, sort, offset, limit, options = {}) {
   else order = sort === "name" ? table.byTitle() : table.byAdded;
   const page = [];
   const counts = new Array(VOD_TAGS.length).fill(0);
-  const hidden = filter.lang ? emptyHidden() : null;
   let total = 0;
   for (let index = 0; index < order.length; index += 1) {
     const row = order[index];
     if (excludeAdult && table.isAdult(row)) continue;
     if (filter.bucket !== null && bucketOf(table, row) !== filter.bucket) continue;
     const langBits = table.langs[row];
-    if (!langPasses(filter.lang, langBits)) {
-      if (hidden) countHidden(hidden, langBits);
-      continue;
-    }
+    if (!langPasses(filter.lang, langBits)) continue;
     const bits = table.tags[row];
     if (bits) {
       for (let tag = 0; tag < VOD_TAGS.length; tag += 1) {
@@ -92486,8 +92448,7 @@ function listPage(table, filter, sort, offset, limit, options = {}) {
     tagCounts: VOD_TAGS.map((tag, index) => ({ tag, count: counts[index] })).filter(
       (item) => item.count > 0
     ),
-    more: offset + page.length < total,
-    hidden
+    more: offset + page.length < total
   };
 }
 
@@ -92505,13 +92466,9 @@ var HOME_FILTERS_MAX = 4;
 function langFilterOf(query) {
   if (!query?.langs) return null;
   const mask = vodLangBits(parseVodLangsParam(query.langs));
-  const unknown2 = query.unknown !== "0";
+  const unknown2 = query.unknown === "1";
   if (mask === VOD_LANG_ALL && unknown2) return null;
   return { mask, unknown: unknown2 };
-}
-function otherLangsOf(hidden) {
-  if (!hidden) return null;
-  return { total: hidden.total, langs: hiddenLangs(hidden), unknown: hidden.unknown };
 }
 var VOD_VIEW_RETRY_MS = 3e4;
 var LANGUAGE_LABEL2 = {
@@ -93387,8 +93344,7 @@ ${name}`),
       otherKindTotal: parsed ? 0 : null,
       tags: [],
       nextCursor: null,
-      stale: false,
-      otherLangs: null
+      stale: false
     };
     if (!catalog || state !== "ready") return empty;
     const table = catalog.tables[query.kind];
@@ -93413,8 +93369,7 @@ ${name}`),
       otherKindTotal: parsed ? searchCached(catalog.tables[other], parsed, null, lang).total : null,
       tags: page.tagCounts.map((item) => ({ tag: item.tag, count: item.count })),
       nextCursor: page.more ? encodeCursor(catalog.stamp, offset + page.rows.length) : null,
-      stale,
-      otherLangs: otherLangsOf(page.hidden)
+      stale
     };
   }
   /** GET /api/v1/vod/languages (§4.10): no necesita el catálogo ni la IPTV. */

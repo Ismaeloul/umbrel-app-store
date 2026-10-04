@@ -9,7 +9,8 @@ con caratulas, ficha de cada titulo (sinopsis, año, reparto, nota),
 temporadas y capitulos. "Seguir viendo" te deja donde lo dejaste, puedes
 saltar adelante y atras y al acabar un capitulo pasa al siguiente. El
 castellano y el latino van por separado y la ficha avisa del idioma real
-del audio cuando el titulo no lo dice.
+del audio cuando el titulo no lo dice. Solo salen las de los idiomas que
+elijas (de entrada, castellano), tambien al buscar.
 
 Guia TV: desde Canales, una parrilla como la de Movistar+ con la
 programacion de tus canales de la IPTV, la raya de "ahora" y la ficha
