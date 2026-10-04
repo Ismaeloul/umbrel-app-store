@@ -49,7 +49,6 @@ describe('estado de la URL (docs/vod.md §12.2)', () => {
       tag: 'vose',
       q: 'dune',
       order: 'az',
-      lang: null,
     });
     expect(writeCineState('?vista=cine&demo=1&flag=cine', state)).toBe(
       '?vista=cine&demo=1&flag=cine&cine=series&cinecat=a1b2c3d4e5f6&cinetag=vose&cineq=dune&cineorden=az',
@@ -62,7 +61,6 @@ describe('estado de la URL (docs/vod.md §12.2)', () => {
         tag: null,
         q: '',
         order: 'novedades',
-        lang: null,
       }),
     ).toBe('?vista=cine');
     // «Todas» SÍ se escribe: es la rejilla de todo, otra pantalla que la portada.
@@ -73,16 +71,8 @@ describe('estado de la URL (docs/vod.md §12.2)', () => {
         tag: null,
         q: '',
         order: 'az',
-        lang: null,
       }),
     ).toBe('?vista=cine&cinecat=all&cineorden=az');
-    // «3 en latino · Ver» (§4.10): `cineidioma`, solo con un idioma conocido.
-    const latino = readCineState('?vista=cine&cineq=coco&cineidioma=latino');
-    expect(latino.lang).toBe('latino');
-    expect(writeCineState('?vista=cine', { ...latino })).toBe(
-      '?vista=cine&cineq=coco&cineidioma=latino',
-    );
-    expect(readCineState('?cineidioma=klingon').lang).toBeNull();
   });
 
   it('lo que no se entiende vale por defecto (sin categoría: la portada)', () => {
@@ -92,7 +82,6 @@ describe('estado de la URL (docs/vod.md §12.2)', () => {
       tag: null,
       q: '',
       order: 'novedades',
-      lang: null,
     });
     expect(readCineState('?cinecat=all').cat).toBe('all');
   });
@@ -364,7 +353,7 @@ describe('números (§12.4 y §12.10)', () => {
 describe('idiomas (docs/vod.md §4.10)', () => {
   const prefs = (langs: VodLang[], unknown = true, chosen = true) => ({ chosen, langs, unknown });
 
-  it('la consulta: sin elegir o con «todos», sin filtro; «Ver» de una búsqueda, solo ese idioma', () => {
+  it('la consulta: sin elegir o con «todos», sin filtro; si no, los elegidos (y sin indicar solo con el interruptor)', () => {
     expect(langQuery(null)).toEqual({});
     expect(langQuery(prefs(['castellano'], true, false))).toEqual({});
     expect(langQuery(prefs([]))).toEqual({});
@@ -373,7 +362,6 @@ describe('idiomas (docs/vod.md §4.10)', () => {
       unknown: '1',
     });
     expect(langQuery(prefs(['castellano'], false))).toEqual({ langs: 'castellano', unknown: '0' });
-    expect(langQuery(prefs(['castellano']), 'latino')).toEqual({ langs: 'latino', unknown: '0' });
     expect(filtersLangs(prefs(['castellano']))).toBe(true);
     expect(filtersLangs(prefs([]))).toBe(false);
     expect(

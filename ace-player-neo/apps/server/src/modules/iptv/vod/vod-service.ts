@@ -117,7 +117,6 @@ import {
 import { VodLanguageStore } from './languages.js';
 import {
   forgetSearches,
-  hiddenLangs,
   langFilterKey,
   langPasses,
   listPage,
@@ -126,7 +125,6 @@ import {
   searchPage,
   type VodFilter,
   type VodLangFilter,
-  type VodLangHiddenCounts,
 } from './search.js';
 import { foldKeepLength, type VodTable } from './table.js';
 import type { VodSyncMode } from './table-codec.js';
@@ -236,21 +234,17 @@ interface HomeParts {
 
 /**
  * El filtro de idiomas de una consulta (§4.10): sin `langs`, ninguno; con
- * todos los idiomas y también los que no lo dicen, ninguno tampoco.
+ * todos los idiomas y también los que no lo dicen, ninguno tampoco. Los que
+ * no indican idioma solo pasan con `unknown=1` (por defecto, no: 0.9.0).
  */
 export function langFilterOf(query: VodLangQuery | undefined): VodLangFilter | null {
   if (!query?.langs) return null;
   const mask = vodLangBits(parseVodLangsParam(query.langs));
-  const unknown = query.unknown !== '0';
+  const unknown = query.unknown === '1';
   if (mask === VOD_LANG_ALL && unknown) return null;
   return { mask, unknown };
 }
 
-/** Lo que queda fuera por idioma, como lo manda la API. */
-function otherLangsOf(hidden: VodLangHiddenCounts | null): VodBrowseResponse['otherLangs'] {
-  if (!hidden) return null;
-  return { total: hidden.total, langs: hiddenLangs(hidden), unknown: hidden.unknown };
-}
 /** Tras un fallo, la vista no vuelve a lanzar una sincronización antes de esto. */
 export const VOD_VIEW_RETRY_MS = 30_000;
 
@@ -1281,7 +1275,6 @@ export class VodService {
       tags: [],
       nextCursor: null,
       stale: false,
-      otherLangs: null,
     };
     if (!catalog || state !== 'ready') return empty;
     const table = catalog.tables[query.kind];
@@ -1309,7 +1302,6 @@ export class VodService {
       tags: page.tagCounts.map((item) => ({ tag: item.tag, count: item.count })),
       nextCursor: page.more ? encodeCursor(catalog.stamp, offset + page.rows.length) : null,
       stale,
-      otherLangs: otherLangsOf(page.hidden),
     };
   }
 

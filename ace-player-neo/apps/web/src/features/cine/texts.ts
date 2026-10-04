@@ -158,20 +158,6 @@ export const LANG_BADGE: Record<VodLang, string> = {
   otros: 'Otro idioma',
 };
 
-/** En una frase: «3 en latino», «1 en VOSE», «2 en otros idiomas». */
-export const LANG_IN: Record<VodLang, string> = {
-  castellano: 'castellano',
-  latino: 'latino',
-  vose: 'VOSE',
-  ingles: 'inglés',
-  frances: 'francés',
-  italiano: 'italiano',
-  aleman: 'alemán',
-  portugues: 'portugués',
-  catalan: 'catalán',
-  otros: 'otros idiomas',
-};
-
 /** La marca de la tesela del selector. */
 export const LANG_CODE: Record<VodLang, string> = {
   castellano: 'ES',
@@ -221,8 +207,6 @@ export const LANG_TEXT = {
   saved: 'Idiomas guardados',
   saveFailed: 'No se han podido guardar los idiomas.',
   change: 'Cambiar idiomas',
-  otherLangsLead: 'En otros idiomas sí hay:',
-  backToMine: 'Volver a mis idiomas',
   settingsTitle: 'Idiomas de Pelis y series',
   settingsChange: 'Cambiar',
   loading: 'Cargando los idiomas…',
@@ -257,11 +241,6 @@ export function langCountText(movies: number, series: number): string {
   return parts.length ? parts.join(' · ') : 'Nada en tu IPTV';
 }
 
-/** «3 en latino». */
-export function inLangText(n: number, lang: VodLang): string {
-  return `${formatCount(n)} en ${LANG_IN[lang]}`;
-}
-
 /** «12.345 títulos de tu IPTV no dicen en qué idioma están.» */
 export function unknownHelp(n: number): string {
   return n === 1
@@ -277,11 +256,6 @@ export function noneInLangs(kind: VodKind, langs: readonly VodLang[]): string {
 /** «Tu IPTV tiene 1.234 películas en otros idiomas.» */
 export function elsewhereText(n: number, kind: VodKind): string {
   return `Tu IPTV tiene ${titlesText(n, kind)} en otros idiomas.`;
-}
-
-/** «Viendo solo en latino.» (la rejilla tras «3 en latino · Ver»). */
-export function onlyInLangText(lang: VodLang): string {
-  return `Viendo solo en ${LANG_IN[lang]}.`;
 }
 
 /** Nombre accesible del botón de la cabecera: «Idiomas: Castellano y Francés. Cambiar». */

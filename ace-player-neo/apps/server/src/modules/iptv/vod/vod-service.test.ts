@@ -235,7 +235,7 @@ describe('VodService contra el proveedor falso', () => {
     expect(vose.items.map((card) => card.title)).toEqual(['Amélie']);
   });
 
-  it('idiomas (§4.10): portada y rejilla filtran, las categorías sin nada en esos idiomas no salen y lo de fuera se cuenta', async () => {
+  it('idiomas (§4.10): portada y rejilla filtran, las categorías sin nada en esos idiomas no salen y lo de otros idiomas no se cuenta', async () => {
     const rig = await ready();
     const { vod } = await synced(rig);
     const all = VodHomeSchema.parse(await vod.home());
@@ -261,8 +261,23 @@ describe('VodService contra el proveedor falso', () => {
       { tag: 'latino', count: 1 },
       { tag: '4k', count: 1 },
     ]);
-    /* Castellano y, por defecto, también los que no lo indican (la de adultos y el anime). */
-    const castellano = VodHomeSchema.parse(await vod.home({ langs: 'castellano' }));
+    /* Castellano: por defecto, SOLO castellano (0.9.0); los que no lo indican, fuera. */
+    const onlyEs = VodHomeSchema.parse(await vod.home({ langs: 'castellano' }));
+    expect(onlyEs.newMovies.map((card) => card.title)).toEqual([
+      'Oppenheimer',
+      'Spider-Man: No Way Home',
+      'Dune',
+      'Mission: Impossible – Dead Reckoning',
+      'Reserva',
+      'Паразиты',
+    ]);
+    expect(onlyEs.updatedSeries.map((card) => card.title)).toEqual([
+      'The Office (US)',
+      'Paquita Salas',
+    ]);
+    expect(onlyEs.shown).toEqual({ movies: 6, series: 2 });
+    /* Con `unknown=1`, también los que no lo indican (la de adultos y el anime). */
+    const castellano = VodHomeSchema.parse(await vod.home({ langs: 'castellano', unknown: '1' }));
     expect(castellano.newMovies.map((card) => card.title)).toEqual([
       'Oppenheimer',
       'Spider-Man: No Way Home',
@@ -278,7 +293,7 @@ describe('VodService contra el proveedor falso', () => {
       '東京物語',
     ]);
     expect(castellano.shown).toEqual({ movies: 7, series: 3 });
-    /* Búsqueda: en tus idiomas, y lo de fuera por idioma («1 en latino · Ver»). */
+    /* Búsqueda: solo en tus idiomas (lo de otros no sale ni se cuenta). */
     const dune = VodBrowseResponseSchema.parse(
       await vod.browse({
         kind: 'movie',
@@ -291,11 +306,7 @@ describe('VodService contra el proveedor falso', () => {
       }),
     );
     expect(dune.items.map((card) => [card.title, card.langs])).toEqual([['Dune', ['castellano']]]);
-    expect(dune.otherLangs).toEqual({
-      total: 1,
-      langs: [{ lang: 'latino', count: 1 }],
-      unknown: 0,
-    });
+    expect(dune).not.toHaveProperty('otherLangs');
     const amelie = await vod.browse({
       kind: 'movie',
       cat: 'all',
@@ -304,11 +315,8 @@ describe('VodService contra el proveedor falso', () => {
       limit: 60,
       langs: 'castellano,latino',
     });
-    expect(amelie).toMatchObject({
-      total: 0,
-      otherLangs: { total: 1, langs: [{ lang: 'vose', count: 1 }], unknown: 0 },
-    });
-    /* Sin filtro, `otherLangs` es null; en el otro tipo, también en tus idiomas. */
+    expect(amelie).toMatchObject({ total: 0, items: [] });
+    /* Sin filtro, todo; en el otro tipo, también en tus idiomas. */
     const plain = await vod.browse({
       kind: 'movie',
       cat: 'all',
@@ -316,7 +324,7 @@ describe('VodService contra el proveedor falso', () => {
       sort: 'added',
       limit: 60,
     });
-    expect(plain.otherLangs).toBeNull();
+    expect(plain.total).toBe(2);
     const office = await vod.browse({
       kind: 'movie',
       cat: 'all',
@@ -327,7 +335,7 @@ describe('VodService contra el proveedor falso', () => {
       unknown: '0',
     });
     expect(office.otherKindTotal).toBe(0);
-    /* Una categoría abierta también filtra y dice lo de fuera. */
+    /* Una categoría abierta también filtra. */
     const es = all.categories.movie.find((category) => category.name === 'ES | PELÍCULAS');
     const inEs = await vod.browse({
       kind: 'movie',
@@ -338,13 +346,17 @@ describe('VodService contra el proveedor falso', () => {
       unknown: '0',
     });
     expect(inEs.items.map((card) => card.title)).toEqual(['Amélie']);
-    expect(inEs.otherLangs?.langs).toEqual([{ lang: 'castellano', count: 5 }]);
   });
 
   it('idiomas elegidos (§4.10): sin elegir la primera vez, se guardan y sobreviven a eliminar la IPTV', async () => {
     const rig = await ready();
     const vod = rig.service.vod;
-    expect(vod.languagesOf()).toEqual({ chosen: false, langs: [], unknown: true, updatedAt: null });
+    expect(vod.languagesOf()).toEqual({
+      chosen: false,
+      langs: [],
+      unknown: false,
+      updatedAt: null,
+    });
     const saved = await vod.saveLanguages({ langs: ['frances', 'castellano'], unknown: false });
     expect(saved).toMatchObject({ chosen: true, langs: ['castellano', 'frances'], unknown: false });
     const file = rig.core.config.paths.vodFile.replace(/vod\.json$/, 'vod-idiomas.json');

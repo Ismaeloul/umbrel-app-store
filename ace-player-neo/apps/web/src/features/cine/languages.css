@@ -195,55 +195,6 @@
   white-space: nowrap;
 }
 
-/* ---- «Viendo solo en latino» y «3 en latino · Ver» ------------------------------------- */
-.cine-only-lang {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2) var(--s-3);
-  min-width: 0;
-  padding: 10px 12px 10px 14px;
-  border-radius: var(--r-m);
-  background: var(--accent-wash);
-  box-shadow: inset 0 0 0 1px var(--accent-edge);
-  color: var(--text);
-  font-size: var(--fs-15);
-  font-weight: 600;
-}
-.cine-only-lang .icon {
-  color: var(--accent-ink);
-}
-.cine-only-lang__text {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.cine-other-langs {
-  display: grid;
-  gap: var(--s-2);
-  justify-items: center;
-  min-width: 0;
-}
-.cine-other-langs__lead {
-  color: var(--text-2);
-  font-size: var(--fs-15);
-}
-.cine-other-langs__list {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
-/* En la rejilla con resultados: «También en otros idiomas», a la izquierda. */
-.cine-other-langs--inline {
-  justify-items: start;
-}
-.cine-other-langs--inline .cine-other-langs__list {
-  justify-content: flex-start;
-}
-
 /* ---- Ajustes → IPTV: la fila de los idiomas ------------------------------------------------ */
 .cine-langs-setting__unknown {
   grid-column: 1 / -1;

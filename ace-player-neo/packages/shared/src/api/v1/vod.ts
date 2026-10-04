@@ -82,8 +82,10 @@ const VOD_LANG_ALT = VOD_LANGS.join('|');
 
 /**
  * Filtro de idiomas en la URL (§4.10): `langs=castellano,frances` (sin
- * repetir ni inventar ninguno) y `unknown=0|1` (con `1`, por defecto, salen
- * también los títulos que no indican idioma). Sin `langs`, no se filtra.
+ * repetir ni inventar ninguno) y `unknown=0|1` (con `1` salen también los
+ * títulos que no indican idioma; por defecto, desde la 0.9.0, NO salen: solo
+ * los de los idiomas elegidos). Un título «sin indicar» cuyo audio real ya
+ * se comprobó (§4.11) cuenta con ese idioma. Sin `langs`, no se filtra.
  */
 export const VodLangsParamSchema = z
   .string()
@@ -99,16 +101,6 @@ export const VodLangQuerySchema = z.strictObject({
 });
 export type VodLangQuery = z.infer<typeof VodLangQuerySchema>;
 
-/** Con filtro de idiomas: lo que casaba pero queda fuera por su idioma («3 en latino · Ver»). */
-export const VodLangHiddenSchema = z.strictObject({
-  /** Títulos que quedan fuera (uno MULTI cuenta una vez aquí y una vez en cada idioma suyo). */
-  total: z.number().int().nonnegative(),
-  langs: z.array(VodLangCountSchema).max(VOD_LANGS.length),
-  /** Sin idioma indicado (solo con `unknown=0`). */
-  unknown: z.number().int().nonnegative(),
-});
-export type VodLangHidden = z.infer<typeof VodLangHiddenSchema>;
-
 /**
  * Los idiomas que Isma quiere ver en Películas y series (§4.10). Por casa,
  * en el servidor (`v2/vod-idiomas.json`): vale en el PC y en el iPhone, y
@@ -119,7 +111,7 @@ export const VodLanguagesSchema = z.strictObject({
   chosen: z.boolean(),
   /** Vacía = todos los idiomas (sin filtro). */
   langs: z.array(VodLangSchema).max(VOD_LANGS.length),
-  /** También los títulos que no indican idioma. */
+  /** También los títulos que no indican idioma (por defecto, no: solo los idiomas elegidos). */
   unknown: z.boolean(),
   updatedAt: IsoDateTimeSchema.nullable(),
 });
@@ -256,7 +248,7 @@ export const VodBrowseQuerySchema = z.strictObject({
   limit: z.coerce.number().int().min(1).max(VOD_SEARCH.pageMax).default(VOD_SEARCH.pageDefault),
   /** Filtro de idiomas (§4.10): `castellano,frances`. Sin él, todos. */
   langs: VodLangsParamSchema.optional(),
-  /** Con `langs`: `1` (por defecto) también los que no indican idioma. */
+  /** Con `langs`: `1` también los que no indican idioma (por defecto, `0`: no salen). */
   unknown: z.enum(['0', '1']).optional(),
 });
 export type VodBrowseQuery = z.infer<typeof VodBrowseQuerySchema>;
@@ -276,12 +268,6 @@ export const VodBrowseResponseSchema = z.strictObject({
   nextCursor: CursorSchema.nullable(),
   /** El cursor era de otro catálogo: esta es la primera página. */
   stale: z.boolean(),
-  /**
-   * Con filtro de idiomas: lo que casa (la búsqueda, la categoría) pero queda
-   * fuera por su idioma, para decir «3 en latino · Ver». null sin filtro.
-   * Opcional: un servidor anterior no lo manda.
-   */
-  otherLangs: VodLangHiddenSchema.nullable().optional(),
 });
 export type VodBrowseResponse = z.infer<typeof VodBrowseResponseSchema>;
 

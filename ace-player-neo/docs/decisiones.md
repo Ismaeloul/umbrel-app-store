@@ -804,15 +804,19 @@ Detalle en docs/vod.md §4.10.
   siempre separados. Las pistas de audio no sirven (casi todas «und»).
 - **El título manda sobre la categoría**, y los distintivos de lengua salen de
   los idiomas (cambia el detalle de D-VOD6: antes se unían).
-- **Los títulos sin idioma se ven por defecto**, con un interruptor para
-  esconderlos: en un panel con categorías sin marca, esconderlos vaciaría el
-  catálogo.
+- **Los títulos sin idioma NO se ven por defecto** (cambiado el 4-oct, antes
+  de salir la 0.9.0; antes se veían). Isma: «que solo salgan en castellano y
+  ya está, ninguno más». El interruptor «Mostrar también los que no indican
+  idioma» sigue, apagado de entrada (selector de la primera vez y servidor:
+  `unknown` ausente = 0). Un título «sin indicar» cuyo audio real ya se
+  comprobó (docs/vod.md §4.11) cuenta con ese idioma y sale.
 - **La elección es por casa y aparte de `vod.json`** (`v2/vod-idiomas.json`):
   sobrevive a cambiar de proveedor. Va en la copia de seguridad.
 - **Un solo mando de idioma en la web:** el botón del globo; los chips de
-  lengua de la rejilla desaparecen (quedan «Multi» y «4K»). «3 en latino ·
-  Ver» enseña ese idioma solo en esa rejilla (`cineidioma`), sin cambiar lo
-  elegido.
+  lengua de la rejilla desaparecen (quedan «Multi» y «4K»).
+- **La búsqueda, solo en tus idiomas** (4-oct): fuera «3 en latino · Ver»,
+  `otherLangs` de `vodBrowse` y `cineidioma`. Sin aciertos, «Nada con…» y
+  «Cambiar idiomas».
 
 ## D34. Registro en disco de 45 días y «Descargar logs» en Ajustes (0.9.0, equipo/logs)
 

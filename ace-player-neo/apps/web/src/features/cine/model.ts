@@ -38,21 +38,9 @@ export interface CineUrlState {
   /** Lo escrito en el buscador, tal cual. */
   q: string;
   order: CineOrder;
-  /**
-   * «3 en latino · Ver» (§4.10): la rejilla enseña SOLO ese idioma, sin
-   * tocar los elegidos. null = los idiomas elegidos.
-   */
-  lang: VodLang | null;
 }
 
-export const CINE_PARAMS = [
-  'cine',
-  'cinecat',
-  'cinetag',
-  'cineq',
-  'cineorden',
-  'cineidioma',
-] as const;
+export const CINE_PARAMS = ['cine', 'cinecat', 'cinetag', 'cineq', 'cineorden'] as const;
 const CAT_RE = /^(?:[a-f0-9]{12}|none|all)$/;
 
 export function readCineState(search: string): CineUrlState {
@@ -64,14 +52,12 @@ export function readCineState(search: string): CineUrlState {
   }
   const cat = params.get('cinecat');
   const tag = params.get('cinetag');
-  const lang = params.get('cineidioma');
   return {
     kind: params.get('cine') === KIND_PARAM.series ? 'series' : 'movie',
     cat: cat !== null && CAT_RE.test(cat) ? cat : null,
     tag: tag && (VOD_TAGS as readonly string[]).includes(tag) ? (tag as VodTag) : null,
     q: (params.get('cineq') ?? '').slice(0, 200),
     order: params.get('cineorden') === 'az' ? 'az' : 'novedades',
-    lang: lang && (VOD_LANGS as readonly string[]).includes(lang) ? (lang as VodLang) : null,
   };
 }
 
@@ -87,19 +73,13 @@ export function writeCineState(search: string, state: CineUrlState): string {
   set('cinetag', state.tag);
   set('cineq', state.q);
   set('cineorden', state.order === 'az' ? 'az' : null);
-  set('cineidioma', state.lang);
   const text = params.toString().replace(/%2F/gi, '/');
   return text ? `?${text}` : '';
 }
 
 export function sameCineState(a: CineUrlState, b: CineUrlState): boolean {
   return (
-    a.kind === b.kind &&
-    a.cat === b.cat &&
-    a.tag === b.tag &&
-    a.q === b.q &&
-    a.order === b.order &&
-    a.lang === b.lang
+    a.kind === b.kind && a.cat === b.cat && a.tag === b.tag && a.q === b.q && a.order === b.order
   );
 }
 
@@ -147,15 +127,13 @@ export function browseQuery(
 // ---- Idiomas (§4.10) ---------------------------------------------------------------------
 
 /**
- * El filtro de idiomas de las consultas: el de «Ver» de una búsqueda
- * (`override`, solo ese idioma) o el elegido. Sin elegir todavía, con
- * «todos los idiomas» o si el servidor no los sabe: sin filtro.
+ * El filtro de idiomas de las consultas: los elegidos (y los que no indican
+ * idioma solo con su interruptor). Sin elegir todavía, con «todos los
+ * idiomas» o si el servidor no los sabe: sin filtro.
  */
 export function langQuery(
   prefs: Pick<VodLanguages, 'chosen' | 'langs' | 'unknown'> | null | undefined,
-  override: VodLang | null = null,
 ): VodLangQuery {
-  if (override) return { langs: override, unknown: '0' };
   if (!prefs?.chosen || prefs.langs.length === 0) return {};
   return { langs: vodLangsParam(prefs.langs), unknown: prefs.unknown ? '1' : '0' };
 }

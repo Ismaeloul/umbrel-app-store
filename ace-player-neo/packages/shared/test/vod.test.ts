@@ -477,12 +477,6 @@ describe('idiomas (docs/vod.md §4.10)', () => {
     expect(VodLanguagesBodySchema.safeParse({ langs: [] }).success).toBe(false);
     expect(V2_FILES.vodLanguages).toBe('v2/vod-idiomas.json');
   });
-
-  it('«3 en latino · Ver»: lo que queda fuera por idioma valida', () => {
-    const hidden = VARIANT_FIXTURES['vodBrowse.otros-idiomas'];
-    expect(VodBrowseResponseSchema.safeParse(hidden).success).toBe(true);
-    expect(hidden.otherLangs?.langs[0]).toEqual({ lang: 'latino', count: 3 });
-  });
 });
 
 describe('topes del catálogo (M5)', () => {

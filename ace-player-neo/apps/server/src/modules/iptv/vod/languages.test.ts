@@ -29,7 +29,7 @@ describe('VodLanguageStore', () => {
   it('la primera vez: sin elegir y sin fichero (leer no lo crea)', () => {
     const { file, open } = rig();
     const store = open();
-    expect(store.read()).toEqual({ chosen: false, langs: [], unknown: true, updatedAt: null });
+    expect(store.read()).toEqual({ chosen: false, langs: [], unknown: false, updatedAt: null });
     expect(existsSync(file)).toBe(false);
   });
 

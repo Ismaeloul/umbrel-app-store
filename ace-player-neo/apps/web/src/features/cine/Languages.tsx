@@ -6,19 +6,18 @@
      pantalla corta en la propia vista (no un modal): teselas grandes con
      cuántos títulos hay de cada idioma, castellano y latino bien separados,
      y «Puedes cambiarlo cuando quieras». Nunca bloquea: «Ahora no, ver todo».
+     Castellano viene marcado y el interruptor de los que no indican idioma,
+     apagado: lo pidió Isma, «que solo salgan en castellano y ya está».
    - `LanguageButton`: el botón de la cabecera con lo elegido («Castellano
      y Francés», con el globo): abre la hoja para cambiarlo al vuelo.
-   - `OnlyLangNote`: «Viendo solo en latino» (tras «3 en latino · Ver»).
    - `LanguageSheet`: la misma elección en una hoja (cabecera y Ajustes).
-   - `OtherLangs`: «3 en latino · Ver» cuando una búsqueda no da nada en tus
-     idiomas pero sí en otros.
    - `CineLanguagesSetting`: la fila de Ajustes → IPTV.
 
    Se guarda en el servidor (`vodLanguagesUpdate`): vale en el PC y en el
    iPhone. Si guardar falla, la elección vale en esta pestaña y se avisa
    (nunca se queda uno atascado en el selector). */
 
-import type { VodHome, VodLang, VodLangHidden, VodLanguages } from '@ace/shared';
+import type { VodHome, VodLang, VodLanguages } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { describeFailure, routeKey, useApiQuery } from '../../api/index.ts';
@@ -29,7 +28,6 @@ import { Button, Icon, Sheet, Switch } from '../../ui/index.ts';
 import { useSaveLanguages, useVodLanguages } from './data.ts';
 import { langOptions, toggleLang, type LangOption } from './model.ts';
 import {
-  inLangText,
   LANG_CODE,
   LANG_HINT,
   LANG_LABEL,
@@ -37,7 +35,6 @@ import {
   langButtonLabel,
   langCountText,
   langSummary,
-  onlyInLangText,
   unknownHelp,
 } from './texts.ts';
 import './demo.ts';
@@ -149,12 +146,15 @@ export function LanguagePicker({
 
 // ---- La primera vez ------------------------------------------------------------------------
 
-/** Lo elegido de entrada la primera vez: castellano, si el catálogo tiene. */
+/**
+ * Lo elegido de entrada la primera vez: castellano, si el catálogo tiene, y
+ * los que no indican idioma, fuera (solo los idiomas elegidos, 0.9.0).
+ */
 function firstDraft(options: readonly LangOption[]): Draft {
   const castellano = options.find((option) => option.lang === 'castellano');
   return {
     langs: castellano && castellano.movies + castellano.series > 0 ? ['castellano'] : [],
-    unknown: true,
+    unknown: false,
   };
 }
 
@@ -176,7 +176,7 @@ export function LanguageWelcome({ home }: LanguageWelcomeProps) {
   }, []);
   const go = async (which: 'start' | 'skip') => {
     setBusy(which);
-    const ok = await commit(which === 'skip' ? { langs: [], unknown: true } : draft);
+    const ok = await commit(which === 'skip' ? { langs: [], unknown: false } : draft);
     if (ok) haptic('success');
     setBusy(null);
     /* La portada empieza arriba (el botón estaba al final del selector). */
@@ -247,14 +247,14 @@ export function LanguageSheet({ open, onClose, home }: LanguageSheetProps) {
   const fallback = useApiQuery('vodHome', { query: {} }, { enabled: open && !home, retry: 1 });
   const counts = home ?? fallback.data;
   const prefs = languages.data;
-  const [draft, setDraft] = useState<Draft>({ langs: [], unknown: true });
+  const [draft, setDraft] = useState<Draft>({ langs: [], unknown: false });
   const [busy, setBusy] = useState(false);
   const commit = useCommit();
   const wasOpen = useRef(false);
   /* Cada vez que se abre, la elección de ahora (sin restos de la vez anterior). */
   useEffect(() => {
     if (open && !wasOpen.current)
-      setDraft({ langs: [...(prefs?.langs ?? [])], unknown: prefs?.unknown ?? true });
+      setDraft({ langs: [...(prefs?.langs ?? [])], unknown: prefs?.unknown ?? false });
     wasOpen.current = open;
   }, [open, prefs]);
   const options = langOptions(counts?.langs, draft.langs);
@@ -322,58 +322,6 @@ export function LanguageButton({ prefs, onClick, className }: LanguageButtonProp
     >
       <span className="cine-lang-button__text">{langSummary(langs)}</span>
     </Button>
-  );
-}
-
-// ---- «Viendo solo en latino» ---------------------------------------------------------------
-
-/** La rejilla tras «3 en latino · Ver»: lo dice y deja volver a los idiomas elegidos. */
-export function OnlyLangNote({ lang, onBack }: { lang: VodLang; onBack(): void }) {
-  return (
-    <div className="cine-only-lang" role="status">
-      <span className="cine-only-lang__text">
-        <Icon name="idioma" size={20} />
-        {onlyInLangText(lang)}
-      </span>
-      <Button variant="quiet" size="sm" icon="chev-l" onClick={onBack}>
-        {LANG_TEXT.backToMine}
-      </Button>
-    </div>
-  );
-}
-
-// ---- «3 en latino · Ver» ------------------------------------------------------------------
-
-/** Cuántos idiomas de fuera se ofrecen como mucho. */
-export const OTHER_LANGS_MAX = 3;
-
-export interface OtherLangsProps {
-  hidden: VodLangHidden;
-  onPick(lang: VodLang): void;
-}
-
-/** Lo que hay en otros idiomas, cada uno con su «Ver». */
-export function OtherLangs({ hidden, onPick }: OtherLangsProps) {
-  const langs = hidden.langs.filter((item) => item.count > 0).slice(0, OTHER_LANGS_MAX);
-  if (langs.length === 0) return null;
-  return (
-    <div className="cine-other-langs" role="group" aria-label={LANG_TEXT.otherLangsLead}>
-      <p className="cine-other-langs__lead">{LANG_TEXT.otherLangsLead}</p>
-      <div className="cine-other-langs__list">
-        {langs.map((item) => (
-          <Button
-            key={item.lang}
-            variant="quiet"
-            size="sm"
-            trailingIcon="chev-r"
-            className="cine-other-langs__item"
-            onClick={() => onPick(item.lang)}
-          >
-            {inLangText(item.count, item.lang)} · Ver
-          </Button>
-        ))}
-      </div>
-    </div>
   );
 }
 

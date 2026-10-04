@@ -1200,7 +1200,6 @@ export const WEB_V1_FIXTURES = {
     ],
     nextCursor: 'djEuMTc1ODU5OS42MA',
     stale: false,
-    otherLangs: null,
   },
   vodTitle: vodDuneTitle,
   vodStream: vodDuneGrant,
@@ -1481,33 +1480,12 @@ export const VARIANT_FIXTURES = {
     ],
     nextCursor: null,
     stale: false,
-    otherLangs: null,
-  },
-  /* «coco» con castellano elegido: nada en castellano, pero 3 en latino y 1 en VOSE («3 en latino · Ver»). */
-  'vodBrowse.otros-idiomas': {
-    active: true,
-    state: 'ready',
-    items: [],
-    total: 0,
-    capped: false,
-    otherKindTotal: 0,
-    tags: [],
-    nextCursor: null,
-    stale: false,
-    otherLangs: {
-      total: 4,
-      langs: [
-        { lang: 'latino', count: 3 },
-        { lang: 'vose', count: 1 },
-      ],
-      unknown: 0,
-    },
   },
   /* La primera vez: aún sin elegir (la web enseña el selector). */
   'vodLanguagesGet.sin-elegir': {
     chosen: false,
     langs: [],
-    unknown: true,
+    unknown: false,
     updatedAt: null,
   },
   'vodBrowse.vacio': {
@@ -1820,7 +1798,6 @@ export const VARIANT_FIXTURES = {
   'vodHome.none': V1ResponseInput<'vodHome'>;
   'vodHome.unsupported': V1ResponseInput<'vodHome'>;
   'vodBrowse.search': V1ResponseInput<'vodBrowse'>;
-  'vodBrowse.otros-idiomas': V1ResponseInput<'vodBrowse'>;
   'vodLanguagesGet.sin-elegir': V1ResponseInput<'vodLanguagesGet'>;
   'vodBrowse.vacio': V1ResponseInput<'vodBrowse'>;
   'vodTitle.series': V1ResponseInput<'vodTitle'>;

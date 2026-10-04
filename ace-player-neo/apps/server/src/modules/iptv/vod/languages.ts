@@ -37,7 +37,8 @@ export function knownLangs(values: readonly string[]): VodLang[] {
   return VOD_LANGS.filter((lang) => asked.has(lang));
 }
 
-const EMPTY: VodLanguagesFile = { version: 1, langs: [], unknown: true, updatedAt: null };
+/** Sin elegir: los que no indican idioma, fuera (0.9.0: solo los idiomas elegidos). */
+const EMPTY: VodLanguagesFile = { version: 1, langs: [], unknown: false, updatedAt: null };
 
 function viewOf(file: VodLanguagesFile): VodLanguages {
   return {

@@ -35,6 +35,5 @@
     { "tag": "4k", "count": 1 }
   ],
   "nextCursor": null,
-  "stale": false,
-  "otherLangs": null
+  "stale": false
 }

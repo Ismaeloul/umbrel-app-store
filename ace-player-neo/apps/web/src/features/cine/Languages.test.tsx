@@ -1,6 +1,7 @@
 /* Idiomas de Películas y series (docs/vod.md §4.10): el selector la primera
    vez, el botón de la cabecera para cambiarlos al vuelo, el filtro en todas
-   las consultas, «3 en latino · Ver» y que nunca se queda uno atascado. */
+   las consultas (la búsqueda también: solo tus idiomas) y que nunca se queda
+   uno atascado. */
 
 import type { VodLanguages } from '@ace/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -44,7 +45,7 @@ function serve(initial: VodLanguages | null, options: { failSave?: boolean } = {
   net = mockFetch(routes);
 }
 
-const NOT_CHOSEN: VodLanguages = { chosen: false, langs: [], unknown: true, updatedAt: null };
+const NOT_CHOSEN: VodLanguages = { chosen: false, langs: [], unknown: false, updatedAt: null };
 const ONLY_CASTELLANO: VodLanguages = {
   chosen: true,
   langs: ['castellano'],
@@ -88,6 +89,8 @@ describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
     /* Castellano viene marcado de entrada; latino, no: son dos idiomas. */
     expect(castellano).toHaveAttribute('aria-pressed', 'true');
     expect(latino).toHaveAttribute('aria-pressed', 'false');
+    /* Y los que no indican idioma, fuera: «que solo salgan en castellano». */
+    expect(screen.getByRole('switch', { name: /no indican idioma/ })).not.toBeChecked();
     expect(castellano).toHaveAccessibleName(/32 películas · 9 series$/);
     expect(within(group).getByRole('button', { name: /^Francés/ })).toBeInTheDocument();
     expect(
@@ -98,7 +101,7 @@ describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
     fireEvent.click(within(group).getByRole('button', { name: /^Francés/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Ver películas y series' }));
     await waitFor(() => expect(puts()).toHaveLength(1));
-    expect(puts()[0]?.body).toEqual({ langs: ['castellano', 'frances'], unknown: true });
+    expect(puts()[0]?.body).toEqual({ langs: ['castellano', 'frances'], unknown: false });
     /* Ya filtrado: la portada y las filas piden esos idiomas. */
     expect(
       await screen.findByRole('heading', { name: 'Novedades en películas' }),
@@ -107,7 +110,11 @@ describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
       expect(homeCalls().some((call) => queryOf(call).langs === 'castellano,frances')).toBe(true),
     );
     await waitFor(() => expect(browseCalls().length).toBeGreaterThan(0));
-    expect(browseCalls().every((call) => queryOf(call).langs === 'castellano,frances')).toBe(true);
+    expect(
+      browseCalls().every(
+        (call) => queryOf(call).langs === 'castellano,frances' && queryOf(call).unknown === '0',
+      ),
+    ).toBe(true);
     /* Las categorías sin nada en esos idiomas no salen. */
     expect(screen.queryByRole('heading', { level: 2, name: /^Pelis latino/ })).toBeNull();
     expect(
@@ -119,7 +126,7 @@ describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
     serve(NOT_CHOSEN);
     renderCine();
     fireEvent.click(await screen.findByRole('button', { name: 'Ahora no, ver todo' }));
-    await waitFor(() => expect(puts()[0]?.body).toEqual({ langs: [], unknown: true }));
+    await waitFor(() => expect(puts()[0]?.body).toEqual({ langs: [], unknown: false }));
     expect(
       await screen.findByRole('button', { name: 'Idiomas: Todos los idiomas. Cambiar' }),
     ).toBeInTheDocument();
@@ -183,28 +190,22 @@ describe('cambiarlos luego', () => {
   });
 });
 
-describe('«3 en latino · Ver»', () => {
-  it('una búsqueda sin nada en tus idiomas dice lo que hay en otros y deja verlo sin tocar lo elegido', async () => {
+describe('la búsqueda, solo en tus idiomas', () => {
+  it('sin nada en castellano no ofrece otros idiomas: «Nada con…» y «Cambiar idiomas»', async () => {
     serve(ONLY_CASTELLANO);
     renderCine({ search: '?vista=cine&cineq=coco' });
     expect(
       await screen.findByRole('heading', { name: 'Nada con «coco» en películas' }),
     ).toBeInTheDocument();
-    const other = screen.getByRole('group', { name: 'En otros idiomas sí hay:' });
-    fireEvent.click(within(other).getByRole('button', { name: '1 en latino · Ver' }));
-    await waitFor(() => expect(location.search).toContain('cineidioma=latino'));
-    expect(await screen.findByText('Viendo solo en latino.')).toBeInTheDocument();
-    await waitFor(() =>
-      expect(
-        browseCalls().some(
-          (call) => queryOf(call).langs === 'latino' && queryOf(call).unknown === '0',
-        ),
-      ).toBe(true),
-    );
-    expect(await screen.findByRole('link', { name: /^Coco/ })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /otros idiomas/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /· Ver$/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Cambiar idiomas' })).toBeInTheDocument();
+    expect(
+      browseCalls().every(
+        (call) => queryOf(call).langs === 'castellano' && queryOf(call).unknown === '0',
+      ),
+    ).toBe(true);
     expect(puts()).toHaveLength(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Volver a mis idiomas' }));
-    await waitFor(() => expect(location.search).not.toContain('cineidioma'));
   });
 });
 

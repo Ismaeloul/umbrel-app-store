@@ -471,23 +471,23 @@ latino separados; y que luego lo pueda editar: cambio el idioma al francés y bu
   «Multi» y «4K».
 - **Tabla y `vod.enc`:** columna `langs` (Uint16). `VOD_CODEC_VERSION` 2: un `vod.enc` de antes no se lee, se descarta
   y se vuelve a bajar (la 0.9.0 no ha salido).
-- **Filtro:** `langs=castellano,frances` y `unknown=0|1` (por defecto 1) en `vodHome` y `vodBrowse`. Portada:
+- **Filtro:** `langs=castellano,frances` y `unknown=0|1` (por defecto 0: los que no indican idioma no salen) en `vodHome` y `vodBrowse`. Portada:
   novedades, categorías (las que se quedan a 0 no salen), distintivos y `shown` (lo que se ve) filtrados; `counts`,
   `langs` y `noLang` son siempre del catálogo entero. Búsqueda: el filtro va DENTRO del recorrido (no sobre los 2 000
-  mejores) y `otherLangs` cuenta por idioma lo que casa pero queda fuera («3 en latino · Ver»); `otherKindTotal`,
+  mejores) y lo de otros idiomas ni sale ni se cuenta (fuera `otherLangs` y «3 en latino · Ver», 4-oct); `otherKindTotal`,
   también en tus idiomas. Caché de portada por filtro (4) y de búsqueda con el filtro en la clave.
-- **Los que no indican idioma:** se ven por defecto («Mostrar también los que no indican idioma» activado). En un panel
-  donde muchas categorías no llevan marca, esconderlos dejaría el catálogo medio vacío; quien quiera solo los marcados
-  lo apaga.
+- **Los que no indican idioma:** NO se ven por defecto («Mostrar también los que no indican idioma» apagado; cambiado
+  el 4-oct a petición de Isma: «que solo salgan en castellano y ya está»). Si el audio real de uno ya se comprobó
+  (§4.11), cuenta con ese idioma y sale. Quien los quiera enciende el interruptor.
 - **La elección:** `GET/PUT /api/v1/vod/languages` (`vodLanguagesGet`/`vodLanguagesUpdate`, `web`) en
   `v2/vod-idiomas.json` (`z.object` no estricto, como el arranque instantáneo), por casa: vale en el PC y en el
   iPhone y sobrevive a eliminar la IPTV o cambiar de proveedor (no va en `vod.json`). `chosen: false` hasta la
   primera vez; `langs: []` = todos. Entra en la copia de seguridad (`vod`, solo si se eligió; Reemplazar la pone,
   Combinar solo si aquí no se había elegido; `vodLanguages` en la vista previa).
 - **Web** (`features/cine/Languages.tsx`): la primera vez, antes de la portada, «¿En qué idiomas las quieres ver?» en
-  la propia vista (castellano marcado de entrada; «Ahora no, ver todo»); el botón del globo en la cabecera
-  («Castellano y Francés») abre la hoja; también en Ajustes → IPTV. «Ver» de «3 en latino» pone `cineidioma=latino`:
-  la rejilla enseña solo ese idioma sin tocar lo elegido («Viendo solo en latino · Volver a mis idiomas»). La cápsula
+  la propia vista (castellano marcado de entrada y el interruptor de «sin indicar» apagado; «Ahora no, ver todo»); el botón del globo en la cabecera
+  («Castellano y Francés») abre la hoja; también en Ajustes → IPTV. La búsqueda no ofrece otros idiomas: sin
+  aciertos en los tuyos, «Nada con…» y «Cambiar idiomas». La cápsula
   de idioma de una tarjeta no sale si solo se ve un idioma. Si el servidor no sabe de idiomas o falla, se ve todo; si
   guardar falla, la elección vale en esa pestaña.
 

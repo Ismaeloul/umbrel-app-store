@@ -1156,7 +1156,7 @@ export function resetDemoVod(): void {
 
 /** La elección de la demo vive en este navegador (en el servidor de verdad, por casa). */
 const DEMO_LANGS_KEY = 'aceneo-demo-idiomas';
-const NO_CHOICE: VodLanguages = { chosen: false, langs: [], unknown: true, updatedAt: null };
+const NO_CHOICE: VodLanguages = { chosen: false, langs: [], unknown: false, updatedAt: null };
 
 function loadDemoLangs(): VodLanguages {
   try {
@@ -1166,7 +1166,7 @@ function loadDemoLangs(): VodLanguages {
     return {
       chosen: true,
       langs: VOD_LANGS.filter((lang) => value.langs?.includes(lang)),
-      unknown: value.unknown !== false,
+      unknown: value.unknown === true,
       updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : null,
     };
   } catch {
@@ -1195,10 +1195,10 @@ export function demoSaveLanguages(body: VodLanguagesBody): VodLanguages {
 
 type LangFilter = { mask: number; unknown: boolean } | null;
 
-/** El filtro de una consulta (`langs`/`unknown`), como el servidor. */
+/** El filtro de una consulta (`langs`/`unknown`, por defecto sin los que no lo indican), como el servidor. */
 function langFilterOf(query: VodLangQuery | undefined): LangFilter {
   if (!query?.langs) return null;
-  return { mask: vodLangBits(parseVodLangsParam(query.langs)), unknown: query.unknown !== '0' };
+  return { mask: vodLangBits(parseVodLangsParam(query.langs)), unknown: query.unknown === '1' };
 }
 
 function passes(filter: LangFilter, item: { card: { langs?: VodLang[] } }): boolean {
@@ -1491,17 +1491,9 @@ function decodeCursor(cursor: string | undefined): number {
 
 type Query = Partial<Omit<VodBrowseQuery, 'limit'>> & { limit?: unknown };
 
-/** Lo que casa pero queda fuera por su idioma («3 en latino · Ver»). */
-interface Hidden {
-  total: number;
-  byLang: Map<VodLang, number>;
-  unknown: number;
-}
-
 function matching(
   kind: VodKind,
   query: Query,
-  hidden?: Hidden,
 ): Array<{ item: DemoMovie | DemoSeries; level: number }> {
   const items: Array<DemoMovie | DemoSeries> = kind === 'movie' ? MOVIES : SERIES;
   const q = (query.q ?? '').trim();
@@ -1517,15 +1509,7 @@ function matching(
       if (hit === null) continue;
       found = hit;
     }
-    if (!passes(filter, item)) {
-      if (hidden) {
-        hidden.total += 1;
-        const langs = item.card.langs ?? [];
-        if (!langs.length) hidden.unknown += 1;
-        for (const lang of langs) hidden.byLang.set(lang, (hidden.byLang.get(lang) ?? 0) + 1);
-      }
-      continue;
-    }
+    if (!passes(filter, item)) continue;
     out.push({ item, level: found });
   }
   return out;
@@ -1538,8 +1522,7 @@ export function demoVodBrowse(query: Query): VodBrowseResponse {
     VOD_SEARCH.pageMax,
     Math.max(1, Number(query.limit ?? VOD_SEARCH.pageDefault) || 60),
   );
-  const hidden: Hidden = { total: 0, byLang: new Map(), unknown: 0 };
-  const all = matching(kind, { ...query, q }, hidden);
+  const all = matching(kind, { ...query, q });
   const tagsForChips = tagCounts(all.map((entry) => entry.item));
   const filtered = query.tag
     ? all.filter((entry) => entry.item.card.tags.includes(query.tag as VodTag))
@@ -1570,15 +1553,6 @@ export function demoVodBrowse(query: Query): VodBrowseResponse {
     tags: tagsForChips,
     nextCursor: next < filtered.length ? encodeCursor(next) : null,
     stale: false,
-    otherLangs: langFilterOf(query)
-      ? {
-          total: hidden.total,
-          langs: VOD_LANGS.map((lang) => ({ lang, count: hidden.byLang.get(lang) ?? 0 }))
-            .filter((entry) => entry.count > 0)
-            .sort((a, b) => b.count - a.count),
-          unknown: hidden.unknown,
-        }
-      : null,
   };
 }
 

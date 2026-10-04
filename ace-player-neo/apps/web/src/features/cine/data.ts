@@ -7,8 +7,7 @@
    - La rejilla va por páginas de 60 (`nextCursor`); un cursor de otro
      catálogo (`stale: true`) vacía la lista y empieza de nuevo.
    - Nada se pide con la vista oculta (`enabled: active`).
-   - El estado de la URL (`cine`, `cinecat`, `cinetag`, `cineq`, `cineorden`,
-     `cineidioma`) vive en un almacén: la vista y el panel lateral de
+   - El estado de la URL (`cine`, `cinecat`, `cinetag`, `cineq`, `cineorden`) vive en un almacén: la vista y el panel lateral de
      escritorio (aside.tsx) lo comparten sin pasar por el router.
    - Idiomas (§4.10): primero se piden los elegidos (`vodLanguagesGet`) y
      con ellos la portada, las filas y la rejilla (`langs`/`unknown` en la
@@ -179,7 +178,7 @@ export function closeCineGrid(): void {
     history.back();
     return;
   }
-  setCineState({ cat: null, tag: null, order: 'novedades', q: '', lang: null });
+  setCineState({ cat: null, tag: null, order: 'novedades', q: '' });
 }
 
 /**
