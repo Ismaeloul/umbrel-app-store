@@ -528,7 +528,7 @@ describe('estados sin catálogo (§13): siempre con salida', () => {
           stale: true,
           truncated: true,
           builtAt: '2026-09-28T04:00:00.000Z',
-          counts: { movies: 200_000, series: 12 },
+          counts: { movies: 400_000, series: 12 },
         }),
     });
     renderCine();
@@ -536,7 +536,7 @@ describe('estados sin catálogo (§13): siempre con salida', () => {
       await screen.findByText(/^Catálogo del 28 sept?\. No se ha podido actualizar\.$/),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('Tu IPTV tiene más de 200.000 películas; se ven las primeras 200.000.'),
+      screen.getByText('Tu IPTV tiene más de 400.000 películas; se ven las primeras 400.000.'),
     ).toBeInTheDocument();
   });
 
