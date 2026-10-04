@@ -30,7 +30,7 @@ test('Ajustes → IPTV: la IPTV de ejemplo, sin credenciales en la página', asy
   await expect(iptv.getByText('IPTV de ejemplo')).toBeVisible();
   await expect(iptv.getByText('Activa', { exact: true })).toBeVisible();
   await expect(iptv.getByText(/^Xtream · 812 canales/)).toBeVisible();
-  await expect(iptv.getByText(/^Guía: 640 canales con programación/)).toBeVisible();
+  await expect(iptv.getByText(/^Guía: 55 canales con programación/)).toBeVisible();
   await expect(iptv.getByRole('switch', { name: 'Usar la IPTV' })).toBeChecked();
   // «Cambiar datos»: la contraseña no vuelve del servidor.
   await iptv.getByRole('button', { name: 'Cambiar datos' }).click();
