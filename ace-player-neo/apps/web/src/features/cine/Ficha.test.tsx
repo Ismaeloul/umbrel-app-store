@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import seriesAviFixture from '@fixtures/variantes/vodTitle.episodio-avi.json';
 import seriesFixture from '@fixtures/variantes/vodTitle.series.json';
 import movieFixture from '@fixtures/web/v1/vodTitle.json';
+import checkingFixture from '@fixtures/variantes/vodTitle.audio-comprobando.json';
+import heardFixture from '@fixtures/variantes/vodTitle.audio-del-fichero.json';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { resetScrollMemory, saveScroll, savedScroll } from '../../app/scroll-memory.ts';
 import { installShortcutListener } from '../../app/shortcuts.ts';
@@ -420,5 +422,59 @@ describe('serie', () => {
       await screen.findByRole('button', { name: 'Siguiente capítulo: T1 · E4' }),
     ).toBeInTheDocument();
     expect(screen.getAllByText('Visto')).toHaveLength(3);
+  });
+});
+
+describe('lo que dice el fichero (§4.11)', () => {
+  it('«Audio: Inglés» y «Subtítulos: Español» en la cabecera, con su aviso', async () => {
+    serveTitle(heardFixture as VodMovie);
+    await screen.findByRole('heading', { level: 1, name: 'Dune' });
+    const chips = [...document.querySelectorAll('.cine-hero__heard')];
+    expect(chips.map((chip) => chip.textContent)).toEqual(['Audio: Inglés', 'Subtítulos: Español']);
+    expect(chips[0]).toHaveAttribute('title', 'Lo dice el propio fichero, no el proveedor');
+    expect(screen.queryByText('Comprobando el audio…')).toBeNull();
+  });
+
+  it('«Comprobando el audio…» mientras el servidor lee; vuelve a pedir la ficha y sale el chip', async () => {
+    let asked = 0;
+    serveTitle(MOVIE, {
+      [`GET /api/v1/vod/titles/${MOVIE.id}`]: () => {
+        asked += 1;
+        return json(asked === 1 ? checkingFixture : heardFixture);
+      },
+    });
+    expect(await screen.findByText('Comprobando el audio…')).toHaveAttribute('role', 'status');
+    expect(document.querySelector('.cine-hero__heard')).toBeNull();
+    expect(await screen.findByText('Audio: Inglés', {}, { timeout: 5_000 })).toBeInTheDocument();
+    expect(screen.queryByText('Comprobando el audio…')).toBeNull();
+    const calls = asked;
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    // Ya sabido: no se vuelve a pedir.
+    expect(asked).toBe(calls);
+  }, 12_000);
+
+  it('sin dato (no se pudo o no hacía falta): nada', async () => {
+    serveTitle(MOVIE);
+    await screen.findByRole('heading', { level: 1, name: 'Dune' });
+    expect(document.querySelector('.cine-hero__heard')).toBeNull();
+    expect(screen.queryByText('Comprobando el audio…')).toBeNull();
+  });
+
+  it('en cada episodio, si se conoce', async () => {
+    serveTitle({
+      ...SERIES,
+      seasons: SERIES.seasons.map((season) => ({
+        ...season,
+        episodes: season.episodes.map((episode) => ({
+          ...episode,
+          detectedAudio: { audio: ['Inglés'], subtitles: [] },
+        })),
+      })),
+    });
+    await waitFor(() =>
+      expect(document.querySelector('.cine-episode .cine-episode__meta')?.textContent).toContain(
+        'Audio: Inglés',
+      ),
+    );
   });
 });

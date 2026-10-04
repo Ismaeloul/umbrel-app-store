@@ -42,7 +42,7 @@ import {
   shortDateText,
 } from './model.ts';
 import { canPlayHevc, playVod } from './play.ts';
-import { CINE_TEXT, formatBlocked } from './texts.ts';
+import { CINE_TEXT, detectedAudioText, formatBlocked } from './texts.ts';
 
 export interface EpisodeListProps {
   seriesId: string;
@@ -212,7 +212,9 @@ function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: 
             ) : null}
           </span>
           <span className="cine-episode__meta">
-            {[duration, left, aired].filter(Boolean).join(' · ')}
+            {[duration, left, aired, detectedAudioText(episode.detectedAudio?.audio)]
+              .filter(Boolean)
+              .join(' · ')}
             {rating ? (
               <span className="cine-rating">
                 <Icon name="star-f" size={16} className="cine-rating__star" />

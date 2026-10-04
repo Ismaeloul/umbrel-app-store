@@ -363,6 +363,9 @@ export function useVodPages(scope: BrowseScope, enabled: boolean) {
   return query;
 }
 
+/** Cada cuánto se vuelve a pedir una ficha que está «Comprobando el audio…» (el servidor la suelta a los 8 s sin pedirla). */
+export const AUDIO_POLL_MS = 2_500;
+
 /** Clave de una ficha (sin `pre`: la precarga y la ficha comparten la entrada). */
 export function titleKey(id: string): QueryKey {
   return ['v1', 'vodTitle', { id }];
@@ -387,6 +390,9 @@ export function useVodTitle(id: string | null, active: boolean, placeholder?: Vo
     queryFn: ({ signal }) => fetchTitle(id ?? '', false, signal),
     enabled: active && id !== null,
     staleTime: (query) => titleStale(query.state.data),
+    /* «Comprobando el audio…» (§4.11): se vuelve a pedir mientras el servidor lee el fichero; al
+       cerrar la ficha deja de pedirse y el servidor lo corta. */
+    refetchInterval: (query) => (query.state.data?.audioPending ? AUDIO_POLL_MS : false),
     retry: (count, error) =>
       count < 1 && !(error instanceof ApiError && error.code === 'vod_not_found'),
     placeholderData: placeholder ?? undefined,

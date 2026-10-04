@@ -39,6 +39,7 @@ import {
   type VodCard,
   type VodCategory,
   type VodContinue,
+  type VodDetectedAudio,
   type VodEpisode,
   type VodHome,
   type VodKind,
@@ -750,13 +751,15 @@ const MOVIES: DemoMovie[] = MOVIE_SEEDS.map((seed, index) => {
     video: poor ? '' : `${tags.has('4k') ? '2160p' : '1080p'} · ${hevc ? 'HEVC' : 'H.264'}`,
     audio: poor
       ? []
-      : langs.includes('vose') || langs.includes('ingles')
-        ? ['AAC 2.0 · Inglés']
-        : langs.includes('frances')
-          ? ['AC-3 5.1 · Francés']
-          : langs.includes('latino')
-            ? ['AC-3 5.1 · Latino']
-            : ['AC-3 5.1 · Castellano', 'E-AC-3 5.1 · Inglés'],
+      : langs.length === 0
+        ? ['AC-3 5.1'] // «sin indicar»: el proveedor no dice la lengua (la dice el fichero, §4.11)
+        : langs.includes('vose') || langs.includes('ingles')
+          ? ['AAC 2.0 · Inglés']
+          : langs.includes('frances')
+            ? ['AC-3 5.1 · Francés']
+            : langs.includes('latino')
+              ? ['AC-3 5.1 · Latino']
+              : ['AC-3 5.1 · Castellano', 'E-AC-3 5.1 · Inglés'],
     backdrop: extra.backdrop === false || index % 4 === 2 ? null : stamp(`${id}:fondo`),
   };
 });
@@ -1586,6 +1589,26 @@ export function demoVodBrowse(query: Query): VodBrowseResponse {
 const FLAKY = MOVIES[12]?.card.id ?? '';
 const failedOnce = new Set<string>();
 
+/* Lo que dice el fichero (§4.11): un título «sin indicar» sale «Comprobando el
+   audio…» la primera vez y, a los 2 s, «Audio: Inglés» (como Mr. Robot); uno
+   de cada dos, con subtítulos en español. */
+const AUDIO_CHECK_MS = 2_000;
+const audioAskedAt = new Map<string, number>();
+
+function demoAudio(
+  id: string,
+  langs: readonly VodLang[] | undefined,
+  adult: boolean,
+): { detectedAudio?: VodDetectedAudio; audioPending?: boolean } {
+  if (adult || (langs && langs.length)) return {};
+  const now = Date.now();
+  const asked = audioAskedAt.get(id) ?? now;
+  audioAskedAt.set(id, asked);
+  if (now - asked < AUDIO_CHECK_MS) return { audioPending: true };
+  const subtitles = fnv(id) % 2 === 0 ? ['Español'] : [];
+  return { detectedAudio: { audio: ['Inglés'], subtitles } };
+}
+
 export function demoVodTitle(id: string): VodTitle | null {
   const movie = MOVIE_BY_ID.get(id);
   if (movie) {
@@ -1641,6 +1664,8 @@ export function demoVodTitle(id: string): VodTitle | null {
       playable: movie.playable,
       releaseDate: movie.released,
       trailer: movie.trailer,
+      langs: movie.card.langs,
+      ...demoAudio(id, movie.card.langs, movie.card.adult),
     };
   }
   const series = SERIES_BY_ID.get(id);
@@ -1649,10 +1674,17 @@ export function demoVodTitle(id: string): VodTitle | null {
     (a, b) => (a === 0 ? 1 : 0) - (b === 0 ? 1 : 0) || a - b,
   );
   const last = lastEpisodeOf(series);
+  const audio = demoAudio(id, series.card.langs, false);
+  const firstSeason = numbers.find((n) => n !== 0) ?? numbers[0];
+  const heardEpisode = series.episodes
+    .filter((e) => e.season === firstSeason)
+    .sort((a, b) => a.n - b.n)[0]?.id;
   return {
     kind: 'series',
     id,
     info: 'ok',
+    langs: series.card.langs,
+    ...audio,
     title: series.card.title,
     year: series.card.year,
     plot: series.plot,
@@ -1688,6 +1720,9 @@ export function demoVodTitle(id: string): VodTitle | null {
           progress: progressOf(e.id),
           airDate: e.airDate,
           rating: e.rating,
+          ...(audio.detectedAudio && e.id === heardEpisode
+            ? { detectedAudio: audio.detectedAudio }
+            : {}),
         })),
       plot: series.seasonPlots[n] ?? null,
       // Una temporada por año desde el estreno (la de especiales, sin fecha).

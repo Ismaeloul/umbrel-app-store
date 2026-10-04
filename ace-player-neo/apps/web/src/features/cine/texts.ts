@@ -97,6 +97,10 @@ export const CINE_TEXT = {
   watched: 'Visto',
   byProvider: 'Según el proveedor',
   audio: 'Audio',
+  subtitles: 'Subtítulos',
+  /* Lo que dice el propio fichero (docs/vod.md §4.11). */
+  audioChecking: 'Comprobando el audio…',
+  fromFile: 'Lo dice el propio fichero, no el proveedor',
   backToMovies: 'Volver a películas',
   backToSeries: 'Volver a series',
   back: 'Volver',
@@ -224,6 +228,16 @@ export const LANG_TEXT = {
   loading: 'Cargando los idiomas…',
   onlyMarked: 'solo los que lo indican',
 } as const;
+
+/** «Audio: Castellano · Inglés» (lo que dice el fichero, §4.11); null si no dice nada. */
+export function detectedAudioText(langs: readonly string[] | undefined): string | null {
+  return langs?.length ? `${CINE_TEXT.audio}: ${langs.join(' · ')}` : null;
+}
+
+/** «Subtítulos: Español»; null si no hay subtítulos de texto con lengua. */
+export function detectedSubtitlesText(langs: readonly string[] | undefined): string | null {
+  return langs?.length ? `${CINE_TEXT.subtitles}: ${langs.join(' · ')}` : null;
+}
 
 /** «Castellano», «Castellano y Francés», «Castellano, Latino +1»; sin ninguno, «Todos los idiomas». */
 export function langSummary(langs: readonly VodLang[]): string {
