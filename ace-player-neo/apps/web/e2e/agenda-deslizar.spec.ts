@@ -56,6 +56,11 @@ async function colocar(page: Page) {
 test('deslizar cambia de día sobre el título y sobre una fila que ya no tiene más; si la fila tiene más, se desplaza ella', async ({
   page,
 }) => {
+  /* La demo pinta «hoy» según la hora: de madrugada los partidos de hoy ya han
+     terminado y la primera fila cabe entera. A mediodía (13:00 en Madrid) la
+     prueba ve siempre la misma agenda; los temporizadores siguen corriendo. */
+  const hoy = new Date().toISOString().slice(0, 10);
+  await page.clock.setFixedTime(new Date(`${hoy}T11:00:00Z`));
   await page.goto('/?demo=1&vista=agenda');
   await expect(page.getByRole('heading', { name: /LaLiga/ }).first()).toBeVisible();
   const cdp = await page.context().newCDPSession(page);
