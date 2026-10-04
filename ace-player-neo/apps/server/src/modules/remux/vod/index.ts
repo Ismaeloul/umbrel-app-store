@@ -11,7 +11,7 @@
 
 import { VOD_PLAY } from '@ace/shared';
 import { vodUnsupported } from './codecs.js';
-import { MKV_HEAD_BYTES, readMkvIndex } from './index-mkv.js';
+import { MKV_HEAD_BYTES, readMkvIndex, readMkvTracks } from './index-mkv.js';
 import { readMp4Index } from './index-mp4.js';
 import type { RangeReader, VodIndex } from './types.js';
 
@@ -57,6 +57,35 @@ export async function readVodIndex(reader: RangeReader): Promise<VodIndex> {
       return readMkvIndex(reader, head);
     case 'mp4':
       return readMp4Index(reader, head);
+    case 'avi':
+      throw vodUnsupported('formato', 'AVI');
+    case 'ts':
+      throw vodUnsupported('indice', 'MPEG-TS sin índice');
+    default:
+      throw vodUnsupported('formato', 'contenedor desconocido');
+  }
+}
+
+/** Lo primero que se lee para saber solo las pistas (la ficha, docs/vod.md §4.11). */
+export const VOD_TRACKS_HEAD_BYTES = 64 * 1024;
+
+/**
+ * Solo las pistas de audio y de subtítulos (la ficha de un título «sin
+ * indicar», docs/vod.md §4.11): en un MKV, la cabecera y `Tracks` (sin los
+ * Cues); en un MP4, el `moov` (las pistas van dentro). Los mismos lectores
+ * que la reproducción.
+ */
+export async function readVodTracks(
+  reader: RangeReader,
+): Promise<Pick<VodIndex, 'audio' | 'subtitles'>> {
+  const head = await reader.read(0, VOD_TRACKS_HEAD_BYTES - 1);
+  switch (sniffContainer(head)) {
+    case 'mkv':
+      return readMkvTracks(reader, head);
+    case 'mp4': {
+      const index = await readMp4Index(reader, head);
+      return { audio: index.audio, subtitles: index.subtitles };
+    }
     case 'avi':
       throw vodUnsupported('formato', 'AVI');
     case 'ts':

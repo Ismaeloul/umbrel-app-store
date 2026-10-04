@@ -65,6 +65,16 @@ import type { XtreamCredentials } from '../xtream.js';
 import { VOD_ADULT_POLICY } from './adultos.js';
 import { VodArtCache, type ArtReply } from './art.js';
 import {
+  detectedOf,
+  langBitsOf,
+  VodAudioCheck,
+  vodAudioFileOf,
+  type VodAudioEntry,
+  type VodFileTarget,
+  type VodTracksReader,
+  type VodTracksSeen,
+} from './audio-check.js';
+import {
   loadVodCatalog,
   removeVodCatalogFile,
   saveVodCatalog,
@@ -106,6 +116,7 @@ import {
 } from './progress.js';
 import { VodLanguageStore } from './languages.js';
 import {
+  forgetSearches,
   hiddenLangs,
   langFilterKey,
   langPasses,
@@ -161,6 +172,14 @@ export interface VodHost {
   emitStatus(): void;
   /** Duración que conoce el servidor para un id (la sesión VOD de VOD-5), o null. */
   knownDurationS?(id: string): number | null;
+  /**
+   * Lee las pistas de un fichero (§4.11) por el relé VOD, SOLO si la IPTV
+   * está libre: null = ahora no (se deja para luego). Sin él, la ficha no
+   * comprueba el audio.
+   */
+  readVodTracks?: VodTracksReader;
+  /** ¿Está la IPTV libre para leer un fichero ahora? (sin red). */
+  vodReadFree?(): boolean;
 }
 
 /** Lo que necesita la reproducción de un título (`VodService.playTarget`). */
@@ -393,7 +412,21 @@ export class VodService {
       keys: () => host.keys(),
       policyFor: (url) => this.imagePolicy(url),
     });
+    const read = host.readVodTracks;
+    this.audio = new VodAudioCheck({
+      file: vodAudioFileOf(host.paths.vodCatalogFile),
+      clock: host.clock,
+      logger: host.logger,
+      read: read ?? (() => Promise.resolve(null)),
+      free: () => Boolean(read) && (host.vodReadFree?.() ?? !host.busy()),
+      onDetected: (key, entry) => this.applyDetected(key, entry),
+    });
   }
+
+  /** Lo que dicen los ficheros de su audio (§4.11). */
+  readonly audio: VodAudioCheck;
+  /** Filas a las que se les ha puesto el idioma por su fichero (eran «sin indicar»). */
+  private readonly detectedRows = new WeakMap<VodTable, Set<number>>();
 
   // --- Ciclo de vida ---
 
@@ -413,6 +446,7 @@ export class VodService {
     this.art.stop();
     await this.doc.flush();
     await this.languages.flush();
+    await this.audio.stop();
   }
 
   private clearTimers(): void {
@@ -557,6 +591,7 @@ export class VodService {
     this.requeue = false;
     this.details.clear();
     this.art.reset();
+    this.audio.reset();
     this.docFp = null;
     await this.doc.reset(null);
   }
@@ -714,6 +749,7 @@ export class VodService {
         for (const kind of result.held) this.noneOnce.add(kind);
         if (result.held.length) nextInMs = vodRetryDelay(1);
         this.catalog = catalog;
+        this.applyAllDetected(catalog);
         this.homeCache = null;
         this.details.clear();
         await this.doc.setCatalog({
@@ -810,6 +846,7 @@ export class VodService {
           current?.providerId === loaded.providerId && current.meta.builtAt >= loaded.meta.builtAt;
         if (!newer) {
           this.catalog = loaded;
+          this.applyAllDetected(loaded);
           this.homeCache = null;
         }
       } else if (!loaded && !this.catalog) {
@@ -1341,6 +1378,104 @@ export class VodService {
     return out;
   }
 
+  // --- Lo que dice el fichero (§4.11) ---
+
+  /**
+   * Pone a una fila «sin indicar» los idiomas que dice su fichero (el
+   * filtro de idiomas los usa desde ya). Una fila con idioma del proveedor no
+   * se toca; una que ya se puso por su fichero, sí (otra lectura más nueva).
+   */
+  private applyRow(table: VodTable, row: number, entry: VodAudioEntry): boolean {
+    let applied = this.detectedRows.get(table);
+    const current = table.langs[row] as number;
+    if (current !== 0 && !applied?.has(row)) return false;
+    const bits = langBitsOf(entry);
+    if (!bits || bits === current) return false;
+    table.langs[row] = bits;
+    if (!applied) {
+      applied = new Set();
+      this.detectedRows.set(table, applied);
+    }
+    applied.add(row);
+    return true;
+  }
+
+  /** La fila de una clave de la caché del audio (`m:<id>` o `s:<id>`), o null. */
+  private static rowOfKey(
+    catalog: VodCatalog,
+    key: string,
+  ): { table: VodTable; row: number } | null {
+    const match = /^([ms]):(\d+)$/.exec(key);
+    if (!match) return null;
+    const table = catalog.tables[match[1] === 'm' ? 'movie' : 'series'];
+    const row = table.rowOf(Number(match[2]));
+    return row < 0 ? null : { table, row };
+  }
+
+  private applyDetected(key: string, entry: VodAudioEntry): void {
+    const catalog = this.catalog;
+    if (!catalog || catalog.providerId !== this.xtream()?.id) return;
+    const found = VodService.rowOfKey(catalog, key);
+    if (!found || !this.applyRow(found.table, found.row, entry)) return;
+    this.homeCache = null;
+    forgetSearches(found.table);
+  }
+
+  /** Tras cargar o sincronizar el catálogo: los idiomas de los ficheros ya leídos. */
+  private applyAllDetected(catalog: VodCatalog): void {
+    const provider = this.xtream();
+    if (!provider || provider.id !== catalog.providerId) return;
+    let changed = false;
+    for (const [key, entry] of this.audio.all(provider.id)) {
+      const found = VodService.rowOfKey(catalog, key);
+      if (found && this.applyRow(found.table, found.row, entry)) changed = true;
+    }
+    if (changed) {
+      forgetSearches(catalog.tables.movie);
+      forgetSearches(catalog.tables.series);
+    }
+  }
+
+  /**
+   * Las pistas que ha leído la reproducción (el productor ya tiene el
+   * índice): a la misma caché. Un episodio cuenta también para su serie si
+   * de ella aún no se sabía nada.
+   */
+  noteTracks(id: string, tracks: VodTracksSeen): void {
+    const provider = this.xtream();
+    if (!provider) return;
+    const ref = vodRef(this.host.keys(), provider.id, id);
+    if (!ref) return;
+    if (ref.kind === 'movie') {
+      this.audio.note(provider.id, `m:${ref.source}`, tracks);
+    } else if (ref.kind === 'episode') {
+      this.audio.note(provider.id, `e:${ref.source}`, tracks);
+      if (!this.audio.entry(provider.id, `s:${ref.parent}`)) {
+        this.audio.note(provider.id, `s:${ref.parent}`, tracks);
+      }
+    }
+  }
+
+  /**
+   * El episodio que se lee para saber el audio de una serie: el primero de la
+   * temporada del botón principal (la que se mira), o el primero que haya.
+   */
+  private static audioEpisodeOf(
+    series: VodSeriesInfo,
+    episodes: readonly EpisodeRef[],
+    mainId: string | null,
+  ): { source: number; ext: number } | null {
+    const season = episodes.find((episode) => episode.id === mainId)?.season;
+    const chosen =
+      (season !== undefined
+        ? series.seasons.find((item) => item.number === season && item.episodes.length)
+        : undefined) ??
+      series.seasons.find((item) => item.number !== 0 && item.episodes.length) ??
+      series.seasons.find((item) => item.episodes.length);
+    const episode = chosen?.episodes[0];
+    return episode ? { source: episode.source, ext: episode.ext } : null;
+  }
+
   /** GET /api/v1/vod/titles/:id (§7). Nunca 502: lo de la lista con `info: failed`. */
   async title(id: string, options: { readonly pre?: boolean } = {}): Promise<VodTitle> {
     const { ref, table, row } = await this.locate(id, ['movie', 'series']);
@@ -1380,6 +1515,26 @@ export class VodService {
     const originalTitle = this.originalTitleOf(info?.originalTitle ?? null, listPart.title);
     const ageRating = this.textOrNull(info?.ageRating ?? null, 16);
     const progress = this.progressMap();
+    const providerId = this.providerId();
+    /* «Sin indicar» por el proveedor (§4.11): la ficha lee el audio del fichero (no la precarga). */
+    const unknownLang = (table.langs[row] as number) === 0 && !options.pre;
+    const audioOf = (
+      key: string,
+      target: () => VodFileTarget | null,
+      aliases: readonly string[] = [],
+    ): { detectedAudio?: VodMovie['detectedAudio']; audioPending?: boolean } => {
+      let entry = this.audio.entry(providerId, key);
+      let pending = false;
+      if (!entry && unknownLang) {
+        const file = target();
+        if (file) pending = this.audio.want(providerId, key, file, aliases) === 'pending';
+        entry = this.audio.entry(providerId, key);
+      }
+      return {
+        ...(entry ? { detectedAudio: detectedOf(entry) } : {}),
+        ...(pending ? { audioPending: true } : {}),
+      };
+    };
     if (kind === 'movie') {
       const movie = info && info.kind === 'movie' ? info : null;
       const ext = movie?.ext || (table.ext[row] as number);
@@ -1387,6 +1542,11 @@ export class VodService {
       const title: VodMovie = {
         kind: 'movie',
         ...listPart,
+        ...audioOf(`m:${ref.source}`, () => ({
+          kind: 'movie',
+          source: ref.source,
+          ext: extName(ext) ?? 'mp4',
+        })),
         originalTitle,
         ageRating,
         durationS: movie?.durationS ?? null,
@@ -1418,6 +1578,7 @@ export class VodService {
         shown.add(refEpisode.id);
         const entry = progress.get(refEpisode.id);
         const container = extName(episode.ext);
+        const heard = this.audio.entry(providerId, `e:${episode.source}`);
         return [
           {
             id: refEpisode.id,
@@ -1431,15 +1592,27 @@ export class VodService {
             ...(container ? { container } : {}),
             airDate: episode.airDate,
             rating: episode.rating,
+            ...(heard ? { detectedAudio: detectedOf(heard) } : {}),
           },
         ];
       }),
     }));
+    const main = episodes.length ? seriesMain(episodes, progress) : null;
+    const pick = series
+      ? VodService.audioEpisodeOf(series, episodes, main?.episodeId ?? null)
+      : null;
+    const seriesAudio = audioOf(
+      `s:${ref.source}`,
+      () =>
+        pick ? { kind: 'episode', source: pick.source, ext: extName(pick.ext) ?? 'mkv' } : null,
+      pick ? [`e:${pick.source}`] : [],
+    );
     const title: VodSeries = {
       kind: 'series',
       ...listPart,
+      ...seriesAudio,
       seasons,
-      main: episodes.length ? seriesMain(episodes, progress) : null,
+      main,
       truncated: series?.truncated ?? false,
       originalTitle,
       ageRating,

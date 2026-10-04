@@ -72,6 +72,8 @@ import { Seasons } from './Seasons.tsx';
 import { Synopsis } from './Synopsis.tsx';
 import {
   CINE_TEXT,
+  detectedAudioText,
+  detectedSubtitlesText,
   episodeRunText,
   formatBlocked,
   resumeFromText,
@@ -439,6 +441,11 @@ function Details({ title }: { title: VodTitle }) {
 function Hero({ title, onBack, now }: { title: VodTitle; onBack(): void; now: number }) {
   const tags = orderedTags(title.tags);
   const genres = spanishGenres(title.genres).slice(0, 3);
+  /* Lo que dice el propio fichero (§4.11): «Audio: Inglés», «Subtítulos: Español». */
+  const heard = [
+    detectedAudioText(title.detectedAudio?.audio),
+    detectedSubtitlesText(title.detectedAudio?.subtitles),
+  ].filter((text): text is string => text !== null);
   const background = title.backdrop ? 'backdrop' : title.poster ? 'blur' : 'tone';
   const style = { '--hero-fill': artFill(title.title) } as CSSProperties;
   return (
@@ -496,7 +503,7 @@ function Hero({ title, onBack, now }: { title: VodTitle; onBack(): void; now: nu
           ) : null}
           <MetaLine title={title} />
         </div>
-        {genres.length || tags.length || title.adult ? (
+        {genres.length || tags.length || title.adult || heard.length || title.audioPending ? (
           <div className="cine-hero__capsules">
             {title.adult ? (
               <Capsule size="sm" tone="weak">
@@ -508,6 +515,22 @@ function Hero({ title, onBack, now }: { title: VodTitle; onBack(): void; now: nu
                 {TAG_LABEL[tag]}
               </Capsule>
             ))}
+            {heard.map((text, index) => (
+              <Capsule
+                key={text}
+                size="sm"
+                icon={index === 0 ? 'vol' : 'idioma'}
+                title={CINE_TEXT.fromFile}
+                className="cine-hero__heard"
+              >
+                {text}
+              </Capsule>
+            ))}
+            {title.audioPending && !heard.length ? (
+              <span className="cine-hero__checking" role="status">
+                {CINE_TEXT.audioChecking}
+              </span>
+            ) : null}
             {genres.map((genre) => (
               <Capsule key={genre} size="sm">
                 {genre}

@@ -318,6 +318,20 @@ export const VodDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'fecha AAAA
  */
 export const VodTrailerSchema = z.string().regex(/^[A-Za-z0-9_-]{11}$/, 'id de YouTube');
 
+/**
+ * Lo que dice el propio fichero (§4.11): las lenguas de sus pistas de audio
+ * y de sus subtítulos de texto, leídas del índice (MKV/MP4) al abrir la
+ * ficha de un título «sin indicar» o al reproducirlo. Etiquetas ya en
+ * castellano, sin repetir y en el orden de las pistas («Inglés»,
+ * «Castellano», «Español (Latinoamérica)»); vacío si ninguna pista dice su
+ * lengua.
+ */
+export const VodDetectedAudioSchema = z.strictObject({
+  audio: z.array(z.string().max(40)).max(8),
+  subtitles: z.array(z.string().max(40)).max(8),
+});
+export type VodDetectedAudio = z.infer<typeof VodDetectedAudioSchema>;
+
 export const VodMovieSchema = z.strictObject({
   kind: z.literal('movie'),
   id: HashSchema,
@@ -349,6 +363,10 @@ export const VodMovieSchema = z.strictObject({
   playable: VodPlayableSchema,
   progress: VodProgressSchema.nullable(),
   category: VodTitleCategorySchema,
+  /** Lenguas que dice el fichero (§4.11), si ya se han leído. Opcional. */
+  detectedAudio: VodDetectedAudioSchema.nullable().optional(),
+  /** El servidor está leyendo el fichero para saber su audio («Comprobando el audio…»). Opcional. */
+  audioPending: z.boolean().optional(),
   /** Fecha de estreno (`releasedate`). Opcional: un servidor anterior no la manda. */
   releaseDate: VodDateSchema.nullable().optional(),
   /** Tráiler (`youtube_trailer`): el id de YouTube. Opcional. */
@@ -376,6 +394,8 @@ export const VodEpisodeSchema = z.strictObject({
   airDate: VodDateSchema.nullable().optional(),
   /** Nota del episodio (0-10). Opcional. */
   rating: z.number().min(0).max(10).nullable().optional(),
+  /** Lenguas que dice el fichero del episodio (§4.11), si ya se han leído. Opcional. */
+  detectedAudio: VodDetectedAudioSchema.nullable().optional(),
 });
 export type VodEpisode = z.infer<typeof VodEpisodeSchema>;
 
@@ -435,6 +455,10 @@ export const VodSeriesSchema = z.strictObject({
   trailer: VodTrailerSchema.nullable().optional(),
   /** Duración típica de un episodio (`episode_run_time`), en segundos. Opcional. */
   episodeDurationS: z.number().int().positive().max(86_400).nullable().optional(),
+  /** Lenguas que dice el fichero de un episodio (§4.11; el primero de la temporada que se mira). Opcional. */
+  detectedAudio: VodDetectedAudioSchema.nullable().optional(),
+  /** El servidor está leyendo un episodio para saber su audio. Opcional. */
+  audioPending: z.boolean().optional(),
 });
 export type VodSeries = z.infer<typeof VodSeriesSchema>;
 

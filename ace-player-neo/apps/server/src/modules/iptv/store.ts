@@ -15,6 +15,7 @@ import { chmod, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import type { IptvKeys } from '../../config/keys.js';
 import type { Logger } from '../../core/logger.js';
 import { Catalog } from './catalog.js';
+import { vodAudioFileOf } from './vod/audio-check.js';
 import {
   FILE_MODE,
   catalogAad,
@@ -128,7 +129,7 @@ export class IptvFiles {
       `${this.paths.iptvCatalogFile}.tmp`,
       this.paths.iptvGuideFile,
       `${this.paths.iptvGuideFile}.tmp`,
-      ...(vod ? [vod, `${vod}.tmp`] : []),
+      ...(vod ? [vod, `${vod}.tmp`, vodAudioFileOf(vod), `${vodAudioFileOf(vod)}.tmp`] : []),
     ]) {
       await rm(file, { force: true }).catch(() => undefined);
     }

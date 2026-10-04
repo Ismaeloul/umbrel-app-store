@@ -489,6 +489,31 @@ latino separados; y que luego lo pueda editar: cambio el idioma al francés y bu
   de idioma de una tarjeta no sale si solo se ve un idioma. Si el servidor no sabe de idiomas o falla, se ve todo; si
   guardar falla, la elección vale en esa pestaña.
 
+### 4.11 Lo que dice el fichero (0.9.0, «audio real»)
+
+Isma buscó «Mr. Robot» y la versión «sin indicar» sonó en inglés: el índice tenía UNA pista, `eng`. La app no se
+equivocó, pero no lo dijo antes. Ahora:
+
+- **La ficha** de una película o serie «sin indicar» (`langs: []`) lee el índice del fichero
+  (`remux/vod/index.ts` → `readVodTracks`: en un MKV la cabecera y `Tracks`, 64 KiB y sin los Cues; en un MP4, el
+  `moov`), por el relé VOD con Range. En una serie, el primer episodio de la temporada del botón principal (o el
+  primero que haya). La precarga (`pre=1`) no lee.
+- **Nunca quita la conexión a Isma** (`IptvServiceImpl.vodReadFree`): sin ninguna sesión IPTV (directo o VOD), sin
+  sonda, sin un cierre de hace menos de 20 s y con plaza en la cuenta; si no, se deja para la próxima vez que se
+  abra la ficha. La lectura va como «sonda»: una reproducción que empieza la corta y espera. Sesión del relé sin
+  reintentos, plazo de 10 s, de una en una (`vod/audio-check.ts`); lo que falla no se repite en 10 min; lo que la
+  ficha deja de pedir en 8 s (se ha cerrado) se quita de la cola y se corta.
+- **Caché** `v2/iptv/vod-audio.json` (junto a `vod.enc`, tope de 5 000 títulos, del proveedor vigente; se borra con
+  la IPTV). La rellena también la reproducción (el productor ya lee el índice). Claves de lengua con las etiquetas de
+  `remux/vod/audio.ts` (castellano y latino aparte, `es-419` o «Latino» en el nombre; `und`/vacía = no lo dice).
+- **Filtro de idiomas:** un título «sin indicar» toma los idiomas de su audio (y VOSE si no hay audio en español y sí
+  subtítulos de texto en español), en memoria sobre el catálogo cargado; las consultas y la portada se recalculan.
+- **Contrato:** `vodTitle` lleva `detectedAudio` (`{ audio, subtitles }`, etiquetas) y `audioPending`; cada episodio,
+  su `detectedAudio` si se conoce. La web pinta «Audio: Inglés» y «Subtítulos: Español» en la ficha (y en el
+  episodio), «Comprobando el audio…» mientras se lee (vuelve a pedir la ficha cada 2,5 s) y nada si no se pudo.
+- **Registro:** «VOD: productor abierto» lleva `audioTracks` (lang, nombre recortado a 40, códec, defecto) y
+  `audioChosen`; la lectura de la ficha, «VOD: audio del fichero comprobado».
+
 ---
 
 ## 5. Ids de película, serie y episodio (D-VOD3)

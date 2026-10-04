@@ -99,3 +99,54 @@ export function vodAudioLabel(track: VodTrack, position: number): string {
   }
   return label.slice(0, 40);
 }
+
+/* --- Lengua de una pista (§4.11: lo que dice el fichero, para la ficha y el filtro) --- */
+
+/** Código → clave única de su lengua (el castellano y el latino, siempre aparte). */
+const LANGUAGE_KEY: Readonly<Record<string, string>> = {
+  spa: 'spa',
+  es: 'spa',
+  esp: 'spa',
+  'es-es': 'spa',
+  'es-419': 'es-419',
+  eng: 'eng',
+  en: 'eng',
+  fra: 'fra',
+  fre: 'fra',
+  fr: 'fra',
+  ita: 'ita',
+  it: 'ita',
+  deu: 'deu',
+  ger: 'deu',
+  de: 'deu',
+  por: 'por',
+  pt: 'por',
+  cat: 'cat',
+  ca: 'cat',
+  jpn: 'jpn',
+  ja: 'jpn',
+};
+
+/**
+ * La lengua de una pista como clave (`spa`, `es-419`, `eng`, `fra`… o el
+ * código tal cual si no está en la tabla), o null si no la dice (`und`,
+ * vacía). Una pista «Latino» en el nombre es `es-419` aunque diga `spa`.
+ */
+export function vodTrackLangKey(track: Pick<VodTrack, 'lang' | 'name'>): string | null {
+  const code = lower(track.lang).trim();
+  if (code === 'es-419' || /latino|latam|latinoam/.test(lower(track.name))) return 'es-419';
+  if (!code || code === 'und' || code === 'mul' || code === 'zxx' || code === 'mis') return null;
+  const known = LANGUAGE_KEY[code];
+  if (known) return known;
+  /* «es-MX», «es-AR»: latino; «en-US», «fr-CA»: su lengua. */
+  const base = code.split('-')[0] ?? '';
+  if (base === 'es') return 'es-419';
+  const fromBase = LANGUAGE_KEY[base];
+  if (fromBase) return fromBase;
+  return /^[a-z]{2,8}(?:-[a-z0-9]{1,8})?$/.test(code) ? code : null;
+}
+
+/** «Castellano», «Español (Latinoamérica)», «Inglés»… (un código raro, en mayúsculas). */
+export function vodLanguageLabel(key: string): string {
+  return (LANGUAGE_LABEL[key] ?? key.toUpperCase()).slice(0, 40);
+}
