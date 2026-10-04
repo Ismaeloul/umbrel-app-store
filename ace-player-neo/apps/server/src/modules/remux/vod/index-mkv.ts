@@ -422,6 +422,63 @@ function parseSeekHead(
  * por quien detecta el contenedor).
  */
 export async function readMkvIndex(reader: RangeReader, head: Buffer): Promise<VodIndex> {
+  return (await readMkv(reader, head, false)) as VodIndex;
+}
+
+/**
+ * Solo las pistas de audio y de subtítulos de un MKV (la ficha, docs/vod.md
+ * §4.11): la cabecera y `Tracks`, sin los Cues (unos pocos KB).
+ */
+export async function readMkvTracks(
+  reader: RangeReader,
+  head: Buffer,
+): Promise<Pick<VodIndex, 'audio' | 'subtitles'>> {
+  const { tracks } = (await readMkv(reader, head, true)) as { tracks: RawTrack[] };
+  return { audio: audioTracksOf(tracks), subtitles: subtitleTracksOf(tracks) };
+}
+
+function audioTracksOf(raw: readonly RawTrack[]): VodTrack[] {
+  return raw
+    .filter((track) => track.type === TRACK_AUDIO)
+    .map((track, index) => {
+      const codec = audioCodec(track.codecId);
+      return {
+        index,
+        codec,
+        aacLc: codec === 'aac' && mkvAacIsLc(track.codecId, track.codecPrivate),
+        channels: track.channels,
+        lang: track.lang,
+        name: track.name,
+        isDefault: track.isDefault,
+      };
+    });
+}
+
+function subtitleTracksOf(raw: readonly RawTrack[]): VodSubtitle[] {
+  return raw
+    .filter((track) => track.type === TRACK_SUBTITLE)
+    .map((track, index) => {
+      const [codec, text] = SUBTITLE_CODECS[track.codecId] ?? [
+        track.codecId.replace(/^S_/, '').toLowerCase(),
+        false,
+      ];
+      return {
+        index,
+        codec,
+        text,
+        lang: track.lang,
+        name: track.name,
+        isDefault: track.isDefault,
+        forced: track.forced,
+      };
+    });
+}
+
+async function readMkv(
+  reader: RangeReader,
+  head: Buffer,
+  tracksOnly: boolean,
+): Promise<VodIndex | { readonly tracks: RawTrack[] }> {
   const ebml = readElement(head, 0);
   if (!ebml || ebml.id !== MKV_ID.EBML || !fits(head, ebml)) {
     throw vodUnsupported('formato', 'cabecera EBML ilegible');
@@ -494,6 +551,7 @@ export async function readMkvIndex(reader: RangeReader, head: Buffer): Promise<V
   )) {
     if (entry.id === MKV_ID.TrackEntry) raw.push(parseTrackEntry(tracks.data, entry));
   }
+  if (tracksOnly) return { tracks: raw };
   const videoTrack = raw.find((track) => track.type === TRACK_VIDEO);
   if (!videoTrack) throw vodUnsupported('video', 'MKV sin vídeo');
 
@@ -538,37 +596,8 @@ export async function readMkvIndex(reader: RangeReader, head: Buffer): Promise<V
     [...clusterAt].map(([tick, at]) => [toSeconds(tick), at]),
   );
 
-  const audio: VodTrack[] = raw
-    .filter((track) => track.type === TRACK_AUDIO)
-    .map((track, index) => {
-      const codec = audioCodec(track.codecId);
-      return {
-        index,
-        codec,
-        aacLc: codec === 'aac' && mkvAacIsLc(track.codecId, track.codecPrivate),
-        channels: track.channels,
-        lang: track.lang,
-        name: track.name,
-        isDefault: track.isDefault,
-      };
-    });
-  const subtitles: VodSubtitle[] = raw
-    .filter((track) => track.type === TRACK_SUBTITLE)
-    .map((track, index) => {
-      const [codec, text] = SUBTITLE_CODECS[track.codecId] ?? [
-        track.codecId.replace(/^S_/, '').toLowerCase(),
-        false,
-      ];
-      return {
-        index,
-        codec,
-        text,
-        lang: track.lang,
-        name: track.name,
-        isDefault: track.isDefault,
-        forced: track.forced,
-      };
-    });
+  const audio = audioTracksOf(raw);
+  const subtitles = subtitleTracksOf(raw);
 
   const size = reader.size();
   if (size === null) throw new AppError('internal_error', { detail: 'tamaño del MKV sin saber' });

@@ -1142,6 +1142,14 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
             durationS: Math.round(index.durationS),
             segments: producer.plan.segments.length,
             startS: Math.round(startS),
+            /* Qué pistas trae el fichero y cuál suena (lo que dice el índice, §9.9). */
+            audioTracks: index.audio.map((track) => ({
+              lang: track.lang,
+              name: track.name ? track.name.slice(0, 40) : null,
+              codec: track.codec,
+              default: track.isDefault,
+            })),
+            audioChosen: audio ? audio.index : null,
           },
           'VOD: productor abierto',
         );

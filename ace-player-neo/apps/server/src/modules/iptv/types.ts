@@ -173,6 +173,15 @@ export interface VodInput {
   onDropped(listener: (code: string) => void): void;
   /** Duración real (la del índice), para comprobar el progreso (`knownDurationS`). */
   noteDuration(durationS: number): void;
+  /** Las pistas del índice (lenguas del audio y de los subtítulos), para la ficha y el filtro (§4.11). */
+  noteTracks?(tracks: {
+    readonly audio: ReadonlyArray<{ readonly lang: string | null; readonly name: string | null }>;
+    readonly subtitles: ReadonlyArray<{
+      readonly lang: string | null;
+      readonly name: string | null;
+      readonly text: boolean;
+    }>;
+  }): void;
   /** Corta con el proveedor y espera a que se suelte el socket. Idempotente. */
   close(): Promise<void>;
 }

@@ -382,6 +382,11 @@ function prefixLevel(title: string, words: readonly string[]): number | null {
 /** Caché de consultas por tabla (LRU de 16, §6.3): se va con la tabla. */
 const caches = new WeakMap<VodTable, Map<string, VodHits>>();
 
+/** Olvida las consultas guardadas de una tabla (sus idiomas han cambiado, §4.11). */
+export function forgetSearches(table: VodTable): void {
+  caches.delete(table);
+}
+
 /** `searchTable` con la caché LRU de 16 consultas (la clave lleva la categoría y los idiomas). */
 export function searchCached(
   table: VodTable,

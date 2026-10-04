@@ -7658,6 +7658,29 @@ paths:
                               - name
                             additionalProperties: false
                           - type: "null"
+                      detectedAudio:
+                        anyOf:
+                          - type: object
+                            properties:
+                              audio:
+                                maxItems: 8
+                                type: array
+                                items:
+                                  type: string
+                                  maxLength: 40
+                              subtitles:
+                                maxItems: 8
+                                type: array
+                                items:
+                                  type: string
+                                  maxLength: 40
+                            required:
+                              - audio
+                              - subtitles
+                            additionalProperties: false
+                          - type: "null"
+                      audioPending:
+                        type: boolean
                       releaseDate:
                         anyOf:
                           - type: string
@@ -7884,6 +7907,27 @@ paths:
                                         minimum: 0
                                         maximum: 10
                                       - type: "null"
+                                  detectedAudio:
+                                    anyOf:
+                                      - type: object
+                                        properties:
+                                          audio:
+                                            maxItems: 8
+                                            type: array
+                                            items:
+                                              type: string
+                                              maxLength: 40
+                                          subtitles:
+                                            maxItems: 8
+                                            type: array
+                                            items:
+                                              type: string
+                                              maxLength: 40
+                                        required:
+                                          - audio
+                                          - subtitles
+                                        additionalProperties: false
+                                      - type: "null"
                                 required:
                                   - id
                                   - n
@@ -7964,6 +8008,29 @@ paths:
                             exclusiveMinimum: 0
                             maximum: 86400
                           - type: "null"
+                      detectedAudio:
+                        anyOf:
+                          - type: object
+                            properties:
+                              audio:
+                                maxItems: 8
+                                type: array
+                                items:
+                                  type: string
+                                  maxLength: 40
+                              subtitles:
+                                maxItems: 8
+                                type: array
+                                items:
+                                  type: string
+                                  maxLength: 40
+                            required:
+                              - audio
+                              - subtitles
+                            additionalProperties: false
+                          - type: "null"
+                      audioPending:
+                        type: boolean
                     required:
                       - kind
                       - id

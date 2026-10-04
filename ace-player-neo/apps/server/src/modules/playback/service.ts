@@ -867,6 +867,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     if (pace !== null) input.setPace(pace);
     input.setAheadProbe?.(() => remux.vodStats(id)?.aheadS ?? null);
     input.noteDuration(index.durationS);
+    /* Lo que dice el fichero de su audio, para la ficha y el filtro de idiomas (docs/vod.md §4.11). */
+    input.noteTracks?.({ audio: index.audio, subtitles: index.subtitles });
     session = {
       id,
       hash: request.hash,

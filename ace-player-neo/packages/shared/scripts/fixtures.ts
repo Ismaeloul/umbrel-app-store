@@ -1535,6 +1535,14 @@ export const VARIANT_FIXTURES = {
       ),
     })),
   },
+  /* «Sin indicar» por el proveedor: el servidor está leyendo el fichero (§4.11). */
+  'vodTitle.audio-comprobando': { ...vodDuneTitle, langs: [], audioPending: true },
+  /* Lo que dice el fichero: audio en inglés y subtítulos en español (§4.11). */
+  'vodTitle.audio-del-fichero': {
+    ...vodDuneTitle,
+    langs: ['vose', 'ingles'],
+    detectedAudio: { audio: ['Inglés'], subtitles: ['Español'] },
+  },
   /* El proveedor no dio la ficha: lo que se sabe por la lista, y «Reproducir» sigue (§7.3). */
   'vodTitle.info-failed': {
     ...vodDuneTitle,
@@ -1817,6 +1825,8 @@ export const VARIANT_FIXTURES = {
   'vodBrowse.vacio': V1ResponseInput<'vodBrowse'>;
   'vodTitle.series': V1ResponseInput<'vodTitle'>;
   'vodTitle.episodio-avi': V1ResponseInput<'vodTitle'>;
+  'vodTitle.audio-comprobando': V1ResponseInput<'vodTitle'>;
+  'vodTitle.audio-del-fichero': V1ResponseInput<'vodTitle'>;
   'vodTitle.info-failed': V1ResponseInput<'vodTitle'>;
   'vodStream.hevc': V1ResponseInput<'vodStream'>;
   'iptvBrowse.categoria': V1ResponseInput<'iptvBrowse'>;

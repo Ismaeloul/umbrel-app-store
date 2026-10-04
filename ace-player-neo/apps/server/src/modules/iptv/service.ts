@@ -115,6 +115,9 @@ import {
 } from './search.js';
 import { createIptvRelay, type IptvRelayImpl, type RelayVariant } from './relay.js';
 import { IptvFiles } from './store.js';
+import { readVodTracks } from '../remux/vod/index.js';
+import { createHttpRangeReader } from '../remux/vod/reader.js';
+import { VOD_AUDIO_READ_MS, type VodFileTarget, type VodTracksSeen } from './vod/audio-check.js';
 import { VodPreemptedError, VodService } from './vod/vod-service.js';
 import type {
   IptvBackupConfig,
@@ -378,6 +381,8 @@ export class IptvServiceImpl implements IptvService {
       busy: () => this.openInputs > 0 || this.relay.connections() > 0,
       emitStatus: () => this.emitStatus(),
       knownDurationS: (id) => this.vodDurations.get(id) ?? null,
+      readVodTracks: (target, signal) => this.readVodTracks(target, signal),
+      vodReadFree: () => this.vodReadFree(),
     });
   }
 
@@ -2785,6 +2790,7 @@ export class IptvServiceImpl implements IptvService {
       release: () => session.release(),
       onDropped: (listener) => session.onDropped(listener),
       noteDuration: (durationS) => this.noteVodDuration(id, durationS),
+      noteTracks: (tracks) => this.vod.noteTracks(id, tracks),
       close: async () => {
         if (closed) return;
         closed = true;
@@ -2823,6 +2829,82 @@ export class IptvServiceImpl implements IptvService {
         detail: 'la cuenta tiene todas sus plazas ocupadas',
         data: { retryAfterS: 30 },
       });
+    }
+  }
+
+  /**
+   * ¿Se puede leer ahora el índice de un fichero para la ficha (docs/vod.md
+   * §4.11)? Solo con la IPTV Xtream activa y SIN NADA en uso: ninguna sesión
+   * (directo o VOD), ni sonda, ni un cierre de hace nada, y la cuenta con plaza.
+   */
+  private vodReadFree(): boolean {
+    const record = this.record;
+    if (!record || record.kind !== 'xtream' || !record.enabled || this.unreadable) return false;
+    if (this.secrets?.kind !== 'xtream' || this.accountDead()) return false;
+    if (this.relay.sessions() > 0 || this.openInputs > 0 || this.probe) return false;
+    if (this.closedJustNow()) return false;
+    const account = record.account ?? null;
+    return !(
+      account &&
+      account.maxConnections !== null &&
+      account.activeConnections !== null &&
+      account.maxConnections > 0 &&
+      account.activeConnections >= account.maxConnections
+    );
+  }
+
+  /**
+   * Lee las pistas de una película o un episodio para la ficha (§4.11): una
+   * sesión del relé VOD sin reintentos y con plazo corto, la cabecera y las
+   * pistas por Range, y se cierra. null si la IPTV está en uso (para luego).
+   * Va como «sonda»: una sesión de verdad que se abre la corta y espera.
+   */
+  private async readVodTracks(
+    target: VodFileTarget,
+    signal: AbortSignal,
+  ): Promise<VodTracksSeen | null> {
+    if (!this.vodReadFree() || signal.aborted) return null;
+    const secrets = this.secrets;
+    if (secrets?.kind !== 'xtream') return null;
+    const url = xtreamVodUrl(
+      secrets,
+      target.kind === 'movie' ? 'movie' : 'series',
+      target.source,
+      target.ext,
+    );
+    const controller = new AbortController();
+    const onAbort = (): void => controller.abort(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    const revocations = this.revocations;
+    const promise = (async (): Promise<VodTracksSeen | null> => {
+      const session = await this.relay.openVod({
+        url,
+        headers: { 'User-Agent': IPTV_USER_AGENT },
+        ext: target.ext,
+        accountGate: (gate) => this.vodAccountGate(gate),
+        lastClosedAt: () => this.recentCloses.at(-1) ?? null,
+        onUpstreamClosed: () => this.noteClose(),
+        /* Sin reintentos: si el panel no contesta o está lleno, para otra vez. */
+        session: { limits: { firstByteRetries: 0, busyRetryMs: [] } },
+      });
+      try {
+        const tracks = await readVodTracks(
+          createHttpRangeReader(session.inputUrl, {
+            signal: controller.signal,
+            timeoutMs: VOD_AUDIO_READ_MS,
+          }),
+        );
+        return this.revocations === revocations ? tracks : null;
+      } finally {
+        await session.close().catch(() => undefined);
+      }
+    })();
+    this.probe = { controller, promise };
+    try {
+      return await promise;
+    } finally {
+      signal.removeEventListener('abort', onAbort);
+      if (this.probe?.promise === promise) this.probe = null;
     }
   }
 
