@@ -5,7 +5,11 @@
    más de una vez por consulta.
 
    - Fila = un canal: las variantes con la misma clave limpia (§3.4) Y el mismo
-     país deducido (§16.4). Su mejor variante es la primera por
+     país deducido (§16.4); España y sin país son el mismo (como en el
+     buscador, §17; desde la 0.9.0, docs/buscador.md: antes salían dos filas
+     iguales, «M+ LaLiga TV» de «ES: …» y la de «VIP - …» sin país). La fila
+     dice España si alguna de sus variantes lo dice, y cuenta en los dos
+     valores de la faceta. Su mejor variante es la primera por
      `compareVariants` (§4.3); su orden, la primera aparición de cualquiera de
      sus variantes en la lista (el orden del proveedor).
    - Categoría = un nombre de grupo del proveedor, con id
@@ -17,11 +21,15 @@
      palabras por valor. Filtros: O dentro de una faceta, Y entre facetas.
      Recuentos disyuntivos: el de cada valor de F se cuenta con todo lo demás
      elegido MENOS F.
-   - Texto: las mismas reglas que el buscador (§14.3): cada palabra de la
-     consulta limpia es principio de alguna palabra de la clave (con 3 letras
-     o más, también dentro), o la clave sin espacios contiene la consulta sin
-     espacios. Orden por niveles (clave igual → empieza por → palabras en
-     orden → el resto) y, dentro, el del proveedor.
+   - Texto: lo mismo que el buscador (search.ts y el módulo común de buscar
+     por nombre, docs/buscador.md): las mismas palabras (sin país, calidad
+     ni adornos; «la uno» = «la 1»), los mismos candidatos (principio de
+     palabra, un número solo entero, por dentro en compuestos, lo escrito
+     pegado y sin la marca), los mismos alias y el mismo orden
+     (`compareRankedHits`, empaquetado con `packRankedHit`: lo flojo detrás,
+     España primero, lo igual, tus favoritos, el nivel…; al final, el del
+     proveedor). Antes (0.8.x) era
+     otro orden más sencillo y «la 1» daba «La 10» delante de «LaLiga TV 1».
    - Las filas ya ordenadas de una consulta se guardan (16 consultas) para
      servir las páginas siguientes con un trozo del array. */
 
@@ -34,12 +42,30 @@ import {
   MOVISTAR_WORDS,
   SEARCH_QUERY_MAX,
   SEARCH_QUERY_MIN,
+  NAME_TIER,
+  parseNameQuery,
+  regionRank,
   type IptvFacetName,
   type IptvQuality,
+  type NameFacts,
+  type NameQuery,
+  type NameQueryWords,
 } from '@ace/shared';
-import { compareVariants, type Catalog, type CatalogEntry } from './catalog.js';
+import { channelIdOf, compareVariants, type Catalog, type CatalogEntry } from './catalog.js';
 import { FacetDeriver, variantQuality } from './facets.js';
-import { foldText, searchQueryKey, significant } from './search.js';
+import {
+  bestNameTier,
+  cachedKeyNames,
+  entriesPenalty,
+  foldText,
+  indexWordsOf,
+  keyNames,
+  literalMissMask,
+  optionalWordsMask,
+  packRankedHit,
+  rankTier,
+  tokensForWord,
+} from './search.js';
 
 export const FACET_NAMES: readonly IptvFacetName[] = [
   'country',
@@ -138,18 +164,32 @@ export interface BrowseIndex {
   readonly categoryById: ReadonlyMap<string, BrowseCategory>;
   readonly facets: Readonly<Record<IptvFacetName, ReadonlyMap<string, Uint32Array>>>;
   readonly all: Uint32Array;
-  /** Texto: palabras distintas de las claves, ordenadas, y las claves de cada una. */
+  /** Texto: palabras distintas de los nombres de las claves (`keyNames`), ordenadas, y las claves de cada una. */
   readonly tokens: readonly string[];
   readonly byToken: ReadonlyMap<string, number | number[]>;
   /** Claves distintas (poca memoria: arrays paralelos y sin un objeto por clave). */
   readonly keyText: readonly string[];
-  /** La clave sin espacios («lasexta»). */
+  /** Las palabras de la clave pegadas («lasexta»). */
   readonly keyCompact: readonly string[];
   /** Primera fila de cada clave; las demás (otros países), en `keyMoreRows`. */
   readonly keyRow: Int32Array;
+  /** La clave (posición en `keyText`) de cada fila. */
+  readonly rowKey: Int32Array;
+  /**
+   * La familia de cada clave (`NameFacts.family`, como número) y, de cada familia, su primera fila y qué palabras
+   * de relleno llevan sus claves (`optionalWordsMask`): de TODO el catálogo, como el buscador (`familyOrder` y
+   * `literalMiss` de search.ts), para que la pestaña ordene igual con filtros o sin ellos.
+   */
+  readonly keyFamily: Int32Array;
+  readonly familyFirst: Int32Array;
+  readonly familyMask: Uint8Array;
   readonly keyMoreRows: ReadonlyMap<number, readonly number[]>;
   /** Consultas ya ordenadas (LRU). */
   readonly cache: Map<string, CachedQuery>;
+  /** Los nombres de las claves que han salido en una consulta (`cachedKeyNames`: no se guardan todos). */
+  readonly names: Map<string, readonly NameFacts[]>;
+  /** Lo que resta a cada fila para ordenar (`entriesPenalty`), calculado al hacer falta; -1 sin calcular. */
+  readonly penalty: Int8Array;
 }
 
 interface CachedQuery {
@@ -228,7 +268,8 @@ export function* buildBrowseIndexSteps(
   const country: (string | null)[] = [];
   const qualities = new Uint8Array(entries.length);
   const categoryRows: number[][] = names.map(() => []);
-  /* Fila por clave (la del primer país que aparece) y, si la clave sale con otro país, por clave y país. */
+  /* Fila por clave (la del primer país que aparece) y, si la clave sale con otro país, por clave y país (España
+     y sin país, uno: `homeOf`). */
   const firstRow = new Map<string, number>();
   const otherRows = new Map<string, number>();
   const keyText: string[] = [];
@@ -237,6 +278,11 @@ export function* buildBrowseIndexSteps(
   const keyMoreRows = new Map<number, number[]>();
   const keyOfRow: number[] = [];
   const byToken = new Map<string, number | number[]>();
+  /* Familias (número por familia): la de cada clave, su primera fila y el relleno de sus claves. */
+  const familyOf = new Map<string, number>();
+  const keyFamily: number[] = [];
+  const familyFirst: number[] = [];
+  const familyMask: number[] = [];
 
   let done = 0;
   for (const entry of entries) {
@@ -248,9 +294,10 @@ export function* buildBrowseIndexSteps(
       quality: entry.quality,
       nameCountry: entry.country,
     });
+    const bucket = homeOf(derived.country);
     let row = firstRow.get(entry.key);
-    if (row !== undefined && country[row] !== derived.country) {
-      row = otherRows.get(`${entry.key}\n${derived.country ?? ''}`);
+    if (row !== undefined && homeOf(country[row] ?? null) !== bucket) {
+      row = otherRows.get(`${entry.key}\n${bucket}`);
     }
     if (row === undefined) {
       row = best.length;
@@ -264,24 +311,41 @@ export function* buildBrowseIndexSteps(
         const position = keyText.length;
         keyOfRow.push(position);
         keyText.push(entry.key);
-        keyCompact.push(entry.key.replace(/ /g, ''));
+        /* Las palabras de sus nombres (no se guardan: `BrowseIndex.names`). */
+        const names = keyNames(entry.key);
+        const main = names[0] as NameFacts;
+        keyCompact.push(main.compact);
         keyFirst.push(row);
-        for (const word of new Set(entry.key.split(' ').filter(Boolean))) {
+        /* Las claves salen en el orden de su primera fila: la primera de una familia es su primera fila. */
+        let family = familyOf.get(main.family);
+        if (family === undefined) {
+          family = familyFirst.length;
+          familyOf.set(main.family, family);
+          familyFirst.push(row);
+          familyMask.push(0);
+        }
+        keyFamily.push(family);
+        familyMask[family] =
+          (familyMask[family] as number) | optionalWordsMask(entry.key.split(' '));
+        for (const word of indexWordsOf(names)) {
           const list = byToken.get(word);
           if (list === undefined) byToken.set(word, position);
           else if (typeof list === 'number') byToken.set(word, [list, position]);
           else list.push(position);
         }
       } else {
-        otherRows.set(`${entry.key}\n${derived.country ?? ''}`, row);
+        otherRows.set(`${entry.key}\n${bucket}`, row);
         const position = keyOfRow[first] as number;
         keyOfRow.push(position);
         const more = keyMoreRows.get(position);
         if (more) more.push(row);
         else keyMoreRows.set(position, [row]);
       }
-    } else if (compareVariants(entry, best[row] as CatalogEntry) < 0) {
-      best[row] = entry;
+    } else {
+      /* Otra variante de la misma fila: España manda sobre sin país, y cuenta en los dos. */
+      if (derived.country === 'ES' && country[row] === null) country[row] = 'ES';
+      mark('country', derived.country ?? NONE, row);
+      if (compareVariants(entry, best[row] as CatalogEntry) < 0) best[row] = entry;
     }
     (categoryRows[categoryIndex.get(entry.group) as number] as number[]).push(row);
     for (const code of derived.languages) mark('language', code, row);
@@ -297,6 +361,8 @@ export function* buildBrowseIndexSteps(
   }
   firstRow.clear();
   otherRows.clear();
+  familyOf.clear();
+  const rowKey = Int32Array.from(keyOfRow);
   keyOfRow.length = 0;
 
   const rowCount = best.length;
@@ -359,9 +425,20 @@ export function* buildBrowseIndexSteps(
     keyText,
     keyCompact,
     keyRow: Int32Array.from(keyFirst),
+    rowKey,
+    keyFamily: Int32Array.from(keyFamily),
+    familyFirst: Int32Array.from(familyFirst),
+    familyMask: Uint8Array.from(familyMask),
     keyMoreRows,
     cache: new Map(),
+    names: new Map(),
+    penalty: new Int8Array(rowCount).fill(-1),
   };
+}
+
+/** El «país» de una fila: España y sin país son el mismo (''); otro país, su código. */
+function homeOf(country: string | null): string {
+  return country === null || country === 'ES' ? '' : country;
 }
 
 /** El índice de una vez, sin ceder el hilo (tests y catálogos pequeños). */
@@ -394,6 +471,10 @@ export interface BrowseRequest {
   readonly limit: number;
   /** Con categorías y facetas (primera página). */
   readonly withSummary: boolean;
+  /** Canales (`channelIdOf`) de tus favoritos IPTV: con texto, desempatan delante (nunca de lo igual). */
+  readonly favorites?: ReadonlySet<string> | undefined;
+  /** Sello de `favorites` para la caché (cambia si cambian tus favoritos). */
+  readonly favoritesKey?: string | undefined;
 }
 
 export interface BrowseResult {
@@ -418,115 +499,203 @@ export function cleanBrowseQuery(value: unknown): string {
   return q.length < SEARCH_QUERY_MIN ? '' : q;
 }
 
-/* Primera posición de `tokens` que no es menor que `word`. */
-function lowerBound(tokens: readonly string[], word: string): number {
-  let lo = 0;
-  let hi = tokens.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if ((tokens[mid] as string) < word) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
-}
+/* Estado de cada clave en una consulta: aún nada, casa seguro o hay que mirarla con `bestNameTier`. */
+const KEY_NONE = 0;
+const KEY_SURE = 1;
+const KEY_CHECK = 2;
 
-/* Palabras del índice que empiezan por `word` (o la contienen, con 3 letras o más). */
-function tokensForWord(index: BrowseIndex, word: string): string[] {
-  const out: string[] = [];
-  for (let i = lowerBound(index.tokens, word); i < index.tokens.length; i += 1) {
-    const token = index.tokens[i] as string;
-    if (!token.startsWith(word)) break;
-    out.push(token);
-  }
-  if (word.length >= 3) {
-    for (const token of index.tokens) {
-      if (!token.startsWith(word) && token.includes(word)) out.push(token);
-    }
-  }
-  return out;
-}
-
-function inOrder(words: readonly string[], key: string): boolean {
-  const keyWords = key.split(' ');
-  let from = 0;
-  for (const word of words) {
-    let found = -1;
-    for (let i = from; i < keyWords.length; i += 1) {
-      if ((keyWords[i] as string).startsWith(word)) {
-        found = i;
-        break;
+/*
+ * Marca en `state` las claves que tienen todas las palabras (`tokensForWord`
+ * del buscador): se cuenta cuántas palabras lleva casadas cada clave, en
+ * orden, con un contador por clave (sin conjuntos: con 100 000 claves, «canal»
+ * casa con 90 000).
+ */
+function markAllWords(
+  index: BrowseIndex,
+  words: readonly string[],
+  inside: boolean,
+  state: Uint8Array,
+  mark: number,
+): void {
+  if (!words.length) return;
+  const count = new Uint8Array(index.keyText.length);
+  let last: number[] = [];
+  words.forEach((word, position) => {
+    const reached: number[] = [];
+    for (const token of tokensForWord(index, word, inside)) {
+      const items = index.byToken.get(token);
+      if (items === undefined) continue;
+      for (const item of typeof items === 'number' ? [items] : items) {
+        if (count[item] !== position) continue;
+        count[item] = position + 1;
+        reached.push(item);
       }
     }
-    if (found < 0) return false;
-    from = found + 1;
+    last = reached;
+  });
+  for (const item of last) {
+    if (count[item] === words.length && state[item] !== KEY_SURE) state[item] = mark;
   }
-  return true;
+}
+
+/*
+ * Candidatas de una consulta (sin alias), como el buscador: sus palabras (casan
+ * seguro), lo escrito pegado (hay que mirarlo: puede cortar un número) y sin
+ * la marca (seguro). Con `mark` = `KEY_CHECK`, todo se mira (los alias tienen
+ * un nivel máximo).
+ */
+function markCandidates(
+  index: BrowseIndex,
+  q: NameQueryWords,
+  state: Uint8Array,
+  mark: number,
+): void {
+  if (!q.required.length) return;
+  markAllWords(index, q.required, true, state, mark);
+  if (q.compact.length >= 3) {
+    const compacts = index.keyCompact;
+    for (let item = 0; item < compacts.length; item += 1) {
+      if (state[item] === KEY_NONE && (compacts[item] as string).includes(q.compact))
+        state[item] = KEY_CHECK;
+    }
+  }
+  const brandless = q.required.filter((word) => !MOVISTAR_WORDS.has(word));
+  if (
+    brandless.length < q.required.length &&
+    brandless.some((word) => word.length >= 3 && !/^\d+$/.test(word))
+  ) {
+    markAllWords(index, brandless, false, state, mark);
+  }
+}
+
+/* La mejor calidad de una fila para desempatar (bits uhd 1, fhd 2, hd 4, sd 8 → 4, 3, 2, 1). */
+function rowQuality(bits: number): number {
+  if (bits & 1) return 4;
+  if (bits & 2) return 3;
+  if (bits & 4) return 2;
+  return bits & 8 ? 1 : 0;
+}
+
+/*
+ * Lo que resta a una fila (`entriesPenalty`), con TODAS las variantes de su canal (su clave y su país), como el
+ * buscador: con solo la mejor, una fila con la mejor en una plataforma o de reserva (el HEVC va detrás de la reserva)
+ * se castigaba aquí y no en Buscar.
+ */
+function rowPenalty(index: BrowseIndex, row: number, words: readonly string[]): number {
+  const known = index.penalty[row] as number;
+  if (known >= 0) return known;
+  const best = index.best[row] as CatalogEntry;
+  const { bucket } = best;
+  const entries = index.catalog.group(best.key).filter((entry) => entry.bucket === bucket);
+  const value = entriesPenalty(best, entries.length ? entries : [best], words, index.catalog);
+  index.penalty[row] = value;
+  return value;
+}
+
+interface TextMatch {
+  /** Filas que casan (mapa de bits). */
+  readonly bits: Uint32Array;
+  readonly query: NameQuery;
 }
 
 /**
- * Filas que casan con el texto (mapa de bits) y el nivel de cada una
- * (0 clave igual, 1 empieza por, 2 palabras en orden, 3 el resto, 4 sin la
- * marca: «m+ la liga» → «LA LIGA TV BAR»). La consulta se limpia como en el
- * buscador (`searchQueryKey`, §18) y, como allí, «tv», «canal» y «channel»
- * no hace falta encontrarlas si hay otras palabras.
+ * Filas que casan con el texto, con los mismos candidatos que el buscador
+ * (`searchCatalog`) y sus alias. Aquí solo se decide QUÉ casa (barato): el
+ * orden se calcula después con `rankRows`, solo para las filas que quedan tras
+ * los filtros (con 100 000 canales, «canal» casa con 90 000).
  */
-function textMatch(
-  index: BrowseIndex,
-  query: string,
-): { readonly bits: Uint32Array; readonly rank: Uint8Array } {
+function textMatch(index: BrowseIndex, query: string): TextMatch {
   const bits = new Uint32Array(index.words);
-  const rank = new Uint8Array(index.words * 32);
-  const key = searchQueryKey(query);
-  if (!key) return { bits, rank };
-  const words = significant([...new Set(key.split(' ').filter(Boolean))]).slice(0, 32);
-  /* Sin Movistar delante (como el buscador): las listas no siempre lo escriben. */
-  const branded = words.map((word) => MOVISTAR_WORDS.has(word));
-  const brandlessCount = branded.filter((brand) => !brand).length;
-  const brandless =
-    brandlessCount < words.length &&
-    words.some((word, i) => !branded[i] && word.length >= 3 && !/^\d+$/.test(word));
-  /* Cada palabra tiene que casar: se cuenta cuántas palabras casan con cada clave. */
-  const count = index.keyText.length;
-  const hits = new Uint8Array(count);
-  const hitsBrandless = new Uint8Array(count);
-  const last = new Int8Array(count).fill(-1);
-  const hit = (item: number, position: number): void => {
-    if (last[item] === position) return;
-    last[item] = position;
-    hits[item] = (hits[item] as number) + 1;
-    if (!branded[position]) hitsBrandless[item] = (hitsBrandless[item] as number) + 1;
-  };
-  words.forEach((word, position) => {
-    for (const token of tokensForWord(index, word)) {
-      const items = index.byToken.get(token);
-      if (typeof items === 'number') hit(items, position);
-      else if (items) for (const item of items) hit(item, position);
-    }
-  });
-  /* O la clave sin espacios contiene la consulta sin espacios («la sexta» → «lasexta»). */
-  const compact = key.replace(/ /g, '');
-  const byCompact = compact.length >= SEARCH_QUERY_MIN;
-  const mark = (row: number, level: number): void => {
-    setBit(bits, row);
-    rank[row] = level;
-  };
-  for (let position = 0; position < count; position += 1) {
-    let level: number;
+  const q = parseNameQuery(query);
+  if (!q.key) return { bits, query: q };
+  const state = new Uint8Array(index.keyText.length);
+  markCandidates(index, q, state, KEY_SURE);
+  /* Lo de un alias puede quedarse fuera por su nivel máximo: se mira. */
+  for (const alias of q.aliases) markCandidates(index, alias.query, state, KEY_CHECK);
+  for (let item = 0; item < state.length; item += 1) {
+    if (state[item] === KEY_NONE) continue;
     if (
-      hits[position] === words.length ||
-      (byCompact && (index.keyCompact[position] as string).includes(compact))
-    ) {
-      const text = index.keyText[position] as string;
-      level = text === key ? 0 : text.startsWith(key) ? 1 : inOrder(words, text) ? 2 : 3;
-    } else if (brandless && hitsBrandless[position] === brandlessCount) {
-      level = 4;
-    } else {
+      state[item] === KEY_CHECK &&
+      bestNameTier(q, cachedKeyNames(index.names, index.keyText[item] as string)).tier < 0
+    )
       continue;
-    }
-    mark(index.keyRow[position] as number, level);
-    for (const row of index.keyMoreRows.get(position) ?? []) mark(row, level);
+    setBit(bits, index.keyRow[item] as number);
+    for (const row of index.keyMoreRows.get(item) ?? []) setBit(bits, row);
   }
-  return { bits, rank };
+  return { bits, query: q };
+}
+
+/**
+ * Ordena (en su sitio) las filas que casan y han quedado tras los filtros, con
+ * el orden del buscador (`compareRankedHits`, empaquetado en dos números con
+ * `packRankedHit` para ordenar deprisa): su nivel con la consulta y sus alias,
+ * el país, tus favoritos, lo que resta (con todas sus variantes), el relleno
+ * escrito, la familia (y su orden en todo el catálogo), el número, la calidad
+ * y el orden del proveedor: lo mismo que Buscar.
+ */
+function rankRows(
+  index: BrowseIndex,
+  rows: number[],
+  q: NameQuery,
+  favorites: ReadonlySet<string> | undefined,
+): void {
+  const byItem = new Map<number, { tier: number; lead: boolean; main: NameFacts }>();
+  for (const row of rows) {
+    const item = index.rowKey[row] as number;
+    if (byItem.has(item)) continue;
+    const key = index.keyText[item] as string;
+    const names = cachedKeyNames(index.names, key);
+    const found = bestNameTier(q, names);
+    /* Casa por sus palabras aunque no por el nivel de un solo nombre (un alias del emparejado): lo más flojo. */
+    byItem.set(item, {
+      tier: found.tier < 0 ? NAME_TIER.inside : found.tier,
+      lead: found.lead,
+      main: names[0] as NameFacts,
+    });
+  }
+  const context = { query: q };
+  /* Sin favoritos no hace falta montar el id de canal de cada fila. */
+  const withFavorites = favorites !== undefined && favorites.size > 0;
+  const first = new Float64Array(index.rowCount);
+  const second = new Float64Array(index.rowCount);
+  for (const row of rows) {
+    const item = index.rowKey[row] as number;
+    const { tier, lead, main } = byItem.get(item) as {
+      tier: number;
+      lead: boolean;
+      main: NameFacts;
+    };
+    const country = index.country[row] ?? null;
+    const keyRow = index.keyRow[item] as number;
+    const family = index.keyFamily[item] as number;
+    const best = index.best[row] as CatalogEntry;
+    const home = regionRank(country);
+    const [a, b] = packRankedHit({
+      rank: {
+        tier: rankTier(context, tier),
+        lead,
+        region: q.country ? regionRank(country, q.country) : home,
+        favorite: withFavorites && favorites.has(channelIdOf(best)),
+      },
+      penalty: rowPenalty(index, row, main.words),
+      miss: literalMissMask(context, index.familyMask[family] as number),
+      familyLength: main.family.length,
+      familyOrder: index.familyFirst[family] as number,
+      number: main.number,
+      quality: rowQuality(index.qualities[row] as number),
+      keyLength: (index.keyText[item] as string).length,
+      keyOrder: keyRow,
+      abroad: home === 0 ? 0 : 1,
+      /* El orden del catálogo de su mejor variante, como el buscador. */
+      order: best.order,
+    });
+    first[row] = a;
+    second[row] = b;
+  }
+  rows.sort(
+    (x, y) =>
+      (first[x] as number) - (first[y] as number) || (second[x] as number) - (second[y] as number),
+  );
 }
 
 function categoryBits(index: BrowseIndex, category: BrowseCategory): Uint32Array {
@@ -572,6 +741,8 @@ function cacheKey(request: BrowseRequest, text: string, category: number | null)
     list(request.type),
     list(request.sport),
     list(request.quality),
+    /* Con texto, tus favoritos cambian el orden. */
+    text ? (request.favoritesKey ?? '') : '',
   ].join('|');
 }
 
@@ -720,22 +891,11 @@ function compute(
     }
   }
 
-  /* Orden: el del proveedor; con texto, por niveles y luego el del proveedor. */
+  /* Orden: el del proveedor; con texto, el del buscador (`compareRankedHits`) y, al final, el del proveedor. */
   const rows = rowsOf(result);
   if (!text) return { order: Int32Array.from(rows), categories, facets, text: query };
-  /* Por niveles sin comparar: cinco cubos que ya vienen en el orden del proveedor y, dentro de
-     cada uno, España y sin país primero (como el buscador, §18: «dazn 1» da antes el de aquí). */
-  const order = new Int32Array(rows.length);
-  let at = 0;
-  const home = (row: number): boolean => {
-    const country = index.country[row];
-    return country === null || country === undefined || country === 'ES';
-  };
-  for (let level = 0; level <= 4; level += 1) {
-    for (const row of rows) if (text.rank[row] === level && home(row)) order[at++] = row;
-    for (const row of rows) if (text.rank[row] === level && !home(row)) order[at++] = row;
-  }
-  return { order, categories, facets, text: query };
+  rankRows(index, rows, text.query, request.favorites);
+  return { order: Int32Array.from(rows), categories, facets, text: query };
 }
 
 /** Filas de todo el catálogo (para `catalogTotal`). */

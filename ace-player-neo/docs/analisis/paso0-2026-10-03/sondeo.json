@@ -1,0 +1,362 @@
+{
+  "fecha": "2026-10-03T13:03:47.110Z",
+  "fases": [
+    "listas",
+    "codecs",
+    "range",
+    "plaza",
+    "pausa",
+    "token"
+  ],
+  "rapido": false,
+  "cuenta": {
+    "activas": 0,
+    "maximas": 1,
+    "estado": "Active"
+  },
+  "listas": [
+    {
+      "accion": "get_vod_categories",
+      "estado": 200,
+      "bytesCable": 34622,
+      "bytes": 34622,
+      "ms": 107,
+      "forma": "array",
+      "elementos": 444,
+      "ids": 444,
+      "saltados": {
+        "16KiB": 0,
+        "64KiB": 0,
+        "256KiB": 0
+      },
+      "mayorKiB": 1,
+      "extensiones": {},
+      "vose": 9,
+      "adultos": 0,
+      "gzip": false,
+      "error": null
+    },
+    {
+      "accion": "get_vod_streams",
+      "estado": 200,
+      "bytesCable": 66572364,
+      "bytes": 66572364,
+      "ms": 4224,
+      "forma": "array",
+      "elementos": 181210,
+      "ids": 181210,
+      "saltados": {
+        "16KiB": 0,
+        "64KiB": 0,
+        "256KiB": 0
+      },
+      "mayorKiB": 15,
+      "extensiones": {
+        "mkv": 134335,
+        "mp4": 43888,
+        "avi": 2618,
+        "m4v": 191,
+        "ts": 177,
+        "otra": 1
+      },
+      "vose": 11695,
+      "adultos": 0,
+      "gzip": false,
+      "error": null
+    },
+    {
+      "accion": "get_series_categories",
+      "estado": 200,
+      "bytesCable": 31254,
+      "bytes": 31254,
+      "ms": 164,
+      "forma": "array",
+      "elementos": 384,
+      "ids": 384,
+      "saltados": {
+        "16KiB": 0,
+        "64KiB": 0,
+        "256KiB": 0
+      },
+      "mayorKiB": 1,
+      "extensiones": {},
+      "vose": 6,
+      "adultos": 0,
+      "gzip": false,
+      "error": null
+    },
+    {
+      "accion": "get_series",
+      "estado": 200,
+      "bytesCable": 50563916,
+      "bytes": 50563916,
+      "ms": 2472,
+      "forma": "array",
+      "elementos": 48797,
+      "ids": 48797,
+      "saltados": {
+        "16KiB": 0,
+        "64KiB": 0,
+        "256KiB": 0
+      },
+      "mayorKiB": 14,
+      "extensiones": {},
+      "vose": 2411,
+      "adultos": 0,
+      "gzip": false,
+      "error": null
+    }
+  ],
+  "fichas": {
+    "pedidas": 50,
+    "fallidas": 0,
+    "videoCodec": {
+      "sin dato": 50
+    },
+    "altura": {
+      "sin dato": 50
+    },
+    "diezBits": 0,
+    "audioCodec": {
+      "sin dato": 50
+    },
+    "canales": {
+      "sin dato": 50
+    }
+  },
+  "pistas": {
+    "leidas": 27,
+    "fallidas": 3,
+    "contenedorReal": {
+      "mkv": 23,
+      "mp4": 5
+    },
+    "noCoincideExtension": 0,
+    "mkvSinCues": 0,
+    "mp4MoovAlFinal": 5,
+    "mp4Fragmentado": 0,
+    "variosAudios": 7,
+    "conCastellano": 0,
+    "soloLatino": 0,
+    "lenguasAudio": {
+      "fre": 2,
+      "eng": 9,
+      "und": 9,
+      "lat": 1,
+      "ger": 7,
+      "en": 1,
+      "": 1,
+      "per": 2,
+      "swe": 1,
+      "chi": 1
+    },
+    "subsTexto": 12,
+    "subsImagen": 2,
+    "bytesLeidos": 50441437,
+    "ocupado": 0
+  },
+  "range": [
+    {
+      "titulo": "MKV",
+      "inicio": {
+        "estado": 206,
+        "acceptRanges": "0-1205189183",
+        "contentRange": true,
+        "tamanoMiB": 1149,
+        "saltos": 1,
+        "cambiaDeHost": true,
+        "llevaToken": false,
+        "llevaQuery": true,
+        "estadosSalto": [
+          302
+        ]
+      },
+      "error": "tiempo agotado"
+    },
+    {
+      "titulo": "MP4",
+      "error": "tiempo agotado"
+    },
+    {
+      "titulo": "episodio (mkv)",
+      "inicio": {
+        "estado": 206,
+        "acceptRanges": "0-1604851459",
+        "contentRange": true,
+        "tamanoMiB": 1531,
+        "saltos": 1,
+        "cambiaDeHost": true,
+        "llevaToken": false,
+        "llevaQuery": true,
+        "estadosSalto": [
+          302
+        ]
+      },
+      "error": "tiempo agotado"
+    }
+  ],
+  "plaza": [
+    {
+      "antes": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      },
+      "reaperturas": [
+        {
+          "esperaMs": 0,
+          "estado": 206,
+          "libreTrasMs": 0
+        }
+      ],
+      "primera": 206,
+      "error": "tiempo agotado",
+      "despues": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      }
+    },
+    {
+      "antes": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      },
+      "reaperturas": [
+        {
+          "esperaMs": 0,
+          "estado": 206,
+          "libreTrasMs": 0
+        },
+        {
+          "esperaMs": 2000,
+          "estado": 206,
+          "libreTrasMs": 0
+        },
+        {
+          "esperaMs": 5000,
+          "estado": 206,
+          "libreTrasMs": 0
+        }
+      ],
+      "primera": 206,
+      "despues": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      }
+    },
+    {
+      "antes": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      },
+      "reaperturas": [],
+      "error": "tiempo agotado",
+      "despues": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      }
+    },
+    {
+      "antes": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      },
+      "reaperturas": [
+        {
+          "esperaMs": 0,
+          "estado": 206,
+          "libreTrasMs": 0
+        },
+        {
+          "esperaMs": 2000,
+          "estado": 206,
+          "libreTrasMs": 0
+        }
+      ],
+      "primera": 206,
+      "error": "tiempo agotado",
+      "despues": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      }
+    },
+    {
+      "antes": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      },
+      "reaperturas": [],
+      "primera": 206,
+      "error": "tiempo agotado",
+      "despues": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      }
+    }
+  ],
+  "pausa": [
+    {
+      "segundos": 60,
+      "estado": 206,
+      "sigueViva": false,
+      "cortadaDuranteLaPausa": false,
+      "cortadaALosS": null,
+      "motivoFin": "tiempo"
+    },
+    {
+      "segundos": 180,
+      "estado": 206,
+      "sigueViva": false,
+      "cortadaDuranteLaPausa": false,
+      "cortadaALosS": null,
+      "motivoFin": "tiempo"
+    },
+    {
+      "segundos": 300,
+      "estado": 206,
+      "sigueViva": false,
+      "cortadaDuranteLaPausa": false,
+      "cortadaALosS": null,
+      "motivoFin": "tiempo"
+    }
+  ],
+  "token": [
+    {
+      "minutos": 1,
+      "estado": 206
+    },
+    {
+      "minutos": 5,
+      "estado": 206
+    },
+    {
+      "minutos": 15,
+      "estado": 500
+    },
+    {
+      "minutos": 30,
+      "estado": 206
+    },
+    {
+      "minutos": 60,
+      "estado": 206
+    }
+  ],
+  "lectura": [
+    "Range: resultados mezclados; revisar la tabla.",
+    "Token: deja de valer antes de 15 min → reuseRedirect: false.",
+    "Plaza: reabrir enseguida nunca dio «ocupado».",
+    "Pausa: el panel corta la conexión parada (desde 60 s); lo cubre la reapertura perezosa.",
+    "Listas: caben en los topes (160 MiB y 240 s).",
+    "Más del 20 % con subtítulos de texto → valorar los subtítulos en la 0.9.0."
+  ]
+}

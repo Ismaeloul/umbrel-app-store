@@ -23,10 +23,22 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { format, resolveConfig } from 'prettier';
+import {
+  demoGuide,
+  demoGuideNow,
+  demoGuideProgramme,
+  demoGuideProgrammes,
+} from '../src/demo/guide.js';
 import type {
   ApiError,
   BackupCounts,
   BackupFile,
+  IptvVodStatus,
+  VodCard,
+  VodGrant,
+  VodHome,
+  VodMovie,
+  VodSeries,
   Device,
   EngineStatus,
   FootballMatch,
@@ -60,8 +72,10 @@ export type JsonRouteId = {
  * Rutas solo web cuyo ejemplo va en `web/v1/` (docs/iptv.md §5.7): las 5 de
  * la IPTV, el buscador IPTV (`iptvChannels`, §14.2; pasa a `v1/` cuando la
  * app calque el buscador, §14.10) y la pestaña IPTV de Canales
- * (`iptvBrowse`, §16.2; ídem, §16.11). `healthLive` y las demás rutas `web` de
- * antes se quedan en `v1/`, donde la app ya las conoce.
+ * (`iptvBrowse`, §16.2; ídem, §16.11) y las 4 rutas JSON de Películas y
+ * series (docs/vod.md §11.6; pasan a `v1/` cuando la app copie la pantalla,
+ * §17). `healthLive` y las demás rutas `web` de antes se quedan en `v1/`,
+ * donde la app ya las conoce.
  */
 export const WEB_FIXTURE_ROUTE_IDS = [
   'iptvGet',
@@ -75,6 +89,22 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'backupExport',
   'backupExportSecret',
   'backupImport',
+  'vodHome',
+  'vodBrowse',
+  'vodTitle',
+  'vodStream',
+  /* «Descargar fallos» de Salud (0.9.0): solo web, lleva el registro del servidor. */
+  'diagnosticsExport',
+  /* Guía TV (docs/iptv.md §20.6): solo web hasta que la app copie la pantalla. */
+  'iptvGuide',
+  'iptvGuideProgrammes',
+  'iptvGuideProgramme',
+  'iptvGuideNow',
+  'vodLanguagesGet',
+  'vodLanguagesUpdate',
+  /* «Descargar logs» de Ajustes → Registro (0.9.0): solo web (el zip es binario y no lleva ejemplo). */
+  'diagnosticsLogInfo',
+  'diagnosticsWebLog',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 /** Rutas con ejemplo en `v1/`. */
@@ -694,6 +724,337 @@ const iptvBrowseRoot: V1ResponseInput<'iptvBrowse'> = {
   stale: false,
 };
 
+// --- Películas y series (docs/vod.md §11.6): solo web, en web/v1/ ---
+
+/* Ids sellados de 40 hex (32 de AES + la etiqueta IPTV de 8, §5.1). */
+const VOD_ID_DUNE = '4b5c6d7e8f9012345678abcdef0123457a8b9c0d';
+const VOD_ID_DUNE_2 = '23456789abcdef0123456789abcdef0115263748';
+const VOD_ID_OPPENHEIMER = '5c6d7e8f9012345678abcdef01234567a8b9c0d1';
+const VOD_ID_AMELIE = '6d7e8f9012345678abcdef0123456789b9c0d1e2';
+const VOD_ID_OFFICE = '7e8f9012345678abcdef0123456789abc0d1e2f3';
+const VOD_ID_OFFICE_S2E5 = '8f9012345678abcdef0123456789abcdd1e2f304';
+const VOD_ID_OFFICE_S2E6 = '9012345678abcdef0123456789abcdefe2f30415';
+const VOD_ID_OFFICE_S1E1 = '012345678abcdef0123456789abcdef0f3041526';
+const VOD_ID_DARK = '12345678abcdef0123456789abcdef0104152637';
+/* Categorías del proveedor (12 hex, distintas de las del directo, §5.4). */
+const VOD_CAT_ESTRENOS = '9a1b2c3d4e5f';
+const VOD_CAT_4K = 'a1b2c3d4e5f6';
+const VOD_CAT_VOSE = 'b2c3d4e5f607';
+const VOD_CAT_ADULTOS = 'c3d4e5f60718';
+const VOD_CAT_SERIES_ES = 'd4e5f6071829';
+const VOD_CAT_SERIES_VOSE = 'e5f60718293a';
+const VOD_BUILT_AT = '2026-09-23T04:10:00.000Z';
+
+const vodCard = (
+  id: string,
+  kind: VodCard['kind'],
+  title: string,
+  year: number | null,
+  extra: Partial<VodCard> = {},
+): VodCard => ({
+  id,
+  kind,
+  title,
+  year,
+  rating: 7.8,
+  poster: 'c0ffee42',
+  tags: [],
+  adult: false,
+  progress: null,
+  ...extra,
+});
+
+const vodDune = vodCard(VOD_ID_DUNE, 'movie', 'Dune', 2021, {
+  rating: 8,
+  poster: '3fa9c210',
+  tags: ['castellano', '4k'],
+  progress: 0.28,
+  langs: ['castellano'],
+});
+const vodOppenheimer = vodCard(VOD_ID_OPPENHEIMER, 'movie', 'Oppenheimer', 2023, {
+  rating: 8.3,
+  poster: '5d0e7b44',
+  tags: ['castellano', '4k'],
+  langs: ['castellano'],
+});
+const vodAmelie = vodCard(VOD_ID_AMELIE, 'movie', 'Amélie', 2001, {
+  rating: 7.9,
+  poster: null,
+  tags: ['vose'],
+  langs: ['vose'],
+});
+const vodOffice = vodCard(VOD_ID_OFFICE, 'series', 'The Office', 2005, {
+  rating: 8.6,
+  poster: '71bc0a93',
+  tags: ['castellano', 'multi'],
+  /* MULTI con las dos lenguas nombradas («ES/EN | MULTI»). */
+  langs: ['castellano', 'ingles'],
+});
+const vodDark = vodCard(VOD_ID_DARK, 'series', 'Dark', 2017, {
+  rating: 8.7,
+  poster: '0e9d2a61',
+  tags: ['castellano'],
+  langs: ['castellano'],
+});
+
+const vodCategories: VodHome['categories'] = {
+  movie: [
+    { id: VOD_CAT_ESTRENOS, kind: 'movie', name: 'ES | ESTRENOS', count: 1_240, adult: false },
+    { id: VOD_CAT_4K, kind: 'movie', name: 'VOD | 4K', count: 612, adult: false },
+    { id: VOD_CAT_VOSE, kind: 'movie', name: 'VOSE', count: 3_025, adult: false },
+    /* Las de adultos, al final (D-VOD7). */
+    { id: VOD_CAT_ADULTOS, kind: 'movie', name: 'XXX | ADULTOS', count: 410, adult: true },
+  ],
+  series: [
+    { id: VOD_CAT_SERIES_ES, kind: 'series', name: 'SERIES | ES', count: 2_310, adult: false },
+    { id: VOD_CAT_SERIES_VOSE, kind: 'series', name: 'SERIES | VOSE', count: 1_190, adult: false },
+  ],
+};
+
+const vodHomeReady: VodHome = {
+  active: true,
+  state: 'ready',
+  counts: { movies: 48_213, series: 6_904 },
+  builtAt: VOD_BUILT_AT,
+  truncated: false,
+  stale: false,
+  continue: [
+    {
+      id: VOD_ID_DUNE,
+      kind: 'movie',
+      seriesId: null,
+      title: 'Dune',
+      subtitle: null,
+      posS: 2_592,
+      durS: 9_360,
+      isNext: false,
+      art: { id: VOD_ID_DUNE, art: 'backdrop', v: '8a7f3e21' },
+      updatedAt: '2026-09-23T21:40:00.000Z',
+    },
+    {
+      /* El último visto de The Office tiene siguiente: sale ese, desde el principio. */
+      id: VOD_ID_OFFICE_S2E6,
+      kind: 'episode',
+      seriesId: VOD_ID_OFFICE,
+      title: 'The Office',
+      subtitle: 'T2 · E6 · La pelea',
+      posS: 0,
+      durS: 1_320,
+      isNext: true,
+      art: { id: VOD_ID_OFFICE_S2E6, art: 'still', v: '2b6c9d10' },
+      updatedAt: '2026-09-22T22:15:00.000Z',
+    },
+  ],
+  newMovies: [vodOppenheimer, vodDune, vodAmelie],
+  updatedSeries: [vodOffice, vodDark],
+  categories: vodCategories,
+  tags: {
+    movie: [
+      { tag: 'castellano', count: 21_480 },
+      { tag: 'latino', count: 9_310 },
+      { tag: 'vose', count: 3_025 },
+      { tag: 'multi', count: 1_870 },
+      { tag: '4k', count: 612 },
+    ],
+    series: [
+      { tag: 'castellano', count: 3_402 },
+      { tag: 'vose', count: 1_190 },
+      { tag: 'multi', count: 244 },
+    ],
+  },
+  /* Todo el catálogo por idioma (§4.10), para el selector. */
+  langs: {
+    movie: [
+      { lang: 'castellano', count: 21_480 },
+      { lang: 'latino', count: 9_310 },
+      { lang: 'vose', count: 3_025 },
+      { lang: 'ingles', count: 5_102 },
+      { lang: 'frances', count: 1_204 },
+      { lang: 'otros', count: 388 },
+    ],
+    series: [
+      { lang: 'castellano', count: 3_402 },
+      { lang: 'latino', count: 870 },
+      { lang: 'vose', count: 1_190 },
+      { lang: 'ingles', count: 412 },
+    ],
+  },
+  noLang: { movies: 7_704, series: 1_030 },
+  /* Sin filtro de idiomas (`langs` en la consulta), igual que `counts`. */
+  shown: { movies: 48_213, series: 6_904 },
+};
+
+/** Portada sin nada: el proveedor no tiene VOD, y la base de las demás variantes de estado. */
+const vodHomeEmpty: VodHome = {
+  active: true,
+  state: 'none',
+  counts: { movies: 0, series: 0 },
+  builtAt: null,
+  truncated: false,
+  stale: false,
+  continue: [],
+  newMovies: [],
+  updatedSeries: [],
+  categories: { movie: [], series: [] },
+  tags: { movie: [], series: [] },
+};
+
+const vodDuneTitle: VodMovie = {
+  kind: 'movie',
+  id: VOD_ID_DUNE,
+  info: 'ok',
+  title: 'Dune',
+  originalTitle: 'Dune',
+  year: 2021,
+  plot: 'Paul Atreides, un joven brillante marcado por un destino que no comprende, viaja al planeta más peligroso del universo para asegurar el futuro de su familia y de su pueblo.',
+  genres: ['Ciencia ficción', 'Aventura'],
+  cast: ['Timothée Chalamet', 'Rebecca Ferguson', 'Oscar Isaac', 'Zendaya'],
+  director: 'Denis Villeneuve',
+  country: 'Estados Unidos',
+  ageRating: '12',
+  rating: 8,
+  durationS: 9_360,
+  poster: '3fa9c210',
+  backdrop: '8a7f3e21',
+  tags: ['castellano', '4k'],
+  adult: false,
+  tech: {
+    container: 'mkv',
+    video: '2160p · H.264',
+    audio: ['AC-3 5.1 · Castellano', 'E-AC-3 5.1 · Inglés'],
+  },
+  playable: 'yes',
+  progress: { posS: 2_592, durS: 9_360, watched: false },
+  category: { id: VOD_CAT_4K, name: 'VOD | 4K' },
+  releaseDate: '2021-09-15',
+  trailer: 'Dune2021Tra',
+};
+
+const vodOfficeTitle: VodSeries = {
+  kind: 'series',
+  id: VOD_ID_OFFICE,
+  info: 'ok',
+  title: 'The Office',
+  year: 2005,
+  plot: 'El día a día de los empleados de una sucursal de una empresa de papel en Scranton, contado como un documental.',
+  genres: ['Comedia'],
+  cast: ['Steve Carell', 'Rainn Wilson', 'John Krasinski', 'Jenna Fischer'],
+  director: 'Greg Daniels',
+  country: 'Estados Unidos',
+  rating: 8.6,
+  poster: '71bc0a93',
+  backdrop: '4e2d8f07',
+  tags: ['castellano', 'multi'],
+  adult: false,
+  category: { id: VOD_CAT_SERIES_ES, name: 'SERIES | ES' },
+  seasons: [
+    {
+      n: 1,
+      name: 'Temporada 1',
+      episodes: [
+        {
+          id: VOD_ID_OFFICE_S1E1,
+          n: 1,
+          title: 'Piloto',
+          plot: 'Un equipo de documentales llega a la oficina de Dunder Mifflin en Scranton.',
+          durationS: 1_380,
+          still: '6a1f0c38',
+          playable: 'yes',
+          progress: { posS: 1_380, durS: 1_380, watched: true },
+          container: 'mkv',
+          airDate: '2005-03-24',
+          rating: 7.4,
+        },
+      ],
+      plot: 'Michael Scott dirige la sucursal de Scranton mientras le graba un equipo de documentales.',
+      airDate: '2005-03-24',
+    },
+    {
+      n: 2,
+      name: 'Temporada 2',
+      episodes: [
+        {
+          id: VOD_ID_OFFICE_S2E5,
+          n: 5,
+          title: 'Halloween',
+          plot: null,
+          durationS: 1_320,
+          still: null,
+          playable: 'yes',
+          progress: { posS: 1_300, durS: 1_320, watched: true },
+          container: 'mp4',
+        },
+        {
+          id: VOD_ID_OFFICE_S2E6,
+          n: 6,
+          title: 'La pelea',
+          plot: 'Michael y Dwight se enfrentan en el dojo.',
+          durationS: 1_320,
+          still: '2b6c9d10',
+          /* Sin `container`: el servidor todavía no sabe el formato. */
+          playable: 'unknown',
+          progress: null,
+        },
+      ],
+    },
+  ],
+  main: { episodeId: VOD_ID_OFFICE_S2E6, action: 'next', label: 'Siguiente: T2:E6', posS: 0 },
+  truncated: false,
+  originalTitle: 'The Office (US)',
+  ageRating: '12',
+  releaseDate: '2005-03-24',
+  trailer: null,
+  episodeDurationS: 1_320,
+};
+
+const vodDuneGrant: VodGrant = {
+  session: streamSession,
+  url: `/api/v1/video/${SID}/index.m3u8`,
+  protocol: 'hls',
+  remux: true,
+  codec: { video: 'h264', audio: 'aac', source: 'ffprobe' },
+  latency: { mode: 'balanced', initialBufferS: 6, rebuildS: 8, liveSync: null },
+  stats: { via: 'sse' },
+  handoff: false,
+  source: 'iptv',
+  vod: {
+    id: VOD_ID_DUNE,
+    kind: 'movie',
+    seriesId: null,
+    title: 'Dune',
+    subtitle: null,
+    durationS: 9_360,
+    startS: 2_587,
+    resumed: true,
+    audio: [
+      {
+        index: 0,
+        label: 'Castellano 5.1',
+        lang: 'spa',
+        codec: 'ac3',
+        channels: 6,
+        converted: true,
+      },
+      { index: 1, label: 'Inglés 5.1', lang: 'eng', codec: 'eac3', channels: 6, converted: true },
+    ],
+    audioIndex: 0,
+    video: { codec: 'h264', codecs: 'avc1.640033', width: 3840, height: 1600 },
+    next: null,
+    poster: '3fa9c210',
+  },
+};
+
+/** El resumen VOD de `iptv.status` (docs/vod.md §11.4). */
+const iptvVodStatus: IptvVodStatus = {
+  state: 'ready',
+  movies: 48_213,
+  series: 6_904,
+  builtAt: VOD_BUILT_AT,
+  truncated: false,
+  skipped: 3,
+  stale: false,
+};
+
 /* Copia de seguridad (decisiones.md D25): datos inventados, sin secretos.
    La IPTV de la copia normal va sin contraseña; la protegida lleva el bloque
    cifrado (aquí de forma, no se puede abrir con ninguna clave). */
@@ -736,6 +1097,7 @@ const backupFile: BackupFile = {
     secret: null,
   },
   browser: { theme: 'oscuro', transparency: 'normal', playbackMode: 'balanced' },
+  vod: { langs: ['castellano', 'frances'], unknown: true },
 };
 
 const backupCounts = (favorites: number, history: number): BackupCounts => ({
@@ -747,7 +1109,43 @@ const backupCounts = (favorites: number, history: number): BackupCounts => ({
   channelFeedback: 0,
 });
 
+/* Guía TV (docs/iptv.md §20.6 y §20.8): salen de la guía de ejemplo
+   (src/demo/guide.ts) a la hora de los ejemplos, así que dicen lo mismo que
+   la demo de la web. Un trozo de 3 h de los dos primeros favoritos y la
+   ficha de lo que echa uno de ellos a esa hora. */
+const guideFavorites = demoGuide({ scope: 'favorites' }, AT_MS);
+const guideSliceFrom = AT_MS - 30 * 60_000;
+const guideSlice = demoGuideProgrammes(
+  {
+    v: guideFavorites.version,
+    ch: guideFavorites.channels
+      .slice(2, 4)
+      .map((channel) => channel.guide)
+      .join(','),
+    from: guideSliceFrom,
+    to: guideSliceFrom + 3 * 3_600_000,
+  },
+  AT_MS,
+);
+const guideOnAir = guideSlice.channels
+  .flatMap((channel) => channel.programmes)
+  .find((item) => item.start <= AT_MS && item.end > AT_MS);
+const guideDetail = demoGuideProgramme(guideOnAir?.id ?? '', { v: guideFavorites.version }, AT_MS);
+const guideNow = demoGuideNow(
+  {
+    ids: guideFavorites.channels
+      .slice(0, 3)
+      .map((channel) => channel.id)
+      .join(','),
+  },
+  AT_MS,
+);
+
 export const WEB_V1_FIXTURES = {
+  iptvGuide: guideFavorites,
+  iptvGuideProgrammes: guideSlice,
+  iptvGuideProgramme: guideDetail,
+  iptvGuideNow: guideNow,
   backupExport: backupFile,
   backupExportSecret: {
     ...backupFile,
@@ -775,6 +1173,7 @@ export const WEB_V1_FIXTURES = {
     result: backupCounts(2, 1),
     preferences: true,
     settings: false,
+    vodLanguages: true,
     iptv: {
       action: 'needs_secret',
       protected: false,
@@ -785,6 +1184,37 @@ export const WEB_V1_FIXTURES = {
       relinkItems: 1,
     },
     browser: { theme: 'oscuro', transparency: 'normal', playbackMode: 'balanced' },
+  },
+  vodHome: vodHomeReady,
+  vodBrowse: {
+    active: true,
+    state: 'ready',
+    items: [vodOppenheimer, vodDune],
+    total: 612,
+    capped: false,
+    otherKindTotal: null,
+    tags: [
+      { tag: 'castellano', count: 540 },
+      { tag: 'latino', count: 61 },
+      { tag: '4k', count: 612 },
+    ],
+    nextCursor: 'djEuMTc1ODU5OS42MA',
+    stale: false,
+  },
+  vodTitle: vodDuneTitle,
+  vodStream: vodDuneGrant,
+  /* Elegidos: castellano y francés, y también los que no lo dicen. */
+  vodLanguagesGet: {
+    chosen: true,
+    langs: ['castellano', 'frances'],
+    unknown: true,
+    updatedAt: '2026-10-03T17:20:00.000Z',
+  },
+  vodLanguagesUpdate: {
+    chosen: true,
+    langs: ['castellano', 'frances'],
+    unknown: true,
+    updatedAt: '2026-10-03T17:20:00.000Z',
   },
   iptvBrowse: iptvBrowseRoot,
   iptvChannels: {
@@ -830,6 +1260,118 @@ export const WEB_V1_FIXTURES = {
   },
   iptvSync: iptvSyncing,
   iptvDelete: { provider: null, refreshHours: 6 },
+  /* Un fichero de «Descargar fallos» ya redactado: un corte del relé (nuestro)
+     y una fuente sin pares (de fuera), con lo que vio la web. */
+  diagnosticsExport: {
+    format: 'ace-player-neo-fallos',
+    formatVersion: 1,
+    createdAt: AT,
+    appVersion: '0.9.0',
+    summary: {
+      nuestro: 1,
+      deFuera: 1,
+      sinClasificar: 0,
+      byPiece: [
+        { piece: 'fuente', side: 'de_fuera', count: 1 },
+        { piece: 'rele', side: 'nuestro', count: 1 },
+      ],
+      lines: ['Nuestro: 1 fallo (relé de la IPTV 1).', 'De fuera: 1 fallo (fuentes que no van 1).'],
+    },
+    environment: {
+      node: 'v24.15.0',
+      platform: 'linux',
+      arch: 'x64',
+      uptimeSeconds: 5400,
+      memoryMb: 182,
+      logLevel: 'info',
+      scanner: true,
+      autoSync: true,
+      allowPrivateUrls: false,
+      footballDemoOnly: false,
+      teams: true,
+      ai: false,
+      seedSource: 'ACE_SEED',
+      serverLog: true,
+    },
+    status: {
+      health: V1_FIXTURES.health,
+      iptv: { kind: 'xtream', enabled: true, ...iptvStatusOk, connections: 1 },
+      remux: { sessions: 1, max: 4, ffmpegMissing: false },
+    },
+    faults: [
+      {
+        at: AT,
+        side: 'nuestro',
+        piece: 'rele',
+        from: 'servidor',
+        level: 'warn',
+        code: 'iptv_dropped',
+        message: 'IPTV: la salida no avanza; se reconecta el relé',
+      },
+      {
+        at: AT,
+        side: 'de_fuera',
+        piece: 'fuente',
+        from: 'servidor',
+        level: 'error',
+        code: 'source_no_peers',
+        message: 'La fuente no tiene pares.',
+        channel: 'DAZN 1',
+        source: HASH_A,
+      },
+    ],
+    serverLog: [
+      {
+        time: AT,
+        level: 'warn',
+        module: 'playback',
+        sessionId: SID,
+        msg: 'IPTV: la salida no avanza; se reconecta el relé',
+      },
+      {
+        time: AT,
+        level: 'info',
+        module: 'iptv',
+        url: 'http://proveedor.example:8080/live/•••/•••/1234.ts',
+        msg: 'IPTV: abierta',
+      },
+    ],
+    web: {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36',
+      viewport: '1440x900@1',
+      layout: 'wide',
+      mode: 'live',
+      view: 'partido/fltv-2026-09-23-3',
+      online: true,
+      installed: false,
+      uptimeSeconds: 1800,
+      log: [
+        {
+          at: AT,
+          kind: 'player',
+          level: 'warn',
+          code: 'source_no_peers',
+          message: 'La fuente no tiene pares.',
+          view: 'partido/fltv-2026-09-23-3',
+        },
+      ],
+    },
+    redaction: {
+      note: 'Sin contraseñas, usuarios, tokens, cookies, URLs con credenciales ni IPs públicas.',
+      replaced: 1,
+    },
+  },
+  /* 12 días guardados en el disco del Umbrel (los cerrados, comprimidos). */
+  diagnosticsLogInfo: {
+    enabled: true,
+    since: '2026-09-11T08:02:11.000Z',
+    days: 12,
+    bytes: 1_468_006,
+    maxBytes: 40 * 1024 * 1024,
+    maxDays: 45,
+  },
+  /* Una tanda de 3 errores de la web: 2 guardados y el fallo del reproductor que ya llegó con su canal. */
+  diagnosticsWebLog: { accepted: 2, dropped: 1 },
 } satisfies { [K in WebFixtureRouteId]: V1ResponseInput<K> };
 
 // --- Variantes (variantes/<ruta>.<caso>.json) ---
@@ -877,6 +1419,144 @@ const iptvTelecinco: ResolutionCandidate = {
 };
 
 export const VARIANT_FIXTURES = {
+  /* Guía TV (docs/iptv.md §20.6): «Todos» (una página corta) y los estados sin parrilla. */
+  'iptvGuide.todos': demoGuide({ scope: 'all', limit: 6 }, AT_MS),
+  /* Una guía que solo cubre hoy, como la del panel de Isma (Paso 0): coveredTo acaba hoy. */
+  'iptvGuide.solo-hoy': demoGuide({ scope: 'all', limit: 6 }, AT_MS, { onlyToday: true }),
+  'iptvGuide.inactiva': {
+    ...guideFavorites,
+    state: 'inactive',
+    version: '',
+    provider: '',
+    from: null,
+    to: null,
+    coveredFrom: null,
+    coveredTo: null,
+    updatedAt: null,
+    scope: 'favorites',
+    favorites: 0,
+    all: 0,
+    total: 0,
+    channels: [],
+  },
+  'iptvGuide.preparando': {
+    ...guideFavorites,
+    state: 'preparing',
+    version: '',
+    from: null,
+    to: null,
+    coveredFrom: null,
+    coveredTo: null,
+    updatedAt: null,
+    favorites: 0,
+    all: 0,
+    total: 0,
+    channels: [],
+  },
+  'iptvGuideNow.sin-guia': { available: false, version: '', items: [] },
+  /* Películas y series (docs/vod.md §11.6 y §13): los estados de la portada. */
+  'vodHome.preparing': { ...vodHomeEmpty, state: 'preparing' },
+  'vodHome.none': vodHomeEmpty,
+  'vodHome.unsupported': { ...vodHomeEmpty, state: 'unsupported' },
+  /* «dune» en películas: dos aciertos y una serie en el otro tipo («Ver 1 serie»). */
+  'vodBrowse.search': {
+    active: true,
+    state: 'ready',
+    items: [
+      vodDune,
+      vodCard(VOD_ID_DUNE_2, 'movie', 'Dune: Parte dos', 2024, {
+        rating: 8.5,
+        poster: '9c3e1f52',
+        tags: ['latino'],
+      }),
+    ],
+    total: 2,
+    capped: false,
+    otherKindTotal: 1,
+    tags: [
+      { tag: 'castellano', count: 1 },
+      { tag: 'latino', count: 1 },
+      { tag: '4k', count: 1 },
+    ],
+    nextCursor: null,
+    stale: false,
+  },
+  /* La primera vez: aún sin elegir (la web enseña el selector). */
+  'vodLanguagesGet.sin-elegir': {
+    chosen: false,
+    langs: [],
+    unknown: false,
+    updatedAt: null,
+  },
+  'vodBrowse.vacio': {
+    active: true,
+    state: 'ready',
+    items: [],
+    total: 0,
+    capped: false,
+    otherKindTotal: null,
+    tags: [],
+    nextCursor: null,
+    stale: false,
+  },
+  'vodTitle.series': vodOfficeTitle,
+  /* Un episodio en un formato que no se puede reproducir aquí: `container`
+     dice cuál, para que la web lo nombre en vez de «desconocido». */
+  'vodTitle.episodio-avi': {
+    ...vodOfficeTitle,
+    seasons: vodOfficeTitle.seasons.map((season) => ({
+      ...season,
+      episodes: season.episodes.map((episode) =>
+        episode.id === VOD_ID_OFFICE_S2E6
+          ? { ...episode, playable: 'no' as const, container: 'avi' }
+          : episode,
+      ),
+    })),
+  },
+  /* «Sin indicar» por el proveedor: el servidor está leyendo el fichero (§4.11). */
+  'vodTitle.audio-comprobando': { ...vodDuneTitle, langs: [], audioPending: true },
+  /* Lo que dice el fichero: audio en inglés y subtítulos en español (§4.11). */
+  'vodTitle.audio-del-fichero': {
+    ...vodDuneTitle,
+    langs: ['vose', 'ingles'],
+    detectedAudio: { audio: ['Inglés'], subtitles: ['Español'] },
+  },
+  /* El proveedor no dio la ficha: lo que se sabe por la lista, y «Reproducir» sigue (§7.3). */
+  'vodTitle.info-failed': {
+    ...vodDuneTitle,
+    info: 'failed',
+    originalTitle: null,
+    plot: null,
+    genres: [],
+    cast: [],
+    director: null,
+    country: null,
+    ageRating: null,
+    durationS: null,
+    backdrop: null,
+    tech: { container: 'mkv', video: null, audio: [] },
+    playable: 'unknown',
+    releaseDate: null,
+    trailer: null,
+  },
+  /* HEVC copiado con `hvc1` (hevc=1: el cliente lo decodifica, §9.11). */
+  'vodStream.hevc': {
+    ...vodDuneGrant,
+    codec: { video: 'hevc', audio: 'aac', source: 'ffprobe' },
+    vod: {
+      ...vodDuneGrant.vod,
+      id: VOD_ID_OPPENHEIMER,
+      title: 'Oppenheimer',
+      durationS: 10_860,
+      startS: 0,
+      resumed: false,
+      audio: [
+        { index: 0, label: 'Castellano', lang: 'spa', codec: 'aac', channels: 2, converted: false },
+      ],
+      video: { codec: 'hevc', codecs: 'hvc1.2.4.L153.B0', width: 3840, height: 2160 },
+      poster: '5d0e7b44',
+    },
+  },
   /* Pestaña IPTV (§16.2): dentro de «ES | DAZN», primera página con más detrás. */
   'iptvBrowse.categoria': {
     active: true,
@@ -1109,6 +1789,23 @@ export const VARIANT_FIXTURES = {
     source: 'iptv',
   },
 } satisfies {
+  'iptvGuide.todos': V1ResponseInput<'iptvGuide'>;
+  'iptvGuide.solo-hoy': V1ResponseInput<'iptvGuide'>;
+  'iptvGuide.inactiva': V1ResponseInput<'iptvGuide'>;
+  'iptvGuide.preparando': V1ResponseInput<'iptvGuide'>;
+  'iptvGuideNow.sin-guia': V1ResponseInput<'iptvGuideNow'>;
+  'vodHome.preparing': V1ResponseInput<'vodHome'>;
+  'vodHome.none': V1ResponseInput<'vodHome'>;
+  'vodHome.unsupported': V1ResponseInput<'vodHome'>;
+  'vodBrowse.search': V1ResponseInput<'vodBrowse'>;
+  'vodLanguagesGet.sin-elegir': V1ResponseInput<'vodLanguagesGet'>;
+  'vodBrowse.vacio': V1ResponseInput<'vodBrowse'>;
+  'vodTitle.series': V1ResponseInput<'vodTitle'>;
+  'vodTitle.episodio-avi': V1ResponseInput<'vodTitle'>;
+  'vodTitle.audio-comprobando': V1ResponseInput<'vodTitle'>;
+  'vodTitle.audio-del-fichero': V1ResponseInput<'vodTitle'>;
+  'vodTitle.info-failed': V1ResponseInput<'vodTitle'>;
+  'vodStream.hevc': V1ResponseInput<'vodStream'>;
   'iptvBrowse.categoria': V1ResponseInput<'iptvBrowse'>;
   'iptvBrowse.inactiva': V1ResponseInput<'iptvBrowse'>;
   'iptvBrowse.categoria-perdida': V1ResponseInput<'iptvBrowse'>;
@@ -1203,7 +1900,7 @@ export const EVENT_FIXTURES = {
 
 /** Eventos solo web (web/events/): no llegan nunca a /native. */
 export const WEB_EVENT_FIXTURES = {
-  'iptv.status': iptvStatusOk,
+  'iptv.status': { ...iptvStatusOk, vod: iptvVodStatus },
 } satisfies { [T in WebOnlyEventType]: SseEventData<T> };
 
 export const ERROR_FIXTURE: ApiError = {
@@ -1254,10 +1951,15 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   );
 }
 
-/** Para el test: qué rutas no tienen ejemplo porque no responden JSON (SSE, vídeo y PNG). */
+/** Para el test: qué rutas no tienen ejemplo porque no responden JSON (SSE, vídeo, imágenes y el 204 de `vodProgress`). */
 export const NON_JSON_ROUTE_IDS: readonly V1RouteId[] = [
   'events',
   'video',
   'footballTeamCrest',
   'footballCompetitionLogo',
+  'vodArt',
+  'vodProgress',
+  'iptvGuideArt',
+  /* El zip de «Descargar logs» (Ajustes → Registro, 0.9.0). */
+  'diagnosticsLogDownload',
 ];

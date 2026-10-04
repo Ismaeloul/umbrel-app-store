@@ -112,8 +112,9 @@ Si una vista necesita un cambio en algo del armazón, en la API o en
   `buscar-biblioteca`: marca tu buscador con `<TextField focusTarget="buscar-biblioteca" …>`.
 - **Maquetación**: `useLayout()` → `{ kind, asideVisible, asideAvailable,
   setAsideOpen, columnVisible }`.
-- **Transición fila → partido**: envuelve lo mismo en los dos sitios con
-  `<ViewTransition name={partidoTransitionName(id)}>` (`src/app/transitions.ts`).
+- **Transiciones**: cada vista entra y sale con el mismo fundido (Shell.tsx);
+  sin elementos compartidos entre vistas (`src/app/transitions.ts`, 0.9.0: una
+  prueba lo vigila). Solo el reproductor y las barras llevan nombre propio.
 - **Carruseles** (`src/lib/scroll.ts`): `useKeepActiveVisible` (solo se mueven
   al cambiar el activo, nunca al repintar) y `wheelToHorizontal`.
 - **Gestos** (`src/lib/gestures.ts`): `useSwipe(ref, { onSwipe })` para cambiar

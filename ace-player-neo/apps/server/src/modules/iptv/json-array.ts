@@ -17,7 +17,27 @@ import { NetBadResponseError } from '../net/client.js';
 export interface JsonArrayOptions {
   readonly maxObjectBytes?: number;
   readonly signal?: AbortSignal;
+  /** Cada elemento saltado (demasiado grande, JSON roto o que no es objeto), en el momento. */
+  readonly onSkip?: () => void;
 }
+
+/**
+ * Motivo (`cause.message`) cuando lo que llega es «sin datos» y no un array:
+ * `{}`, `null`, `false` o un objeto que solo trae `user_info`/`server_info`
+ * (lo que manda un panel sin esa acción).
+ */
+export const NOT_AN_ARRAY_OBJECT = 'no es un array: es un objeto';
+/** Motivo cuando lo que llega no es JSON (HTML, texto, un objeto cortado…). */
+export const NOT_AN_ARRAY_OTHER = 'no es un array: no es JSON';
+/** Motivo cuando lo que llega es otro objeto JSON (`{"error":"Too many requests"}`…): un fallo. */
+export const NOT_AN_ARRAY_ERROR = 'no es un array: es un objeto que no dice «sin datos»';
+
+/**
+ * Lo que se lee, como mucho, de una respuesta que no empieza por `[` para
+ * saber si es un objeto JSON entero (un «sin VOD» de verdad: `{}` o
+ * `user_info` son de 1-2 KiB) o no. Pasado esto, no lo es.
+ */
+const NOT_AN_ARRAY_PEEK = 64 * 1024;
 
 const OPEN_BRACE = 0x7b;
 const CLOSE_BRACE = 0x7d;
@@ -28,6 +48,39 @@ const BACKSLASH = 0x5c;
 
 function isSpace(byte: number): boolean {
   return byte === 0x20 || byte === 0x0a || byte === 0x0d || byte === 0x09;
+}
+
+/* Las únicas claves de un objeto «sin datos»: las de la respuesta de
+   `player_api.php` sin acción, que es lo que manda un panel que no la tiene. */
+const NO_DATA_KEYS: ReadonlySet<string> = new Set(['user_info', 'server_info']);
+
+/**
+ * ¿Qué es una respuesta que no empieza por `[`, mirada ENTERA? «Sin datos»
+ * (`null`, `false`, `{}` o solo `user_info`/`server_info`), otro objeto
+ * JSON (un error: `{"error":"Too many requests"}` con HTTP 200) o algo que
+ * no es JSON. Mirando solo el primer byte, «not found», «forbidden» o un
+ * `{"user_info":` cortado pasaban por «sin VOD»; y tomando CUALQUIER objeto
+ * por «sin datos», un error pasajero del panel vaciaba esa lista del
+ * catálogo guardado.
+ */
+function notAnArrayReason(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed === 'null' || trimmed === 'false') return NOT_AN_ARRAY_OBJECT;
+  if (!trimmed.startsWith('{')) return NOT_AN_ARRAY_OTHER;
+  let value: unknown;
+  try {
+    value = JSON.parse(trimmed);
+  } catch {
+    return NOT_AN_ARRAY_OTHER;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return NOT_AN_ARRAY_OTHER;
+  return Object.keys(value).every((key) => NO_DATA_KEYS.has(key))
+    ? NOT_AN_ARRAY_OBJECT
+    : NOT_AN_ARRAY_ERROR;
+}
+
+function notAnArray(reason: string): NetBadResponseError {
+  return new NetBadResponseError(new Error(reason));
 }
 
 /**
@@ -52,8 +105,17 @@ export async function parseJsonArrayStream(
   let size = 0;
   let objects = 0;
   let skipped = 0;
+  /* También al momento por `onSkip`: si `onObject` corta la lectura (un tope),
+     lo saltado hasta ahí no se pierde (docs/vod.md §4.2, T5). */
+  const skip = (): void => {
+    skipped += 1;
+    options.onSkip?.();
+  };
   /* Elemento que no es objeto (un número o una cadena suelta). */
   let scalar = false;
+  /* La respuesta no empieza por '[': se guarda (con tope) para mirarla entera. */
+  let other: Buffer[] | null = null;
+  let otherSize = 0;
 
   const emit = (): void => {
     const text = Buffer.concat(pieces, size).toString('utf8');
@@ -63,25 +125,42 @@ export async function parseJsonArrayStream(
     try {
       value = JSON.parse(text);
     } catch {
-      skipped += 1;
+      skip();
       return;
     }
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       objects += 1;
       onObject(value as Record<string, unknown>);
-    } else skipped += 1;
+    } else skip();
   };
 
   try {
     for await (const value of body as AsyncIterable<Buffer | string>) {
       if (options.signal?.aborted) throw options.signal.reason ?? new AppError('fetch_timeout');
       const chunk = typeof value === 'string' ? Buffer.from(value) : value;
+      if (other) {
+        otherSize += chunk.length;
+        if (otherSize > NOT_AN_ARRAY_PEEK) throw notAnArray(NOT_AN_ARRAY_OTHER);
+        other.push(chunk);
+        continue;
+      }
       let segmentStart = -1;
       for (let index = 0; index < chunk.length; index += 1) {
         const byte = chunk[index] as number;
         if (phase === 0) {
           if (isSpace(byte) || byte === 0xef || byte === 0xbb || byte === 0xbf) continue;
-          if (byte !== OPEN_BRACKET) throw new NetBadResponseError(new Error('no es un array'));
+          /* «Sin datos» («{}», `user_info`) no es lo mismo que un objeto de
+             error, una página HTML, un texto o un cuerpo cortado: el VOD
+             toma lo primero por «sin VOD» y lo demás por un fallo
+             (docs/vod.md §4.2). Para saberlo hay que verlo ENTERO, no solo
+             su primer byte. */
+          if (byte !== OPEN_BRACKET) {
+            const rest = chunk.subarray(index);
+            if (rest.length > NOT_AN_ARRAY_PEEK) throw notAnArray(NOT_AN_ARRAY_OTHER);
+            other = [rest];
+            otherSize = rest.length;
+            break;
+          }
           phase = 1;
           continue;
         }
@@ -100,14 +179,14 @@ export async function parseJsonArrayStream(
             collecting = byte === OPEN_BRACE;
             oversize = false;
             segmentStart = collecting ? index : -1;
-            if (!collecting) skipped += 1;
+            if (!collecting) skip();
             continue;
           }
           /* Número, cadena, true/false/null sueltos: se saltan. */
           scalar = true;
           inString = byte === QUOTE;
           escaped = false;
-          skipped += 1;
+          skip();
           continue;
         }
         if (scalar) {
@@ -141,14 +220,14 @@ export async function parseJsonArrayStream(
               const piece = chunk.subarray(segmentStart < 0 ? 0 : segmentStart, index + 1);
               size += piece.length;
               if (size > maxObject) {
-                skipped += 1;
+                skip();
                 pieces = [];
                 size = 0;
               } else {
                 pieces.push(piece);
                 emit();
               }
-            } else if (collecting) skipped += 1;
+            } else if (collecting) skip();
             collecting = false;
             segmentStart = -1;
             continue;
@@ -169,6 +248,7 @@ export async function parseJsonArrayStream(
   } finally {
     body.destroy();
   }
+  if (other) throw notAnArray(notAnArrayReason(Buffer.concat(other, otherSize).toString('utf8')));
   if (phase !== 2) throw new NetBadResponseError(new Error('array sin cerrar'));
   return { objects, skipped };
 }

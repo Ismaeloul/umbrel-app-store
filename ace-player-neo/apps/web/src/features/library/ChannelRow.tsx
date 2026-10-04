@@ -17,12 +17,17 @@
    nombre: «IPTV» (cápsula neutra con la tele, como en el cartel de la
    fuente) con sus calidades detrás, y «AceStream» con cuántas fuentes
    («AceStream · 3»). Si solo está en uno, solo su etiqueta. En la pestaña
-   IPTV (§16.6), lo mismo. */
+   IPTV (§16.6), lo mismo.
+
+   Con texto escrito (`highlight`), lo que casa del nombre se resalta como un
+   rotulador (0.9.0, docs/buscador.md; `useNameHighlight`): se ve de un
+   vistazo por qué sale cada fila («La 1» en «La 1 Catalunya»). */
 
 import type { LibraryCollection } from '@ace/shared';
 import { useEffect, useId, useRef, type CSSProperties, type MouseEvent } from 'react';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
+import { useNameHighlight } from '../../lib/name-highlight.ts';
 import { teamCrest, teamPalette, teamShort } from '../../lib/teams.ts';
 import {
   Capsule,
@@ -79,6 +84,8 @@ export interface ChannelRowProps {
    * IPTV («4K · 1080p · 720p»), en el buscador (§17) y en la pestaña IPTV (§16.6).
    */
   tags?: readonly string[] | undefined;
+  /** Lo escrito en el buscador o el filtro: lo que casa del nombre se resalta. */
+  highlight?: string | undefined;
 }
 
 function scoreText(home: number, away: number): string {
@@ -108,6 +115,7 @@ function OnAirLine({
             colors={teamPalette(match, 'home')}
             crest={teamCrest(match, 'home')}
             size={18}
+            plate
             lit
           />
           {match.away ? (
@@ -117,6 +125,7 @@ function OnAirLine({
               colors={teamPalette(match, 'away')}
               crest={teamCrest(match, 'away')}
               size={18}
+              plate
               lit
             />
           ) : null}
@@ -156,6 +165,7 @@ function OnAirLine({
             colors={teamPalette(match, 'home')}
             crest={teamCrest(match, 'home')}
             size={18}
+            plate
           />
           {match.away ? (
             <TeamMark
@@ -164,6 +174,7 @@ function OnAirLine({
               colors={teamPalette(match, 'away')}
               crest={teamCrest(match, 'away')}
               size={18}
+              plate
             />
           ) : null}
         </span>
@@ -202,6 +213,7 @@ export function ChannelRow({
   ace = 0,
   subtitle: ownSubtitle,
   tags,
+  highlight,
 }: ChannelRowProps) {
   const { bind, menu } = useContextMenu();
   // El marcador del partido que ves va tapado (regla 29). El «destapado» es
@@ -241,6 +253,9 @@ export function ChannelRow({
   const halftime = live ? isHalftime(live.score) : false;
   const subtitle = ownSubtitle ?? subtitleFor(item, kind, availability);
   const title = item.title || 'Canal sin nombre';
+  const nameRef = useRef<HTMLSpanElement>(null);
+  useNameHighlight(nameRef, highlight, title);
+  const hasTags = iptv || Boolean(tags?.length) || ace > 0;
 
   return (
     <article
@@ -265,7 +280,9 @@ export function ChannelRow({
         <ChannelMark name={title} shape="tile" size={36} className="ch__dorsal" />
         <span className="ch__body">
           <span className="ch__name">
-            <span className="ch__name-text">{title}</span>
+            <span className="ch__name-text" ref={nameRef}>
+              {title}
+            </span>
             {fallen ? (
               <span
                 className="ch__fallen"
@@ -278,7 +295,7 @@ export function ChannelRow({
             ) : null}
           </span>
           <OnAirLine onAir={onAir} scoreHidden={scoreHidden} id={lineId} />
-          <span className="ch__meta" id={metaId}>
+          <span className={cx('ch__meta', live && hasTags && 'ch__meta--wrap')} id={metaId}>
             {onScreen ? (
               <span className="ch__onair">
                 <span className="ch__eq" aria-hidden="true">
@@ -299,14 +316,17 @@ export function ChannelRow({
                     <Num value={minute} label={`minuto ${minute}`} />
                   ) : null}
                 </span>
-                <span className={cx('ch__state', scoreHidden && 'ch__state--hidden')}>
-                  {scoreHidden ? 'Marcador oculto' : 'En directo'}
-                </span>
+                {/* «Descanso» ya dice que está en directo (sin los dos juntos). */}
+                {halftime && !scoreHidden ? null : (
+                  <span className={cx('ch__state', scoreHidden && 'ch__state--hidden')}>
+                    {scoreHidden ? 'Marcador oculto' : 'En directo'}
+                  </span>
+                )}
               </>
             ) : (
               <span className="ch__sub">{subtitle}</span>
             )}
-            {iptv || tags?.length || ace > 0 ? (
+            {hasTags ? (
               <span className="ch__tags">
                 {iptv ? (
                   <Capsule tone="neutral" size="sm" icon="tv" className="ch__src ch__iptv">

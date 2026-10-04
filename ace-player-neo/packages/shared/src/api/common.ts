@@ -76,6 +76,24 @@ export const CompetitionBadgeSchema = z.strictObject({
 });
 export type CompetitionBadge = z.infer<typeof CompetitionBadgeSchema>;
 
+/**
+ * Agenda híbrida (docs/iptv.md §4.7): lo que dice la guía de la IPTV de un
+ * partido de hoy o de mañana. Solo en `GET /api/v1/football` y solo con la
+ * IPTV activa y una guía que tenga el partido: sin IPTV, en pausa o sin guía
+ * para ese partido no aparece y el partido es el de siempre.
+ */
+export const FootballGuideInfoSchema = z.strictObject({
+  /** Canal confirmado por la guía («M+ LaLiga TV 2»); va el primero en `channels`. */
+  channel: z.string().min(1).max(200),
+  /** Hora del partido según la guía, «HH:MM» de Madrid (la misma que `time`). */
+  time: z.string(),
+  /** Solo si la guía cambió la hora: la que decía la agenda («18:30»). */
+  agendaTime: z.string().optional(),
+  /** El partido no estaba en la agenda: lo trae solo la guía. */
+  added: z.boolean(),
+});
+export type FootballGuideInfo = z.infer<typeof FootballGuideInfoSchema>;
+
 export const FootballMatchSchema = z.strictObject({
   /** `fltv-<fecha>-<posición>`, `epg-…`, id de TheSportsDB o `demo-N`. En la 0.7.0, estable (arquitectura §5.10). */
   id: z.string().min(1),
@@ -97,6 +115,8 @@ export const FootballMatchSchema = z.strictObject({
   awayTeam: TeamBadgeSchema.optional(),
   /** Logo de la competición, si se conoce. `competition` sigue siendo texto. */
   competitionBadge: CompetitionBadgeSchema.optional(),
+  /** Agenda híbrida: confirmado (o movido, o añadido) por la guía de tu IPTV. Solo en /api/v1. */
+  guide: FootballGuideInfoSchema.optional(),
 });
 export type FootballMatch = z.infer<typeof FootballMatchSchema>;
 

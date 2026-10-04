@@ -54,6 +54,49 @@ export const DIAGNOSTICS_TOTAL_REPORTS_PER_MINUTE = 120;
 /** Registro de fallos: entradas que devuelve GET /api/v1/diagnostics sin `limit`. */
 export const DIAGNOSTICS_DEFAULT_LIST_LIMIT = 100;
 
+/**
+ * «Descargar fallos» (Salud, 0.9.0): lo que guarda cada anillo en memoria y
+ * lo que entra en el fichero. La web apunta sus últimos errores (sin disco);
+ * el servidor, sus últimas líneas de registro (y su tamaño total).
+ */
+export const WEB_LOG_MAX_ENTRIES = 200;
+export const SERVER_LOG_RING_LINES = 2000;
+export const SERVER_LOG_RING_BYTES = 1024 * 1024;
+/** Fallos (servidor + web) como mucho en el fichero, de los más nuevos. */
+export const DIAGNOSTICS_EXPORT_MAX_FAULTS = 1000;
+
+/**
+ * Registro en disco («Descargar logs», Ajustes → Registro, 0.9.0; docs/registro.md).
+ * Un fichero por día (hora de Madrid) en `<DATA_DIR>/v2/registro/`; los días
+ * cerrados se comprimen (gzip). Se borra lo de más de LOG_STORE_MAX_DAYS días
+ * y, si todo junto pasa de LOG_STORE_MAX_BYTES en el disco, lo más viejo.
+ * Un día que pasa de LOG_STORE_DAY_SOFT_BYTES solo guarda avisos y errores;
+ * de LOG_STORE_DAY_HARD_BYTES, nada más (con una línea que lo dice).
+ */
+export const LOG_STORE_MAX_DAYS = 45;
+export const LOG_STORE_MAX_BYTES = 40 * 1024 * 1024;
+export const LOG_STORE_DAY_SOFT_BYTES = 8 * 1024 * 1024;
+export const LOG_STORE_DAY_HARD_BYTES = 12 * 1024 * 1024;
+/**
+ * Lo que mandan los clientes (errores de la web y fallos que reporta un
+ * aparato) tiene su propio tope por día y clase, aparte del de arriba: un
+ * cliente autenticado que manda textos distintos sin parar no puede llenar el
+ * día y dejar sin sitio a los errores del servidor.
+ */
+export const LOG_STORE_CLIENT_DAY_BYTES = 2 * 1024 * 1024;
+/**
+ * Sitio reservado por día, pasado el tope duro, para los avisos y errores del
+ * servidor y lo del emparejamiento (module `auth`): nunca lo gasta nadie más.
+ */
+export const LOG_STORE_RESERVE_BYTES = 2 * 1024 * 1024;
+/** Una línea más larga se guarda con sus textos recortados (pilas, mensajes). */
+export const LOG_STORE_LINE_MAX_CHARS = 16 * 1024;
+/** Registro sin comprimir que entra como mucho en el zip de «Descargar logs» (lo más nuevo). */
+export const LOG_DOWNLOAD_MAX_BYTES = 48 * 1024 * 1024;
+/** Errores de la web que se mandan al servidor para el registro: por envío y por minuto (en total). */
+export const WEB_LOG_UPLOAD_MAX_ENTRIES = 20;
+export const WEB_LOG_UPLOAD_PER_MINUTE = 60;
+
 /** Emparejamiento: intentos por código y por minuto en total (arquitectura §5.12). */
 export const PAIRING_ATTEMPTS_PER_CODE = 5;
 export const PAIRING_ATTEMPTS_PER_MINUTE = 10;

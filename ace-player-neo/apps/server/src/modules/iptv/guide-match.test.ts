@@ -7,8 +7,12 @@ import { channelMatchScore } from '@ace/shared';
 import {
   competitionFamily,
   confirmByGuide,
+  extractGuideMatchup,
   isNotLive,
+  kickoffFromProgramme,
+  programmeHasTeams,
   teamAliases,
+  teamCache,
   type GuideChannelCandidate,
   type GuideMatchInput,
   type GuideProgramme,
@@ -102,10 +106,182 @@ describe('confirmByGuide', () => {
         stop: KICKOFF + 130 * MIN,
       }),
       programme('Real Sociedad - Villarreal', {
-        start: KICKOFF - 40 * MIN,
+        start: KICKOFF - 70 * MIN,
         stop: KICKOFF + 100 * MIN,
       }),
       programme('Real Sociedad - Villarreal', { start: KICKOFF, stop: KICKOFF + 60 * MIN }),
+      /* Empieza 40 min antes pero acaba antes del final del partido. */
+      programme('Real Sociedad - Villarreal', {
+        start: KICKOFF - 40 * MIN,
+        stop: KICKOFF + 60 * MIN,
+      }),
+    ]) {
+      expect(confirmed([channel('M+ LaLiga TV 2', [p])])).toEqual([]);
+    }
+  });
+
+  it('con la previa dentro del mismo programa (hasta 60 min antes del saque): sí', () => {
+    for (const before of [40, 60]) {
+      const p = programme('LaLiga EA Sports: Real Sociedad - Villarreal', {
+        start: KICKOFF - before * MIN,
+        stop: KICKOFF + 110 * MIN,
+      });
+      expect(confirmed([channel('M+ LaLiga TV 2', [p])])).toEqual(['M+ LaLiga TV 2']);
+    }
+  });
+
+  it('con más de 30 min de previa, el programa tiene que cubrir el partido entero (105 min después del saque)', () => {
+    const at = (before: number, after: number): string[] =>
+      confirmed([
+        channel('M+ LaLiga TV 2', [
+          programme('LaLiga EA Sports: Real Sociedad - Villarreal', {
+            start: KICKOFF - before * MIN,
+            stop: KICKOFF + after * MIN,
+          }),
+        ]),
+      ]);
+    /* Hasta 30 min antes, como en la 0.8.3: basta con 90 min después del saque. */
+    expect(at(30, 90)).toEqual(['M+ LaLiga TV 2']);
+    /* De 20:15 a 22:30 no es un partido de las 21:00 (acabaría a las 22:50). */
+    expect(at(45, 90)).toEqual([]);
+    expect(at(60, 100)).toEqual([]);
+    expect(at(45, 105)).toEqual(['M+ LaLiga TV 2']);
+  });
+
+  it('formas cortas de las guías: «R. Sociedad», «At. Madrid», «Ath. Club», partículas', () => {
+    const at = (home: string, away: string, title: string): string[] =>
+      confirmed([channel('M+ LaLiga TV 2', [programme(`LaLiga: ${title}`)])], {
+        ...MATCH,
+        home,
+        away,
+      });
+    expect(at('Real Sociedad', 'Villarreal', 'R. Sociedad - Villarreal')).toEqual([
+      'M+ LaLiga TV 2',
+    ]);
+    expect(at('Atlético de Madrid', 'Getafe', 'At. Madrid - Getafe')).toEqual(['M+ LaLiga TV 2']);
+    expect(at('Atlético de Madrid', 'Getafe', 'Atl. Madrid - Getafe CF')).toEqual([
+      'M+ LaLiga TV 2',
+    ]);
+    expect(at('Athletic Club', 'Real Betis', 'Ath. Club - R. Betis')).toEqual(['M+ LaLiga TV 2']);
+    expect(at('Celta', 'Deportivo Alavés', 'Celta de Vigo - Dep. Alavés')).toEqual([
+      'M+ LaLiga TV 2',
+    ]);
+    /* Siglas de club pegadas al separador: «Girona FC - Sevilla FC» con «Girona» y «Sevilla». */
+    expect(at('Girona', 'Sevilla', 'Girona FC - Sevilla FC')).toEqual(['M+ LaLiga TV 2']);
+    expect(at('Real Madrid', 'Barcelona', 'Real Madrid CF - FC Barcelona')).toEqual([
+      'M+ LaLiga TV 2',
+    ]);
+    /* «Madrid» suelto sigue sin valer: «Getafe - Madrid» no es el Atlético. */
+    expect(at('Atlético de Madrid', 'Getafe', 'Getafe - Madrid')).toEqual([]);
+  });
+
+  it('nombres en castellano de clubes de fuera y partículas que unas guías ponen y otras no', () => {
+    const champions = (home: string, away: string, title: string): string[] =>
+      confirmed([channel('M+ Liga de Campeones', [programme(`Champions League: ${title}`)])], {
+        ...MATCH,
+        home,
+        away,
+        competition: 'Champions League',
+        channels: ['M+ Liga de Campeones'],
+      });
+    expect(champions('Bayern Múnich', 'Real Madrid', 'Bayern de Múnich - Real Madrid')).toEqual([
+      'M+ Liga de Campeones',
+    ]);
+    expect(champions('Napoli', 'Barcelona', 'Nápoles - FC Barcelona')).toEqual([
+      'M+ Liga de Campeones',
+    ]);
+    expect(champions('FC Porto', 'Atlético de Madrid', 'Oporto - Atlético de Madrid')).toEqual([
+      'M+ Liga de Campeones',
+    ]);
+    /* Siglas pegadas al separador («BC», «ACF», «CP», «SL») y el nombre largo en la agenda. */
+    expect(champions('Atalanta', 'Fiorentina', 'Atalanta BC - ACF Fiorentina')).toEqual([
+      'M+ Liga de Campeones',
+    ]);
+    expect(champions('Sporting de Portugal', 'Benfica', 'Sporting CP - SL Benfica')).toEqual([
+      'M+ Liga de Campeones',
+    ]);
+  });
+
+  it('la tabla de alias vale en los dos sentidos: futbolenlatv en castellano y la guía como en su país (y al revés)', () => {
+    const champions = (home: string, away: string, title: string): string[] =>
+      confirmed([channel('M+ Liga de Campeones', [programme(`Champions League: ${title}`)])], {
+        ...MATCH,
+        home,
+        away,
+        competition: 'Champions League',
+        channels: ['M+ Liga de Campeones'],
+      });
+    for (const [home, away, title] of [
+      ['Nápoles', 'Barcelona', 'Napoli - Barcelona'],
+      ['Oporto', 'Benfica', 'FC Porto - SL Benfica'],
+      ['Club Brujas', 'Real Madrid', 'Club Brugge - Real Madrid'],
+      ['Estrella Roja', 'Olympiacos', 'Crvena Zvezda - Olympiakos'],
+      ['Crvena Zvezda', 'Olympiakos', 'Estrella Roja - Olympiacos'],
+      ['Sparta de Praga', 'Salzburgo', 'Sparta Praha - Red Bull Salzburg'],
+      ['Copenhague', 'Marsella', 'FC Copenhagen - Marseille'],
+      /* Como abrevia futbolenlatv (football/scores.ts). */
+      ['O. Lyonnais', 'B. Dortmund', 'Olympique de Lyon - Borussia Dortmund'],
+    ] as const) {
+      expect(champions(home, away, title), `${home} - ${away}`).toEqual(['M+ Liga de Campeones']);
+    }
+    /* Y sin inventar: un club que no es el de la tabla sigue sin casar. */
+    expect(champions('Sparta Rotterdam', 'Salzburgo', 'Sparta Praha - Red Bull Salzburg')).toEqual(
+      [],
+    );
+  });
+
+  it('las formas cortas y los nombres en castellano de la Premier y la Bundesliga (casos reales de la revisión)', () => {
+    const at = (competition: string, home: string, away: string, title: string): string[] =>
+      confirmed([channel('DAZN 1', [programme(`${competition}: ${title} (Directo)`)])], {
+        ...MATCH,
+        home,
+        away,
+        competition,
+        channels: ['DAZN 1'],
+      });
+    expect(
+      at('Premier League', 'Brighton & Hove Albion', 'Tottenham Hotspur', 'Brighton - Spurs'),
+    ).toEqual(['DAZN 1']);
+    expect(
+      at('Premier League', 'Wolverhampton Wanderers', 'Nottingham Forest', 'Wolves - Nottingham'),
+    ).toEqual(['DAZN 1']);
+    expect(at('Bundesliga', 'Colonia', 'Maguncia', 'FC Köln - Mainz 05')).toEqual(['DAZN 1']);
+    expect(
+      at(
+        'Bundesliga',
+        'Borussia Mönchengladbach',
+        'Eintracht Fráncfort',
+        'B. Mönchengladbach - Eintracht Frankfurt',
+      ),
+    ).toEqual(['DAZN 1']);
+  });
+
+  it('las leyendas no son el primer equipo, ni el fútbol que no es el de la agenda', () => {
+    const madrid: GuideMatchInput = {
+      ...MATCH,
+      home: 'Real Madrid',
+      away: 'Juventus',
+      competition: 'Champions League',
+    };
+    for (const title of [
+      'Real Madrid Leyendas - Juventus Leyendas',
+      'Leyendas del Real Madrid - Leyendas de la Juventus',
+      'eLaLiga: Real Madrid - Juventus',
+      'Champions League: Real Madrid - Juventus. Fútbol americano',
+      'Premier League 2: Real Madrid - Juventus',
+    ]) {
+      expect(
+        confirmed([channel('M+ Liga de Campeones', [programme(title)])], madrid),
+        title,
+      ).toEqual([]);
+    }
+  });
+
+  it('partidos de archivo y documentales: no', () => {
+    for (const p of [
+      programme('Partidos históricos: Real Sociedad - Villarreal'),
+      programme('Real Sociedad - Villarreal (2010)'),
+      programme('Real Sociedad - Villarreal', { categories: ['Documental'] }),
     ]) {
       expect(confirmed([channel('M+ LaLiga TV 2', [p])])).toEqual([]);
     }
@@ -397,11 +573,79 @@ describe('guía de canales en abierto: nada por error', () => {
 
 describe('piezas', () => {
   it('alias de equipos sin los débiles', () => {
-    expect(teamAliases('Real Madrid')).toEqual(['real madrid']);
+    expect(teamAliases('Real Madrid')).toEqual(['real madrid', 'r madrid']);
+    expect(teamAliases('Real Madrid')).not.toContain('madrid');
     expect(teamAliases('Real Betis')).toContain('betis');
     expect(teamAliases('Atlético de Madrid')).toContain('atleti');
     expect(teamAliases('Atlético de Madrid')).not.toContain('atletico');
     expect(teamAliases('Racing de Santander')).not.toContain('racing');
+  });
+
+  it('los equipos de un texto de la guía (partidos que solo trae la guía)', () => {
+    const cases: [string, { home: string; away: string } | null][] = [
+      [
+        'LaLiga EA Sports. Jornada 7: Real Sociedad - Villarreal',
+        { home: 'Real Sociedad', away: 'Villarreal' },
+      ],
+      ['Fútbol: Real Madrid vs. Barcelona (Directo)', { home: 'Real Madrid', away: 'Barcelona' }],
+      ['DIRECTO: REAL BETIS - ATHLETIC CLUB', { home: 'Real Betis', away: 'Athletic Club' }],
+      [
+        'UEFA Champions League: Paris Saint-Germain - Real Madrid',
+        { home: 'Paris Saint-Germain', away: 'Real Madrid' },
+      ],
+      ['R. Sociedad v. Villarreal CF. Jornada 7', { home: 'R. Sociedad', away: 'Villarreal CF' }],
+      ['At. Madrid - Getafe, desde el Metropolitano', { home: 'At. Madrid', away: 'Getafe' }],
+      ['Fútbol: LaLiga EA Sports - Sevilla - Betis', { home: 'Sevilla', away: 'Betis' }],
+      ['Liverpool - Arsenal (L)', { home: 'Liverpool', away: 'Arsenal' }],
+      ['LaLiga EA Sports', null],
+      ['Telediario', null],
+      ['Fútbol - Jornada 7', null],
+      /* Casos de la revisión: dos enfrentamientos, otro enfrentamiento dentro de un nombre,
+         equipos por decidir y el mismo nombre a los dos lados. */
+      ['Liga de Campeones: Real Madrid - Juventus y Liverpool - Bayern (Directo)', null],
+      ['LaLiga EA Sports: Real Madrid - Barcelona / Sevilla - Betis (Directo)', null],
+      [
+        'Directo LaLiga EA Sports: El Clásico - Real Madrid vs Barcelona',
+        { home: 'Real Madrid', away: 'Barcelona' },
+      ],
+      ['Liga de Campeones: Por confirmar - Por confirmar (Directo)', null],
+      ['Liga de Campeones: Ganador A - Ganador B (Directo)', null],
+      ['Copa del Rey: Real Madrid - Real Madrid', null],
+      [
+        'Premier League: Brighton & Hove Albion - Spurs',
+        { home: 'Brighton & Hove Albion', away: 'Spurs' },
+      ],
+    ];
+    for (const [text, expected] of cases) expect(extractGuideMatchup(text), text).toEqual(expected);
+  });
+
+  it('los equipos solo en el título o el subtítulo (para mover la hora en la agenda híbrida)', () => {
+    const cache = teamCache({ home: 'Real Madrid', away: 'Barcelona' });
+    const inDesc = programme('LaLiga EA Sports: Sevilla - Betis (Directo)', {
+      desc: 'Esta noche, Real Madrid - Barcelona en M+ LaLiga TV.',
+    });
+    expect(programmeHasTeams(inDesc, cache)).toBe(true);
+    expect(programmeHasTeams(inDesc, cache, 'title')).toBe(false);
+    expect(
+      programmeHasTeams(
+        programme('Fútbol', { subTitle: 'Real Madrid vs. Barcelona' }),
+        cache,
+        'title',
+      ),
+    ).toBe(true);
+  });
+
+  it('el saque que se deduce de un programa: al cuarto de hora siguiente si cubre el partido', () => {
+    const at = (start: number, minutes: number): number | null =>
+      kickoffFromProgramme(programme('x', { start, stop: start + minutes * MIN }));
+    const nine = Date.UTC(2026, 8, 26, 19, 0);
+    expect(at(nine - 10 * MIN, 115)).toBe(nine);
+    expect(at(nine, 120)).toBe(nine);
+    expect(at(nine - 5 * MIN, 120)).toBe(nine);
+    /* 100 min desde las 20:50: redondeado a las 21:00 ya no cubre 90 min; su inicio, sí. */
+    expect(at(nine - 10 * MIN, 95)).toBe(nine - 10 * MIN);
+    /* Un programa de 85 min no cubre un partido entero. */
+    expect(at(nine, 85)).toBe(null);
   });
 
   it('familias de competición', () => {

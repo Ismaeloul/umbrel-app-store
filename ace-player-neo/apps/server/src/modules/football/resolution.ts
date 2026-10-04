@@ -371,6 +371,95 @@ function withGuideHints(
 }
 
 /**
+ * Agenda híbrida (docs/iptv.md §4.7): el canal que confirma la guía de la
+ * IPTV guía también AceStream. Una fuente que es ESE canal según la regla de
+ * la IPTV (`sameChannel` ≥ 92, que entiende «M+ LA LIGA TV 2 1080», «M.
+ * LALIGA TV 2» o «MOVISTAR LALIGA TV 2»…) cuenta como canal pedido con su
+ * puntuación entera y ese canal en `matchedChannel`. Sin canales de la guía,
+ * nada cambia.
+ */
+function withGuideChannels(
+  candidates: readonly BaseCandidate[],
+  guideChannels: readonly string[],
+  sameChannel: ((channel: string, title: string) => number) | null,
+): BaseCandidate[] {
+  if (!guideChannels.length || !sameChannel) return [...candidates];
+  return candidates.map((candidate) => {
+    if (candidate.source === 'iptv') return candidate;
+    let score = 0;
+    let matchedChannel = '';
+    for (const channel of guideChannels) {
+      const value = sameChannel(channel, candidate.title);
+      if (value > score) {
+        score = value;
+        matchedChannel = channel;
+      }
+    }
+    if (score < RESOLUTION_EXACT_SCORE || score <= candidate.score) return candidate;
+    return {
+      ...candidate,
+      score,
+      matchedChannel,
+      soloFamilia: false,
+      familyFallbackAllowed: false,
+    };
+  });
+}
+
+/**
+ * ¿Es esta fuente el canal que confirma la guía? Una IPTV confirmada por la
+ * guía, o cualquier fuente ≥ 92 que es ese canal (por su canal emparejado o
+ * por su título). Las de la familia («DAZN» por «DAZN 1») no.
+ */
+function isGuideChannelSource(
+  candidate: BaseCandidate,
+  guideChannels: readonly string[],
+  sameChannel: (channel: string, title: string) => number,
+): boolean {
+  if (candidate.score < RESOLUTION_EXACT_SCORE || candidate.soloFamilia) return false;
+  if (candidate.source === 'iptv' && candidate.iptv?.guide === true) return true;
+  const matched = normalizeChannelKey(candidate.matchedChannel);
+  return guideChannels.some(
+    (channel) =>
+      normalizeChannelKey(channel) === matched ||
+      sameChannel(channel, candidate.matchedChannel) >= RESOLUTION_EXACT_SCORE ||
+      (candidate.source !== 'iptv' &&
+        sameChannel(channel, candidate.title) >= RESOLUTION_EXACT_SCORE),
+  );
+}
+
+/** Ids de las fuentes del canal de la guía (van delante en el orden, `preferred` de sources). */
+function guidePreferred(
+  candidates: readonly BaseCandidate[],
+  guideChannels: readonly string[],
+  sameChannel: ((channel: string, title: string) => number) | null,
+): ReadonlySet<string> | undefined {
+  if (!guideChannels.length || !sameChannel) return undefined;
+  const ids = candidates
+    .filter((candidate) => isGuideChannelSource(candidate, guideChannels, sameChannel))
+    .map((candidate) => candidate.id);
+  return ids.length ? new Set(ids) : undefined;
+}
+
+/**
+ * Consultas al buscador: primero el canal de la guía (tal cual y sin la
+ * marca del operador: «M+ LaLiga TV 2» y «laliga tv 2», que es como lo
+ * escriben muchas listas), luego los de la agenda y las pistas.
+ */
+function guideQueries(guideChannels: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const channel of guideChannels) {
+    out.push(channel);
+    const core = normalizeChannelKey(channel)
+      .split(' ')
+      .filter((token) => !['movistar', 'm', 'plus'].includes(token))
+      .join(' ');
+    if (core.length >= 3) out.push(core);
+  }
+  return out;
+}
+
+/**
  * Decisión de §4.1 para un id que llega por otra vía (vínculos, favoritos,
  * historial, el buscador o un precalentado guardado): AceStream tal cual, un
  * id IPTV del catálogo vigente convertido en candidata IPTV y uno que ya no
@@ -498,6 +587,11 @@ export async function resolveFootballChannel(
   const hints = (iptvLayer?.hints ?? []).filter(
     (hint) => !channelKeys.has(normalizeChannelKey(hint)),
   );
+  /* Agenda híbrida (§4.7): en un partido, el canal que confirma la guía se busca el primero en
+     AceStream y sus fuentes van delante. Sin guía (o sin IPTV), vacío: todo como siempre. */
+  const guideChannels = scope === 'match' ? [...(iptvLayer?.hints ?? [])] : [];
+  const sameChannel =
+    guideChannels.length && deps.iptv ? deps.iptv.sameChannel.bind(deps.iptv) : null;
 
   let checked: string[];
   if (scope === 'channel')
@@ -536,14 +630,18 @@ export async function resolveFootballChannel(
      entienda tienen una segunda oportunidad en la IA; después, el umbral. */
   const local = adoptAll(
     withGuideHints(
-      scope === 'guide'
-        ? libraryResolutionCandidates(state, hints, 0)
-        : libraryResolutionCandidates(
-            state,
-            channels,
-            0,
-            research ? { sourceOrder: ['favorites', 'm3u'] } : {},
-          ),
+      withGuideChannels(
+        scope === 'guide'
+          ? libraryResolutionCandidates(state, hints, 0)
+          : libraryResolutionCandidates(
+              state,
+              channels,
+              0,
+              research ? { sourceOrder: ['favorites', 'm3u'] } : {},
+            ),
+        guideChannels,
+        sameChannel,
+      ),
       scope === 'guide' ? [] : hints,
     ).map((candidate) =>
       scope === 'guide'
@@ -564,8 +662,12 @@ export async function resolveFootballChannel(
   let semanticResult: Awaited<ReturnType<typeof applySemanticCandidateScores<BaseCandidate>>>;
   try {
     if (scope === 'match') {
-      /* Las pistas de la guía también se buscan (8 consultas como mucho). */
-      const queries = aceSearchQueries([...channels, ...hints], semanticEnabled);
+      /* Las pistas de la guía también se buscan (8 consultas como mucho); el canal que confirma
+         la guía, el primero (agenda híbrida). */
+      const queries = aceSearchQueries(
+        [...guideQueries(guideChannels), ...channels, ...hints],
+        semanticEnabled,
+      );
       const searched = await Promise.allSettled(
         queries.map((query) => untilAborted(deps.search(query, stage.signal), stage.signal)),
       );
@@ -579,7 +681,7 @@ export async function resolveFootballChannel(
       }
       /* Un id IPTV no llega nunca al motor: del buscador se descarta. */
       remote.push(
-        ...withGuideHints(found, hints).filter(
+        ...withGuideHints(withGuideChannels(found, guideChannels, sameChannel), hints).filter(
           (candidate) => !deps.iptv || deps.iptv.classify(candidate.id) === 'engine',
         ),
       );
@@ -674,6 +776,8 @@ export async function resolveFootballChannel(
       return candidate.score >= minimumResolutionScore(candidate, semanticResult.used);
     }),
   );
+  /* Agenda híbrida (§4.7): las fuentes del canal de la guía, delante. */
+  const preferred = guidePreferred(qualified, guideChannels, sameChannel);
   const candidates = mergeResolutionCandidates(
     qualified,
     research
@@ -681,8 +785,13 @@ export async function resolveFootballChannel(
           sourceOrder: ['iptv', 'favorites', 'm3u', 'acestream'],
           sourceStats: state.sourceStats ?? null,
           requestedChannels: channels,
+          ...(preferred ? { preferred } : {}),
         }
-      : { sourceStats: state.sourceStats ?? null, requestedChannels: channels },
+      : {
+          sourceStats: state.sourceStats ?? null,
+          requestedChannels: channels,
+          ...(preferred ? { preferred } : {}),
+        },
   );
   const ai: AiInfo = {
     enabled: deps.semantic.enabled,
@@ -784,18 +893,26 @@ export function overlayIptv(
   const layer = iptv ? iptv.resolve(channels, program) : null;
   const fresh = layer?.candidates ?? [];
   const freshIds = new Set(fresh.map((candidate) => candidate.id));
-  const kept = (core.candidates || [])
-    .filter(
-      (candidate) =>
-        !(
-          candidate.source === 'iptv' &&
-          (candidate as { iptv?: { guide?: boolean } }).iptv?.guide === true
-        ),
-    )
-    .map((candidate) => adoptIptvCandidate(iptv, candidate))
-    .filter(
-      (candidate): candidate is BaseCandidate => candidate !== null && !freshIds.has(candidate.id),
-    );
+  /* Agenda híbrida (§4.7): el canal de la guía de AHORA también sobre lo guardado. */
+  const guideChannels = [...(layer?.hints ?? [])];
+  const sameChannel = guideChannels.length && iptv ? iptv.sameChannel.bind(iptv) : null;
+  const kept = withGuideChannels(
+    (core.candidates || [])
+      .filter(
+        (candidate) =>
+          !(
+            candidate.source === 'iptv' &&
+            (candidate as { iptv?: { guide?: boolean } }).iptv?.guide === true
+          ),
+      )
+      .map((candidate) => adoptIptvCandidate(iptv, candidate))
+      .filter(
+        (candidate): candidate is BaseCandidate =>
+          candidate !== null && !freshIds.has(candidate.id),
+      ),
+    guideChannels,
+    sameChannel,
+  );
   const channelKeys = new Set(channels.map((channel) => normalizeChannelKey(channel)));
   const hints = (layer?.hints ?? []).filter((hint) => !channelKeys.has(normalizeChannelKey(hint)));
   /* Lo aprendido se aplica UNA vez, sobre todo (un «Canal incorrecto» aparta también una IPTV). */
@@ -809,10 +926,12 @@ export function overlayIptv(
     ),
   );
   const withIptv = qualified.some((candidate) => candidate.source === 'iptv');
+  const preferred = guidePreferred(qualified, guideChannels, sameChannel);
   const candidates = withIptv
     ? mergeResolutionCandidates(qualified, {
         sourceStats: options.sourceStats ?? null,
         requestedChannels: channels,
+        ...(preferred ? { preferred } : {}),
       })
     : qualified;
   const checked = core.checked.filter((item) => item !== 'iptv');

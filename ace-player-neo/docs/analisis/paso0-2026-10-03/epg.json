@@ -1,0 +1,35 @@
+{
+  "fecha": "2026-10-03T13:03:45.042Z",
+  "estado": 200,
+  "tipo": "application/xml; charset=utf-8",
+  "comprimida": false,
+  "segundos": 2,
+  "bytesCable": 46672277,
+  "bytes": 46672277,
+  "canalesDeclarados": 4391,
+  "canalesConProgramas": 3581,
+  "programas": 137126,
+  "programasPorCanal": {
+    "min": 1,
+    "mediana": 31,
+    "max": 696
+  },
+  "desdeHoras": -24,
+  "hastaHoras": 36,
+  "reparto": {
+    "pasado": 110750,
+    "hoy": 26376,
+    "manana": 0,
+    "mas": 0
+  },
+  "conCampo": {
+    "descripcion": 100,
+    "categoria": 0,
+    "imagen": 0,
+    "episodio": 0,
+    "subtitulo": 0,
+    "nota": 0,
+    "edad": 0,
+    "directo": 0
+  }
+}

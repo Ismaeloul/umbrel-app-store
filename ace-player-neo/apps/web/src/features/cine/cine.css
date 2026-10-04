@@ -1,0 +1,1442 @@
+/* ==========================================================================
+   Películas y series (docs/vod.md §12) con la piel «Palco», «como los
+   partidos» (pendiente.md, punto 7): portada en filas como la agenda,
+   carteles 2:3 grandes con el título bien visible, rejilla aparte y la ficha
+   con el cartel, toda la información y el play grande y amarillo. Prefijo
+   `.cine-`. Solo tokens; animaciones solo con transform y opacity; el hover,
+   solo con ratón de verdad; nada por debajo de 11 px; objetivos de 44 px.
+   ========================================================================== */
+
+.cine {
+  display: grid;
+  gap: var(--s-6);
+  align-content: start;
+  min-width: 0;
+  max-width: 1480px;
+  margin-inline: auto;
+}
+.cine-screen {
+  min-width: 0;
+}
+.cine-screen[hidden],
+.cine-portada[hidden] {
+  display: none;
+}
+.cine-portada {
+  display: grid;
+  gap: var(--s-8);
+  min-width: 0;
+}
+
+/* ---- Cabecera: «Películas | Series», categorías y buscador ------------------- */
+.cine-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+  min-width: 0;
+}
+.cine-head__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.cine-head__search {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .cine-head__row {
+    flex: 0 1 auto;
+    justify-content: flex-start;
+  }
+  .cine-head__search {
+    flex: 1 1 280px;
+  }
+}
+/* La pista «/» solo tiene sentido con teclado físico. */
+@media (hover: none) {
+  .cine-head .field__kbd {
+    display: none;
+  }
+}
+.cine-note {
+  padding-inline: var(--s-1);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.cine-dot {
+  color: var(--text-3);
+}
+
+/* ---- Títulos de sección -------------------------------------------------------- */
+.cine-section {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.cine-section__title {
+  padding-inline: 2px;
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.01em;
+  line-height: var(--lh-snug);
+}
+@media (min-width: 768px) {
+  .cine-section__title {
+    font-size: var(--fs-22);
+  }
+}
+
+/* ---- Filas de la portada (Rows.tsx), como las competiciones de la agenda ------ */
+.cine-row {
+  display: grid;
+  gap: var(--s-1);
+  min-width: 0;
+}
+.cine-row__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.cine-row__title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding-inline: 2px;
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.01em;
+  line-height: var(--lh-snug);
+}
+.cine-row__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cine-row__count {
+  flex: none;
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  font-weight: 600;
+  font-stretch: 100%;
+  letter-spacing: 0;
+}
+.cine-row__all {
+  flex: none;
+  margin-right: -8px;
+  color: var(--text-2);
+}
+@media (min-width: 768px) {
+  .cine-row__title {
+    font-size: var(--fs-22);
+  }
+}
+.cine-row__failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 120px;
+  padding-inline: 2px;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.cine-row__skeleton {
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
+  padding: 6px 0 14px;
+}
+.cine-row__ghost {
+  display: grid;
+  flex: none;
+  gap: 8px;
+  width: var(--cine-card-w);
+}
+.cine-row__ghost-poster {
+  width: 100%;
+  height: auto !important;
+  aspect-ratio: 2 / 3;
+}
+.cine-portada__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+/* El ancho de un cartel en las filas: unas 2,5 tarjetas en el iPhone (se ve
+   que la fila se desliza) y carteles de 200 px en el PC. */
+.cine,
+.cine-skeleton {
+  --cine-card-w: clamp(136px, 38vw, 200px);
+  /* Una tarjeta de «Seguir viendo» (la imagen 16:9 y su «Más opciones»). */
+  --cine-continue-w: clamp(240px, 72vw, 320px);
+  /* El halo de una tarjeta al pasar el ratón o pulsarla: envuelve el cartel
+     y su texto con este aire alrededor (el texto no toca su borde). */
+  --cine-halo: 8px;
+  /* Lo que el texto de debajo del cartel entra respecto a su borde: las
+     esquinas del cartel son redondas y, pegado, parecía que se salía. */
+  --cine-text-inset: 4px;
+}
+.cine-rail,
+.cine-continue {
+  --prail-gap: 14px;
+  /* Sitio arriba para el halo (la pista recorta lo que se sale): 4 px más
+     que los 6 de siempre, devueltos con el margen para no mover nada. */
+  --prail-pad-top: calc(var(--cine-halo) + 2px);
+  margin-top: -4px;
+}
+.cine-rail {
+  --prail-item-w: var(--cine-card-w);
+}
+.cine-continue {
+  --prail-item-w: var(--cine-continue-w);
+}
+@media (min-width: 768px) {
+  .cine-rail {
+    --prail-gap: 18px;
+  }
+}
+/* Móvil y tableta: los carruseles sangran hasta el borde de la pantalla (como
+   la agenda), con el primer cartel alineado con el titular. */
+@media (max-width: 1023.98px) {
+  .cine-rail,
+  .cine-continue {
+    --prail-pad: calc(var(--gutter) + var(--safe-left));
+    margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
+      calc(-1 * (var(--gutter) + var(--safe-right)));
+  }
+}
+/* Escritorio: alineados con el titular, pero con el aire del halo a los lados
+   (relleno, y a la izquierda un margen negativo que lo devuelve, como
+   «Emitiendo ahora» de Canales): sin él, el halo del primer cartel salía
+   cortado en recto. A la derecha no hace falta margen: el relleno de una
+   pista se ve (los carteles pasan por él) y solo añade sitio al final. */
+@media (min-width: 1024px) {
+  .cine-rail,
+  .cine-continue {
+    --prail-pad: calc(var(--cine-halo) + 2px);
+    margin-left: calc(-1 * (var(--cine-halo) + 2px));
+  }
+}
+/* Las flechas, a media altura del cartel 2:3 (alto = 1,5 × ancho)… */
+.prail.cine-rail .prail__arrow {
+  top: calc(var(--prail-pad-top) + var(--cine-card-w) * 0.75);
+}
+/* …o de la imagen 16:9 de «Seguir viendo» (su ancho es el de la tarjeta menos
+   los 40 px de «Más opciones»: 44 del botón − 6 de margen + 2 de hueco). */
+.prail.cine-continue .prail__arrow {
+  top: calc(var(--prail-pad-top) + (var(--cine-continue-w) - 40px) * 0.28125);
+}
+
+/* ---- Imagen con relleno (Art.tsx) ---------------------------------------------- */
+.cine-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--art-fill, var(--surface-2));
+  color: #fff;
+}
+.cine-art--poster {
+  aspect-ratio: 2 / 3;
+}
+.cine-art--backdrop,
+.cine-art--still {
+  aspect-ratio: 16 / 9;
+}
+.cine-art__mono {
+  font-size: clamp(22px, 30%, 44px);
+  font-weight: 800;
+  font-stretch: var(--w-head);
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
+/* Cartel sin imagen: el título abajo a la izquierda sobre el color del título,
+   con un degradado, como un cartel de verdad. Escala con la tarjeta.
+   La ÚLTIMA línea va siempre a la misma altura (anclado abajo, al 8 %): un
+   título de 1, 2 o 3 líneas crece hacia arriba y en una fila todos acaban
+   alineados. Los carteles de la demo (demo-art.ts, POSTER_TEXT) pintan su
+   título con esta misma geometría (9 %, 12 % del ancho, 1,05 y 8 %): si cambia
+   aquí, cambia allí (lo comprueba demo.test.ts). */
+.cine-art--poster {
+  container-type: inline-size;
+}
+.cine-art--poster[data-state='fill'] {
+  background:
+    linear-gradient(to bottom, rgb(0 0 0 / 0) 35%, rgb(0 0 0 / 0.55) 100%),
+    linear-gradient(
+      150deg,
+      var(--art-fill, var(--surface-2)),
+      color-mix(in oklab, var(--art-fill, var(--surface-2)) 45%, #000)
+    );
+}
+.cine-art__name {
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  bottom: 8%;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  font-size: max(12px, 12cqi);
+  font-weight: 800;
+  font-stretch: var(--w-head);
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.35);
+}
+.cine-art[data-state='image'] .cine-art__name,
+.cine-art[data-state='image'] .cine-art__mono {
+  visibility: hidden;
+}
+.cine-art__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity var(--dur-rapido) var(--ease-out);
+}
+.cine-art[data-state='image'] .cine-art__img {
+  opacity: 1;
+}
+
+/* ---- Halo de las tarjetas (PosterCard y «Seguir viendo») -------------------------
+   Al pasar el ratón o pulsar, un fondo suave envuelve el cartel Y su texto con
+   `--cine-halo` de aire alrededor y por DETRÁS (el cartel no se aclara). Antes
+   era el velo de `.press`, del tamaño justo de la tarjeta: el texto tocaba su
+   borde (lo vio Isma en «Coco» y en «Seguir viendo», 0.9.0). En «Seguir
+   viendo» envuelve también su «Más opciones». */
+.cine-card,
+.cine-continue__item {
+  position: relative;
+  isolation: isolate;
+}
+.cine-card::before,
+.cine-continue__item::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: calc(-1 * var(--cine-halo));
+  border-radius: calc(var(--r-m) + var(--cine-halo));
+  background: var(--text);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-rapido) var(--ease-rapido);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cine-card:hover::before,
+  .cine-continue__item:hover::before {
+    opacity: 0.06;
+  }
+}
+.cine-card:active::before,
+.cine-continue__item:has(> .cine-continue__card:active)::before {
+  opacity: 0.1;
+}
+.cine-card.press::after,
+.cine-continue__card.press::after {
+  content: none;
+}
+
+/* ---- Tarjeta (PosterCard.tsx) -------------------------------------------------- */
+.cine-card {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text);
+  border-radius: var(--r-m);
+  outline: none;
+}
+.cine-card:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 3px;
+}
+.cine-card__poster {
+  position: relative;
+  display: block;
+  border-radius: var(--r-m);
+  overflow: hidden;
+  box-shadow: var(--shadow-poster);
+  margin-bottom: 6px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cine-card__poster .cine-art {
+    transition: transform var(--dur-estandar) var(--ease-estandar);
+  }
+  .cine-card:hover .cine-card__poster .cine-art {
+    transform: scale(1.03);
+  }
+}
+/* Las cápsulas van encima del cartel, como «HOY 15:30» en un partido. */
+.cine-card__badges {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  pointer-events: none;
+}
+.cine-card__badge {
+  max-width: 100%;
+}
+.cine-card__progress {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+}
+/* El texto de debajo del cartel (y el de «Seguir viendo») entra lo mismo en
+   todos los carruseles: `--cine-text-inset` respecto al borde del cartel. */
+.cine-card__title,
+.cine-card__meta,
+.cine-continue__title,
+.cine-continue__line {
+  padding-inline: var(--cine-text-inset);
+}
+.cine-card__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.cine-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+}
+.cine-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.cine-rating__star {
+  flex: none;
+  width: 0.95em;
+  height: 0.95em;
+  color: var(--accent-ink);
+}
+
+/* ---- Rejilla (Grid.tsx) y su cabecera ------------------------------------------- */
+.cine-browse {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.cine-browse__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  margin-left: -4px;
+}
+.cine-browse__titles {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.cine-browse__title {
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  line-height: var(--lh-tight);
+  overflow-wrap: anywhere;
+  outline: none;
+}
+/* Recibe el foco al abrir la rejilla con el teclado: que se vea. */
+.cine-browse__title:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 3px;
+  border-radius: var(--r-s);
+}
+.cine-browse__count {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+}
+@media (min-width: 1024px) {
+  .cine-browse__title {
+    font-size: var(--fs-30);
+  }
+}
+.cine-grid {
+  --cols: 2;
+  min-width: 0;
+}
+.cine-grid__cells {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: 14px;
+  padding-bottom: 22px;
+}
+@media (min-width: 768px) {
+  .cine-grid__cells {
+    gap: 20px;
+    padding-bottom: 26px;
+  }
+}
+.cine-grid__cell {
+  min-width: 0;
+}
+.cine-load-more {
+  margin-top: var(--s-2);
+}
+.cine-more-failed {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding-inline: var(--s-1);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+
+/* ---- Chips con desplazamiento, filtros y orden ----------------------------------- */
+.cine-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cine-chips--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+  margin-inline: calc(var(--s-1) * -1);
+  padding: 8px var(--s-1);
+  scroll-padding-inline: var(--s-1);
+}
+.cine-chips--scroll::-webkit-scrollbar {
+  display: none;
+}
+.cine-chips--scroll > * {
+  flex: none;
+}
+/* «Novedades | A-Z» y, a su lado, los distintivos. */
+.cine-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.cine-order {
+  flex: none;
+  width: max-content;
+  min-width: 200px;
+}
+/* «Buscar en todas las películas» (una búsqueda dentro de una categoría). */
+.cine-browse__everywhere {
+  justify-self: start;
+}
+/* En el teléfono (también en horizontal) los carteles necesitan el sitio:
+   sin la fila de categorías (están en «Categorías», arriba) y el orden y los
+   distintivos en UNA fila que se desliza. Así la primera fila de carteles,
+   con su título, cabe entera en la pantalla al abrir una categoría. */
+@media (max-width: 767.98px), (orientation: landscape) and (max-height: 540px) {
+  .cine[data-screen='rejilla'] {
+    gap: var(--s-4);
+  }
+  .cine-browse {
+    gap: var(--s-3);
+  }
+  .cine-browse__cats {
+    display: none;
+  }
+  .cine-filters {
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    touch-action: pan-x pan-y;
+    margin-inline: calc(var(--s-1) * -1);
+    padding: 4px var(--s-1);
+    scroll-padding-inline: var(--s-1);
+  }
+  .cine-filters::-webkit-scrollbar {
+    display: none;
+  }
+  .cine-filters > * {
+    flex: none;
+  }
+  .cine-filters .cine-tags {
+    flex-wrap: nowrap;
+  }
+  .cine-order {
+    min-width: 0;
+  }
+}
+
+/* ---- Categorías: lista de la hoja y del panel lateral ----------------------------- */
+.cine-cats {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cine-cat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: var(--r-s);
+  color: var(--text);
+  text-align: left;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-medium);
+}
+.cine-cat[aria-pressed='true'] {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-weight: var(--wght-strong);
+}
+.cine-cat--home {
+  margin-bottom: 4px;
+  font-weight: var(--wght-strong);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cine-cat:hover {
+    background: var(--line-soft);
+  }
+  .cine-cat[aria-pressed='true']:hover {
+    background: var(--accent-wash);
+  }
+}
+.cine-cat__name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cine-cat__adult {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-11);
+  font-weight: var(--wght-strong);
+}
+.cine-cat__count {
+  flex: none;
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+.cine-aside {
+  display: grid;
+  gap: var(--s-2);
+  padding-top: var(--s-6);
+}
+.cine-aside__title {
+  padding-inline: 12px;
+  color: var(--text-3);
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+
+/* ---- «Seguir viendo» (ContinueRail.tsx) ----------------------------------------- */
+/* La tarjeta y su «Más opciones» uno al lado del otro (nunca encima: dos
+   controles pisados no se pueden tocar bien). */
+.cine-continue__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 2px;
+  min-width: 0;
+}
+.cine-continue__card {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  color: var(--text);
+  text-align: left;
+  border-radius: var(--r-m);
+}
+.cine-continue__art {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-m);
+  overflow: hidden;
+  box-shadow: var(--shadow-poster);
+  margin-bottom: 6px;
+}
+.cine-continue__art > .cine-art {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  aspect-ratio: auto;
+}
+/* Solo hay cartel: entero a la izquierda, sobre su propio color desenfocado. */
+.cine-continue__blur .cine-art__img {
+  filter: blur(18px) saturate(1.3);
+  transform: scale(1.3);
+}
+.cine-continue__blur {
+  opacity: 0.85;
+}
+.cine-continue__art > .cine-continue__poster {
+  inset: 8px auto 8px 8px;
+  width: auto;
+  height: calc(100% - 16px);
+  aspect-ratio: 2 / 3;
+  border-radius: var(--r-s);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
+}
+.cine-continue__progress {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+}
+/* Con el cartel a la izquierda (ocupa el 37,5 % del ancho), la barra a su derecha. */
+.cine-continue__art[data-art='poster'] .cine-continue__progress {
+  left: 45%;
+  right: 12px;
+}
+.cine-continue__title {
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cine-continue__line {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cine-continue__more {
+  margin-right: -6px;
+}
+
+/* ---- Esqueletos ------------------------------------------------------------------ */
+.cine-skeleton {
+  display: grid;
+  gap: var(--s-4);
+}
+.cine-skeleton__rail {
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
+}
+.cine-skeleton__poster {
+  flex: none;
+  width: var(--cine-card-w);
+  height: auto !important;
+  aspect-ratio: 2 / 3;
+}
+
+/* ---- Ficha (Ficha.tsx) ------------------------------------------------------------- */
+.cine-ficha {
+  display: grid;
+  gap: var(--s-8);
+  align-content: start;
+  min-width: 0;
+  max-width: 1180px;
+  margin-inline: auto;
+  padding-bottom: var(--s-8);
+}
+.cine-ficha__skeleton {
+  width: 100%;
+  height: auto !important;
+  aspect-ratio: 16 / 9;
+  max-height: 420px;
+}
+.cine-ficha__failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: calc(var(--s-6) * -1);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+
+/* La cabecera: un fondo (la imagen 16:9, el cartel desenfocado o el color del
+   título) que se funde con la página, y encima el cartel, los datos, el play
+   y la sinopsis. `--hero-h` es lo que mide el fondo. */
+.cine-hero {
+  --hero-h: min(56.25vw, 44vh);
+  --hero-poster: 116px;
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+}
+.cine-hero[data-bg='blur'],
+.cine-hero[data-bg='tone'] {
+  --hero-h: 300px;
+}
+/* El fondo se funde con la página con una MÁSCARA (no con una capa del color
+   de la página encima): sirve igual en claro y en oscuro y no deja rayas en
+   las esquinas redondeadas. */
+.cine-hero__bg {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: calc(-1 * (var(--gutter) + var(--safe-left)));
+  right: calc(-1 * (var(--gutter) + var(--safe-right)));
+  height: var(--hero-h);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 100%);
+}
+.cine-hero[data-bg='tone'] .cine-hero__bg {
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--hero-fill) 70%, var(--bg)) 0%,
+    color-mix(in oklab, var(--hero-fill) 30%, var(--bg)) 100%
+  );
+}
+.cine-hero__bg > .cine-art {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+.cine-hero__bg > .cine-art[data-state='fill'] {
+  background: transparent;
+}
+.cine-hero__blur .cine-art__img {
+  filter: blur(36px) saturate(1.35);
+  transform: scale(1.35);
+}
+.cine-hero__blur {
+  opacity: 0.6;
+}
+.cine-hero__back {
+  position: absolute;
+  z-index: 1;
+  top: calc(var(--safe-top) + var(--s-3));
+  left: 0;
+}
+.cine-hero__top {
+  display: grid;
+  grid-template-columns: var(--hero-poster) minmax(0, 1fr);
+  grid-template-areas:
+    'poster info'
+    'caps caps'
+    'actions actions'
+    'plot plot';
+  align-items: end;
+  column-gap: var(--s-4);
+  row-gap: var(--s-5);
+  padding-top: calc(var(--hero-h) - 92px);
+  min-width: 0;
+}
+.cine-hero[data-bg='blur'] .cine-hero__top,
+.cine-hero[data-bg='tone'] .cine-hero__top {
+  padding-top: calc(var(--safe-top) + 72px);
+}
+.cine-hero__poster {
+  grid-area: poster;
+  align-self: start;
+  border-radius: var(--r-m);
+  overflow: hidden;
+  box-shadow: var(--shadow-poster);
+}
+.cine-hero__info {
+  grid-area: info;
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.cine-hero__actions {
+  grid-area: actions;
+  min-width: 0;
+}
+.cine-hero__plot {
+  grid-area: plot;
+  min-width: 0;
+}
+/* «PELÍCULA · ESTRENOS 2024». Cada parte empieza con su separador en una
+   franja de 18 px; la fila se mete 18 px a la izquierda y el párrafo recorta:
+   la franja de la parte que empieza línea queda fuera. Así, al partirse, la
+   segunda línea no empieza con «·». */
+.cine-hero__kicker {
+  --kicker-sep: 18px;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+.cine-hero__kicker-row {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  margin-left: calc(var(--kicker-sep) * -1);
+}
+.cine-hero__kicker-part {
+  display: inline-flex;
+  min-width: 0;
+}
+.cine-hero__sep {
+  flex: none;
+  width: var(--kicker-sep);
+  text-align: center;
+}
+.cine-hero__cat {
+  overflow-wrap: anywhere;
+}
+/* El título siempre entero (es el h1): si es muy largo, más pequeño. */
+.cine-hero__title {
+  font-size: var(--fs-30);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+.cine-hero__title:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 3px;
+  border-radius: var(--r-s);
+}
+.cine-hero__original {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+.cine-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 0;
+  color: var(--text-2);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-medium);
+}
+.cine-hero__meta-item {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.cine-hero__meta-item .cine-dot {
+  padding-inline: 7px;
+}
+.cine-age {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: var(--r-xs);
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  color: var(--text);
+  font-size: var(--fs-12);
+  font-weight: var(--wght-strong);
+}
+.cine-hero__capsules {
+  grid-area: caps;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  margin-top: calc(var(--s-5) * -0.5);
+}
+/* «Comprobando el audio…» (§4.11): discreto, sin cápsula, con un latido suave. */
+.cine-hero__checking {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 4px;
+  font-size: 0.8125rem;
+  color: var(--text-3);
+  animation: cine-checking var(--dur-latido) var(--ease-out) infinite alternate;
+}
+@keyframes cine-checking {
+  50% {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cine-hero__checking {
+    animation: none;
+  }
+}
+.cine-hero__meta .cine-age {
+  margin-left: 10px;
+}
+.cine-hero__meta .cine-age:first-child {
+  margin-left: 0;
+}
+/* En el móvil, títulos largos: el cartel y los datos alineados arriba. */
+@media (max-width: 767.98px) {
+  .cine-hero__top {
+    align-items: start;
+  }
+  .cine-hero__info {
+    align-self: end;
+  }
+  .cine-hero__title {
+    font-size: var(--fs-22);
+  }
+  .cine-hero__title[data-long] {
+    font-size: var(--fs-17);
+    line-height: 1.15;
+  }
+}
+@media (min-width: 768px) {
+  .cine-hero {
+    --hero-poster: 180px;
+    --hero-h: min(56.25vw, 52vh);
+  }
+  .cine-hero__top {
+    column-gap: var(--s-6);
+    padding-top: calc(var(--hero-h) - 150px);
+  }
+}
+@media (min-width: 1024px) {
+  .cine-hero {
+    --hero-h: 470px;
+    --hero-poster: 240px;
+  }
+  .cine-hero[data-bg='blur'],
+  .cine-hero[data-bg='tone'] {
+    --hero-h: 440px;
+  }
+  .cine-hero__bg {
+    left: 0;
+    right: 0;
+    /* Solo la esquina de arriba a la derecha se ve (lo demás lo funde la máscara):
+       redondear las otras dejaba un hilo en la esquina de la izquierda. */
+    border-radius: 0 var(--r-xl) 0 0;
+  }
+  .cine-hero[data-bg='blur'] .cine-hero__bg,
+  .cine-hero[data-bg='tone'] .cine-hero__bg {
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+  }
+  /* La imagen nace arriba a la derecha y se funde hacia la izquierda (donde
+     van el cartel y los textos) y hacia abajo. */
+  .cine-hero[data-bg='backdrop'] .cine-hero__bg {
+    -webkit-mask-image:
+      radial-gradient(ellipse 78% 118% at 100% 0%, #000 48%, transparent 100%),
+      linear-gradient(to bottom, #000 50%, transparent 100%);
+    -webkit-mask-composite: source-in;
+    mask-image:
+      radial-gradient(ellipse 78% 118% at 100% 0%, #000 48%, transparent 100%),
+      linear-gradient(to bottom, #000 50%, transparent 100%);
+    mask-composite: intersect;
+  }
+  .cine-hero__back {
+    top: var(--s-4);
+    left: var(--s-4);
+  }
+  .cine-hero__top {
+    grid-template-areas:
+      'poster info'
+      'poster caps'
+      'poster actions'
+      'poster plot';
+    grid-template-rows: auto auto auto 1fr;
+    align-items: start;
+    column-gap: var(--s-8);
+    row-gap: var(--s-5);
+    padding: 132px var(--s-8) 0;
+  }
+  .cine-hero[data-bg='blur'] .cine-hero__top,
+  .cine-hero[data-bg='tone'] .cine-hero__top {
+    padding-top: 84px;
+  }
+  .cine-hero__poster {
+    box-shadow: 0 18px 48px rgb(0 0 0 / 0.38);
+  }
+  .cine-hero__title {
+    font-size: var(--fs-44);
+  }
+  .cine-hero__title[data-long] {
+    font-size: var(--fs-30);
+  }
+  .cine-hero__info {
+    gap: var(--s-3);
+  }
+}
+
+/* ---- El play grande y sus acciones -------------------------------------------- */
+.cine-actions {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.cine-actions__main {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.cine-play.btn {
+  width: 100%;
+  min-height: 54px;
+  padding: 0 28px;
+  font-size: var(--fs-17);
+}
+.cine-actions__progress {
+  display: grid;
+  gap: 6px;
+  max-width: 440px;
+}
+.cine-actions__line {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+}
+.cine-actions__more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.cine-actions__reason {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+@media (min-width: 768px) {
+  .cine-play.btn {
+    justify-self: start;
+    width: auto;
+    min-width: 300px;
+  }
+}
+
+/* ---- Sinopsis ---------------------------------------------------------------------- */
+.cine-synopsis {
+  display: grid;
+  gap: var(--s-1);
+  justify-items: start;
+  max-width: 72ch;
+}
+.cine-synopsis__text {
+  font-size: var(--fs-15);
+  line-height: var(--lh-text);
+}
+.cine-synopsis__text--clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+@media (min-width: 1024px) {
+  .cine-synopsis__text--clamp {
+    -webkit-line-clamp: 6;
+  }
+}
+.cine-synopsis__more {
+  margin-left: -14px;
+}
+
+/* ---- Detalles ----------------------------------------------------------------------- */
+.cine-details {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.cine-details__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--s-4) var(--s-6);
+  margin: 0;
+}
+.cine-details__row {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+.cine-details__row dt {
+  color: var(--text-3);
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+.cine-details__row dd {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-15);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+.cine-details__link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 28px;
+  color: var(--accent-ink);
+  font-weight: var(--wght-strong);
+  text-align: left;
+}
+/* Zona táctil de 44 px aunque el texto sea más bajo. */
+.cine-details__link::before {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
+}
+
+/* ---- Temporadas y episodios (Seasons.tsx, EpisodeList.tsx) --------------------- */
+.cine-seasons {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.cine-seasons__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.cine-seasons__picker {
+  max-width: 100%;
+}
+.cine-seasons__count {
+  padding-inline: 2px;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+}
+/* El resumen de la temporada (`overview`): más discreto que la sinopsis. */
+.cine-seasons__plot {
+  padding-inline: 2px;
+}
+.cine-seasons__plot .cine-synopsis__text {
+  color: var(--text-2);
+}
+.cine-seasons__plot .cine-synopsis__text--clamp {
+  -webkit-line-clamp: 2;
+}
+@media (min-width: 1024px) {
+  .cine-seasons__plot .cine-synopsis__text--clamp {
+    -webkit-line-clamp: 3;
+  }
+}
+.cine-episodes {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cine-episode {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px;
+  margin-inline: -8px;
+  border-radius: var(--r-l);
+}
+/* El episodio del botón principal: el aura dorada de la tarjeta elegida. */
+.cine-episode[data-main] {
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent-edge) 70%, transparent);
+}
+.cine-episode__play {
+  display: grid;
+  grid-template-columns: minmax(120px, 42%) minmax(0, 1fr);
+  grid-template-areas:
+    'art body'
+    'plot plot';
+  column-gap: var(--s-3);
+  row-gap: var(--s-2);
+  align-items: start;
+  width: 100%;
+  color: var(--text);
+  text-align: left;
+  border-radius: var(--r-m);
+}
+@media (min-width: 768px) {
+  .cine-episode__play {
+    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-areas:
+      'art body'
+      'art plot';
+    grid-template-rows: auto 1fr;
+    column-gap: var(--s-4);
+  }
+}
+.cine-episode__play:disabled {
+  cursor: not-allowed;
+}
+.cine-episode__art {
+  grid-area: art;
+  position: relative;
+  display: block;
+  border-radius: var(--r-s);
+  overflow: hidden;
+}
+/* Sin fotograma: el número grande sobre el color de la serie. */
+.cine-episode__big {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(
+    135deg,
+    var(--ep-fill, var(--surface-2)),
+    color-mix(in oklab, var(--ep-fill, var(--surface-2)) 55%, #000)
+  );
+  color: #fff;
+  font-size: var(--fs-44);
+  font-weight: 800;
+}
+/* El mismo número debajo de un fotograma que carga o que ha fallado (Art, `fallback`). */
+.cine-art > .cine-episode__big {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: auto;
+}
+.cine-episode__glyph {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--glass-video);
+  color: var(--on-video);
+}
+.cine-episode__play:disabled .cine-episode__glyph {
+  display: none;
+}
+.cine-episode__progress {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+}
+.cine-episode__body {
+  grid-area: body;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+.cine-episode__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.cine-episode__title {
+  min-width: 0;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+.cine-episode__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.cine-episode__watched {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ok-ink);
+  font-weight: var(--wght-strong);
+}
+.cine-episode__blocked {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.cine-episode__plot {
+  grid-area: plot;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-snug);
+}
+.cine-episode__more {
+  margin-top: -4px;
+  margin-right: -6px;
+}
+.cine-episode__line-progress {
+  max-width: 220px;
+  margin-top: 2px;
+}
+/* Lista compacta (ningún fotograma en la temporada): el número en un círculo. */
+.cine-episode--compact .cine-episode__play {
+  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-areas:
+    'num body'
+    '. plot';
+  grid-template-rows: auto;
+  column-gap: var(--s-3);
+  row-gap: 4px;
+}
+.cine-episode__num {
+  grid-area: num;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+}
+.cine-episode--compact[data-watched] .cine-episode__num {
+  background: color-mix(in oklab, var(--ok) 18%, transparent);
+  color: var(--ok-ink);
+}
+.cine-episode--compact[data-main] .cine-episode__num {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.cine-episode--compact .cine-episode__body {
+  min-height: 44px;
+  align-content: center;
+}

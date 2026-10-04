@@ -4,7 +4,8 @@
    Qué enseña, de arriba abajo:
    1. Resumen en una frase («Todo funciona.») con los datos de la 0.6.59
       (fuentes en cuarentena, correcciones aprendidas y hora de la
-      comprobación) y «Volver a comprobar».
+      comprobación), «Volver a comprobar» y «Descargar fallos» (0.9.0: un
+      fichero redactado con los fallos y el registro, faults.ts).
    2. Avisos del backend tal cual (cupo de reinicios agotado, fugas del
       comprobador…).
    3. Cuadrícula por servicio: backend, motor, segundo motor, IA, agenda,
@@ -25,9 +26,18 @@
    `state.changed` invalidan la salud y el registro, src/api/sse.ts). */
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useMemo, type CSSProperties } from 'react';
-import { invalidateRoute, useApiQuery, useAppMode, useEngineStatus } from '../../api/index.ts';
+import { useMemo, useState, type CSSProperties } from 'react';
+import {
+  describeFailure,
+  invalidateRoute,
+  useApiQuery,
+  useAppMode,
+  useEngineStatus,
+} from '../../api/index.ts';
+import { useLayout } from '../../app/layout.tsx';
 import { cx } from '../../lib/cx.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { notify } from '../../notices/index.ts';
 import { Button } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
 import { Icon } from '../../ui/Icon.tsx';
@@ -38,6 +48,7 @@ import { Skeleton } from '../../ui/Skeleton.tsx';
 import { useSecondTap } from '../settings/second-tap.ts';
 import { DIAG_LIMIT, DiagnosticsLog } from './DiagnosticsLog.tsx';
 import { CONFIRM_RESTART_MS, RESTART_WARNING, useEngineRestart } from './engine.ts';
+import { downloadFaults, faultsNotice } from './faults.ts';
 import {
   CAUSE_INFO,
   formatWhen,
@@ -108,6 +119,53 @@ function Tile({ row, index }: { row: ServiceRow; index: number }) {
       ) : null}
       {row.id === 'engine' ? <EngineRestart /> : null}
     </li>
+  );
+}
+
+/**
+ * «Descargar fallos» (0.9.0): un fichero con los fallos y el registro de los
+ * dos lados, redactado y clasificado (faults.ts), para pasárselo a quien
+ * ayude. El error, si lo hay, sale debajo y lo lee el lector de pantalla.
+ */
+function DownloadFaults() {
+  const mode = useAppMode();
+  const { kind } = useLayout();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const download = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { name, file } = await downloadFaults({
+        layout: kind,
+        mode: mode === 'pending' ? undefined : mode,
+      });
+      haptic('success');
+      notify(faultsNotice(name, file), { tone: 'ok', icon: 'descargar' });
+    } catch (failure) {
+      setError(`No se pudieron descargar los fallos. ${describeFailure(failure)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <Button
+        variant="quiet"
+        icon="descargar"
+        busy={busy}
+        onClick={() => void download()}
+        className="salud-top__btn"
+        title="Un fichero con los fallos y el registro, sin contraseñas ni enlaces con claves"
+      >
+        Descargar fallos
+      </Button>
+      {error ? (
+        <p className="salud-top__error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -223,15 +281,18 @@ export function HealthSection() {
             </p>
           )}
         </div>
-        <Button
-          variant="quiet"
-          icon="refresh"
-          busy={refreshing}
-          onClick={refresh}
-          className="salud-top__btn"
-        >
-          Volver a comprobar
-        </Button>
+        <div className="salud-top__acts">
+          <Button
+            variant="quiet"
+            icon="refresh"
+            busy={refreshing}
+            onClick={refresh}
+            className="salud-top__btn"
+          >
+            Volver a comprobar
+          </Button>
+          <DownloadFaults />
+        </div>
       </div>
 
       {health.data?.warnings.length ? (

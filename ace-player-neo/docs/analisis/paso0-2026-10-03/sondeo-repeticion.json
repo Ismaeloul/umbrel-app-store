@@ -1,0 +1,219 @@
+{
+  "fecha": "2026-10-03T14:16:11.117Z",
+  "fases": [
+    "range",
+    "plaza",
+    "pausa"
+  ],
+  "rapido": false,
+  "cuenta": {
+    "activas": 0,
+    "maximas": 1,
+    "estado": "Active"
+  },
+  "range": [
+    {
+      "titulo": "MKV",
+      "error": "tiempo agotado"
+    },
+    {
+      "titulo": "MP4",
+      "inicio": {
+        "estado": 206,
+        "acceptRanges": "0-710834484",
+        "contentRange": true,
+        "tamanoMiB": 678,
+        "saltos": 1,
+        "cambiaDeHost": true,
+        "llevaToken": false,
+        "llevaQuery": true,
+        "estadosSalto": [
+          302
+        ]
+      },
+      "mitad": {
+        "estado": 206,
+        "empiezaDonde": true
+      },
+      "destinoDirecto": {
+        "estado": 206,
+        "contentRange": true
+      }
+    },
+    {
+      "titulo": "episodio (mkv)",
+      "inicio": {
+        "estado": 206,
+        "acceptRanges": "0-1302796734",
+        "contentRange": true,
+        "tamanoMiB": 1242,
+        "saltos": 1,
+        "cambiaDeHost": true,
+        "llevaToken": false,
+        "llevaQuery": true,
+        "estadosSalto": [
+          302
+        ]
+      },
+      "mitad": {
+        "estado": 206,
+        "empiezaDonde": true
+      },
+      "destinoDirecto": {
+        "estado": 206,
+        "contentRange": true
+      }
+    }
+  ],
+  "plaza": [
+    {
+      "antes": {
+        "activas": null,
+        "maximas": null,
+        "estado": null
+      },
+      "reaperturas": [
+        {
+          "esperaMs": 0,
+          "estado": 206,
+          "libreTrasMs": 0
+        },
+        {
+          "esperaMs": 2000,
+          "estado": 206,
+          "libreTrasMs": 0
+        },
+        {
+          "esperaMs": 5000,
+          "estado": 206,
+          "libreTrasMs": 0
+        }
+      ],
+      "primera": 206,
+      "despues": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      }
+    },
+    {
+      "antes": {
+        "activas": null,
+        "maximas": null,
+        "estado": null
+      },
+      "reaperturas": [
+        {
+          "esperaMs": 0,
+          "estado": 206,
+          "libreTrasMs": 0
+        },
+        {
+          "esperaMs": 2000,
+          "estado": 206,
+          "libreTrasMs": 0
+        },
+        {
+          "esperaMs": 5000,
+          "estado": 206,
+          "libreTrasMs": 0
+        }
+      ],
+      "primera": 206,
+      "despues": {
+        "activas": null,
+        "maximas": null,
+        "estado": null
+      }
+    },
+    {
+      "antes": {
+        "activas": null,
+        "maximas": null,
+        "estado": null
+      },
+      "reaperturas": [
+        {
+          "esperaMs": 0,
+          "estado": 206,
+          "libreTrasMs": 0
+        },
+        {
+          "esperaMs": 2000,
+          "estado": 206,
+          "libreTrasMs": 0
+        }
+      ],
+      "primera": 206,
+      "error": "tiempo agotado",
+      "despues": {
+        "activas": null,
+        "maximas": null,
+        "estado": null
+      }
+    },
+    {
+      "antes": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      },
+      "reaperturas": [
+        {
+          "esperaMs": 0,
+          "estado": 206,
+          "libreTrasMs": 0
+        }
+      ],
+      "primera": 206,
+      "error": "tiempo agotado",
+      "despues": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      }
+    },
+    {
+      "antes": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      },
+      "reaperturas": [],
+      "error": "tiempo agotado",
+      "despues": {
+        "activas": 0,
+        "maximas": 1,
+        "estado": "Active"
+      }
+    }
+  ],
+  "pausa": [
+    {
+      "segundos": 60,
+      "estado": 206,
+      "sigueViva": false,
+      "cortadaDuranteLaPausa": false,
+      "cortadaALosS": null,
+      "motivoFin": "tiempo"
+    },
+    {
+      "segundos": 180,
+      "error": "tiempo agotado"
+    },
+    {
+      "segundos": 300,
+      "estado": 206,
+      "sigueViva": false,
+      "cortadaDuranteLaPausa": false,
+      "cortadaALosS": null,
+      "motivoFin": "tiempo"
+    }
+  ],
+  "lectura": [
+    "Range: resultados mezclados; revisar la tabla.",
+    "Redirección: el destino admite Range por sí solo; mirar la duración del token para reuseRedirect.",
+    "Plaza: reabrir enseguida nunca dio «ocupado».",
+    "Pausa: el panel corta la conexión parada (desde 60 s); lo cubre la reapertura perezosa."
+  ]
+}

@@ -60,6 +60,10 @@ import { useZapBanner } from './favorite-zap.ts';
 import { NerdPanel } from './NerdPanel.tsx';
 import { stageSlotStore } from './stage-slot.ts';
 import { liveButton, stageMessage } from './status.ts';
+import { VodEndCards } from './vod/NextUp.tsx';
+import { VOD_TEXT } from './vod/texts.ts';
+import { VodControls } from './vod/VodControls.tsx';
+import { useNavigate } from '../app/router.tsx';
 
 /** Publica el hueco sobre el vídeo mientras existe (y lo retira al irse). */
 function publishStageSlot(node: HTMLDivElement | null) {
@@ -208,9 +212,62 @@ function IdleFacts() {
   );
 }
 
+/** La salida de un error con una película (§13): «Reintentar», «Volver a la ficha» (o las dos) o «Ir a Ajustes». */
+function VodFailureAction({ state, ctx }: { state: PlayerState; ctx: PlayerContextValue }) {
+  const navigate = useNavigate();
+  const action = state.vod?.failure?.action ?? 'retry';
+  if (action === 'title')
+    return (
+      <Button variant="video" size="sm" icon="chev-l" onClick={ctx.actions.openTitle}>
+        Volver a la ficha
+      </Button>
+    );
+  if (action === 'settings')
+    return (
+      <Button
+        variant="video"
+        size="sm"
+        icon="ajustes"
+        onClick={() => navigate({ vista: 'ajustes', seccion: 'iptv' })}
+      >
+        Ir a Ajustes
+      </Button>
+    );
+  const retry = (
+    <Button variant="video" size="sm" icon="refresh" onClick={ctx.actions.retry}>
+      Reintentar
+    </Button>
+  );
+  if (action === 'retry-title')
+    return (
+      <div className="player-msg__actions">
+        {retry}
+        <Button variant="video" size="sm" icon="chev-l" onClick={ctx.actions.openTitle}>
+          Volver a la ficha
+        </Button>
+      </div>
+    );
+  return retry;
+}
+
 function StageMessage({ state, ctx }: { state: PlayerState; ctx: PlayerContextValue }) {
   const message = stageMessage(state);
   if (!message) return null;
+  if (state.kind === 'vod')
+    return (
+      <div className="player-msg" data-tone={message.tone} role="status">
+        <span className="player-msg__mark" aria-hidden="true">
+          {message.tone === 'busy' ? (
+            <span className="player-msg__pulse" />
+          ) : (
+            <Icon name={message.tone === 'error' ? 'aviso' : 'cine'} size={28} />
+          )}
+        </span>
+        <p className="player-msg__title">{message.title}</p>
+        {message.text ? <p className="player-msg__text">{message.text}</p> : null}
+        {state.phase === 'error' ? <VodFailureAction state={state} ctx={ctx} /> : null}
+      </div>
+    );
   const showRetry = state.phase === 'error' && state.idleReason !== 'sin-motor';
   const showHere = state.phase === 'idle' && state.idleReason === 'traspasado';
   const showFacts = state.phase === 'idle' && !state.waiting && !showHere;
@@ -245,6 +302,8 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
   const { actions } = ctx;
   const playing = state.phase === 'reproduciendo';
   const hasChannel = state.channel !== null;
+  /** Una película o un episodio (docs/vod.md §12.7): su barra de tiempo en vez del directo. */
+  const vod = state.kind === 'vod';
   const [chrome, setChrome] = useState(true);
   const hideTimer = useRef<number | null>(null);
   const clickTimer = useRef<number | null>(null);
@@ -390,7 +449,8 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
      tiene hijos: los controles son hermanos, así que un gesto que empieza en
      la barra de tiempo, el volumen o un botón nunca llega aquí. */
   const minimizes = ctx.compact && !ctx.immersive;
-  const zapSwipes = !ctx.finePointer && hasChannel;
+  // Con una película no hay favoritos entre los que cambiar.
+  const zapSwipes = !ctx.finePointer && hasChannel && !vod;
   useSwipe(hitRef, {
     axis: minimizes && zapSwipes ? 'both' : minimizes ? 'y' : 'x',
     threshold: ZAP_SWIPE_MIN_PX,
@@ -479,12 +539,22 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
         <span className="player-spinner" aria-hidden="true" />
       ) : null}
       {/* El rótulo de la demo, nunca encima del panel («Reconectando»…). */}
-      {state.engine === 'demo' && state.started && state.channel && !stageMessage(state) ? (
+      {/* Ni detrás de la tarjeta «Terminada» (asomaban letras por los lados). */}
+      {state.engine === 'demo' &&
+      state.started &&
+      state.channel &&
+      !stageMessage(state) &&
+      !state.vod?.ended ? (
         <p className="player-demo" aria-hidden="true">
           <strong>{state.channel.title.toUpperCase()}</strong>
-          <span>reproducción simulada — en el Umbrel verías el stream real</span>
+          <span>
+            {vod
+              ? VOD_TEXT.demo(state.vod?.kind ?? 'movie')
+              : 'reproducción simulada — en el Umbrel verías el stream real'}
+          </span>
         </p>
       ) : null}
+      {vod ? <VodEndCards state={state} actions={actions} /> : null}
       {/* Sobre el vídeo: a pantalla completa (no se ve nada más) o en
           escritorio si ninguna vista los enseña; en el móvil en vertical
           van en una hoja (index.tsx). */}
@@ -534,15 +604,17 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
           </div>
           {hasChannel ? (
             <div className="player-cap glass--video">
-              <IconButton
-                icon="star"
-                pressedIcon="star-f"
-                pressed={ctx.isFavorite}
-                label={ctx.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
-                shortcut="G"
-                variant="video"
-                onClick={actions.toggleFavorite}
-              />
+              {vod ? null : (
+                <IconButton
+                  icon="star"
+                  pressedIcon="star-f"
+                  pressed={ctx.isFavorite}
+                  label={ctx.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
+                  shortcut="G"
+                  variant="video"
+                  onClick={actions.toggleFavorite}
+                />
+              )}
               {ctx.canPip ? (
                 <IconButton
                   icon="pip"
@@ -566,7 +638,9 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
         {/* En error no hay nada que reproducir, pausar ni adelantar: fuera los
             controles de abajo, que en el móvil apretaban el panel con
             «Reintentar» (Detener sigue en «Más opciones»). */}
-        {hasChannel && state.phase !== 'error' ? (
+        {hasChannel && state.phase !== 'error' && vod ? (
+          <VodControls state={state} ctx={ctx} />
+        ) : hasChannel && state.phase !== 'error' ? (
           <div className="player-chrome__bottom">
             <div className="player-chrome__group">
               {/* Pausa grande: el botón que más se usa, relleno y aparte. */}

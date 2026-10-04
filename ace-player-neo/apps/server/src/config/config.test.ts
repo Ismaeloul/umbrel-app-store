@@ -193,6 +193,19 @@ describe('variables nuevas', () => {
     expect(bad.warnings).toHaveLength(2);
   });
 
+  it('ACE_LOOPBACK: el relé en 127.0.0.1 salvo `::1` (o `[::1]`); nunca otra dirección', () => {
+    expect(loadConfig({ ACE_SEED: SEED }).config.playback.relayLoopback).toBe('127.0.0.1');
+    expect(loadConfig({ ACE_SEED: SEED, ACE_LOOPBACK: '::1' }).config.playback.relayLoopback).toBe(
+      '::1',
+    );
+    expect(
+      loadConfig({ ACE_SEED: SEED, ACE_LOOPBACK: '[::1]' }).config.playback.relayLoopback,
+    ).toBe('::1');
+    const bad = loadConfig({ ACE_SEED: SEED, ACE_LOOPBACK: '0.0.0.0' });
+    expect(bad.config.playback.relayLoopback).toBe('127.0.0.1');
+    expect(bad.warnings).toHaveLength(1);
+  });
+
   it('APP_VERSION del entorno si el build no la inyecta', () => {
     expect(loadConfig({ ACE_SEED: SEED, APP_VERSION: '0.7.1' }).config.appVersion).toBe('0.7.1');
   });
@@ -243,10 +256,11 @@ describe('HKDF-SHA256 (arquitectura §5.3)', () => {
       iptvSecrets: 'ace-iptv-v1',
       iptvIds: 'ace-iptv-id-v1',
       iptvIdTag: 'ace-iptv-tag-v1',
+      iptvVod: 'ace-iptv-vod-v1',
     });
-    /* Las tres de la IPTV (docs/iptv.md §2.3) son independientes entre sí y de las demás. */
-    const iptv = [a.iptv.secrets, a.iptv.ids, a.iptv.idTag];
-    expect(new Set([a.video, a.pairing, ...iptv].map((key) => key.toString('hex'))).size).toBe(5);
+    /* Las cuatro de la IPTV (docs/iptv.md §2.3 y docs/vod.md §5) son independientes entre sí y de las demás. */
+    const iptv = [a.iptv.secrets, a.iptv.ids, a.iptv.idTag, a.iptv.vod];
+    expect(new Set([a.video, a.pairing, ...iptv].map((key) => key.toString('hex'))).size).toBe(6);
     expect(a.iptv.secrets.equals(deriveKey(SEED, KEY_LABELS.iptvSecrets))).toBe(true);
   });
 

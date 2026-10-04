@@ -1,0 +1,160 @@
+{
+  "format": "ace-player-neo-fallos",
+  "formatVersion": 1,
+  "createdAt": "2026-09-23T18:30:00.000Z",
+  "appVersion": "0.9.0",
+  "summary": {
+    "nuestro": 1,
+    "deFuera": 1,
+    "sinClasificar": 0,
+    "byPiece": [
+      { "piece": "fuente", "side": "de_fuera", "count": 1 },
+      { "piece": "rele", "side": "nuestro", "count": 1 }
+    ],
+    "lines": ["Nuestro: 1 fallo (relé de la IPTV 1).", "De fuera: 1 fallo (fuentes que no van 1)."]
+  },
+  "environment": {
+    "node": "v24.15.0",
+    "platform": "linux",
+    "arch": "x64",
+    "uptimeSeconds": 5400,
+    "memoryMb": 182,
+    "logLevel": "info",
+    "scanner": true,
+    "autoSync": true,
+    "allowPrivateUrls": false,
+    "footballDemoOnly": false,
+    "teams": true,
+    "ai": false,
+    "seedSource": "ACE_SEED",
+    "serverLog": true
+  },
+  "status": {
+    "health": {
+      "version": "0.7.0",
+      "checkedAt": "2026-09-23T18:30:00.000Z",
+      "uptimeSeconds": 3600,
+      "components": {
+        "backend": { "status": "ready" },
+        "engine": {
+          "status": "online",
+          "online": true,
+          "since": "2026-09-23T18:30:00.000Z",
+          "checkedAt": "2026-09-23T18:30:00.000Z",
+          "engineVersion": "3.2.3",
+          "autoRestarts": { "lastHour": 0, "max": 3, "nextAllowedAt": null, "exhausted": false }
+        },
+        "scanner": {
+          "status": "ready",
+          "busy": false,
+          "queue": 0,
+          "activeJobs": 0,
+          "cachedSources": 42,
+          "leakedSessionsLastHour": 0
+        },
+        "ai": { "status": "disabled", "model": "embeddinggemma:300m-qat-q4_0" },
+        "agenda": {
+          "status": "ready",
+          "generatedAt": "2026-09-23T18:30:00.000Z",
+          "matches": 120,
+          "preheated": 3
+        },
+        "directories": { "status": "ready", "total": 1, "channels": 2 },
+        "state": { "status": "ready", "recoveredFrom": null },
+        "playback": { "sessions": 1, "viewers": 2, "remuxSessions": 1 },
+        "events": { "connections": 2 }
+      },
+      "reports": { "total": 2, "quarantined": 1, "learningCount": 4 },
+      "diagnostics": {
+        "counts24h": { "engine": 1, "source": 3, "network": 0, "codec": 1, "client": 2, "state": 0 }
+      },
+      "warnings": []
+    },
+    "iptv": {
+      "kind": "xtream",
+      "enabled": true,
+      "status": "ok",
+      "channels": 812,
+      "updatedAt": "2026-09-23T18:30:00.000Z",
+      "error": null,
+      "staleSince": null,
+      "account": {
+        "status": "active",
+        "expiresAt": "2026-12-03T00:00:00.000Z",
+        "maxConnections": 1,
+        "activeConnections": 0,
+        "ours": 0
+      },
+      "guide": {
+        "available": true,
+        "channelsWithGuide": 640,
+        "updatedAt": "2026-09-23T12:00:00.000Z",
+        "failedAt": null
+      },
+      "connections": 1
+    },
+    "remux": { "sessions": 1, "max": 4, "ffmpegMissing": false }
+  },
+  "faults": [
+    {
+      "at": "2026-09-23T18:30:00.000Z",
+      "side": "nuestro",
+      "piece": "rele",
+      "from": "servidor",
+      "level": "warn",
+      "code": "iptv_dropped",
+      "message": "IPTV: la salida no avanza; se reconecta el relé"
+    },
+    {
+      "at": "2026-09-23T18:30:00.000Z",
+      "side": "de_fuera",
+      "piece": "fuente",
+      "from": "servidor",
+      "level": "error",
+      "code": "source_no_peers",
+      "message": "La fuente no tiene pares.",
+      "channel": "DAZN 1",
+      "source": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+    }
+  ],
+  "serverLog": [
+    {
+      "time": "2026-09-23T18:30:00.000Z",
+      "level": "warn",
+      "module": "playback",
+      "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+      "msg": "IPTV: la salida no avanza; se reconecta el relé"
+    },
+    {
+      "time": "2026-09-23T18:30:00.000Z",
+      "level": "info",
+      "module": "iptv",
+      "url": "http://proveedor.example:8080/live/•••/•••/1234.ts",
+      "msg": "IPTV: abierta"
+    }
+  ],
+  "web": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36",
+    "viewport": "1440x900@1",
+    "layout": "wide",
+    "mode": "live",
+    "view": "partido/fltv-2026-09-23-3",
+    "online": true,
+    "installed": false,
+    "uptimeSeconds": 1800,
+    "log": [
+      {
+        "at": "2026-09-23T18:30:00.000Z",
+        "kind": "player",
+        "level": "warn",
+        "code": "source_no_peers",
+        "message": "La fuente no tiene pares.",
+        "view": "partido/fltv-2026-09-23-3"
+      }
+    ]
+  },
+  "redaction": {
+    "note": "Sin contraseñas, usuarios, tokens, cookies, URLs con credenciales ni IPs públicas.",
+    "replaced": 1
+  }
+}

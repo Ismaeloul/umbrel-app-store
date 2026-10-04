@@ -367,6 +367,40 @@ describe('restaurar', () => {
     expect(b.state.get().favorites).toHaveLength(3);
   });
 
+  it('los idiomas de Películas y series (docs/vod.md §4.10): van en la copia si se eligieron; Reemplazar los pone y Combinar solo si aquí no se habían elegido', async () => {
+    const a = await umbrel(SEED_A);
+    /* Sin elegir: la copia no los lleva (y así la 0.8.4 la sigue leyendo). */
+    expect((await a.backup.exportFile()).vod).toBeUndefined();
+    await a.service.vod.saveLanguages({ langs: ['frances', 'castellano'], unknown: false });
+    const file = await a.backup.exportFile();
+    expect(file.vod).toEqual({ langs: ['castellano', 'frances'], unknown: false });
+    expect(BackupFileSchema.safeParse(file).success).toBe(true);
+
+    const b = await umbrel(SEED_B);
+    const preview = await b.backup.importFile(body(file, { dryRun: true }));
+    expect(preview.vodLanguages).toBe(true);
+    expect(b.service.vod.languagesOf().chosen).toBe(false);
+    await b.backup.importFile(body(file));
+    expect(b.service.vod.languagesOf()).toMatchObject({
+      chosen: true,
+      langs: ['castellano', 'frances'],
+      unknown: false,
+    });
+    /* Otra vez lo mismo: ya no cambia nada. */
+    expect((await b.backup.importFile(body(file, { dryRun: true }))).vodLanguages).toBe(false);
+
+    /* Combinar no pisa una elección que ya había. */
+    const c = await umbrel(SEED_B);
+    await c.service.vod.saveLanguages({ langs: ['latino'], unknown: true });
+    const merged = await c.backup.importFile(body(file, { mode: 'merge' }));
+    expect(merged.vodLanguages).toBe(false);
+    expect(c.service.vod.languagesOf().langs).toEqual(['latino']);
+    /* Una copia de antes (sin `vod`) no toca los idiomas. */
+    const { vod: _vod, ...old } = file;
+    expect((await c.backup.importFile(body(old as BackupFile))).vodLanguages).toBe(false);
+    expect(c.service.vod.languagesOf().langs).toEqual(['latino']);
+  });
+
   it('dispositivos emparejados, sesiones y «quién tiene el mando» no se tocan', async () => {
     const a = await umbrel(SEED_A);
     await populate(a);

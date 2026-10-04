@@ -129,6 +129,13 @@ export interface MergeOptions {
   readonly sourceStats?: Partial<SourceStats> | null;
   /** Canales pedidos por la agenda, para apartar la marca (B-174). */
   readonly requestedChannels?: readonly unknown[];
+  /**
+   * Agenda híbrida (docs/iptv.md §4.7): ids de las fuentes del canal que
+   * confirma la guía de la IPTV. Van delante de las demás, de cualquier
+   * procedencia (dentro, el orden de siempre: IPTV, lo tuyo, el buscador).
+   * Sin esto (sin IPTV o sin guía), el orden de siempre.
+   */
+  readonly preferred?: ReadonlySet<string>;
 }
 
 /** `mergeResolutionCandidates` (server.js:4004-4133). T-050 a T-055, T-092, T-093. */
@@ -245,14 +252,23 @@ export function mergeResolutionCandidates<T extends RankableCandidate>(
   const genericas = concretas.length ? vivas.filter(esGenerica) : [];
   const porNivel = concretas.length ? [concretas, genericas] : [vivas];
 
+  /* El canal que confirma la guía, delante (agenda híbrida); sin él, una sola pasada como siempre. */
+  const preferidas = options.preferred;
+  const pasadas = (nivel: readonly T[]): (readonly T[])[] =>
+    preferidas?.size
+      ? [nivel.filter((c) => preferidas.has(c.id)), nivel.filter((c) => !preferidas.has(c.id))]
+      : [nivel];
+
   const salida: T[] = [];
   const yaPuestas = new Set<string>();
   for (const nivel of porNivel) {
-    for (const pertenece of grupos) {
-      const grupo = nivel.filter((c) => !yaPuestas.has(c.id) && pertenece(c)).sort(porCalidad);
-      for (const candidate of repartirEntreProveedores(grupo)) {
-        yaPuestas.add(candidate.id);
-        salida.push(candidate);
+    for (const pasada of pasadas(nivel)) {
+      for (const pertenece of grupos) {
+        const grupo = pasada.filter((c) => !yaPuestas.has(c.id) && pertenece(c)).sort(porCalidad);
+        for (const candidate of repartirEntreProveedores(grupo)) {
+          yaPuestas.add(candidate.id);
+          salida.push(candidate);
+        }
       }
     }
   }

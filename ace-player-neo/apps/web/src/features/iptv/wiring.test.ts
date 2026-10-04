@@ -45,6 +45,47 @@ describe('datos', () => {
     expect(client.getQueryState(routeKey('bootstrap'))?.isInvalidated).toBe(true);
   });
 
+  it('agenda híbrida: iptv.status vuelve a pedir la agenda solo si cambia la IPTV activa o su guía', () => {
+    const client = createQueryClient();
+    const status: IptvStatus = {
+      status: 'ok',
+      channels: 812,
+      updatedAt: null,
+      error: null,
+      staleSince: null,
+      account: null,
+      guide: {
+        available: true,
+        channelsWithGuide: 93,
+        updatedAt: '2026-10-03T08:00:00.000Z',
+        failedAt: null,
+      },
+    };
+    const agendaInvalidated = (): boolean | undefined =>
+      client.getQueryState(routeKey('footballSchedule'))?.isInvalidated;
+    const fresh = (): void => {
+      client.setQueryData(routeKey('footballSchedule'), { days: [] });
+    };
+    fresh();
+    applyToCache(client, 'iptv.status', status);
+    // El primero solo se apunta; el mismo estado otra vez (llega casi en cada entrada), nada.
+    expect(agendaInvalidated()).toBe(false);
+    applyToCache(client, 'iptv.status', { ...status, channels: 813 });
+    expect(agendaInvalidated()).toBe(false);
+    // En pausa: la agenda vuelve a la de siempre.
+    applyToCache(client, 'iptv.status', { ...status, status: 'disabled' });
+    expect(agendaInvalidated()).toBe(true);
+    // Otra guía: también.
+    fresh();
+    applyToCache(client, 'iptv.status', status);
+    fresh();
+    applyToCache(client, 'iptv.status', {
+      ...status,
+      guide: { ...status.guide, updatedAt: '2026-10-03T16:00:00.000Z' },
+    });
+    expect(agendaInvalidated()).toBe(true);
+  });
+
   it('iptvActive lee `features.iptv` del bootstrap (ausente = sin IPTV)', () => {
     const client = createQueryClient();
     expect(iptvActive(client)).toBe(false);
@@ -71,7 +112,7 @@ describe('demo (§1.6)', () => {
   });
   afterEach(() => resetDemoState());
 
-  it('«IPTV de ejemplo»: Xtream, 812 canales, guía con 640, activa; el bootstrap la da por activa', async () => {
+  it('«IPTV de ejemplo»: Xtream, 812 canales, guía con 55, activa; el bootstrap la da por activa', async () => {
     const view = await handleDemo('iptvGet', req());
     expect(IptvViewSchema.safeParse(view).success).toBe(true);
     expect(view.provider).toMatchObject({
@@ -79,7 +120,7 @@ describe('demo (§1.6)', () => {
       kind: 'xtream',
       channels: 812,
       enabled: true,
-      guide: { channelsWithGuide: 640 },
+      guide: { channelsWithGuide: 55 },
     });
     const boot = await handleDemo('bootstrap', req());
     expect(boot.features.iptv).toBe(true);
@@ -121,6 +162,27 @@ describe('reproductor y «Dónde se está reproduciendo»', () => {
     expect(rows[0]).toEqual(['Origen', 'IPTV · Casa']);
     expect(rows.find(([term]) => term === 'Pares')).toEqual(['Pares', '—']);
     expect(rows.find(([term]) => term === 'Bajada')?.[1]).toBe('900 KB/s');
+    expect(rows.find(([term]) => term === 'Llegada')?.[1]).toBe('seguida');
+    // Auditoría 0.9.0: un proveedor que entrega a golpes, y la puerta del relé tolerante.
+    const bursty = nerdRows(
+      iptvState({
+        streamSource: 'iptv',
+        stats: {
+          status: 'iptv',
+          peers: 0,
+          speedDown: 900,
+          speedUp: 0,
+          downloaded: 1,
+          cadenceMs: 10_500,
+          gateTolerant: true,
+          at: '',
+        },
+      }),
+      'en línea',
+    );
+    expect(bursty.find(([term]) => term === 'Llegada')?.[1]).toBe(
+      'a golpes cada 10,5 s · sin esperar a la imagen (pierde paquetes)',
+    );
     // Sin nada sonando, sin origen.
     expect(nerdRows(INITIAL_PLAYER_STATE, 'en línea')[0]?.[0]).toBe('Motor');
   });

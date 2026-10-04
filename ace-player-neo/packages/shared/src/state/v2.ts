@@ -11,6 +11,7 @@ import {
   ShortCodeSchema,
 } from '../primitives.js';
 import { IPTV_NAME_MAX } from '../constants/iptv.js';
+import { VOD_PROGRESS } from '../constants/vod.js';
 import { StateV1Schema } from './v1.js';
 
 /** Versión de esquema que escribe la 0.7.0. Ausente = 1 (arquitectura §5.4). */
@@ -31,8 +32,30 @@ export const V2_FILES = {
   iptvDir: 'v2/iptv',
   iptvCatalog: 'v2/iptv/catalogo.enc',
   iptvGuide: 'v2/iptv/guia.enc',
+  /**
+   * Guía TV (docs/iptv.md §20.2): la guía COMPLETA en SQLite, sin cifrar
+   * (no lleva credenciales; decisiones.md D31.1), 0600 en la carpeta 0700. Se
+   * construye en `guia.db.next` y se cambia de golpe.
+   */
+  iptvGuideDb: 'v2/iptv/guia.db',
   /** 32 bytes aleatorios, solo si no hay `ACE_SEED` ni `ENGINE_CONTROL_TOKEN`. */
   iptvKey: 'v2/iptv/clave',
+  /**
+   * Películas y series (docs/vod.md §10.1): progreso, «Seguir viendo»,
+   * preferencias y el resumen del catálogo (0600). Se crea en la primera
+   * escritura. Nunca en `state.json` (T4).
+   */
+  vod: 'v2/vod.json',
+  /** Catálogo VOD binario y cifrado (§4.6). */
+  vodCatalog: 'v2/iptv/vod.enc',
+  /** Caché en disco de los carteles (§8): `arte/<ab>/<HMAC 32 hex>`. */
+  vodArt: 'v2/iptv/arte',
+  /**
+   * Idiomas de Películas y series (docs/vod.md §4.10). Aparte de `vod.json`
+   * a propósito: ese se vacía al cambiar de proveedor y se borra al eliminar
+   * la IPTV, y los idiomas son de Isma, no del proveedor.
+   */
+  vodLanguages: 'v2/vod-idiomas.json',
 } as const;
 
 /** state.json tal y como lo escribe la 0.7.0: las 12 claves v1 más la versión. */
@@ -246,3 +269,103 @@ export const IptvFileSchema = z.strictObject({
   provider: IptvProviderRecordSchema.nullable(),
 });
 export type IptvFile = z.infer<typeof IptvFileSchema>;
+
+// --- v2/vod.json (Películas y series, docs/vod.md §10.1) ---
+
+/**
+ * Estado del catálogo VOD (§4.8):
+ * - `off`: sin IPTV, o en pausa.
+ * - `unsupported`: IPTV por M3U (la v1 es solo Xtream, D-VOD1).
+ * - `preparing`: primera sincronización en marcha, o cargando `vod.enc`.
+ * - `ready`: hay catálogo (con `stale` si la última sincronización falló).
+ * - `none`: el proveedor no tiene VOD.
+ * - `error`: falló y no hay catálogo guardado.
+ */
+export const VodCatalogStateSchema = z.enum([
+  'off',
+  'preparing',
+  'ready',
+  'none',
+  'unsupported',
+  'error',
+]);
+export type VodCatalogState = z.infer<typeof VodCatalogStateSchema>;
+
+/** Una película o un episodio con progreso (§10.1). Los ids son sellados (§5): nunca el `stream_id`. */
+export const VodProgressEntrySchema = z.strictObject({
+  /** Película o episodio (id sellado). */
+  id: HashSchema,
+  kind: z.enum(['movie', 'episode']),
+  seriesId: HashSchema.nullable(),
+  /** La película o la serie. */
+  title: z.string().min(1).max(200),
+  /** «T2 · E5 · El regreso». */
+  subtitle: z.string().max(120).nullable(),
+  season: z.number().int().min(0).max(999).nullable(),
+  episode: z.number().int().min(0).max(9_999).nullable(),
+  posS: z.number().min(0).max(86_400),
+  durS: z.number().min(0).max(86_400),
+  watched: z.boolean(),
+  /** «Quitar de Seguir viendo». */
+  hidden: z.boolean(),
+  /** Se rellena al acabar un episodio: el siguiente que propone «Seguir viendo». */
+  next: z.strictObject({ id: HashSchema, label: z.string().max(80) }).nullable(),
+  updatedAt: z.number().int(),
+});
+export type VodProgressEntry = z.infer<typeof VodProgressEntrySchema>;
+
+/** Preferencia de audio y subtítulos de una serie o una película (§10.4). */
+export const VodPrefSchema = z.strictObject({
+  /** Serie o película. */
+  id: HashSchema,
+  /** Lengua ('spa', 'eng'…). */
+  audio: z.string().max(8).nullable(),
+  /** Lengua, `forced` u `off` (reservado para los subtítulos, §9.10). */
+  subtitle: z.string().max(12).nullable(),
+  updatedAt: z.number().int(),
+});
+export type VodPref = z.infer<typeof VodPrefSchema>;
+
+/** Resumen del catálogo sin abrir `vod.enc` (§4.6): con él responden `features.vod` y Ajustes. */
+export const VodCatalogSummarySchema = z.strictObject({
+  state: VodCatalogStateSchema,
+  movies: z.number().int(),
+  series: z.number().int(),
+  builtAt: IsoDateTimeSchema.nullable(),
+  truncated: z.boolean(),
+  skipped: z.number().int(),
+});
+export type VodCatalogSummary = z.infer<typeof VodCatalogSummarySchema>;
+
+/**
+ * `v2/vod.json`: por casa, no por aparato (D-VOD17). `providerFp` es
+ * HMAC(k_vod, provider.id): con otro proveedor todos los ids cambian y el
+ * documento se vacía (§10.5). `progress` es una LRU por `updatedAt`.
+ */
+export const VodDocSchema = z.strictObject({
+  v: z.literal(1),
+  providerFp: z
+    .string()
+    .regex(/^[a-f0-9]{16}$/)
+    .nullable(),
+  catalog: VodCatalogSummarySchema.nullable(),
+  progress: z.array(VodProgressEntrySchema).max(VOD_PROGRESS.itemsMax),
+  prefs: z.array(VodPrefSchema).max(VOD_PROGRESS.prefsMax),
+});
+export type VodDoc = z.infer<typeof VodDocSchema>;
+
+// --- v2/vod-idiomas.json (docs/vod.md §4.10) ---
+
+/**
+ * Los idiomas elegidos para Películas y series. `z.object` (no estricto) a
+ * propósito, como `arranque-instantaneo.json`: un campo de una versión
+ * futura se ignora y no aparta el fichero. Los idiomas que no conozca esta
+ * versión se descartan al leer. El fichero solo existe si Isma ya eligió.
+ */
+export const VodLanguagesFileSchema = z.object({
+  version: z.literal(1),
+  langs: z.array(z.string().max(20)).max(20),
+  unknown: z.boolean(),
+  updatedAt: IsoDateTimeSchema.nullable(),
+});
+export type VodLanguagesFile = z.infer<typeof VodLanguagesFileSchema>;

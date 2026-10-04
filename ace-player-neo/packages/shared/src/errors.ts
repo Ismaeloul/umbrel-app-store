@@ -16,6 +16,7 @@
    - `message`: texto en español para enseñárselo a Isma tal cual. */
 
 import { z } from 'zod';
+import { VOD_UNSUPPORTED_REASONS } from './constants/vod.js';
 
 export interface ErrorDefinition {
   readonly status: number;
@@ -535,6 +536,30 @@ export const ERROR_CATALOG = {
     message: 'La lista de tu IPTV es demasiado grande para el Umbrel.',
   },
 
+  /* --- Guía TV (docs/iptv.md §20.6) ---
+     Prefijo `guide_` y no `iptv_`: los 16 `iptv_*` están fijados y
+     significan «pasa a AceStream» (T14). Ninguno es de fuente. */
+  guide_unavailable: {
+    status: 409,
+    legacyStatus: null,
+    public: true,
+    message: 'La guía de tu IPTV no está disponible ahora.',
+  },
+  guide_stale: {
+    status: 409,
+    legacyStatus: null,
+    public: true,
+    message: 'La guía se ha actualizado mientras la mirabas: vuelve a cargarla.',
+  },
+  /** Los logos e imágenes de la guía (`iptvGuideArt`) con la cola llena: va con `Retry-After`. */
+  guide_busy: {
+    status: 503,
+    legacyStatus: null,
+    public: true,
+    message:
+      'Se están cargando muchas imágenes de la guía a la vez. Vuelve a intentarlo en un momento.',
+  },
+
   // --- Copia de seguridad de tus ajustes (0.8.4, decisiones.md D25) ---
   backup_invalid: {
     status: 400,
@@ -560,6 +585,72 @@ export const ERROR_CATALOG = {
     legacyStatus: null,
     public: true,
     message: 'La clave no es correcta: no se puede abrir la contraseña de la IPTV de esta copia.',
+  },
+
+  /* --- Películas y series (docs/vod.md §11.3, D-VOD20) ---
+     Prefijo `vod_` y no `iptv_`: los 16 `iptv_*` están fijados y significan
+     «pasa a AceStream» (T14). Un `vod_*` nunca tiene puente a AceStream y no
+     es un error de sistema. La 0.6.59 no los conocía. */
+  vod_unavailable: {
+    status: 503,
+    legacyStatus: null,
+    public: true,
+    message: 'Tu IPTV no ofrece películas ni series, o no responde ahora mismo.',
+  },
+  vod_not_found: {
+    status: 404,
+    legacyStatus: null,
+    public: true,
+    message: 'Este título ya no está en tu IPTV.',
+  },
+  /** `data.reason`: `formato`, `video`, `hevc`, `indice` o `sin_saltos` (VOD_UNSUPPORTED_REASONS). */
+  vod_unsupported: {
+    status: 422,
+    legacyStatus: null,
+    public: true,
+    message: 'Este título usa un formato que no se puede reproducir aquí.',
+  },
+  /** `data.retryAfterS` si el panel tarda en soltar la plaza (§3): la web reintenta una vez sola. */
+  vod_busy: {
+    status: 503,
+    legacyStatus: null,
+    public: true,
+    message: 'Tu cuenta IPTV está en uso en otro aparato. Ciérralo y vuelve a intentarlo.',
+  },
+  vod_timeout: {
+    status: 504,
+    legacyStatus: null,
+    public: true,
+    message: 'Tu IPTV tarda demasiado en dar el vídeo. Prueba otra vez.',
+  },
+  vod_dropped: {
+    status: 502,
+    legacyStatus: null,
+    public: true,
+    message: 'El proveedor ha cortado el vídeo. Vuelve a intentarlo.',
+  },
+  /**
+   * El servidor del proveedor da 5xx al ABRIR el vídeo (antes de servir nada) una y otra vez: el
+   * fallo es suyo, no un corte (3-oct, Paso 0). Un corte a mitad sigue siendo `vod_dropped`.
+   */
+  vod_provider_error: {
+    status: 502,
+    legacyStatus: null,
+    public: true,
+    message:
+      'Tu proveedor no está dando este título ahora mismo (error de su servidor). Prueba más tarde.',
+  },
+  vod_disk_full: {
+    status: 507,
+    legacyStatus: null,
+    public: true,
+    message: 'No queda espacio en el Umbrel para preparar el vídeo.',
+  },
+  vod_account: {
+    status: 403,
+    legacyStatus: null,
+    public: true,
+    message: 'Tu cuenta IPTV no está activa. Revísala en Ajustes → IPTV.',
   },
 
   // --- Internos: no deberían salir nunca en una respuesta ---
@@ -719,6 +810,16 @@ export function isIptvErrorCode(value: unknown): value is IptvErrorCode {
   return isErrorCode(value) && value.startsWith('iptv_');
 }
 
+/** Códigos de Películas y series (docs/vod.md §11.3): los 9 `vod_*`. Nunca pasan a AceStream. */
+export type VodErrorCode = Extract<ErrorCode, `vod_${string}`>;
+export const VOD_ERROR_CODES = ERROR_CODES.filter((code): code is VodErrorCode =>
+  code.startsWith('vod_'),
+);
+
+export function isVodErrorCode(value: unknown): value is VodErrorCode {
+  return isErrorCode(value) && value.startsWith('vod_');
+}
+
 const HTTP_STATUS_ERROR_RE = /^http_(\d{3})$/;
 
 export function isErrorCode(value: unknown): value is ErrorCode {
@@ -764,11 +865,23 @@ export const ApiErrorSchema = z.strictObject({
     message: z.string().min(1),
     requestId: z.string().min(1).max(128),
     /**
-     * Datos de más del error, solo cuando hay algo que decir: hoy, los intentos
-     * que hizo el servidor antes de rendirse en «Guardar IPTV» (docs/iptv.md
-     * §16.8; la web añade «Lo he intentado dos veces…»). Ausente en todo lo demás.
+     * Datos de más del error, solo cuando hay algo que decir. Ausente en todo
+     * lo demás. Una de estas formas, nunca mezcladas:
+     * - `attempts`: los intentos que hizo el servidor antes de rendirse en
+     *   «Guardar IPTV» (docs/iptv.md §16.8; la web añade «Lo he intentado dos
+     *   veces…»).
+     * - `reason`: por qué un título no se puede reproducir (`vod_unsupported`,
+     *   docs/vod.md §11.3).
+     * - `retryAfterS`: el panel tarda en soltar la plaza (`vod_busy`, docs/vod.md
+     *   §3); la web reintenta una vez sola pasado ese tiempo.
      */
-    data: z.strictObject({ attempts: z.number().int().min(2).max(9) }).optional(),
+    data: z
+      .union([
+        z.strictObject({ attempts: z.number().int().min(2).max(9) }),
+        z.strictObject({ reason: z.enum(VOD_UNSUPPORTED_REASONS) }),
+        z.strictObject({ retryAfterS: z.number().int().min(1).max(120) }),
+      ])
+      .optional(),
   }),
 });
 export type ApiError = z.infer<typeof ApiErrorSchema>;

@@ -17,6 +17,14 @@ export function createNativeEngine(args: EngineArgs): Engine {
   const onMeta = () => {
     if (destroyed || ready) return;
     ready = true;
+    /* Película o episodio (docs/vod.md §12.7): la lista lleva `EXT-X-START`;
+       si Safari no lo ha respetado, el cabezal se pone a mano. */
+    const startS = args.vod?.startS ?? 0;
+    if (startS > 0 && Math.abs((args.video.currentTime || 0) - startS) > 2) {
+      try {
+        args.video.currentTime = startS;
+      } catch {}
+    }
     args.callbacks.onReady();
   };
   return {

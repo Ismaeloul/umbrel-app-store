@@ -1,0 +1,598 @@
+/* Guía TV (docs/iptv.md §20; medidas de la investigación §2.2): parrilla
+   estilo Movistar+ con la columna de canales opaca (la regla del cristal:
+   sobre listas, casi opaco; nada de backdrop-filter en el scroll). Las filas
+   van con `top` y no con transform: así la columna de canales (z 3) queda
+   por encima de la raya de «ahora» (z 2) en todas las filas. */
+
+/* La parrilla ocupa lo que queda de pantalla: sin el relleno de abajo del
+   armazón (la parrilla ya deja sitio a la barra y al mini-reproductor). */
+.app[data-vista='guia'] .app-main {
+  padding-bottom: 0;
+}
+
+.guia {
+  min-width: 0;
+}
+.guia-scope {
+  flex: none;
+}
+
+.guia-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.guia-toolbar__day {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+}
+.guia-toolbar__day strong {
+  color: var(--text);
+  font-weight: var(--wght-strong);
+}
+.guia-toolbar__hint {
+  color: var(--text-3);
+}
+.guia-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.guia-note {
+  margin: 0 0 var(--s-3);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+
+/* ---- El tablero: parrilla + franja ---------------------------------------- */
+.guia-board {
+  --guia-bottom: calc(var(--safe-bottom) + var(--tabbar-h) + var(--tabbar-gap) + 12px);
+  display: flex;
+  flex-direction: column;
+  /* Tope, no alto fijo: con pocos canales la parrilla mide lo que tiene y la
+     franja va justo debajo (a 1920×1080 quedaban ~260 px vacíos en medio). */
+  max-height: max(340px, calc(100dvh - var(--guia-top, 200px) - var(--guia-bottom)));
+  /* En el móvil, de borde a borde: cada píxel de ancho es tiempo que se ve. */
+  margin-inline: calc(-1 * var(--gutter));
+}
+.app[data-mini='true'] .guia-board {
+  --guia-bottom: calc(
+    var(--safe-bottom) + var(--tabbar-h) + var(--tabbar-gap) + var(--mini-h) + 20px
+  );
+}
+.guia-board--skeleton {
+  height: max(340px, calc(100dvh - var(--guia-top, 200px) - var(--guia-bottom)));
+  padding-inline: var(--gutter);
+}
+
+.guia-grid-wrap {
+  position: relative;
+  flex: 0 1 auto;
+  /* Lo que mide el contenido más la barra de desplazamiento horizontal. */
+  height: calc(var(--content-h, 100vh) + 14px);
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border-block: 1px solid var(--line-soft);
+}
+.guia-grid {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.guia-grid:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: -2px;
+}
+.guia-grid__content {
+  position: relative;
+}
+
+/* ---- Regla de horas -------------------------------------------------------- */
+.guia-ruler {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  height: var(--ruler-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-soft);
+}
+.guia-ruler__corner {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: var(--col-w);
+  height: 100%;
+  padding: 0 12px;
+  line-height: var(--ruler-h);
+  background: var(--surface);
+  border-right: 1px solid var(--line-soft);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.guia-ruler__day {
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+}
+.guia-ruler__date {
+  color: var(--text-3);
+  font-size: var(--fs-12);
+}
+.guia-ruler__mark {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  overflow: clip;
+  padding-left: 8px;
+  border-left: 1px solid var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* La hora, pegada al borde visible si la media hora empezó antes (--sl, --bx: Board.tsx). */
+.guia-ruler__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: max(0px, min(calc(var(--sl, 0px) + var(--col-w) - var(--bx)), 100%));
+}
+.guia-ruler__mark--day {
+  color: var(--text);
+  font-weight: var(--wght-strong);
+  border-left-color: var(--line-strong);
+}
+.guia-ruler__now {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  /* El rojo de la raya, oscurecido: el blanco encima pasa de 4,5:1 (con
+     el rojo tal cual, 3,5:1 en oscuro). */
+  background: color-mix(in oklab, var(--live), #000 24%);
+  color: #fff;
+  font-size: var(--fs-12);
+  font-weight: var(--wght-strong);
+  font-variant-numeric: tabular-nums;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+/* ---- Raya de «ahora» y final de la guía ------------------------------------ */
+.guia-now {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--live);
+  pointer-events: none;
+}
+.guia-end {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 16px;
+  border-left: 1px dashed var(--line-strong);
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  text-align: center;
+}
+.guia-end span {
+  position: sticky;
+  top: calc(var(--ruler-h) + 16px);
+}
+
+/* ---- Filas ----------------------------------------------------------------- */
+.guia-row {
+  position: absolute;
+  left: 0;
+  height: var(--row-h);
+}
+.guia-chan {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 2.4em auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: var(--col-w);
+  height: 100%;
+  padding: 0 10px 0 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+.guia-chan__num {
+  color: var(--text-2);
+  font-size: var(--fs-15);
+  text-align: right;
+}
+.guia-chan__name {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+  line-height: var(--lh-snug);
+}
+.guia-chan__country {
+  margin-left: 5px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-3);
+  font-size: var(--fs-11);
+  vertical-align: 1px;
+}
+.guia-chan__fav {
+  color: var(--accent-ink);
+}
+.guia-logo {
+  display: block;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+/* ---- Bloques --------------------------------------------------------------- */
+.guia-block {
+  position: absolute;
+  top: 2px;
+  height: calc(var(--row-h) - 4px);
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  background: var(--surface-2);
+  overflow: clip;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  .guia-block:hover {
+    background: color-mix(in oklab, var(--surface-2), var(--text) 7%);
+  }
+}
+/* El título se ve desde el borde de la columna aunque el programa empezara
+   antes: --sl es el desplazamiento de la parrilla (lo pone Board.tsx al
+   desplazarse) y --bx, dónde empieza el bloque. */
+.guia-block__label {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+  /* Sin tope: si del programa solo asoma un trozo, el título y la hora se
+     recortan con «…» en ese trozo (antes asomaba «er» sin puntos). */
+  margin-left: max(0px, min(calc(var(--sl, 0px) + var(--col-w) - var(--bx)), 100%));
+  padding: 0 10px;
+}
+.guia-block__title {
+  overflow: hidden;
+  font-size: var(--fs-15);
+  font-weight: 600;
+  font-stretch: var(--w-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.guia-block__time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.guia-block--past {
+  background: color-mix(in oklab, var(--surface-2), var(--surface) 55%);
+}
+.guia-block--past .guia-block__title {
+  color: var(--text-3);
+  font-weight: 520;
+}
+.guia-block--none {
+  background: color-mix(in oklab, var(--surface-2), var(--surface) 65%);
+}
+.guia-block--none .guia-block__title,
+.guia-block--error .guia-block__title {
+  color: var(--text-3);
+  font-weight: 450;
+}
+.guia-block--loading,
+.guia-block--error {
+  background: color-mix(in oklab, var(--surface-2), var(--surface) 40%);
+  cursor: default;
+}
+.guia-block--loading {
+  padding: 0 12px;
+}
+.guia-block__shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--line-soft), transparent);
+  transform: translateX(-100%);
+  animation: guia-brillo var(--dur-brillo) linear infinite;
+}
+@keyframes guia-brillo {
+  to {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .guia-block__shimmer {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+.guia-block--selected,
+.guia-block--selected:hover {
+  background: var(--accent-wash);
+  outline: 2px solid var(--accent-edge);
+  outline-offset: -2px;
+}
+.guia-block--selected .guia-block__title {
+  color: var(--text);
+}
+
+/* ---- Lo que flota sobre la parrilla ---------------------------------------- */
+/* «‹ Ahora», sobre la regla de horas (no tapa programas). */
+.guia-nowpill {
+  position: absolute;
+  top: max(0px, calc((var(--ruler-h) - 36px) / 2));
+  right: 8px;
+  z-index: 6;
+  box-shadow: var(--shadow-poster);
+}
+.guia-failed {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  border-radius: var(--r-pill);
+  background: var(--glass-dense);
+  border: 1px solid var(--glass-rim);
+  font-size: var(--fs-13);
+}
+.guia-typed {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 7;
+  padding: 10px 18px;
+  border-radius: var(--r-l);
+  background: var(--glass-dense);
+  border: 1px solid var(--glass-rim);
+  font-size: var(--fs-22);
+  font-weight: var(--wght-strong);
+  transform: translate(-50%, -50%);
+}
+
+/* ---- Franja del programa elegido (PC) -------------------------------------- */
+.guia-strip {
+  flex: none;
+  display: grid;
+  grid-template-columns: var(--col-w) minmax(0, 1fr);
+  height: var(--strip-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-soft);
+}
+.guia-strip--empty {
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+}
+.guia-strip__channel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  border-right: 1px solid var(--line-soft);
+  text-align: center;
+}
+.guia-strip__chname {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+}
+.guia-strip__num {
+  color: var(--text-2);
+  font-size: var(--fs-15);
+}
+.guia-strip__main {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 24px;
+}
+.guia-strip__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.guia-strip__title {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--fs-22);
+  font-weight: var(--wght-strong);
+  font-stretch: var(--w-tight);
+  line-height: var(--lh-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.guia-strip__bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  max-width: 720px;
+}
+.guia-strip__time {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-variant-numeric: tabular-nums;
+}
+.guia-strip__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  max-width: 720px;
+}
+.guia-strip__when {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.guia-strip__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---- Hoja «Más info» ------------------------------------------------------- */
+.guia-sheet__body {
+  display: grid;
+  gap: 14px;
+}
+.guia-sheet__channel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.guia-sheet__chname {
+  margin: 0;
+  font-weight: var(--wght-strong);
+}
+.guia-sheet__when {
+  margin: 2px 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.guia-sheet__when::first-letter {
+  text-transform: uppercase;
+}
+.guia-sheet__bar {
+  display: grid;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.guia-sheet__sub {
+  margin: 0;
+  font-weight: var(--wght-medium);
+}
+.guia-sheet__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.guia-sheet__text {
+  margin: 0;
+  line-height: var(--lh-text);
+}
+.guia-sheet__credits {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.guia-sheet__credits strong {
+  color: var(--text);
+  font-weight: var(--wght-medium);
+}
+.guia-sheet__loading {
+  display: grid;
+  gap: 8px;
+}
+.guia-sheet__foot {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---- Móvil: columna estrecha con número arriba y nombre debajo -------------- */
+.guia[data-layout='mobile'] .guia-chan {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  gap: 1px;
+  padding: 0 8px 0 10px;
+}
+.guia[data-layout='mobile'] .guia-chan__num {
+  font-size: var(--fs-12);
+  text-align: left;
+}
+.guia[data-layout='mobile'] .guia-chan__name {
+  font-size: var(--fs-12);
+}
+.guia[data-layout='mobile'] .guia-chan__fav {
+  display: none;
+}
+.guia[data-layout='mobile'] .guia-chan__country {
+  display: none;
+}
+.guia[data-layout='mobile'] .guia-toolbar__hint,
+.guia[data-layout='mobile'] .guia-ruler__date {
+  display: none;
+}
+.guia[data-layout='mobile'] .guia-block__title {
+  font-size: var(--fs-13);
+}
+
+/* ---- Desde 768: tarjeta con esquinas y sin barra de abajo ------------------- */
+@media (min-width: 768px) {
+  .guia-board {
+    --guia-bottom: calc(var(--safe-bottom) + 20px);
+    margin-inline: 0;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-l);
+    overflow: hidden;
+  }
+  .app[data-mini='true'] .guia-board {
+    --guia-bottom: calc(var(--safe-bottom) + var(--mini-h) + 40px);
+  }
+  .guia-board--skeleton {
+    padding-inline: 0;
+    border: 0;
+  }
+  .guia-grid-wrap {
+    border-block: 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .guia-strip {
+    border-bottom: 0;
+  }
+}
+.guia-sheet__num {
+  color: var(--text-2);
+  font-weight: var(--wght-medium);
+}

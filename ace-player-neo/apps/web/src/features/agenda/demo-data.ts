@@ -40,6 +40,8 @@ interface Sample {
   /** Minutos de juego en los que marca cada uno. */
   goals?: { home: number[]; away: number[] };
   preheat?: Pick<PreheatPublic, 'status' | 'checked' | 'playable' | 'total' | 'candidateCount'>;
+  /** Agenda híbrida: lo que diría la guía de la IPTV (su canal va el primero en `channels`). */
+  guide?: { channel: string; agendaTime?: string; added?: boolean };
 }
 
 const SAMPLES: Sample[] = [
@@ -80,7 +82,8 @@ const SAMPLES: Sample[] = [
     home: 'Real Sociedad',
     away: 'Villarreal',
     competition: 'LaLiga',
-    channels: ['DAZN LaLiga', 'M+ LaLiga 2'],
+    channels: ['M+ LaLiga 2', 'DAZN LaLiga'],
+    guide: { channel: 'M+ LaLiga 2' },
     goals: { home: [], away: [] },
     preheat: { status: 'scanning', checked: 2, playable: 0, total: 5, candidateCount: 5 },
   },
@@ -101,7 +104,9 @@ const SAMPLES: Sample[] = [
     home: 'Real Betis',
     away: 'Athletic Club',
     competition: 'LaLiga',
-    channels: ['GOL Play'],
+    channels: ['M+ LaLiga TV'],
+    /* Un partido que no trae la agenda y añade la guía. */
+    guide: { channel: 'M+ LaLiga TV', added: true },
   },
   {
     id: 'demo-7',
@@ -111,6 +116,8 @@ const SAMPLES: Sample[] = [
     away: 'Atlético de Madrid',
     competition: 'LaLiga',
     channels: ['DAZN LaLiga 2'],
+    /* La guía cambia la hora de la agenda. */
+    guide: { channel: 'DAZN LaLiga 2', agendaTime: '21:00' },
   },
   {
     id: 'demo-8',
@@ -307,6 +314,16 @@ export function demoSchedule(): FootballSchedule {
           ...(homeTeam ? { homeTeam } : {}),
           ...(awayTeam ? { awayTeam } : {}),
           competitionBadge: demoCompetitionBadge(sample.competition),
+          ...(sample.guide
+            ? {
+                guide: {
+                  channel: sample.guide.channel,
+                  time,
+                  ...(sample.guide.agendaTime ? { agendaTime: sample.guide.agendaTime } : {}),
+                  added: sample.guide.added === true,
+                },
+              }
+            : {}),
         };
       }),
   }));

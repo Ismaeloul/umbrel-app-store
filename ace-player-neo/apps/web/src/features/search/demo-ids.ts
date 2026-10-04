@@ -17,7 +17,11 @@ export function fakeHash(seed: string): string {
   return out.slice(0, 40);
 }
 
-/** Canales de la IPTV de ejemplo (demo-5, «Casa»): nombre limpio y calidad. */
+/**
+ * Canales de la IPTV de ejemplo (demo-5, «Casa»): nombre limpio y calidad. Desde la 0.9.0 (docs/buscador.md),
+ * también los que se parecen y confunden a un buscador sencillo («La 10», «LALIGA+ PPV 1», «La 1 Catalunya»…),
+ * para ver en la demo el orden de verdad.
+ */
 export const DEMO_IPTV_SEARCH: ReadonlyArray<[string, 'fhd' | 'hd']> = [
   ['DAZN LaLiga', 'fhd'],
   ['DAZN 1', 'fhd'],
@@ -27,6 +31,12 @@ export const DEMO_IPTV_SEARCH: ReadonlyArray<[string, 'fhd' | 'hd']> = [
   ['Telecinco', 'hd'],
   ['laSexta', 'hd'],
   ['La 1', 'hd'],
+  ['La 1 Catalunya', 'hd'],
+  ['La 10', 'hd'],
+  ['LALIGA+ PPV 1', 'hd'],
+  ['DAZN 2', 'fhd'],
+  ['M+ LaLiga TV 2', 'hd'],
+  ['LaLiga TV Hypermotion', 'hd'],
 ];
 
 /** Id de un canal de la IPTV de ejemplo (el mismo en el buscador y en la resolución). */

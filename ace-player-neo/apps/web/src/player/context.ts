@@ -29,6 +29,25 @@ export interface PlayerActions {
   zapFavorite(direction: 1 | -1): void;
   minimize(): void;
   expand(): void;
+  // ---- Películas y series (docs/vod.md §12.7 y §12.9) ----
+  /** ±10 s (las pulsaciones seguidas se juntan). */
+  seekBy(delta: number): void;
+  /** A un punto (la barra, al soltar). */
+  seekTo(seconds: number): void;
+  /** «Siguiente episodio» / «Ver ahora». */
+  nextEpisode(): void;
+  /** «Ver créditos»: la tarjeta sin cuenta atrás. */
+  watchCredits(): void;
+  /** «¿Sigues viendo?» → «Seguir viendo». */
+  keepWatching(): void;
+  /** «¿Sigues viendo?» → «Salir» (detiene y vuelve a la ficha). */
+  leaveVod(): void;
+  /** «Ver de nuevo». */
+  replay(): void;
+  /** Otra pista de audio (se reabre en la posición). */
+  setAudio(index: number): void;
+  /** «Volver a la ficha» (la película o la serie). */
+  openTitle(): void;
 }
 
 export interface PlayerContextValue {

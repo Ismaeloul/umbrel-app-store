@@ -5,8 +5,8 @@ tamaños en `docs/capturas/fase2/agenda/`.
 
 | Fichero                    | Qué                                                                                                                                                                                                                                                  |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `index.tsx`                | La portada (piel Palco, W4): cabecera, héroe, tira de días, «Para ti»/«Todos», tarjeta de primer uso, filas por competición y, desde 1024 px, panel del partido elegido + «Luego» (desde 1280, tira de directos B1). Nunca reproduce ni enseña vídeo |
-| `Hero.tsx`                 | Héroe: el `featuredMatch` como tarjeta versus XL en móvil y tableta, banda compacta desde 1024 px (sin marcador), «Ver ahora»/«Ver el partido»/«Buscar canal»/«Volver al vídeo» (navega al partido), cápsula «Marcador» y dónde se emite                                                              |
+| `index.tsx`                | La portada (piel Palco, W4): cabecera, héroe (solo móvil y tableta), tira de días, «Para ti»/«Todos», tarjeta de primer uso, filas por competición y, desde 1024 px, panel del partido elegido + «Luego» (desde 1280, «En directo» con marcador, B1). Nunca reproduce ni enseña vídeo |
+| `Hero.tsx`                 | Héroe del móvil y la tableta: el `featuredMatch` como tarjeta versus XL (sin marcador), «Ver ahora»/«Ver el partido»/«Buscar canal»/«Volver al vídeo» (navega al partido), cápsula «Marcador» y dónde se emite. En escritorio no hay héroe (0.9.0) |
 | `cards.ts`                 | Funciones puras de las tarjetas versus: lados (`versusSide`), chip de cuándo (`versusWhen`), palabra y tono de la señal y `matchGlow(match)` (luz de los dos clubes con la paleta de la API)                                                         |
 | `column.tsx`               | Columna compacta junto al reproductor (centro de partido ≥ 1280), en tarjetas versus pequeñas. Comparte día y filtro con la vista (`state.ts`)                                                                                                       |
 | `domain.ts`                | Reglas puras: reloj de Madrid, insignias, días, grupos, marcadores (ventana 15 min/3,5 h, 8 s/45 s), señal por partido, «Ver canal»/«Buscar canal». Lo de «Para ti» y el emparejado de canales se importa de `@ace/shared`                           |
@@ -14,8 +14,9 @@ tamaños en `docs/capturas/fase2/agenda/`.
 | `MatchRow.tsx`             | Tarjeta de partido (versus `md`, o `sm` compacta): cápsula de señal arriba, marcador o tapado abajo a la derecha, canales debajo. `FlipNum`, `CensorBars` y `teamGlow` los usan también el panel y el centro de partido                              |
 | `AgendaList.tsx`           | Filas horizontales por competición (`PosterRail`, sin virtualizar) y la pila de la columna compacta                                                                                                                                                  |
 | `DayStrip.tsx`             | Tira de días (pastillas Palco; teselas en escritorio) que no se recoloca al repintar                                                                                                                                                                 |
-| `Stage.tsx`                | Panel del partido elegido en escritorio y `LiveStrip` (B1)                                                                                                                                                                                           |
-| `score-reveal.ts`          | Marcador TAPADO del partido que suena (regla 29): `useScoreHidden(id)`, `revealScore(id)`, `resetScoreReveal()`                                                                                                                                      |
+| `Stage.tsx`                | Panel del partido elegido en escritorio y `LiveStrip` (B1: «RSO 1–0 VIL · 33'», tapado solo el que estás viendo)                                                                                                                                     |
+| `day-swipe.ts`             | Deslizar entre días en el móvil (`useDaySwipe`): Touch Events pasivos; una fila de tarjetas solo se queda el gesto si aún puede desplazarse hacia ese lado                                                                                         |
+| `score-reveal.ts`          | Marcador TAPADO del partido que suena (regla 29): `useScoreHidden(id)`, `revealScore(id)`, `resetScoreReveal()`; lo tapado a mano en la agenda: `hideScore(id)`, `useScoreCovered(id)`                                                              |
 | `demo.ts` / `demo-data.ts` | Agenda, marcadores y precalentado del modo demo (los datos solo se descargan en demo)                                                                                                                                                                |
 
 Para otras vistas:
@@ -44,6 +45,22 @@ Para otras vistas:
 - **Refresco:** sin sondeo de la agenda (§3.1); caduca a los 10 min y se vuelve a
   pedir al volver a la pestaña. Los marcadores sí se consultan (8 s / 45 s y solo
   con partidos en su ventana): no hay evento SSE de marcadores.
+- **Escritorio sin héroe (0.9.0):** toda la página es el calendario; el
+  destacado sale de entrada en el panel de la derecha y su tarjeta, elegida.
+- **«Tu equipo» (0.9.0):** aura VERDE alrededor de la tarjeta (por fuera) en
+  la lista y en «Luego»; solo equipos, no ligas. Oro no: se confundía con el
+  aro oro (por dentro) de la tarjeta elegida.
+- **Deslizar entre días (móvil):** también sobre las filas cuando no tienen
+  más que enseñar hacia ese lado; el scroll vertical siempre gana. Dedo a la
+  izquierda = día siguiente; hacia un lado sin día (Hoy, a la derecha) la
+  lista apenas se mueve. Solo anula el gesto un scroll que SIGUE al dedo (no
+  el salto de la barra del navegador al final de la página), y el cuerpo de
+  la agenda recorta lo que se sale por los lados para que la página nunca se
+  ensanche (eso reajustaba la ventana en mitad del gesto).
+- **«En directo» (≥ 1280):** dos cápsulas por línea y como mucho dos líneas a
+  la vista; con más de cuatro se desplaza (a mano) y el título dice cuántas
+  hay. Enseña el marcador salvo el del partido que ves (regla 29) y los que
+  tapes a mano (`useScoreCovered`).
 - **Flechas ‹ › de la tira**, solo con ratón (en táctil se desliza la tira).
   La tira no va pegada arriba; al cambiar de día con la lista bajada, la página
   vuelve a ella.

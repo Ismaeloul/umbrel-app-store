@@ -100,6 +100,75 @@ describe('router', () => {
     expect(screen.getByTestId('ruta')).toHaveTextContent('agenda');
   });
 
+  it('con View Transitions, la vuelta atrás se lanza al acabar el popstate (lleva fundido)', async () => {
+    // React pinta SIN View Transition lo que se lanza dentro de un popstate:
+    // la vuelta atrás tiene que salir del evento para fundirse como las demás.
+    const doc = document as { startViewTransition?: unknown };
+    doc.startViewTransition = vi.fn();
+    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Google Inc.');
+    try {
+      render(
+        <RouterProvider>
+          <Probe />
+        </RouterProvider>,
+      );
+      fireEvent.click(screen.getByText('biblioteca'));
+      history.replaceState({ aceDepth: 0 }, '', '/?vista=agenda');
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      expect(screen.getByTestId('ruta')).toHaveTextContent('biblioteca');
+      await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+      expect(screen.getByTestId('ruta')).toHaveTextContent('agenda');
+
+      // Si en ese instante se navega a otra parte, manda la navegación nueva.
+      history.replaceState({ aceDepth: 0 }, '', '/?vista=buscar');
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        fireEvent.click(screen.getByText('ajustes'));
+      });
+      await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+      expect(screen.getByTestId('ruta')).toHaveTextContent('ajustes');
+    } finally {
+      delete doc.startViewTransition;
+      vendor.mockRestore();
+    }
+  });
+
+  it('en el acto en WebKit (su fundido es CSS) y tras el gesto de volver del móvil', () => {
+    const doc = document as { startViewTransition?: unknown };
+    doc.startViewTransition = vi.fn();
+    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Apple Computer, Inc.');
+    try {
+      render(
+        <RouterProvider>
+          <Probe />
+        </RouterProvider>,
+      );
+      fireEvent.click(screen.getByText('biblioteca'));
+      history.replaceState({ aceDepth: 0 }, '', '/?vista=agenda');
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      expect(screen.getByTestId('ruta')).toHaveTextContent('agenda');
+
+      // Chrome con el gesto de volver (hasUAVisualTransition): el navegador ya lo animó.
+      vendor.mockReturnValue('Google Inc.');
+      fireEvent.click(screen.getByRole('button', { name: 'biblioteca' }));
+      expect(screen.getByTestId('ruta')).toHaveTextContent('biblioteca');
+      history.replaceState({ aceDepth: 0 }, '', '/?vista=agenda');
+      act(() => {
+        window.dispatchEvent(
+          Object.assign(new PopStateEvent('popstate'), { hasUAVisualTransition: true }),
+        );
+      });
+      expect(screen.getByTestId('ruta')).toHaveTextContent('agenda');
+    } finally {
+      delete doc.startViewTransition;
+      vendor.mockRestore();
+    }
+  });
+
   it('atrás sin historial propio va a la ruta de respaldo reemplazando', () => {
     render(
       <RouterProvider initialSearch="?vista=partido/m-9">

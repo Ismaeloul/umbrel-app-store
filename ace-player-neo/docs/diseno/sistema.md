@@ -141,10 +141,15 @@ Ninguna duración va escrita a mano en el CSS: siempre un token.
   insertarse el nodo, así que un repintado con las mismas claves no la relanza.
 - **View Transitions:** el router navega dentro de `startTransition` y React
   (`<ViewTransition>`) lanza la transición; donde no existe, la navegación es
-  instantánea. Tipos `adelante`/`atras`. El partido que viaja de la fila de la
-  agenda al centro de partido usa `partidoTransitionName(id)` en los dos sitios
-  (`src/app/transitions.ts`). Cada vista va en su propia `<ViewTransition>`
-  dentro de su `<Activity>`: la que se deja sale y la que se abre entra, cada
+  instantánea. Tipos `adelante`/`atras`. Sin elementos compartidos (Isma,
+  0.9.0): abrir un partido, y volver de él (también con el botón atrás), es el
+  mismo fundido que cambiar de pestaña; el reproductor lleva un nombre por
+  presentación (`ace-reproductor-mini`/`-stage`) para fundirse en vez de viajar
+  de la esquina al escenario (`src/app/transitions.ts`); en WebKit no lleva
+  ninguna transición (allí todo es el fundido CSS de las vistas). La animación de los
+  escudos que viajan queda para la app de iPhone. Cada vista va en su propia
+  `<ViewTransition>` dentro de su `<Activity>`: la que se deja sale y la que se
+  abre entra, cada
   una en su sitio de la pantalla (nunca una caja que se transforma en otra:
   con scroll y altos distintos se deslizaba la página entera). Las barras de
   navegación tienen nombre propio y quedan quietas encima. Al volver a una
@@ -257,7 +262,7 @@ La app nativa no imita el cristal: usa el del sistema. La web copia sus reglas.
 | `LiveRing` | `Circle().trim(from: 0, to: minuto / 90).stroke(...)`; la onda con `.symbolEffect(.pulse)` o escala que se apaga con movimiento reducido |
 | `SignalBadge` | `Image(systemName: "cellularbars", variableValue:)` + palabra; «comprobando» con `.symbolEffect(.variableColor.iterative)` |
 | Marcador que cambia | `.contentTransition(.numericText())` + `.sensoryFeedback(.impact, trigger:)` |
-| Fila → centro de partido (View Transition) | `.matchedTransitionSource(id:in:)` + `.navigationTransition(.zoom(sourceID:in:))` |
+| Fila → centro de partido (en la web, solo el fundido de vista; los escudos que viajan, solo aquí) | `.matchedTransitionSource(id:in:)` + `.navigationTransition(.zoom(sourceID:in:))` |
 | Toasts / línea de estado | Toast propio en `.overlay(alignment: .bottom)` fuera del vídeo; la línea de estado es una `Text` bajo el `VideoPlayer` |
 | `--tap` 44 | El mínimo de las HIG (44 pt) |
 | Zonas seguras y `--kb` | Automáticas (`safeAreaInset`, el teclado aparta el contenido) |

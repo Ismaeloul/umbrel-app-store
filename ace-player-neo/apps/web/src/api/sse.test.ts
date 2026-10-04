@@ -5,7 +5,8 @@ import { fixture } from '../test/fetch.ts';
 import { getViewerId, resetIdentity } from './identity.ts';
 import { routeKey } from './query.ts';
 import { realtimeStore } from './realtime-store.ts';
-import { onSseEvent, SSE_TYPES, startRealtime } from './sse.ts';
+import iptvStatusEvent from '@fixtures/web/events/iptv.status.json';
+import { applyToCache, onSseEvent, SSE_TYPES, startRealtime } from './sse.ts';
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
@@ -99,6 +100,32 @@ describe('SSE', () => {
     last().emit('state.changed', { scopes: ['library'], at: '2026-09-23T18:30:00.000Z' });
     expect(client.getQueryState(routeKey('libraryGet'))?.isInvalidated).toBe(true);
     expect(client.getQueryState(routeKey('settingsGet'))?.isInvalidated).toBe(false);
+  });
+
+  it('iptv.status vuelve a pedir Películas y series solo si cambia el catálogo VOD (docs/vod.md §11.1)', () => {
+    const vodClient = new QueryClient();
+    const seed = () => {
+      vodClient.setQueryData(routeKey('vodHome'), { marca: 1 });
+      vodClient.setQueryData(['v1', 'vodTitle', { id: 'x' }], { marca: 2 });
+    };
+    const invalidated = () => ({
+      home: vodClient.getQueryState(routeKey('vodHome'))?.isInvalidated,
+      title: vodClient.getQueryState(['v1', 'vodTitle', { id: 'x' }])?.isInvalidated,
+    });
+    const base = structuredClone(iptvStatusEvent.data);
+    seed();
+    applyToCache(vodClient, 'iptv.status', base);
+    expect(invalidated()).toEqual({ home: true, title: true });
+    // Otro evento con el mismo catálogo (la guía, la cuenta…): nada.
+    seed();
+    applyToCache(vodClient, 'iptv.status', { ...base, channels: base.channels + 1 });
+    expect(invalidated()).toEqual({ home: false, title: false });
+    // Catálogo nuevo (otra `builtAt`): otra vez.
+    applyToCache(vodClient, 'iptv.status', {
+      ...base,
+      vod: { ...base.vod, builtAt: '2026-09-24T04:10:00.000Z' },
+    });
+    expect(invalidated()).toEqual({ home: true, title: true });
   });
 
   it('playback.sessions cambia las sesiones del estado de reproducción sin tocar el mando', () => {

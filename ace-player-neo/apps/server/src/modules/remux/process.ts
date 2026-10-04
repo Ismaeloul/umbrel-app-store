@@ -16,6 +16,7 @@ import path from 'node:path';
 import { REMUX_LOG_BYTES } from '@ace/shared';
 import { ACE_SESSION_MARK } from './args.js';
 import type { ProcessLauncher, RemuxProcess } from './types.js';
+import type { VodProcess, VodProcessLauncher } from './vod/types.js';
 
 /** Prioridad de los ffmpeg (arquitectura §5.7: nice 10). */
 export const REMUX_NICENESS = 10;
@@ -42,18 +43,30 @@ export interface SpawnLauncherOptions {
   /** Argumentos que van delante de los de ffmpeg (el script del ffmpeg falso). */
   readonly prefixArgs?: readonly string[];
   readonly niceness?: number;
+  /**
+   * `pipe`: la salida de ffmpeg llega por `stdout` (el VOD saca fMP4 por
+   * `pipe:1`, docs/vod.md §9.6). Por defecto se tira, como en el directo.
+   */
+  readonly stdout?: 'ignore' | 'pipe';
 }
 
 /** Lanzador real con `child_process.spawn`. */
-export function createSpawnLauncher(options: SpawnLauncherOptions = {}): ProcessLauncher {
+export function createSpawnLauncher(
+  options: SpawnLauncherOptions & { readonly stdout: 'pipe' },
+): VodProcessLauncher;
+export function createSpawnLauncher(options?: SpawnLauncherOptions): ProcessLauncher;
+export function createSpawnLauncher(
+  options: SpawnLauncherOptions = {},
+): ProcessLauncher | VodProcessLauncher {
   const command = options.command ?? 'ffmpeg';
   const prefix = options.prefixArgs ?? [];
   const niceness = options.niceness ?? REMUX_NICENESS;
+  const piped = options.stdout === 'pipe';
   return {
-    spawn(args) {
+    spawn(args: readonly string[]) {
       const child = spawn(command, [...prefix, ...args], {
         detached: !IS_WINDOWS,
-        stdio: ['ignore', 'ignore', 'pipe'],
+        stdio: ['ignore', piped ? 'pipe' : 'ignore', 'pipe'],
         windowsHide: true,
       });
       /* Un 'error' sin escuchar tumbaría el proceso: el servicio pone el suyo,
@@ -79,6 +92,7 @@ export function createSpawnLauncher(options: SpawnLauncherOptions = {}): Process
           killProcessTree(child.pid, child);
         },
       };
+      if (piped && child.stdout) return { ...handle, stdout: child.stdout } satisfies VodProcess;
       return handle;
     },
   };
@@ -134,7 +148,7 @@ export class RingLog {
  */
 export async function findOrphanPids(
   procRoot: string,
-  knownSessions: ReadonlySet<string>,
+  knownSessions: { has(sessionId: string): boolean },
   ownPid: number,
 ): Promise<number[]> {
   let entries: string[];

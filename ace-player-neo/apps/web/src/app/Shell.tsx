@@ -3,8 +3,9 @@
 
    Maquetación (docs/diseno/sistema.md §Maquetación, piel «Palco» W3):
    - Móvil (< 768): la vista a lo ancho, barra inferior flotante con los 4
-     destinos y el mini-reproductor encima. En el centro de partido no hay
-     barra: el vídeo va arriba, pegado, y se minimiza con la flecha o deslizando.
+     destinos (5 con «Pelis y series», docs/vod.md §12.1) y el
+     mini-reproductor encima. En el centro de partido no hay barra: el vídeo
+     va arriba, pegado, y se minimiza con la flecha o deslizando.
    - Tableta (768-1023): barra superior + la vista.
    - Escritorio (1024-1279): barra superior + vista + panel lateral de la vista.
    - Ancho (≥ 1280): en el centro de partido, columna de agenda + reproductor +
@@ -54,7 +55,15 @@ import { useBack, useNavigate, useRoute } from './router.tsx';
 import { formatVista, type Route, type Vista } from './routes.ts';
 import { restoreScroll } from './scroll-memory.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
-import { finishEntranceAnimations, VISTA_CAMBIA, VISTA_ENTRA, VISTA_SALE } from './transitions.ts';
+import {
+  finishEntranceAnimations,
+  playerSwapsByName,
+  REPRODUCTOR_CAMBIA,
+  reproductorTransitionName,
+  VISTA_CAMBIA,
+  VISTA_ENTRA,
+  VISTA_SALE,
+} from './transitions.ts';
 import { playPendingCrossfade } from './viewCrossfade.ts';
 import { installViewTransitionGuard, viewMotion } from './viewTransitionGuard.ts';
 import { useShortcut } from './shortcuts.ts';
@@ -64,9 +73,12 @@ import './shell.css';
 const WHAT: Record<Vista, string> = {
   agenda: 'la agenda',
   biblioteca: 'la biblioteca',
+  guia: 'la guía de TV',
+  cine: 'las películas y series',
   buscar: 'la búsqueda',
   ajustes: 'los ajustes',
   partido: 'el centro de partido',
+  sala: 'el reproductor',
   sistema: 'el sistema de diseño',
 };
 
@@ -142,6 +154,30 @@ function asideInitiallyOpen(): boolean {
   return readItem(STORAGE_KEYS.aside) !== 'plegado';
 }
 
+/**
+ * La <ViewTransition> del reproductor (transitions.ts): con un nombre por
+ * presentación, al pasar de mini a grande (o al revés) uno se funde y el otro
+ * aparece como las vistas, sin viajar de una esquina a otra. En WebKit no
+ * hay ninguna (playerSwapsByName): allí abrir un partido es solo el fundido
+ * de las vistas, sin transiciones del documento que se queden pegadas.
+ */
+function PlayerTransition({
+  animate,
+  presentation,
+  children,
+}: {
+  animate: boolean;
+  presentation: PlayerPresentation;
+  children: ReactNode;
+}) {
+  if (!animate) return children;
+  return (
+    <ViewTransition name={reproductorTransitionName(presentation)} default={REPRODUCTOR_CAMBIA}>
+      {children}
+    </ViewTransition>
+  );
+}
+
 export function Shell() {
   const route = useRoute();
   const navigate = useNavigate();
@@ -151,6 +187,8 @@ export function Shell() {
   const presence = usePlayerPresence();
   const [helpOpen, setHelpOpen] = useState(false);
   const [asideOpen, setAsideOpenState] = useState(asideInitiallyOpen);
+  // El reproductor cambia de nombre con la presentación salvo en WebKit (transitions.ts).
+  const [playerSwap] = useState(() => playerSwapsByName());
 
   // Cambio de vista con View Transitions o, en WebKit, con un fundido CSS
   // (viewTransitionGuard.ts explica por qué). Ninguna View Transition se
@@ -166,23 +204,25 @@ export function Shell() {
   lastRoutes.current.set(route.vista, route);
 
   const inPartido = route.vista === 'partido';
-  const dockMounted = PlayerDock !== null && (inPartido || presence.active);
-  const presentation: PlayerPresentation = inPartido ? 'stage' : 'mini';
-  const immersive = presence.immersive || (inPartido && phoneLandscape);
+  // El escenario: un partido, o una película o un episodio (`sala`, docs/vod.md §12.2).
+  const inStage = inPartido || route.vista === 'sala';
+  const dockMounted = PlayerDock !== null && (inStage || presence.active);
+  const presentation: PlayerPresentation = inStage ? 'stage' : 'mini';
+  const immersive = presence.immersive || (inStage && phoneLandscape);
   const Aside = asideComponent(route.vista);
   const wideEnough = kind === 'desktop' || kind === 'wide';
   const asideAvailable = Aside !== null && wideEnough;
   const asideVisible = asideAvailable && asideOpen;
   const columnVisible = inPartido && kind === 'wide' && AgendaColumn !== null;
   const miniVisible = dockMounted && presentation === 'mini';
-  const tabbarVisible = kind === 'mobile' && !inPartido;
+  const tabbarVisible = kind === 'mobile' && !inStage;
 
   // Avisos: la línea de estado solo vive en el centro de partido; con el
   // vídeo a pantalla completa no se pinta ningún toast.
   useEffect(() => {
-    setWatching(inPartido);
-    if (!inPartido) clearStatus();
-  }, [inPartido]);
+    setWatching(inStage);
+    if (!inStage) clearStatus();
+  }, [inStage]);
   useEffect(() => setImmersive(immersive), [immersive]);
 
   // Sin View Transitions por vista: la vista que se deja se apaga encima de
@@ -288,10 +328,10 @@ export function Shell() {
           </aside>
         ) : null}
         <main id="contenido" className="app-main" tabIndex={-1}>
-          {dockMounted || inPartido ? (
+          {dockMounted || inStage ? (
             <div className="stage" data-presentation={presentation}>
               {dockMounted && PlayerDock ? (
-                <ViewTransition name="ace-reproductor">
+                <PlayerTransition animate={playerSwap} presentation={presentation}>
                   <div className="dock" data-presentation={presentation}>
                     <ErrorBoundary what="el reproductor">
                       <Suspense fallback={<StagePlaceholder loading />}>
@@ -304,11 +344,11 @@ export function Shell() {
                       </Suspense>
                     </ErrorBoundary>
                   </div>
-                </ViewTransition>
+                </PlayerTransition>
               ) : (
                 <StagePlaceholder />
               )}
-              {inPartido ? <StatusLineHost className="stage__status" /> : null}
+              {inStage ? <StatusLineHost className="stage__status" /> : null}
             </div>
           ) : null}
           <div className="views">

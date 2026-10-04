@@ -3,9 +3,10 @@
    carteles de canal (ChannelPoster) sobre PosterRail. Va arriba de Canales y
    NO reordena tus favoritos, que siguen debajo tal cual.
 
-   El carrusel nunca se recoloca solo (regla 1): solo desplaza el usuario (la
-   rueda del ratón se convierte en horizontal y las flechas salen solo con
-   puntero fino). El partido que ves sale TAPADO hasta que lo pides (regla 29). */
+   El carrusel nunca se recoloca solo (regla 1): solo desplaza el usuario (con
+   el touchpad, Mayús + rueda o las flechas, que salen solo con puntero fino;
+   la rueda sola baja la página). El partido que ves sale TAPADO hasta que lo
+   pides (regla 29). */
 
 import type { Item } from '@ace/shared';
 import { searchFor } from '../../app/routes.ts';

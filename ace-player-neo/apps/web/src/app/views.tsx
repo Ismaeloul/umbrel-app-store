@@ -20,9 +20,12 @@ const PLAYERS = import.meta.glob<PlayerModule>('../player/index.tsx');
 export const FEATURE_FOLDER: Record<Exclude<Vista, 'sistema'>, string> = {
   agenda: 'agenda',
   biblioteca: 'biblioteca',
+  guia: 'guia',
+  cine: 'cine',
   buscar: 'buscar',
   ajustes: 'ajustes',
   partido: 'partido',
+  sala: 'sala',
 };
 
 function find<T>(modules: Record<string, Loader<T>>, path: string): Loader<T> | null {

@@ -35,6 +35,7 @@ import {
   Switch,
   TextField,
 } from '../../ui/index.ts';
+import { CineLanguagesSetting } from '../cine/Languages.tsx';
 import { CONFIRM_DELETE_MS, looksPrivateUrl } from '../directories/model.ts';
 import { useSecondTap } from '../settings/second-tap.ts';
 import {
@@ -68,6 +69,7 @@ import {
   needsSecrets,
   refreshingText,
   staleLine,
+  vodLines,
   syncedText,
   syncingText,
   validateForm,
@@ -502,6 +504,8 @@ function IptvCard({
   const stale = staleLine(provider);
   const account = provider.kind === 'xtream' ? accountLine(provider.account) : null;
   const guide = guideLine(provider.guide);
+  /* Películas y series (docs/vod.md §12.10). */
+  const vod = vodLines(provider);
   const failed = provider.status === 'error' && !stale && provider.error;
   const noteId = useId();
   /* La papelera se convierte en «¿Borrar?» (otro botón): el foco la sigue, y
@@ -553,8 +557,19 @@ function IptvCard({
             </p>
           ) : null}
           {guide ? <p className="iptv-card__line iptv-card__guide">{guide}</p> : null}
+          {vod.map((line) => (
+            <p
+              key={line.text}
+              className={cx('iptv-card__line', 'iptv-card__vod', `iptv-card__line--${line.tone}`)}
+            >
+              {line.tone !== 'plain' ? <Icon name="aviso" size={16} /> : null}
+              {line.text}
+            </p>
+          ))}
         </div>
       </div>
+      {/* Idiomas de Pelis y series (docs/vod.md §4.10): con catálogo, se cambian también aquí. */}
+      {provider.vod?.state === 'ready' ? <CineLanguagesSetting /> : null}
       <Switch
         className="iptv-switch"
         label="Usar la IPTV"

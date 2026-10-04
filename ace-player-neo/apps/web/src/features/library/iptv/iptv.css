@@ -179,6 +179,22 @@
   min-width: 0;
   padding-block: 6px;
 }
+/* Las facetas de un solo valor, juntas en una línea. */
+.iptv-line--solos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px var(--s-6);
+}
+.iptv-solo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  padding-block: 6px;
+}
+.iptv-solo .iptv-line__title {
+  min-width: 76px;
+}
 .iptv-lines__foot {
   display: flex;
   justify-content: flex-end;

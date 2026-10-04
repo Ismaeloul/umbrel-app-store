@@ -19,6 +19,7 @@
 
 import {
   ENGINE_MAX_AUTO_RESTARTS_PER_HOUR,
+  normalizeHash,
   type BootstrapResponse,
   type LibraryView,
   type Device,
@@ -27,6 +28,7 @@ import {
   type PlaybackStatus,
   type StateV1,
 } from '@ace/shared';
+import { AppError } from '../../core/errors.js';
 import type { RequestContext } from '../../core/module.js';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
@@ -101,6 +103,15 @@ export function registerV1Routes(router: V1Router, services: Services): void {
   router.handle('settingsUpdate', ({ body }) => services.state.updateSettings(body));
   router.handle('libraryGet', () => withIptvIds(services, services.state.libraryView()));
   router.handle('libraryMutate', async ({ body }) => {
+    /* Una película, serie o episodio no es un canal: no entra en Favoritos
+       ni en Recientes (docs/vod.md §5.3). Renombrar o quitar sí, por si uno
+       se coló antes. */
+    if (
+      (body.action === 'favorite-upsert' || body.action === 'history-upsert') &&
+      vodIdOf(services, body.item.id)
+    ) {
+      throw new AppError('validation_error', { detail: 'vod_id' });
+    }
     const result = await services.state.mutateLibrary(body, {
       isIptvId: (id) => iptvIdOf(services, id),
     });
@@ -123,6 +134,17 @@ export function registerV1Routes(router: V1Router, services: Services): void {
   router.handle('preferencesUpdate', async ({ body }) => ({
     preferences: await services.state.updatePreferences(body),
   }));
+}
+
+/** ¿Es un id de Películas y series de tu IPTV? Si la IPTV no responde, no. */
+function vodIdOf(services: Services, raw: string): boolean {
+  const id = normalizeHash(raw);
+  if (!id || !services.iptv?.isVodId) return false;
+  try {
+    return services.iptv.isVodId(id);
+  } catch {
+    return false;
+  }
 }
 
 /** ¿Es un id de tu IPTV? Si la IPTV no responde, no (renombrar sigue igual que siempre). */
@@ -234,6 +256,16 @@ export function bootstrap(services: Services, ctx: RequestContext): BootstrapRes
         () => false,
       )
         ? { iptv: true }
+        : {}),
+      /* docs/vod.md §11.4: Películas y series (solo la web por ahora; ausente = no). */
+      ...(ctx.origin === 'web' &&
+      safely(
+        services,
+        'iptv',
+        () => services.iptv.vod?.feature() ?? false,
+        () => false,
+      )
+        ? { vod: true }
         : {}),
     },
   };

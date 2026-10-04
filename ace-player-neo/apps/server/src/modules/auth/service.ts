@@ -31,6 +31,7 @@ import {
   AUTH_TIMINGS,
   DEVICE_SECRET_BYTES,
   DeviceIdSchema,
+  LOG_MODULE_AUTH,
   PAIRING_ATTEMPTS_PER_CODE,
   PAIRING_ATTEMPTS_PER_MINUTE,
   PAIRING_BASE_URL_RE,
@@ -131,7 +132,9 @@ export function publicDevice(record: DeviceRecord): Device {
 const MISSING_DEVICE_DIGEST = sha256('dispositivo-inexistente');
 
 export function createAuth(deps: AuthDeps, options: AuthOptions = {}): AuthServiceInternal {
-  const { clock, logger, bus, config } = deps;
+  const { clock, bus, config } = deps;
+  /* Con su módulo: el registro en disco le guarda sitio (emparejar, entrar) aunque el día vaya lleno. */
+  const logger = deps.logger.child({ module: LOG_MODULE_AUTH });
   const random = options.random ?? defaultRandom;
   const videoKey = config.security.keys.video;
   const pairingKey = config.security.keys.pairing;

@@ -20,11 +20,9 @@
      quien la usa, según lo que haga el toque («Ver canal para …»). Con «En
      pantalla» abajo a la derecha, en una tarjeta estrecha (< 300 px) el
      nombre no cabe al lado: se ven las siglas y el nombre entero sigue ahí
-     para el lector de pantalla (VersusCard.css).
-   - `transitionName` envuelve el bloque de escudos en una <ViewTransition>
-     (elemento compartido con el marcador del centro de partido). */
+     para el lector de pantalla (VersusCard.css). */
 
-import { ViewTransition, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { cx } from '../lib/cx.ts';
 import { paletteOf, teamInitials, versusPair, type TeamLike } from '../lib/teams.ts';
 import { Capsule } from './Capsule.tsx';
@@ -60,8 +58,6 @@ export interface VersusCardProps {
   as?: 'div' | 'button' | 'a';
   href?: string;
   onClick?: (event: MouseEvent<HTMLElement>) => void;
-  /** Nombre de la View Transition del bloque de escudos. */
-  transitionName?: string;
   /** Cápsula de señal (esquina superior derecha). */
   children?: ReactNode;
   className?: string;
@@ -87,7 +83,6 @@ export function VersusCard({
   as = 'div',
   href,
   onClick,
-  transitionName,
   children,
   className,
   style,
@@ -187,7 +182,7 @@ export function VersusCard({
         </span>
         {children ? <span className="versus__signal">{children}</span> : null}
       </span>
-      {transitionName ? <ViewTransition name={transitionName}>{crests}</ViewTransition> : crests}
+      {crests}
       <span className="versus__bottom">
         <span className="versus__names">
           <span className="versus__line">

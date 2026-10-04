@@ -106,6 +106,13 @@ video {
   outline: 2px solid var(--accent-edge);
   outline-offset: 2px;
 }
+/* Los titulares que reciben el foco al cambiar de vista (Shell.tsx) no son
+   controles: no se llega a ellos con Tab y el anillo no ayuda. WebKit lo
+   pintaba al tocar la barra de pestañas (auditoría web 0.9.0). */
+:is(h1, h2)[tabindex='-1']:focus,
+:is(h1, h2)[tabindex='-1']:focus-visible {
+  outline: none;
+}
 
 .sr-only {
   position: absolute !important;
@@ -250,12 +257,16 @@ video {
   backdrop-filter: none;
 }
 
-/* ---- Microinteracción al pulsar: el control se aprieta (transform, 0,975
-   como los carteles de Palco) y se ilumina (una capa con opacidad, no un
-   filtro). ------------------------------------------------------------------ */
+/* ---- Microinteracción al pulsar: el control se aprieta (0,975 como los
+   carteles de Palco) y se ilumina (una capa con opacidad, no un filtro).
+   El apretón es la propiedad `scale` y NO `transform: scale()`: se suma al
+   `transform`/`translate` propio del control en vez de pisarlo. Con
+   `transform`, un control centrado con translate(-50%) (las flechas de los
+   carruseles, «Toca para reproducir») perdía el centrado al pulsarlo y bajaba
+   media altura de golpe (0.9.0). ---------------------------------------------- */
 .press {
   position: relative;
-  transition: transform var(--dur-rapido) var(--ease-rapido);
+  transition: scale var(--dur-rapido) var(--ease-rapido);
 }
 .press::after {
   content: '';
@@ -268,7 +279,7 @@ video {
   transition: opacity var(--dur-rapido) var(--ease-rapido);
 }
 .press:active:not(:disabled) {
-  transform: scale(0.975);
+  scale: 0.975;
 }
 .press:active:not(:disabled)::after {
   opacity: 0.1;
@@ -335,8 +346,8 @@ video {
    (.ace-vista-sale) se apaga en su sitio y la que entra (.ace-vista-entra)
    aparece con un desplazamiento mínimo según el sentido. Cada una es su
    propia instantánea, sin transformar una caja en otra (por qué, en
-   src/app/transitions.ts). El partido que viaja de la agenda al centro de
-   partido usa su propio nombre. */
+   src/app/transitions.ts). Abrir un partido es lo mismo: sin elementos
+   compartidos (0.9.0). */
 ::view-transition-group(*) {
   animation-duration: var(--dur-estandar);
   animation-timing-function: var(--ease-estandar);
@@ -399,6 +410,27 @@ video {
   animation: ace-vt-sale var(--dur-rapido) var(--ease-out) both;
 }
 ::view-transition-new(.ace-barra):only-child {
+  animation: ace-funde var(--dur-rapido) var(--ease-out) both;
+}
+/* El reproductor de mini a grande (o al revés) no viaja: cada presentación
+   lleva su nombre (transitions.ts), así que la que se va se apaga en su sitio
+   y la que llega aparece, a la vez que las vistas. Dentro de una misma
+   presentación (pareja vieja/nueva: «Preparando el reproductor…» → el
+   reproductor con «Buscando señal») la nueva sustituye a la vieja en el acto:
+   con el fundido cruzado de siempre se leían los dos textos uno encima del
+   otro (auditoría web 0.9.0). */
+::view-transition-old(.ace-reproductor-cambia) {
+  animation: none;
+  opacity: 0;
+}
+::view-transition-new(.ace-reproductor-cambia) {
+  animation: none;
+}
+::view-transition-old(.ace-reproductor-cambia):only-child {
+  opacity: 1;
+  animation: ace-vt-sale var(--dur-rapido) var(--ease-out) both;
+}
+::view-transition-new(.ace-reproductor-cambia):only-child {
   animation: ace-funde var(--dur-rapido) var(--ease-out) both;
 }
 @media (prefers-reduced-motion: reduce) {

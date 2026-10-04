@@ -23,6 +23,7 @@ import { CHANNEL_FILLER_TOKENS, type IptvKind, type IptvQuality } from '@ace/sha
 import {
   cleanIptvTitle,
   countryBucket,
+  iptvBase,
   iptvGroupPlatform,
   iptvSpelling,
   iptvTitlePlatform,
@@ -80,9 +81,9 @@ export class CatalogEntry implements RawChannel {
     return cleanIptvTitle(this.title, this.group, { keepMirror: this.keepMirror }).display;
   }
 
-  /** Nombre para emparejar: `display` con las grafías de la IPTV. */
+  /** Nombre para emparejar: `display` con las grafías de la IPTV (y los apodos, si es de España: `iptvBase`). */
   get base(): string {
-    return iptvSpelling(this.display);
+    return iptvBase(this.display, this.country);
   }
 
   /** '' para España o sin país; si no, el código del país (docs/iptv.md §17). */

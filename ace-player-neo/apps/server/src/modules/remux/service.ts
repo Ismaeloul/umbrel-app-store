@@ -31,14 +31,32 @@
      (una vez por atasco) para que playback reconecte el relé; `ensure()` con
      un ffmpeg atascado va por el mismo camino en vez de relanzarlo por su
      cuenta, salvo que el aviso lleve mucho sin efecto o nunca llegara a estar
-     lista (entonces se relanza como antes). */
+     lista (entonces se relanza como antes).
+   - Cadencia (auditoría 0.9.0): con un proveedor que entrega a golpes, el
+     umbral es además 1,5× su cadencia (la lista no cambia entre golpe y
+     golpe), el aviso se repite cada umbral mientras siga atascada (playback
+     primero suelta la puerta y, si no basta, reinicia) y el plazo de la
+     generación nueva cuenta la conexión, la cadencia y el probe de ffmpeg.
+   - Windows (solo desarrollo): ffmpeg renombra index.m3u8.tmp encima de la
+     lista y el renombrado falla si el backend la tiene abierta: como mucho
+     una lectura cada 250 ms por carpeta. */
+
+/* Películas y series (docs/vod.md §9.7-§9.8, VOD-5): `openVod` lee el índice
+   por el relé VOD (caché de 8 por título), elige el audio y abre un
+   `VodProducer` en `remuxDir/vod-<sid>`, registrado aparte de los remux del
+   directo pero contando en el tope de 3. `serveFile` sirve sus ficheros
+   (la lista desde el índice con `EXT-X-START`; los segmentos, cuando el
+   productor los tiene; 503 con `Retry-After: 1` si aún no). Al arrancar se
+   barren las carpetas `vod-*` que no son de nadie. */
 
 import { randomBytes } from 'node:crypto';
+import type { FastifyReply } from 'fastify';
 import { watch, type FSWatcher } from 'node:fs';
 import { mkdir, rm, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import {
   HASH_RE,
+  IPTV_RELAY,
   IPTV_REMUX_READY_MS,
   MAX_REMUX_SESSIONS,
   REMUX_TIMINGS,
@@ -70,6 +88,10 @@ import {
 } from './files.js';
 import { SerialLock } from './lock.js';
 import { RingLog, createSpawnLauncher, findOrphanPids, killProcessTree } from './process.js';
+import { pickVodAudio } from './vod/audio.js';
+import { assertPlayable, readVodIndex, VodIndexCache } from './vod/index.js';
+import { VOD_DIR_PREFIX, VodProducer, sweepVodDirs } from './vod/producer.js';
+import { createHttpRangeReader } from './vod/reader.js';
 import type {
   RemuxCloseReason,
   RemuxDeps,
@@ -91,6 +113,15 @@ export const IPTV_STALL_CHECK_MS = 2_000;
 /** Atasco de la IPTV: la lista sin cambiar en `max(IPTV_STALL_MIN_MS, IPTV_STALL_TD_FACTOR × TD)`. */
 export const IPTV_STALL_MIN_MS = 10_000;
 export const IPTV_STALL_TD_FACTOR = 3;
+/** …y `IPTV_STALL_CADENCE_FACTOR` × la cadencia de entrega del proveedor (si entrega a golpes). */
+export const IPTV_STALL_CADENCE_FACTOR = 1.5;
+/**
+ * Lo que tarda ffmpeg en sacar algo tras engancharse: `-analyzeduration 5000000` (5 s de vídeo).
+ * Cuenta en el plazo de la generación nueva tras un reinicio por atasco.
+ */
+export const IPTV_FFMPEG_PROBE_MS = 5_000;
+/** Windows (solo desarrollo): una lectura de la lista cada esto como mucho (ver arriba). */
+export const WIN32_PLAYLIST_READ_GAP_MS = 250;
 /**
  * `ensure()` sobre una IPTV avisada de atasco hace más de esto sin que la lista se haya movido: el aviso
  * no ha servido (nadie lo atiende, o el reinicio no llegó a nada) y se relanza ffmpeg como antes.
@@ -128,8 +159,10 @@ interface Entry {
   targetMs: number;
   /** Ya se avisó `onStalled` de este atasco (se rearma cuando la lista cambia). */
   stallNotified: boolean;
-  /** Cuándo se avisó (para relanzar en `ensure()` si el aviso no sirve). */
+  /** Cuándo se avisó por última vez (el aviso se repite cada umbral mientras siga atascada). */
   stallNotifiedAt: number;
+  /** Cuándo se avisó por primera vez de este atasco (para relanzar en `ensure()` si el aviso no sirve). */
+  stallSince: number;
   /** Generación en la carpeta: 1 el primer ffmpeg, +1 en cada reinicio continuo (B2). */
   readonly generation: number;
   /** Primer segmento de esta generación (0 en la primera). */
@@ -254,6 +287,21 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const registry = new SerialLock();
   /* Sesiones a mitad de un restart/retarget: si entre medias no hay entrada, «aún no está» y no 410. */
   const replacing = new Map<string, number>();
+  /** Productores VOD por sesión (docs/vod.md §9.7) y dónde empieza su lista. */
+  const vods = new Map<string, { readonly producer: VodProducer; startS: number }>();
+  /**
+   * Sesiones VOD a medio abrir: `VodProducer.open` lanza ffmpeg antes de que
+   * la sesión entre en `vods`, y el recolector de huérfanos no debe matarlo.
+   */
+  const vodOpening = new Set<string>();
+  const vodIndexes = new VodIndexCache();
+  const vodLauncher =
+    deps.vodLauncher ??
+    createSpawnLauncher({
+      stdout: 'pipe',
+      /* En Windows (solo desarrollo), «nice 10» se queda sin turno con la CPU llena. */
+      ...(process.platform === 'win32' ? { niceness: 0 } : {}),
+    });
   let ffmpegMissing = false;
   let reaper: TimerHandle | null = null;
   let stallTimer: TimerHandle | null = null;
@@ -272,8 +320,10 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     }
   }
 
-  function emitStalled(entry: Entry): void {
-    if (entry.stallNotified) return;
+  /** Avisa `onStalled`. Con `again`, aunque ya se avisara de este atasco (sigue igual un umbral después). */
+  function emitStalled(entry: Entry, again = false): void {
+    if (entry.stallNotified && !again) return;
+    if (!entry.stallNotified) entry.stallSince = clock.now();
     entry.stallNotified = true;
     entry.stallNotifiedAt = clock.now();
     logger.warn(
@@ -331,9 +381,55 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     }
   }
 
-  /** Umbral del vigilante de la IPTV: `max(10 s, 3×TD)`, para no saltar con los GOP largos. */
+  /** Cadencia de entrega del proveedor de esta entrada (ms), o 0 si llega seguido. */
+  function cadenceOf(entry: Entry): number {
+    try {
+      return entry.source.inputCadenceMs?.() ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Umbral del vigilante de la IPTV: `max(10 s, 3×TD, 1,5×cadencia)`, para no saltar con los GOP largos
+   * ni entre dos golpes de un proveedor que entrega a golpes.
+   */
   function iptvStallMs(entry: Entry): number {
-    return Math.max(IPTV_STALL_MIN_MS, IPTV_STALL_TD_FACTOR * entry.targetMs);
+    return Math.max(
+      IPTV_STALL_MIN_MS,
+      IPTV_STALL_TD_FACTOR * entry.targetMs,
+      IPTV_STALL_CADENCE_FACTOR * cadenceOf(entry),
+    );
+  }
+
+  /**
+   * Plazo para ver avanzar la generación nueva tras un reinicio por atasco: lo de siempre, o lo que tarda
+   * en llegar algo de verdad (la conexión nueva con el proveedor, un golpe de su cadencia, el probe de
+   * ffmpeg y un segmento), lo que sea mayor. No 10 s fijos.
+   */
+  function iptvProgressMs(entry: Entry): number {
+    return Math.max(
+      iptvStallMs(entry),
+      IPTV_RELAY.headersMs + cadenceOf(entry) + IPTV_FFMPEG_PROBE_MS + entry.targetMs,
+    );
+  }
+
+  /* Windows (solo desarrollo): espera lo que falte para no leer la lista más de una vez cada 250 ms. Con
+     el reloj de verdad (no el del backend): es el del sistema de ficheros, y un reloj falso no avanza. */
+  const lastPlaylistRead = new Map<string, number>();
+  /* Por defecto solo con el ffmpeg de verdad (los tests con el falso no renombran nada). */
+  const pacePlatform = deps.platform ?? (deps.launcher ? null : process.platform);
+  async function paceRead(dir: string): Promise<void> {
+    if (pacePlatform !== 'win32') return;
+    const last = lastPlaylistRead.get(dir) ?? -Infinity;
+    const wait = last + WIN32_PLAYLIST_READ_GAP_MS - performance.now();
+    lastPlaylistRead.set(dir, performance.now() + Math.max(0, wait));
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  }
+
+  async function readInfo(dir: string): ReturnType<typeof readPlaylistInfo> {
+    await paceRead(dir);
+    return readPlaylistInfo(path.join(dir, 'index.m3u8'));
   }
 
   /**
@@ -346,7 +442,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     if (entry.origin !== 'iptv' || entry.closed || entry.exited || !entry.ready) return false;
     if (!(await observe(entry))) return false;
     if (clock.now() - entry.lastChangeAt <= IPTV_STALL_MIN_MS) return false;
-    const info = await readPlaylistInfo(path.join(entry.dir, 'index.m3u8'));
+    const info = await readInfo(entry.dir);
     if (info?.targetDuration) entry.targetMs = info.targetDuration * 1000;
     return clock.now() - entry.lastChangeAt > iptvStallMs(entry);
   }
@@ -358,7 +454,11 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   async function watchStalls(): Promise<void> {
     for (const entry of [...byHash.values()]) {
       if (entry.origin !== 'iptv' || !clientsCount(entry)) continue;
-      if (await isIptvStalled(entry)) emitStalled(entry);
+      if (!(await isIptvStalled(entry))) continue;
+      /* Avisado y sigue igual otro umbral entero: se repite (playback suelta primero la puerta del relé
+         y, si con eso no basta, reinicia). */
+      const again = entry.stallNotified && clock.now() - entry.stallNotifiedAt > iptvStallMs(entry);
+      emitStalled(entry, again);
     }
   }
 
@@ -484,6 +584,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       targetMs: 0,
       stallNotified: false,
       stallNotifiedAt: 0,
+      stallSince: 0,
       generation,
       startNumber: next?.startNumber ?? 0,
       initName: initFileName(generation),
@@ -626,7 +727,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
 
   /** Tope de 3 sesiones: desaloja solo las que no tienen espectadores (server.js:247-255). */
   async function makeRoomLocked(): Promise<void> {
-    while (byHash.size >= MAX_REMUX_SESSIONS) {
+    while (byHash.size + vods.size >= MAX_REMUX_SESSIONS) {
       const candidates = new Map<string, EvictionCandidate>();
       for (const [key, entry] of byHash) {
         candidates.set(key, {
@@ -706,7 +807,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     const t0 = clock.now();
     for (;;) {
       throwIfGone(entry);
-      const info = await readPlaylistInfo(path.join(entry.dir, 'index.m3u8'));
+      const info = await readInfo(entry.dir);
       throwIfGone(entry);
       /* Tras un reinicio continuo, la lista que hay puede ser aún la de la generación anterior (congelada):
          solo cuenta la que nombra el init de esta. */
@@ -721,7 +822,12 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         if (progressMs !== undefined && waited > progressMs && !(ready && ready.segments >= 1)) {
           throw new AppError('iptv_dropped', { detail: 'la salida no avanza tras reconectar' });
         }
-        if (waited > IPTV_REMUX_READY_MS) throw new AppError('iptv_timeout');
+        /* 20 s, o lo que tarda en llegar algo de verdad con un proveedor que entrega a golpes. */
+        const readyMs = Math.max(
+          IPTV_REMUX_READY_MS,
+          (progressMs ?? iptvProgressMs(entry)) + entry.targetMs,
+        );
+        if (waited > readyMs) throw new AppError('iptv_timeout');
         await waitChange(entry, READY_POLL_MS, signal);
         continue;
       }
@@ -752,6 +858,68 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     };
   }
 
+  /** Un fichero de una sesión VOD (docs/vod.md §9.7): la lista del índice o lo que tiene el productor. */
+  async function serveVodFile(
+    reply: FastifyReply,
+    sessionId: string,
+    vod: { readonly producer: VodProducer; readonly startS: number },
+    file: string,
+    options: {
+      readonly rangeHeader?: string;
+      readonly head?: boolean;
+      readonly videoToken?: string;
+      readonly deviceId?: string | null;
+    },
+  ): Promise<void> {
+    if (!VIDEO_FILE_RE.test(file)) throw new AppError('not_found');
+    /* Pedir ficheros cuenta como actividad del visor (latido). */
+    for (const listener of [...listeners]) {
+      try {
+        listener.onAccess?.(sessionId, options.deviceId ?? null);
+      } catch (error) {
+        logger.error({ err: error }, 'un suscriptor del remux ha fallado');
+      }
+    }
+    const dir = path.join(remuxDir, `${VOD_DIR_PREFIX}${sessionId}`);
+    const send = { rangeHeader: options.rangeHeader, head: options.head };
+    if (file === 'index.m3u8') {
+      const text = vod.producer.playlist(vod.startS > 0 ? vod.startS : undefined);
+      const body = options.videoToken ? rewritePlaylist(text, options.videoToken) : text;
+      await sendBuffer(reply, path.join(dir, file), Buffer.from(body), send);
+      return;
+    }
+    const controller = new AbortController();
+    const onClose = (): void => controller.abort();
+    reply.raw.once('close', onClose);
+    let result: Awaited<ReturnType<VodProducer['file']>>;
+    try {
+      result = await vod.producer.file(file, controller.signal);
+    } finally {
+      reply.raw.off('close', onClose);
+    }
+    if (reply.raw.destroyed) return;
+    if (result.kind === 'file') {
+      await sendFile(reply, result.path, send);
+      return;
+    }
+    if (result.kind === 'not_yet') {
+      /* Aún no está: hls.js reintenta (la app nativa, el 404 de siempre con Retry-After). */
+      await sendBare(reply, options.videoToken ? 404 : 503, { ...NOT_YET_HEADERS });
+      return;
+    }
+    await sendBare(reply, 404, { 'cache-control': 'no-store' });
+  }
+
+  /** La sesión es nuestra: directo/IPTV en el registro, VOD abierto o a medio abrir, o en un relevo. */
+  function isKnownSession(sessionId: string): boolean {
+    return (
+      !!findBySession(sessionId) ||
+      vods.has(sessionId) ||
+      vodOpening.has(sessionId) ||
+      replacing.has(sessionId)
+    );
+  }
+
   async function reap(): Promise<void> {
     await registry.run(async () => {
       for (const entry of [...byHash.values()]) {
@@ -764,8 +932,9 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       }
     });
     if (!procRoot) return;
-    const known = new Set([...byHash.values()].map((entry) => entry.sessionId));
-    const orphans = await findOrphanPids(procRoot, known, process.pid);
+    /* Vista viva (no una foto): leer /proc tarda, y una sesión que se abre
+       entre medias (directo o VOD) tampoco es huérfana. */
+    const orphans = await findOrphanPids(procRoot, { has: isKnownSession }, process.pid);
     for (const pid of orphans) {
       logger.warn({ pid }, 'ffmpeg huérfano del remux: se mata');
       killPid(pid);
@@ -775,6 +944,9 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const service: RemuxService = {
     async start() {
       if (reaper || stopped) return;
+      /* Carpetas VOD de un proceso anterior que murió sin limpiar (docs/vod.md §9.7). */
+      const swept = await sweepVodDirs(remuxDir, new Set(vods.keys())).catch(() => []);
+      if (swept.length) logger.info({ count: swept.length }, 'VOD: carpetas huérfanas borradas');
       reaper = clock.setInterval(
         () => {
           reap().catch((error: unknown) => logger.error({ err: error }, 'recolector del remux'));
@@ -822,7 +994,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
             if (await isIptvStalled(current)) {
               if (
                 current.stallNotified &&
-                clock.now() - current.stallNotifiedAt > IPTV_ENSURE_RELAUNCH_MS
+                clock.now() - current.stallSince > IPTV_ENSURE_RELAUNCH_MS
               ) {
                 reusable = false;
               } else {
@@ -886,7 +1058,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
           /* IPTV: reinicio continuo en la misma carpeta (B2). El resto, como siempre. */
           if (current.origin === 'iptv') {
             /* Por atasco (B3): el plazo para ver avanzar la generación nueva escala con el TD, como el umbral. */
-            if (options.stalled) progressMs = iptvStallMs(current);
+            if (options.stalled) progressMs = iptvProgressMs(current);
             return replaceLocked(current, carry);
           }
           await closeLocked(current, 'stopped', false);
@@ -903,6 +1075,106 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       return replacing.has(sessionId);
     },
 
+    async openVod(request) {
+      if (stopped) throw new AppError('remux_died', { detail: 'remux parado' });
+      if (ffmpegMissing) throw new AppError('ffmpeg_missing');
+      const index = await vodIndexes.get(request.titleId, () =>
+        deps.readVodIndex
+          ? deps.readVodIndex(request.inputUrl, request.signal)
+          : readVodIndex(
+              createHttpRangeReader(request.inputUrl, {
+                /* Un poco más que los reintentos del relé (3 × 8 s): ver iptv/relay-vod.ts. */
+                timeoutMs: 30_000,
+                ...(request.signal ? { signal: request.signal } : {}),
+              }),
+            ),
+      );
+      assertPlayable(index, request.hevc);
+      const audio = pickVodAudio(index.audio, {
+        requested: request.audio,
+        preferredLang: request.preferredLang ?? null,
+      });
+      const last = Math.max(0, index.durationS - 1);
+      const startS = Math.min(Math.max(0, request.startS), last);
+      return registry.run(async () => {
+        if (stopped) throw new AppError('remux_died', { detail: 'remux parado' });
+        const previous = vods.get(request.sessionId);
+        if (previous) {
+          vods.delete(request.sessionId);
+          await previous.producer.close();
+        }
+        await makeRoomLocked();
+        /* «Arrancando» antes de lanzar ffmpeg: el recolector no lo toma por huérfano. */
+        vodOpening.add(request.sessionId);
+        let producer: VodProducer;
+        try {
+          producer = await VodProducer.open(
+            {
+              clock,
+              logger,
+              launcher: vodLauncher,
+              redact,
+              onIdle: () => request.onIdle?.(),
+              onDropped: (error) => request.onDropped?.(error),
+            },
+            {
+              sessionId: request.sessionId,
+              dir: path.join(remuxDir, `${VOD_DIR_PREFIX}${request.sessionId}`),
+              inputUrl: request.inputUrl,
+              index,
+              audio,
+              /* `-tag:v hvc1` solo si el VÍDEO es HEVC: `request.hevc` dice que el
+               cliente lo decodifica (Chrome lo manda siempre) y, con H.264,
+               ffmpeg no escribe la cabecera. */
+              hevc: index.video.codec === 'hevc',
+              startS,
+            },
+          );
+          vods.set(request.sessionId, { producer, startS });
+        } finally {
+          vodOpening.delete(request.sessionId);
+        }
+        logger.info(
+          {
+            sessionId: request.sessionId,
+            container: index.container,
+            video: index.video.codec,
+            durationS: Math.round(index.durationS),
+            segments: producer.plan.segments.length,
+            startS: Math.round(startS),
+            /* Qué pistas trae el fichero y cuál suena (lo que dice el índice, §9.9). */
+            audioTracks: index.audio.map((track) => ({
+              lang: track.lang,
+              name: track.name ? track.name.slice(0, 40) : null,
+              codec: track.codec,
+              default: track.isDefault,
+            })),
+            audioChosen: audio ? audio.index : null,
+          },
+          'VOD: productor abierto',
+        );
+        return { sessionId: request.sessionId, index, audio, startS };
+      });
+    },
+
+    async closeVod(sessionId) {
+      await registry.run(async () => {
+        const entry = vods.get(sessionId);
+        if (!entry) return;
+        vods.delete(sessionId);
+        await entry.producer.close();
+      });
+    },
+
+    setVodStart(sessionId, startS) {
+      const entry = vods.get(sessionId);
+      if (entry) entry.startS = Math.max(0, startS);
+    },
+
+    vodStats(sessionId) {
+      return vods.get(sessionId)?.producer.stats() ?? null;
+    },
+
     async detach(sessionId, viewerId) {
       await registry.run(async () => {
         const entry = findBySession(sessionId);
@@ -917,6 +1189,11 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     },
 
     async serveFile(reply, sessionId, file, options) {
+      const vod = vods.get(sessionId);
+      if (vod) {
+        await serveVodFile(reply, sessionId, vod, file, options);
+        return;
+      }
       const entry = findBySession(sessionId);
       if (!entry) {
         /* A mitad de un reinicio: «aún no está» (503 con Retry-After; la app nativa, el 404 de siempre
@@ -933,6 +1210,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       /* La lista de un remux que arranca o se reinicia puede no estar todavía: «aún no está» (503 con
          Retry-After), no un error (docs/iptv.md §18). */
       const playlist = file === 'index.m3u8';
+      if (playlist) await paceRead(entry.dir);
       const send = {
         rangeHeader: options.rangeHeader,
         head: options.head,
@@ -1050,6 +1328,10 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     async stopAll() {
       await registry.run(async () => {
         for (const entry of [...byHash.values()]) await closeLocked(entry, 'shutdown', true);
+        for (const [sessionId, entry] of [...vods]) {
+          vods.delete(sessionId);
+          await entry.producer.close();
+        }
       });
     },
 

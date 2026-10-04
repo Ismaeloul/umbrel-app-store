@@ -31,9 +31,19 @@ import type {
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { NetClient } from '../net/index.js';
 import type { StateService } from '../state/index.js';
+import type { GuideAgendaRequest, GuideAgendaResult } from './guide-agenda.js';
+import type { GuideApi } from './guide-api.js';
 import type { ChannelScorer } from './match.js';
+import type { VodPlayTarget, VodService } from './vod/vod-service.js';
 
 export type { ChannelScorer } from './match.js';
+export type {
+  GuideAgendaAddition,
+  GuideAgendaConfirmation,
+  GuideAgendaMatch,
+  GuideAgendaRequest,
+  GuideAgendaResult,
+} from './guide-agenda.js';
 
 export interface IptvDeps extends CoreDeps {
   readonly state: StateService;
@@ -107,12 +117,72 @@ export interface IptvInput {
   readonly isHls: boolean;
   /** Nombre limpio del canal y del proveedor, para «Dónde se está reproduciendo». */
   readonly title: string;
-  stats(): { readonly bytes: number; readonly kbps: number; readonly lastByteAt: number | null };
+  stats(): {
+    readonly bytes: number;
+    readonly kbps: number;
+    readonly lastByteAt: number | null;
+    /** Cadencia de entrega del proveedor (ms) si entrega a golpes; null si llega seguido. */
+    readonly cadenceMs?: number | null;
+    /** La puerta TS deja pasar las costuras por pérdida (modo tolerante). */
+    readonly gateTolerant?: boolean;
+  };
   /** El relé se ha agotado (o la cuenta ya no vale): hay que cerrar la sesión con ese código. */
   onDropped(listener: (code: IptvReason) => void): void;
   /** Otra base de tiempos o variante: hay que reiniciar el remux en la misma sesión. */
   onRestart(listener: () => void): void;
+  /**
+   * La salida no avanza pero siguen llegando bytes: si la puerta TS espera un punto
+   * de acceso, lo deja pasar todo ya (sin reiniciar). true si estaba esperando.
+   */
+  releaseGate?(): boolean;
   /** Aborta la conexión con el proveedor y espera a que se suelte. Idempotente. */
+  close(): Promise<void>;
+}
+
+/**
+ * La entrada de una película o un episodio (docs/vod.md §9.8): una sesión del
+ * relé VOD. La URL del proveedor nunca sale de `iptv`.
+ */
+export interface VodInput {
+  readonly id: string;
+  /** `http://127.0.0.1:<p>/r/<ticket>/vod.<ext>`: lo único que ven el índice y ffmpeg. */
+  readonly inputUrl: string;
+  /** Lo que la concesión necesita del título (textos, siguiente, progreso, audio). */
+  readonly target: VodPlayTarget;
+  stats(): {
+    readonly bytes: number;
+    readonly kbps: number;
+    readonly lastByteAt: number | null;
+    readonly opens: number;
+    readonly timeouts: number;
+    readonly pacedMs: number;
+  };
+  /**
+   * Ritmo de lectura (bytes/s del título, Paso 0); null sin límite. Con `refill: false`
+   * (cambia la tasa a mitad, la de cerca del cabezal) no se vuelve a llenar el cubo.
+   */
+  setPace(bytesPerS: number | null, options?: { readonly refill?: boolean }): void;
+  /**
+   * Segundos producidos por delante de lo pedido (el productor): por debajo de
+   * `VOD_PLAY.paceFloorS` el relé lee sin freno hasta `paceFloorUntilS` (auditoría 0.9.0).
+   */
+  setAheadProbe?(probe: () => number | null): void;
+  /** Pausa larga: suelta la conexión con el proveedor (la sesión sigue). */
+  release(): Promise<void>;
+  /** El proveedor corta una y otra vez (`vod_dropped`) o su servidor falla al abrir (`vod_provider_error`): hay que cerrar con ese código. */
+  onDropped(listener: (code: string) => void): void;
+  /** Duración real (la del índice), para comprobar el progreso (`knownDurationS`). */
+  noteDuration(durationS: number): void;
+  /** Las pistas del índice (lenguas del audio y de los subtítulos), para la ficha y el filtro (§4.11). */
+  noteTracks?(tracks: {
+    readonly audio: ReadonlyArray<{ readonly lang: string | null; readonly name: string | null }>;
+    readonly subtitles: ReadonlyArray<{
+      readonly lang: string | null;
+      readonly name: string | null;
+      readonly text: boolean;
+    }>;
+  }): void;
+  /** Corta con el proveedor y espera a que se suelte el socket. Idempotente. */
   close(): Promise<void>;
 }
 
@@ -213,6 +283,14 @@ export interface IptvService extends Lifecycle {
   classify(id: string): IptvIdClass;
   /** Capa IPTV de la resolución (§4.3 a §4.5), en memoria. */
   resolve(request: IptvResolveRequest): IptvResolveResult;
+  /**
+   * Agenda híbrida (decisiones.md D27; docs/iptv.md §4.7, guide-agenda.ts): lo que
+   * la guía dice de los partidos de hoy y mañana (confirmados, con la hora
+   * movida, o que solo trae la guía). null sin IPTV activa o sin guía. En
+   * memoria y sin red; el mismo objeto mientras no cambien la lista, la guía
+   * ni `request.key`.
+   */
+  guideAgenda(request: GuideAgendaRequest): GuideAgendaResult | null;
   /** Un id de favoritos, historial o vínculos que es del catálogo vigente, como candidata IPTV. */
   candidateFor(
     id: string,
@@ -262,6 +340,12 @@ export interface IptvService extends Lifecycle {
    * panel aún puede contarla) o si la cuenta tiene todas sus plazas ocupadas.
    */
   prewarmBlocker(): string | null;
+  /**
+   * Abre la entrada de una película o un episodio (relé VOD, docs/vod.md
+   * §9.8). Lanza `vod_*` (`vod_not_found`, `vod_unavailable`, `vod_busy`…).
+   * Opcional por los dobles de los tests de otros módulos.
+   */
+  openVod?(id: string, options: { readonly signal: AbortSignal }): Promise<VodInput>;
   /** Abre la entrada de una sesión IPTV (relé); lanza los `iptv_*` de §5.6. */
   openInput(id: string, options: { readonly signal: AbortSignal }): Promise<IptvInput>;
   /** Carril IPTV del comprobador (§7.3): null = sin veredicto (cuenta bien, «Sin comprobar»). */
@@ -271,4 +355,40 @@ export interface IptvService extends Lifecycle {
   subscribe(listener: IptvListener): () => void;
   /** Conexiones abiertas ahora con el proveedor. */
   connections(): number;
+
+  // --- Películas y series (docs/vod.md) ---
+  /**
+   * ¿Es un id de película, serie o episodio de este proveedor? (§5.3: la
+   * biblioteca los rechaza con `validation_error`, `detail: 'vod_id'`).
+   * Opcional por los dobles de los tests de otros módulos.
+   */
+  isVodId?(id: string): boolean;
+  /**
+   * Catálogo, fichas, carteles y progreso del VOD. Opcional: los dobles de
+   * los tests de otros módulos no lo tienen, y entonces las rutas `vod*`
+   * responden `vod_unavailable`.
+   */
+  readonly vod?: VodApi;
+
+  // --- Guía TV (docs/iptv.md §20) ---
+  /**
+   * Las 5 rutas `iptvGuide*` (guide-api.ts). Opcional, como `vod`: sin ella
+   * (dobles de los tests de otros módulos) responden `guide_unavailable`.
+   */
+  readonly tvGuide?: GuideApi;
 }
+
+/** Lo que las rutas y los demás módulos ven de Películas y series (docs/vod.md §11.1). */
+export type VodApi = Pick<
+  VodService,
+  | 'home'
+  | 'browse'
+  | 'title'
+  | 'artOf'
+  | 'progress'
+  | 'isVodId'
+  | 'feature'
+  | 'status'
+  | 'languagesOf'
+  | 'saveLanguages'
+>;

@@ -1,0 +1,14 @@
+/* Ajustes → Registro («Descargar logs», 0.9.0). Casi todo sale de
+   settings.css (.set-stack, .set-field, .set-about, .set-row, .set-help);
+   aquí solo lo propio. Solo tokens. */
+
+/* Lo guardado: cifras que no bailan y filas del esqueleto centradas. */
+.logs-store dd {
+  font-variant-numeric: tabular-nums;
+}
+.logs-store > div[aria-hidden='true'] {
+  align-items: center;
+}
+.logs-note {
+  max-width: 60ch;
+}

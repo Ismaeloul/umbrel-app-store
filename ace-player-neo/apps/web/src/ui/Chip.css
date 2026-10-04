@@ -43,6 +43,9 @@
 }
 .chip--button {
   min-height: 32px;
+  /* Con una palabra corta («Hoy»), 40 + 2 × 2 de zona = 44 de ancho también. */
+  min-width: 40px;
+  justify-content: center;
 }
 /* Zona táctil de 44 aunque el chip mida 32. */
 .chip--button::before {

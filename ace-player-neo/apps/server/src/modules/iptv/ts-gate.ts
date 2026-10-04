@@ -53,6 +53,17 @@
    seguir hasta el siguiente): con el PES ya empezado no se puede tirar sin
    dejar a ffmpeg medio cuadro. Solo H.264 (HEVC no tiene `frame_num`).
 
+   Esperas por pérdida (`lossSeam`, auditoría 0.9.0):
+   - Lo que dice si la línea de tiempo sigue es el PTS del vídeo VISTO durante
+     la espera (cuadro a cuadro), no el último entregado antes de la costura:
+     si no, una espera de más de `seamPtsMs` (un GOP de 2 s o más) pasaba a
+     «otra fuente» por el mero paso del tiempo y el relé reiniciaba el remux.
+   - El audio (y los demás PID) siguen pasando: solo falta imagen, y el sonido
+     no se corta. Al volver a `pass` esos PID no esperan a su PUSI.
+   - `tolerant` (lo pone el relé cuando la puerta pasa demasiado tiempo
+     esperando): las costuras por pérdida se cuentan pero no se esperan, como
+     antes de la puerta (un poco de imagen rota antes que parones).
+
    Sin punto de acceso a tiempo (GOP abierto, refresco intra), quien la usa
    llama a `release()`: la PAT y la PMT y todo lo que venga (el relé reinicia
    el remux). La puerta no tiene relojes: el plazo lo lleva el relé. */
@@ -307,6 +318,10 @@ export class TsGate {
   waits = 0;
   /** La espera de ahora es por paquetes perdidos (solo el contador, el PTS sigue su línea). */
   lossSeam = false;
+  /** Modo tolerante (lo pone el relé): las costuras por pérdida no se esperan. */
+  tolerant = false;
+  /** Costuras por pérdida que han pasado sin esperar (modo tolerante). */
+  tolerated = 0;
 
   private rest: Buffer | null = null;
   private pmtPid: number | null = null;
@@ -318,6 +333,12 @@ export class TsGate {
   private videoType = 0;
   private readonly elementary = new Set<number>();
   private lastVideoPts: number | null = null;
+  /* PTS del último cuadro de vídeo VISTO durante la espera (para `lossSeam`). */
+  private seenVideoPts: number | null = null;
+  /* PID que siguen pasando durante una espera por pérdida (no esperan a su PUSI al abrir). */
+  private readonly flowing = new Set<number>();
+  /* El primer slice que delató el hueco del `frame_num` (para aceptarlo en modo tolerante). */
+  private gapSlice: AvcSlice | null = null;
   /* Seguimiento del `frame_num` (H.264): el SPS y el del último cuadro de referencia. */
   private avcSps: AvcSps | null = null;
   private prevRefFrameNum: number | null = null;
@@ -343,6 +364,8 @@ export class TsGate {
     this.candidate = null;
     this.forward = options.forward;
     this.floorVideo = options.forward ? this.lastVideoPts : null;
+    this.seenVideoPts = this.lastVideoPts;
+    this.flowing.clear();
     this.forgetFrameNum();
     if (options.fresh) this.rest = null;
   }
@@ -350,11 +373,13 @@ export class TsGate {
   /** Olvida lo entregado (otra base de tiempos: el remux se reinicia). */
   resetTimeline(): void {
     this.lastVideoPts = null;
+    this.seenVideoPts = null;
     this.lastPts.clear();
     this.videoCc = null;
     this.floorVideo = null;
     this.forgetFrameNum();
     this.resume.clear();
+    this.flowing.clear();
   }
 
   /** Olvida la PAT y la PMT (otra variante). */
@@ -386,7 +411,9 @@ export class TsGate {
     this.resume.clear();
     const free: ResumeFloor = { hard: null, soft: null };
     if (this.videoPid !== null) this.resume.set(this.videoPid, free);
-    for (const pid of this.elementary) this.resume.set(pid, free);
+    /* Los que siguieron pasando durante la espera van por la mitad de un PES: siguen. */
+    for (const pid of this.elementary) if (!this.flowing.has(pid)) this.resume.set(pid, free);
+    this.flowing.clear();
     return head;
   }
 
@@ -504,26 +531,8 @@ export class TsGate {
 
   private passPacket(data: Buffer, offset: number, pid: number, pusi: boolean): boolean {
     if (pid === PID_NULL) return true;
-    const pending = this.resume.get(pid);
-    const isVideo = pid === this.videoPid;
-    if (pending !== undefined) {
-      if (!pusi) return false;
-      const start = payloadStart(data, offset);
-      const pts = start === null ? null : pesPts(data, start, offset + TS_PACKET);
-      if (pts !== null && this.behind(pts, pending)) return false;
-      this.resume.delete(pid);
-      if (pts !== null) this.notePts(pid, pts);
-      if (isVideo) this.videoCc = (data[offset + 3] as number) & 0x0f;
-      return true;
-    }
-    if (!isVideo) {
-      if (pusi && this.elementary.has(pid)) {
-        const start = payloadStart(data, offset);
-        const pts = start === null ? null : pesPts(data, start, offset + TS_PACKET);
-        if (pts !== null) this.lastPts.set(pid, pts);
-      }
-      return true;
-    }
+    if (pid !== this.videoPid || this.resume.has(pid))
+      return this.passOther(data, offset, pid, pusi);
     /* Vídeo: ¿costura dentro de la conexión? */
     let seam = (adaptationFlags(data, offset) & 0x80) !== 0;
     let ccBreak = false;
@@ -546,6 +555,14 @@ export class TsGate {
     if (!seam && !ccBreak && start !== null && this.videoType === 0x1b) {
       frameGap = this.followFrameNum(data, offset, start, pusi);
     }
+    if ((ccBreak || frameGap) && !seam && this.tolerant) {
+      /* Modo tolerante: la pérdida se cuenta pero no se espera (la línea de tiempo sigue). */
+      this.seams += 1;
+      this.tolerated += 1;
+      this.acceptGap();
+      if (pts !== null) this.lastVideoPts = pts;
+      return true;
+    }
     if (seam || ccBreak || frameGap) {
       this.seams += 1;
       this.wait({ forward: false });
@@ -559,9 +576,42 @@ export class TsGate {
     return true;
   }
 
+  /*
+   * Un PID que no es el vídeo (o el vídeo esperando a su PUSI tras abrir):
+   * con su suelo de reanudación si lo tiene, y apuntando su último PTS.
+   */
+  private passOther(data: Buffer, offset: number, pid: number, pusi: boolean): boolean {
+    const pending = this.resume.get(pid);
+    if (pending !== undefined) {
+      if (!pusi) return false;
+      const start = payloadStart(data, offset);
+      const pts = start === null ? null : pesPts(data, start, offset + TS_PACKET);
+      if (pts !== null && this.behind(pts, pending)) return false;
+      this.resume.delete(pid);
+      if (pts !== null) this.notePts(pid, pts);
+      if (pid === this.videoPid) this.videoCc = (data[offset + 3] as number) & 0x0f;
+      return true;
+    }
+    if (pusi && this.elementary.has(pid)) {
+      const start = payloadStart(data, offset);
+      const pts = start === null ? null : pesPts(data, start, offset + TS_PACKET);
+      if (pts !== null) this.lastPts.set(pid, pts);
+    }
+    return true;
+  }
+
+  /* Modo tolerante: el cuadro que delató el hueco del `frame_num` pasa a ser el de referencia. */
+  private acceptGap(): void {
+    const slice = this.gapSlice;
+    this.gapSlice = null;
+    if (!slice) return;
+    this.prevRefFrameNum = slice.reference ? slice.frameNum : null;
+  }
+
   private forgetFrameNum(): void {
     this.prevRefFrameNum = null;
     this.pesPayloads = [];
+    this.gapSlice = null;
   }
 
   /*
@@ -596,7 +646,10 @@ export class TsGate {
            el mismo solo lo repite el segundo campo de un par. */
         gap = slice.frameNum !== (prev + 1) % max && !(slice.field && slice.frameNum === prev);
       }
-      if (gap) return true;
+      if (gap) {
+        this.gapSlice = slice;
+        return true;
+      }
       if (slice.reference) this.prevRefFrameNum = slice.frameNum;
       return false;
     }
@@ -665,19 +718,32 @@ export class TsGate {
   }
 
   private waitPacket(data: Buffer, offset: number, pid: number, pusi: boolean): boolean {
-    if (this.videoPid === null || pid !== this.videoPid) return false;
+    if (this.videoPid === null || pid !== this.videoPid) {
+      /* Espera por pérdida: solo falta imagen; el audio y lo demás siguen pasando. */
+      if (this.lossSeam && this.elementary.has(pid) && this.passOther(data, offset, pid, pusi)) {
+        this.flowing.add(pid);
+        return true;
+      }
+      return false;
+    }
     const start = payloadStart(data, offset);
     if (pusi) {
       this.candidate = null;
       if (start === null) return false;
       const pts = pesPts(data, start, offset + TS_PACKET);
-      if (
-        this.lossSeam &&
-        pts !== null &&
-        this.lastVideoPts !== null &&
-        Math.abs(ptsDiff(pts, this.lastVideoPts)) > SEAM_TICKS
-      ) {
-        this.lossSeam = false;
+      /* Se compara con el cuadro de antes (visto en la espera), no con el último
+         entregado: esperar más de `seamPtsMs` no convierte la pérdida en otra fuente. */
+      if (pts !== null) {
+        if (
+          this.lossSeam &&
+          this.seenVideoPts !== null &&
+          Math.abs(ptsDiff(pts, this.seenVideoPts)) > SEAM_TICKS
+        ) {
+          this.lossSeam = false;
+          /* Otra línea de tiempo: el audio deja de pasar y, al abrir, espera a su PUSI. */
+          this.flowing.clear();
+        }
+        this.seenVideoPts = pts;
       }
       if (this.forward && this.floorVideo !== null && pts !== null) {
         if (ptsDiff(pts, this.floorVideo) <= 0) return false;
@@ -737,9 +803,12 @@ export class TsGate {
     this.resume.clear();
     const soft = candidate.pts === null ? null : (candidate.pts - AUDIO_LEAD + PTS_WRAP) % PTS_WRAP;
     for (const pid of this.elementary) {
+      /* El que siguió pasando durante la espera por pérdida va en su línea: sigue. */
+      if (this.flowing.has(pid)) continue;
       const last = this.lastPts.get(pid);
       this.resume.set(pid, { hard: this.forward && last !== undefined ? last : null, soft });
     }
+    this.flowing.clear();
     this.forward = false;
     this.floorVideo = null;
   }

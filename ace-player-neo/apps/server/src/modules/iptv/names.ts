@@ -48,9 +48,29 @@
      «LaLigaPlus»; «SUPER CUPA» → «Supercopa»; «R. MADRID» → «Real Madrid».
    - `platform`: VIX, Pluto TV, Rakuten TV, GOLD TV 24/7… (por el nombre o
      la categoría). No se emparejan por nombre con la agenda (su «LA LIGA 1»
-     no es «M+ LaLiga TV») y el buscador las pone detrás. */
+     no es «M+ LaLiga TV») y el buscador las pone detrás.
 
-import { channelSpelling, normalizeChannelKey, type IptvQuality } from '@ace/shared';
+   Con el corpus de nombres raros de la 0.9.0 (docs/buscador.md) se suma:
+   - País: cualquier símbolo lo separa del nombre («ES► », «ES ✪ », «ES ★ …
+     ★») y puede haber adornos delante («◉ ES: »).
+   - «#N» NO es una copia: en las listas numera canales distintos («LALIGA+
+     PPV #1», «#2», «#3»; «NBA LEAGUE PASS #1»…) y juntarlos escondía los
+     demás y hacía que el relé saltara a otro evento. Se queda como el número
+     del canal («LALIGA+ PPV 2»), como en la 0.8.4. «#0» es el canal de
+     Movistar y se enseña con su «#» («M+ #0», no «M+ 0»).
+   - RTVE detrás de su canal o delante del número («LA 1 TVE», «TVE 1») es
+     La 1: la misma fila.
+   - Los apodos de España («TELE 5»/«TELE5» = Telecinco, «A3» = Antena 3, «A3
+     SERIES» = Atreseries; `spainChannelNicknames`) solo si el canal es de
+     España por su nombre o su categoría (`iptvBase`): un «TELE 5» en
+     «POLSKA» o «GERMANY» (sin país que se deduzca) es otro canal. */
+
+import {
+  channelSpelling,
+  normalizeChannelKey,
+  spainChannelNicknames,
+  type IptvQuality,
+} from '@ace/shared';
 
 export interface CleanIptvTitle {
   /** Nombre para enseñar, sin país, adornos, calidad ni reserva. */
@@ -100,9 +120,14 @@ const COUNTRY_3 = new Set([
   'DZA', 'ALG', 'TUN', 'EGY', 'KSA', 'SAU', 'UAE', 'ARE', 'QAT', 'ISR', 'IRN', 'IRQ', 'KUR',
 ]); // prettier-ignore
 
-/* «ES: », «|ES| », «[ES] », «(ES) », «ES - », «ESPAÑA | », «ES • », «ES » », «ES ➤ », «ES TI - » (la segunda sigla es la plataforma). */
+/* «ES: », «|ES| », «[ES] », «(ES) », «ES - », «ESPAÑA | », «ES • », «ES » », «ES ➤ », «ES TI - » (la segunda sigla es la plataforma).
+   Desde la 0.9.0 (docs/buscador.md) cualquier símbolo separa («ES► », «ES ✪ », «ES ★ … ★») y puede haber adornos
+   delante («◉ ES: »): antes «ES► LA 1» se quedaba «ES LA 1», otra fila que el buscador ponía detrás de «La 10». No
+   separan (la sigla es parte del nombre): el punto, la coma y las comillas («DR. HOUSE»), «&», «+», «!», «?», «@»,
+   «$», «%», «#», «/» y «\» («AT&T SPORTSNET», «BT+ SPORT», «GO! TV», «AC/DC», «PPV #3») ni lo que abre un paréntesis
+   o un corchete. Lo mismo que el módulo común (`LEAD_PREFIX_RE` de name-search.ts). */
 const TITLE_COUNTRY_RE =
-  /^\s*[|[(]?\s*([A-Z]{2,3}|ESPAÑA|ESPANA|SPAIN)(?:\s+[A-Z]{2,3})?\s*[|\]):\-–•·▎┃»➤➜→>]+\s*/u;
+  /^[\s\p{P}\p{S}]*([A-Z]{2,3}|ESPAÑA|ESPANA|SPAIN)(?:\s+[A-Z]{2,3})?\s*(?:(?![.,'’"&+!?@$%#/\\([{])[\p{P}\p{S}])+\s*/u;
 /* España delante sin separador: «ES DAZN 1», «ESP DAZN 1» (solo España: «DE PELÍCULA» es un canal). */
 const TITLE_SPAIN_BARE_RE = /^\s*(?:ES|ESP|SPAIN|ESPAÑA|ESPANA)\s+(?=[\p{L}\p{N}])/u;
 /* España al final, entre corchetes, paréntesis o barras: «DAZN 1 [ES]», «DAZN 1 |ES|», «DAZN 1 (ESP)»;
@@ -205,6 +230,11 @@ const BACKUP_RE =
   /\b(?:backup|back\s*up|bkp|bk|alt|alternativ[oa]|reserva|respaldo|multi(?:audio)?)(?:\s?\d{1,2})?\b/giu;
 /* La copia entre paréntesis o corchetes del final: «DAZN 1 (2)», «DAZN 1 [1]». */
 const MIRROR_RE = /\s*[([]\s*(\d{1,2})\s*[)\]]\s*$/u;
+/* El «#» delante de una palabra o un número se quita («#VAMOS» → «VAMOS», «PPV #2» → «PPV 2»), salvo en «#0», que
+   es el nombre del canal de Movistar. */
+const HASH_RE = /#\s*(?=[\p{L}\p{N}])(?!0(?![\p{L}\p{N}]))/gu;
+/* «TVE 1», «TVE1»: La 1 (y La 2). */
+const TVE_NUMBER_TITLE_RE = /\br?tve\s*([12])\b/giu;
 
 /* Emojis, banderas (indicadores regionales) y adornos. */
 const EMOJI_RE = /\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}]|\u{FE0F}|\u{200D}/gu;
@@ -232,6 +262,16 @@ export function iptvSpelling(value: string): string {
   const spelled = channelSpelling(value);
   const key = normalizeChannelKey(spelled);
   return IPTV_CHANNEL_ALIASES[key] ?? spelled;
+}
+
+/**
+ * El nombre para emparejar de un canal IPTV ya limpio (`CleanIptvTitle.base`):
+ * `iptvSpelling` y, si el canal es de España, sus apodos («TELE 5» →
+ * «Telecinco», «A3» → «Antena 3»). Sin país o con otro, no: hay un TELE 5
+ * alemán y otro polaco (docs/buscador.md §4).
+ */
+export function iptvBase(display: string, country: string | null): string {
+  return iptvSpelling(country === 'ES' ? spainChannelNicknames(display) : display);
 }
 
 /*
@@ -405,7 +445,8 @@ export function cleanIptvTitle(
   }
   text = text.replace(NOTE_RE, ' ');
   const backupTag = strip(text, BACKUP_TAG_RE);
-  text = backupTag.text.replace(DECOR_RE, ' ').replace(/#(?=[\p{L}\p{N}])/gu, '');
+  /* «#N» es el número del canal, no una copia («LALIGA+ PPV #2» es otro evento que «#1»; docs/buscador.md §4). */
+  text = backupTag.text.replace(DECOR_RE, ' ').replace(HASH_RE, '');
   const hevcStep = strip(text, HEVC_RE);
   text = hevcStep.text;
   const hevc = hevcStep.found;
@@ -417,7 +458,10 @@ export function cleanIptvTitle(
     if (step.found) quality ??= value;
   }
   const backupStep = strip(text, BACKUP_RE);
-  text = collapse(backupStep.text);
+  /* RTVE detrás de su canal o delante del número: «LA 1 TVE» y «TVE 1» son La 1 (la misma fila). */
+  text = collapse(
+    backupStep.text.replace(BROADCASTER_INNER_RE, '$1').replace(TVE_NUMBER_TITLE_RE, 'La $1'),
+  );
   const spainLetter = SPAIN_LETTER_RE.exec(text);
   if (spainLetter && spainLetter.index > 0) {
     country ??= 'ES';
@@ -442,7 +486,7 @@ export function cleanIptvTitle(
     Boolean(geo?.[1]);
   const display = collapse(text);
   country ??= groupCountry(group);
-  const base = iptvSpelling(display);
+  const base = iptvBase(display, country);
   return {
     display,
     base,

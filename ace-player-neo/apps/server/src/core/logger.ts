@@ -1,6 +1,9 @@
 /* Logs del backend: pino a stdout en JSON, sin transports (arquitectura
    §5.15 y empaquetado §7.2: en el NAS no hay node_modules y un transport
-   levanta hilos de más). Docker recoge stdout.
+   levanta hilos de más). Docker recoge stdout. Desde la 0.9.0, cada línea
+   de nivel info o peor va también al registro en disco de unos 45 días
+   (`store`, core/log-store.ts; «Descargar logs» de Ajustes → Registro), por
+   el mismo enganche que el anillo de «Descargar fallos».
 
    Redacción (arquitectura §5.12): nunca sale al log la cabecera
    `Authorization`, el token de un dispositivo, el `?t=` de una URL de vídeo
@@ -19,6 +22,8 @@
    - el serializador de `err` pasa `message`, `detail`, `stack` y la causa
      por `redactText` (cada URL que aparezca, por `redactUrl`). */
 
+import { SERVER_LOG_RING_BYTES, SERVER_LOG_RING_LINES } from '@ace/shared';
+import type { LogStore } from './log-store.js';
 import pino, {
   type DestinationStream,
   type Level,
@@ -197,16 +202,99 @@ export function redactedErrSerializer(error: unknown): unknown {
   return redactSerialized(withCause as Serialized);
 }
 
+/* ---- Anillo del registro («Descargar fallos» de Salud, 0.9.0) -----------------
+   Las últimas líneas que se escriben, en memoria y acotadas (por número y por
+   bytes), para el fichero de fallos (modules/diagnostics/export.ts). Cada
+   línea es la MISMA que sale a stdout, ya con la redacción de pino; el
+   informe la vuelve a pasar por su redactor. Nada va a disco.
+
+   Además, cada línea se guarda ya pasada por el redactor de la IPTV de ESE
+   momento (`setScrubber`, main.ts): al cambiar o borrar el proveedor, el
+   redactor olvida sus secretos (IptvRedactor.reset) y el anillo sigue
+   guardando lo escrito desde el arranque; así, lo de antes sigue tapado. */
+
+/** Lo que se guarda si el redactor falla con una línea (mejor perderla que guardarla en claro). */
+export const RING_UNSCRUBBED_LINE = JSON.stringify({
+  level: 'warn',
+  msg: 'anillo: una línea que no se pudo redactar no se guarda',
+});
+
+export interface LogRing {
+  /** Apunta una línea tal cual la escribe pino (JSON + salto de línea). */
+  push(line: string): void;
+  /** Las líneas guardadas, de la más vieja a la más nueva. */
+  lines(): string[];
+  readonly size: number;
+  /** Pasa por aquí cada línea antes de guardarla (null: tal cual). */
+  setScrubber(scrub: ((line: string) => string) | null): void;
+}
+
+export function createLogRing(
+  maxLines = SERVER_LOG_RING_LINES,
+  maxBytes = SERVER_LOG_RING_BYTES,
+  maxLineChars = 8 * 1024,
+): LogRing {
+  const buffer: string[] = [];
+  let bytes = 0;
+  let scrubber: ((line: string) => string) | null = null;
+  return {
+    push(raw) {
+      let line = raw.endsWith('\n') ? raw.slice(0, -1) : raw;
+      if (scrubber) {
+        try {
+          line = scrubber(line);
+        } catch {
+          line = RING_UNSCRUBBED_LINE;
+        }
+      }
+      if (line.length > maxLineChars) line = `${line.slice(0, maxLineChars)}…`;
+      buffer.push(line);
+      bytes += line.length;
+      while (buffer.length > maxLines || (bytes > maxBytes && buffer.length > 1)) {
+        bytes -= buffer.shift()?.length ?? 0;
+      }
+    },
+    lines: () => [...buffer],
+    get size() {
+      return buffer.length;
+    },
+    setScrubber(scrub) {
+      scrubber = scrub;
+    },
+  };
+}
+
+/* El anillo de cada logger creado con uno (los hijos comparten el del padre). */
+const rings = new WeakMap<object, LogRing>();
+
+/** El anillo del logger raíz, o null si se creó sin él (tests, logger silencioso). */
+export function logRingOf(logger: Logger): LogRing | null {
+  return rings.get(logger) ?? null;
+}
+
+/* El registro en disco de cada logger creado con uno («Descargar logs», core/log-store.ts). */
+const stores = new WeakMap<object, LogStore>();
+
+/** El registro en disco del logger raíz, o null si se creó sin él (tests, pila local). */
+export function logStoreOf(logger: Logger): LogStore | null {
+  return stores.get(logger) ?? null;
+}
+
 export interface LoggerOptions {
   readonly level?: LogLevel;
   /** Por defecto, stdout. Los tests pasan un flujo en memoria para leer lo escrito. */
   readonly destination?: DestinationStream;
   /** Campos fijos en cada línea (por ejemplo, la versión). */
   readonly base?: Record<string, unknown>;
+  /** Copia en memoria de las últimas líneas («Descargar fallos»). */
+  readonly ring?: LogRing;
+  /** Registro en disco de unos 45 días («Descargar logs», core/log-store.ts): info o peor. */
+  readonly store?: LogStore;
 }
 
 export function createLogger(options: LoggerOptions = {}): Logger {
-  return pino(
+  const { ring, store } = options;
+  const logger = pino(
     {
       level: options.level ?? 'info',
       base: options.base ?? null,
@@ -217,9 +305,24 @@ export function createLogger(options: LoggerOptions = {}): Logger {
         /* `"level":"info"` en vez del número: se lee mejor con `docker logs`. */
         level: (label) => ({ level: label }),
       },
+      ...(ring || store
+        ? {
+            hooks: {
+              /* La línea ya serializada y redactada, justo antes de escribirla. */
+              streamWrite: (line: string) => {
+                ring?.push(line);
+                store?.push(line);
+                return line;
+              },
+            },
+          }
+        : {}),
     },
     options.destination ?? pino.destination({ dest: 1, sync: false }),
   );
+  if (ring) rings.set(logger, ring);
+  if (store) stores.set(logger, store);
+  return logger;
 }
 
 /** Logger que no escribe nada (tests que no miran los logs). */
