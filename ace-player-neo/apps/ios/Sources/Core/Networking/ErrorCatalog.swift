@@ -14,7 +14,7 @@ public struct ErrorDefinition: Sendable, Equatable {
     public let message: String
 }
 
-/// Catálogo de códigos de error con sus mensajes en español (119 códigos).
+/// Catálogo de códigos de error con sus mensajes en español (120 códigos).
 public enum ErrorCatalog {
     public static let entries: [String: ErrorDefinition] = [
         "bad_request": ErrorDefinition(status: 400, isPublic: true, message: "La petición no es válida."),
@@ -114,6 +114,7 @@ public enum ErrorCatalog {
         "vod_provider_error": ErrorDefinition(status: 502, isPublic: true, message: "Tu proveedor no está dando este título ahora mismo (error de su servidor). Prueba más tarde."),
         "vod_disk_full": ErrorDefinition(status: 507, isPublic: true, message: "No queda espacio en el Umbrel para preparar el vídeo."),
         "vod_account": ErrorDefinition(status: 403, isPublic: true, message: "Tu cuenta IPTV no está activa. Revísala en Ajustes → IPTV."),
+        "vod_list_full": ErrorDefinition(status: 409, isPublic: true, message: "Mi lista está llena (500 títulos). Quita alguno para añadir más."),
         "state_unreadable": ErrorDefinition(status: 500, isPublic: false, message: "No se pudo leer el estado guardado."),
         "scanner_unavailable": ErrorDefinition(status: 502, isPublic: false, message: "El comprobador no responde."),
         "scanner_timeout": ErrorDefinition(status: 504, isPublic: false, message: "El comprobador tarda demasiado."),

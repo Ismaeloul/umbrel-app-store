@@ -1,0 +1,35 @@
+{
+  "items": [
+    {
+      "id": "7e8f9012345678abcdef0123456789abc0d1e2f3",
+      "kind": "series",
+      "title": "The Office",
+      "year": 2005,
+      "rating": 8.6,
+      "poster": "71bc0a93",
+      "tags": ["castellano", "multi"],
+      "adult": false,
+      "progress": null,
+      "langs": ["castellano", "ingles"],
+      "addedAt": "2026-10-04T18:30:00.000Z",
+      "available": true,
+      "upTo": { "label": "T2 · E5 · La fiesta", "next": false }
+    },
+    {
+      "id": "4b5c6d7e8f9012345678abcdef0123457a8b9c0d",
+      "kind": "movie",
+      "title": "Dune",
+      "year": 2021,
+      "rating": 8,
+      "poster": "3fa9c210",
+      "tags": ["castellano", "4k"],
+      "adult": false,
+      "progress": 0.28,
+      "langs": ["castellano"],
+      "addedAt": "2026-10-03T21:10:00.000Z",
+      "available": true,
+      "upTo": null
+    }
+  ],
+  "max": 500
+}

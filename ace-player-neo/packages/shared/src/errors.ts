@@ -652,6 +652,13 @@ export const ERROR_CATALOG = {
     public: true,
     message: 'Tu cuenta IPTV no está activa. Revísala en Ajustes → IPTV.',
   },
+  /** «Mi lista» llena (`VOD_LIST.itemsMax`, 0.9.1): hay que quitar alguno antes de añadir otro. */
+  vod_list_full: {
+    status: 409,
+    legacyStatus: null,
+    public: true,
+    message: 'Mi lista está llena (500 títulos). Quita alguno para añadir más.',
+  },
 
   // --- Internos: no deberían salir nunca en una respuesta ---
   state_unreadable: {
@@ -810,7 +817,7 @@ export function isIptvErrorCode(value: unknown): value is IptvErrorCode {
   return isErrorCode(value) && value.startsWith('iptv_');
 }
 
-/** Códigos de Películas y series (docs/vod.md §11.3): los 9 `vod_*`. Nunca pasan a AceStream. */
+/** Códigos de Películas y series (docs/vod.md §11.3): los 10 `vod_*` (con `vod_list_full` de «Mi lista»). Nunca pasan a AceStream. */
 export type VodErrorCode = Extract<ErrorCode, `vod_${string}`>;
 export const VOD_ERROR_CODES = ERROR_CODES.filter((code): code is VodErrorCode =>
   code.startsWith('vod_'),

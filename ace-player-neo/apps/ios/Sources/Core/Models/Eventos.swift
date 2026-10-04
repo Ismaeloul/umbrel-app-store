@@ -129,7 +129,7 @@ public struct ScanVerdictData: Codable, Sendable, Hashable {
 
 /// `STATE_SCOPES`: qué parte de lo guardado ha cambiado.
 public enum StateScope: String, EnumTolerante {
-    case library, preferences, directories, bindings, reports, learning, stats, nowPlaying, settings
+    case library, preferences, directories, bindings, reports, learning, stats, nowPlaying, settings, vod
     case desconocido
 }
 

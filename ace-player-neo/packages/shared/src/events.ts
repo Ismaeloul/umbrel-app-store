@@ -217,6 +217,8 @@ export const STATE_SCOPES = [
   'stats',
   'nowPlaying',
   'settings',
+  /* «Mi lista» de Películas y series (0.9.1): la web vuelve a pedir `vodListGet`. */
+  'vod',
 ] as const;
 export const StateScopeSchema = z.enum(STATE_SCOPES);
 export type StateScope = z.infer<typeof StateScopeSchema>;

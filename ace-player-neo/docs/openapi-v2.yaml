@@ -2912,6 +2912,41 @@ paths:
                       - langs
                       - unknown
                     additionalProperties: false
+                  vodList:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        kind:
+                          type: string
+                          enum:
+                            - movie
+                            - series
+                        title:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                        year:
+                          anyOf:
+                            - type: integer
+                              minimum: 1880
+                              maximum: 2100
+                            - type: "null"
+                        addedAt:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                      required:
+                        - id
+                        - kind
+                        - title
+                        - year
+                        - addedAt
+                      additionalProperties: false
                 required:
                   - format
                   - schemaVersion
@@ -3486,6 +3521,41 @@ paths:
                       - langs
                       - unknown
                     additionalProperties: false
+                  vodList:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        kind:
+                          type: string
+                          enum:
+                            - movie
+                            - series
+                        title:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                        year:
+                          anyOf:
+                            - type: integer
+                              minimum: 1880
+                              maximum: 2100
+                            - type: "null"
+                        addedAt:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                      required:
+                        - id
+                        - kind
+                        - title
+                        - year
+                        - addedAt
+                      additionalProperties: false
                 required:
                   - format
                   - schemaVersion
@@ -3726,6 +3796,24 @@ paths:
                     type: boolean
                   vodLanguages:
                     type: boolean
+                  vodList:
+                    type: object
+                    properties:
+                      incoming:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      result:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      changed:
+                        type: boolean
+                    required:
+                      - incoming
+                      - result
+                      - changed
+                    additionalProperties: false
                   iptv:
                     type: object
                     properties:
@@ -8885,6 +8973,539 @@ paths:
         - umbrelGateway: []
       x-access: web
       x-native-path: /native/api/v1/vod/languages
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/vod/list:
+    get:
+      operationId: vodListGet
+      tags:
+        - iptv
+      summary: "«Mi lista»: las películas y series guardadas para ver luego"
+      description: "Por casa, en `v2/vod-mi-lista.json` (0.9.1): vale en el PC y en el iPhone y entra en la copia de seguridad. De la más nueva a la más vieja, SIN filtrar por los idiomas elegidos. Lo que ya no está en el catálogo sale con `available: false` («Ya no está en tu IPTV»); en las series empezadas, `upTo` dice por qué episodio se va."
+      parameters: []
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        kind:
+                          type: string
+                          enum:
+                            - movie
+                            - series
+                        title:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                        year:
+                          anyOf:
+                            - type: integer
+                              minimum: 1880
+                              maximum: 2100
+                            - type: "null"
+                        rating:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 10
+                            - type: "null"
+                        poster:
+                          anyOf:
+                            - type: string
+                              pattern: ^[a-f0-9]{8}$
+                            - type: "null"
+                        tags:
+                          maxItems: 5
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - multi
+                              - 4k
+                        adult:
+                          type: boolean
+                        progress:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 1
+                            - type: "null"
+                        langs:
+                          maxItems: 10
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - ingles
+                              - frances
+                              - italiano
+                              - aleman
+                              - portugues
+                              - catalan
+                              - otros
+                        addedAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        available:
+                          type: boolean
+                        upTo:
+                          anyOf:
+                            - type: object
+                              properties:
+                                label:
+                                  type: string
+                                  maxLength: 120
+                                next:
+                                  type: boolean
+                              required:
+                                - label
+                                - next
+                              additionalProperties: false
+                            - type: "null"
+                      required:
+                        - id
+                        - kind
+                        - title
+                        - year
+                        - rating
+                        - poster
+                        - tags
+                        - adult
+                        - progress
+                        - addedAt
+                        - available
+                        - upTo
+                      additionalProperties: false
+                  max:
+                    type: integer
+                    exclusiveMinimum: 0
+                    maximum: 9007199254740991
+                required:
+                  - items
+                  - max
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/vod/list
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/vod/list/{id}:
+    put:
+      operationId: vodListAdd
+      tags:
+        - iptv
+      summary: Añadir una película o una serie a «Mi lista» (si ya está, no cambia nada)
+      description: "Solo películas y series del catálogo (un episodio da `vod_not_found`). Idempotente: si ya estaba, se queda donde estaba. Con la lista llena (500), `vod_list_full`. Devuelve la lista entera y avisa a las demás pestañas (`state.changed` con `vod`)."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{40}$
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        kind:
+                          type: string
+                          enum:
+                            - movie
+                            - series
+                        title:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                        year:
+                          anyOf:
+                            - type: integer
+                              minimum: 1880
+                              maximum: 2100
+                            - type: "null"
+                        rating:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 10
+                            - type: "null"
+                        poster:
+                          anyOf:
+                            - type: string
+                              pattern: ^[a-f0-9]{8}$
+                            - type: "null"
+                        tags:
+                          maxItems: 5
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - multi
+                              - 4k
+                        adult:
+                          type: boolean
+                        progress:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 1
+                            - type: "null"
+                        langs:
+                          maxItems: 10
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - ingles
+                              - frances
+                              - italiano
+                              - aleman
+                              - portugues
+                              - catalan
+                              - otros
+                        addedAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        available:
+                          type: boolean
+                        upTo:
+                          anyOf:
+                            - type: object
+                              properties:
+                                label:
+                                  type: string
+                                  maxLength: 120
+                                next:
+                                  type: boolean
+                              required:
+                                - label
+                                - next
+                              additionalProperties: false
+                            - type: "null"
+                      required:
+                        - id
+                        - kind
+                        - title
+                        - year
+                        - rating
+                        - poster
+                        - tags
+                        - adult
+                        - progress
+                        - addedAt
+                        - available
+                        - upTo
+                      additionalProperties: false
+                  max:
+                    type: integer
+                    exclusiveMinimum: 0
+                    maximum: 9007199254740991
+                required:
+                  - items
+                  - max
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/vod/list/{id}
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: vod_not_found
+          status: 404
+          message: Este título ya no está en tu IPTV.
+        - code: vod_unavailable
+          status: 503
+          message: Tu IPTV no ofrece películas ni series, o no responde ahora mismo.
+        - code: vod_list_full
+          status: 409
+          message: Mi lista está llena (500 títulos). Quita alguno para añadir más.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+    delete:
+      operationId: vodListRemove
+      tags:
+        - iptv
+      summary: Quitar un título de «Mi lista»
+      description: "Idempotente: quitar uno que no está devuelve la lista igual. Vale también para los que ya no están en el catálogo. Devuelve la lista entera."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{40}$
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        kind:
+                          type: string
+                          enum:
+                            - movie
+                            - series
+                        title:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                        year:
+                          anyOf:
+                            - type: integer
+                              minimum: 1880
+                              maximum: 2100
+                            - type: "null"
+                        rating:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 10
+                            - type: "null"
+                        poster:
+                          anyOf:
+                            - type: string
+                              pattern: ^[a-f0-9]{8}$
+                            - type: "null"
+                        tags:
+                          maxItems: 5
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - multi
+                              - 4k
+                        adult:
+                          type: boolean
+                        progress:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 1
+                            - type: "null"
+                        langs:
+                          maxItems: 10
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - ingles
+                              - frances
+                              - italiano
+                              - aleman
+                              - portugues
+                              - catalan
+                              - otros
+                        addedAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        available:
+                          type: boolean
+                        upTo:
+                          anyOf:
+                            - type: object
+                              properties:
+                                label:
+                                  type: string
+                                  maxLength: 120
+                                next:
+                                  type: boolean
+                              required:
+                                - label
+                                - next
+                              additionalProperties: false
+                            - type: "null"
+                      required:
+                        - id
+                        - kind
+                        - title
+                        - year
+                        - rating
+                        - poster
+                        - tags
+                        - adult
+                        - progress
+                        - addedAt
+                        - available
+                        - upTo
+                      additionalProperties: false
+                  max:
+                    type: integer
+                    exclusiveMinimum: 0
+                    maximum: 9007199254740991
+                required:
+                  - items
+                  - max
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/vod/list/{id}
       x-side-effects: true
       x-legacy-twin: null
       x-errors:
@@ -15746,6 +16367,7 @@ components:
                       - stats
                       - nowPlaying
                       - settings
+                      - vod
                 at:
                   type: string
                   format: date-time

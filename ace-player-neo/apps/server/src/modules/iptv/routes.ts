@@ -17,6 +17,8 @@
      (docs/vod.md §11.1), en `vod/vod-service.ts`. `vodArt` manda la imagen
      (o el 304) por su cuenta, con `nosniff` y `default-src 'none'`.
    - iptvGuide*: las 5 de la Guía TV (docs/iptv.md §20.6), en guide-routes.ts.
+   - vodListGet, vodListAdd y vodListRemove: «Mi lista» (0.9.1), en
+     `vod/my-list.ts`.
    - vodLanguagesGet y vodLanguagesUpdate: los idiomas elegidos (§4.10), en
      `vod/languages.ts`.
    Ni el cuerpo ni la respuesta se registran: el cuerpo de iptvSave lleva
@@ -54,6 +56,9 @@ export const V1_ROUTE_IDS: readonly string[] = [
   ...GUIDE_ROUTE_IDS,
   'vodLanguagesGet',
   'vodLanguagesUpdate',
+  'vodListGet',
+  'vodListAdd',
+  'vodListRemove',
 ];
 
 export function registerLegacyRoutes(_router: LegacyRouter, _services: Services): void {}
@@ -100,6 +105,10 @@ export function registerV1Routes(router: V1Router, services: Services): void {
   router.handle('vodProgress', (input) => vod().progress(input.params.id, input.body));
   router.handle('vodLanguagesGet', () => vod().languagesOf());
   router.handle('vodLanguagesUpdate', (input) => vod().saveLanguages(input.body));
+  /* «Mi lista» (0.9.1). */
+  router.handle('vodListGet', () => vod().listOf());
+  router.handle('vodListAdd', (input) => vod().listAdd(input.params.id));
+  router.handle('vodListRemove', (input) => vod().listRemove(input.params.id));
 }
 
 /** `If-None-Match` de la petición (la primera si viniera repetida). */

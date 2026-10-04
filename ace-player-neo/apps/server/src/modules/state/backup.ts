@@ -19,6 +19,8 @@
         el plan calculado DENTRO de la cola sobre el estado vigente;
       - la política de mismo canal (settings.json, su propia cola);
       - la IPTV (iptv.json, su propia cola) si la copia trae la contraseña;
+      - «Mi lista» de Películas y series (vod-mi-lista.json, 0.9.1): en
+        Reemplazar, la de la copia; en Combinar, la de aquí más lo que falte;
       - los idiomas de Películas y series (vod-idiomas.json, docs/vod.md
         §4.10): en Reemplazar, los de la copia; en Combinar, solo si aquí
         aún no se habían elegido (como «Tu fútbol»).
@@ -52,6 +54,7 @@ import {
   type Preferences,
   type SameChannelPolicy,
   type StateV1,
+  type VodListEntry,
   type WebSource,
   MAX_HISTORY,
   MAX_WEB_SOURCES,
@@ -61,6 +64,7 @@ import type { Clock } from '../../core/clock.js';
 import { AppError } from '../../core/errors.js';
 import type { Logger } from '../../core/logger.js';
 import type { IptvPlainSecrets, IptvService } from '../iptv/types.js';
+import { mergeLists } from '../iptv/vod/my-list.js';
 import { backupAad, openWithPassphrase, sealWithPassphrase } from './backup-crypto.js';
 import type { StateService } from './types.js';
 
@@ -338,6 +342,36 @@ export function createBackupService(deps: BackupDeps): BackupService {
     return same ? null : incoming;
   }
 
+  /** «Mi lista» de ahora (vacía si no hay VOD o falla). */
+  function vodListNow(): readonly VodListEntry[] {
+    try {
+      return iptv?.vod?.listEntries() ?? [];
+    } catch (error) {
+      logger.warn({ err: error }, 'copia: Mi lista no responde');
+      return [];
+    }
+  }
+
+  /**
+   * Cómo queda «Mi lista» tras restaurar (null si la copia no la trae o no
+   * hay VOD): en Reemplazar, la de la copia; en Combinar, la de aquí más lo
+   * que falte (como los favoritos).
+   */
+  function vodListPlan(
+    backup: BackupFile,
+    mode: 'replace' | 'merge',
+  ): NonNullable<BackupImportResponse['vodList']> | null {
+    const incoming = backup.vodList;
+    if (!incoming || !iptv?.vod) return null;
+    const current = vodListNow();
+    const next = mergeLists(current, incoming, mode);
+    return {
+      incoming: incoming.length,
+      result: next.length,
+      changed: JSON.stringify(next) !== JSON.stringify(current),
+    };
+  }
+
   async function exportFile(options: { readonly passphrase?: string } = {}): Promise<BackupFile> {
     const current = state.get();
     const mark = (item: Item): BackupItem =>
@@ -364,6 +398,7 @@ export function createBackupService(deps: BackupDeps): BackupService {
       };
     }
     const languages = vodLanguages();
+    const myList = vodListNow();
     const file: BackupFile = {
       format: BACKUP_FORMAT,
       schemaVersion: BACKUP_SCHEMA_VERSION,
@@ -386,6 +421,8 @@ export function createBackupService(deps: BackupDeps): BackupService {
       ...(languages?.chosen
         ? { vod: { langs: [...languages.langs], unknown: languages.unknown } }
         : {}),
+      /* Ídem «Mi lista» (0.9.1): solo si tiene algo. */
+      ...(myList.length ? { vodList: myList.map((item) => ({ ...item })) } : {}),
     };
     logger.info(
       {
@@ -452,6 +489,7 @@ export function createBackupService(deps: BackupDeps): BackupService {
       const plan = planImport(current, policy, backup, mode, adopt);
       const outcome = iptvOutcome(backup, mode, secrets, plan.relinkItems);
       const languages = vodLanguagesPlan(backup, mode);
+      const listPlan = vodListPlan(backup, mode);
       const preview: BackupImportResponse = {
         applied: false,
         mode,
@@ -466,6 +504,7 @@ export function createBackupService(deps: BackupDeps): BackupService {
         preferences: !samePreferences(current.preferences, plan.preferences),
         settings: plan.sameChannelPolicy !== policy,
         vodLanguages: languages !== null,
+        ...(listPlan ? { vodList: listPlan } : {}),
         iptv: outcome,
         browser: backup.browser ?? null,
       };
@@ -500,6 +539,9 @@ export function createBackupService(deps: BackupDeps): BackupService {
       }
       /* 4. Los idiomas de Películas y series (no dependen de la IPTV ni de su proveedor). */
       if (languages && iptv?.vod) await iptv.vod.saveLanguages(languages);
+      /* 5. «Mi lista» (emite `state.changed` con `vod` si cambia). */
+      if (listPlan?.changed && backup.vodList && iptv?.vod)
+        await iptv.vod.restoreList(backup.vodList, mode);
       const after = state.get();
       logger.info(
         {

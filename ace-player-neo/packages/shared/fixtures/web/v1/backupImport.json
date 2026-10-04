@@ -29,6 +29,7 @@
   "preferences": true,
   "settings": false,
   "vodLanguages": true,
+  "vodList": { "incoming": 2, "result": 2, "changed": true },
   "iptv": {
     "action": "needs_secret",
     "protected": false,

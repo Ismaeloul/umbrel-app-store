@@ -1,5 +1,5 @@
 /* Contrato de Películas y series (docs/vod.md §11 y §15.1 «Contratos»): las
-   6 rutas nacen solo web, los 9 `vod_*` con su HTTP, nada del proveedor en
+   rutas nacen solo web, los 10 `vod_*` con su HTTP, nada del proveedor en
    los esquemas `Vod*`, lo que ve la app no cambia y el presupuesto de
    tiempos de `vodStream` (§9.12) cabe bajo nginx. */
 
@@ -37,6 +37,8 @@ import {
   VodHomeSchema,
   VodLanguagesBodySchema,
   VodLanguagesSchema,
+  VodListFileSchema,
+  VodListSchema,
   VodProgressBodySchema,
   VodStreamQuerySchema,
   VodTitleSchema,
@@ -72,7 +74,7 @@ function keysOf(node: unknown, found = new Set<string>()): Set<string> {
 }
 
 describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
-  it('las 8, en su orden, solo web con bearer; ninguna módulo nuevo', () => {
+  it('las 11, en su orden, solo web con bearer; ninguna módulo nuevo', () => {
     const vod = listV1Routes().filter((route) => route.id.startsWith('vod'));
     expect(vod.map((route) => `${route.id} ${route.method} ${route.path} ${route.module}`)).toEqual(
       [
@@ -85,6 +87,10 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
         /* Los idiomas (§4.10). */
         'vodLanguagesGet GET /api/v1/vod/languages iptv',
         'vodLanguagesUpdate PUT /api/v1/vod/languages iptv',
+        /* «Mi lista» (0.9.1). */
+        'vodListGet GET /api/v1/vod/list iptv',
+        'vodListAdd PUT /api/v1/vod/list/:id iptv',
+        'vodListRemove DELETE /api/v1/vod/list/:id iptv',
       ],
     );
     for (const route of vod) {
@@ -94,11 +100,20 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
     }
   });
 
-  it('solo abrir, guardar progreso y elegir idiomas tienen efectos (anti-CSRF); leer, no', () => {
+  it('solo abrir, guardar progreso, elegir idiomas y cambiar Mi lista tienen efectos (anti-CSRF); leer, no', () => {
     expect(V1_ROUTES.vodStream.sideEffects).toBe(true);
     expect(V1_ROUTES.vodProgress.sideEffects).toBe(true);
     expect(V1_ROUTES.vodLanguagesUpdate.sideEffects).toBe(true);
-    for (const id of ['vodHome', 'vodBrowse', 'vodTitle', 'vodArt', 'vodLanguagesGet'] as const) {
+    expect(V1_ROUTES.vodListAdd.sideEffects).toBe(true);
+    expect(V1_ROUTES.vodListRemove.sideEffects).toBe(true);
+    for (const id of [
+      'vodHome',
+      'vodBrowse',
+      'vodTitle',
+      'vodArt',
+      'vodLanguagesGet',
+      'vodListGet',
+    ] as const) {
       expect(V1_ROUTES[id].sideEffects, id).toBe(false);
     }
   });
@@ -115,14 +130,20 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
     expect(empty).toEqual(['vodProgress']);
   });
 
-  it('errores propios: vodStream los 9 vod_* y remux_busy; ningún iptv_* (no pasan a AceStream)', () => {
+  it('errores propios: vodStream los vod_* de abrir y remux_busy; ningún iptv_* (no pasan a AceStream)', () => {
     expect([...V1_ROUTES.vodStream.errors].sort()).toEqual(
-      [...VOD_ERROR_CODES, 'remux_busy'].sort(),
+      [...VOD_ERROR_CODES.filter((code) => code !== 'vod_list_full'), 'remux_busy'].sort(),
     );
     expect(V1_ROUTES.vodBrowse.errors).toEqual(['empty_query']);
     expect(V1_ROUTES.vodTitle.errors).toEqual(['vod_not_found', 'vod_unavailable']);
     expect(V1_ROUTES.vodArt.errors).toEqual(['vod_not_found']);
     expect(V1_ROUTES.vodProgress.errors).toEqual(['vod_not_found']);
+    expect(V1_ROUTES.vodListAdd.errors).toEqual([
+      'vod_not_found',
+      'vod_unavailable',
+      'vod_list_full',
+    ]);
+    expect(V1_ROUTES.vodListRemove.errors).toEqual([]);
     for (const id of V1_ROUTE_IDS.filter((routeId) => routeId.startsWith('vod'))) {
       expect(
         V1_ROUTES[id].errors.filter((code) => isIptvErrorCode(code)),
@@ -143,7 +164,7 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
 });
 
 describe('errores vod_* (docs/vod.md §11.3)', () => {
-  it('9 códigos, públicos, sin estado antiguo y con el HTTP del diseño', () => {
+  it('10 códigos, públicos, sin estado antiguo y con el HTTP del diseño', () => {
     const statuses = Object.fromEntries(
       VOD_ERROR_CODES.map((code) => [code, ERROR_CATALOG[code].status]),
     );
@@ -157,6 +178,7 @@ describe('errores vod_* (docs/vod.md §11.3)', () => {
       vod_provider_error: 502,
       vod_disk_full: 507,
       vod_account: 403,
+      vod_list_full: 409,
     });
     for (const code of VOD_ERROR_CODES) {
       expect(ERROR_CATALOG[code].public, code).toBe(true);
@@ -207,6 +229,8 @@ describe('esquemas Vod* (docs/vod.md §11.2)', () => {
       ['VodTitle', VodTitleSchema],
       ['VodProgressBody', VodProgressBodySchema],
       ['VodDoc', VodDocSchema],
+      ['VodList', VodListSchema],
+      ['VodListFile', VodListFileSchema],
       ['IptvStatus', IptvStatusSchema],
     ] as const) {
       const keys = keysOf(z.toJSONSchema(schema, { io: 'output' }));
