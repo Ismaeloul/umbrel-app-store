@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.8.4"
+version: "0.9.0"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,39 +13,39 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Agenda: en "Para ti" ya no salen partidos de juveniles, filiales,
-  femenino, regionales ni Sub-21, salvo que sigas a ese equipo. "Barcelona"
-  es el primer equipo del FC Barcelona y "España" la seleccion absoluta
-  masculina. En "Todos" van primero tus competiciones y, si la fuente
-  principal no tiene una competicion, se busca en TheSportsDB.
+  Pelis y series: pestaña nueva con las peliculas y series de tu IPTV,
+  con caratulas, ficha de cada titulo (sinopsis, año, reparto, nota),
+  temporadas y capitulos. "Seguir viendo" te deja donde lo dejaste, puedes
+  saltar adelante y atras y al acabar un capitulo pasa al siguiente. El
+  castellano y el latino van por separado y la ficha avisa del idioma real
+  del audio cuando el titulo no lo dice.
 
-  Partido destacado: en el ordenador la tarjeta del partido destacado es
-  compacta, una banda horizontal. En el movil no cambia.
+  Guia TV: desde Canales, una parrilla como la de Movistar+ con la
+  programacion de tus canales de la IPTV, la raya de "ahora" y la ficha
+  del programa elegido.
 
-  Reproductor: los controles se esconden a los 2,5 segundos, tambien
-  despues de pulsar pantalla completa, y al momento si el raton sale del
-  video. "Vas en directo" ya no enseña ninguna cifra de retraso.
+  Agenda hibrida: hoy y mañana la guia de tu IPTV confirma el partido y su
+  canal exacto, ayuda tambien a encontrar el AceStream y añade los partidos
+  que solo salen en la guia. Sin IPTV todo sigue como antes.
 
-  Cambio rapido de canal: pasa de un favorito a otro con las flechas
-  arriba y abajo en el ordenador o deslizando a los lados en el movil. Un
-  cartel dice "Favorito 3/12" y solo se abre el canal en el que te paras.
+  Agenda: en el ordenador ya no hay partido destacado, toda la pagina es el
+  calendario. Los partidos de tus equipos llevan un aura de color y "En
+  directo" enseña el marcador junto al minuto.
 
-  Arranque instantaneo: 3 minutos antes de un partido de tus equipos
-  favoritos la mejor fuente ya esta lista, asi que empieza al momento. Se
-  apaga y se enciende en Ajustes, Reproduccion.
+  Buscador de canales IPTV mejorado: los nombres raros de los proveedores
+  ("ES: LA 1 4K", "|ES| LA 1 FHD") ya no estorban y "la 1" da La 1 la
+  primera.
 
-  Ajustes: se ven por secciones, una cada vez. Seccion nueva "Copia de
-  seguridad" para descargar tus ajustes y restaurarlos; la contraseña de tu
-  IPTV va solo si quieres y protegida con una clave tuya.
+  IPTV en directo sin parones con los proveedores que mandan la señal a
+  golpes.
 
-  Navegacion: las transiciones entre todas las pestañas son suaves e
-  iguales, se han revisado todas las animaciones y la direccion de la
-  pagina ya no arrastra parametros de otras vistas. En el iPhone el
-  cambio de pestaña tiene el mismo fundido que en el ordenador y ya no
-  se quedan dos pantallas una encima de otra.
+  Registro: el Umbrel guarda 45 dias de registro y en Ajustes puedes
+  descargarlo con "Descargar logs". En Salud, "Descargar fallos" baja los
+  errores, sin contraseñas.
 
-  Logo: el logo de Umbrel en todas partes, en la cabecera, en la pestaña
-  del navegador y en el icono al instalar la app.
+  Y arreglos varios: escudos en la columna de Canales, abrir un partido
+  con el mismo fundido que las pestañas, deslizar entre dias en el movil y
+  los carteles de "Fuentes" que ya no se solapan.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []

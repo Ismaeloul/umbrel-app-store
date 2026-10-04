@@ -2,6 +2,42 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.0 (2026-10-04)
+
+Pelis y series: pestaña nueva con las peliculas y series de tu IPTV,
+con caratulas, ficha de cada titulo (sinopsis, año, reparto, nota),
+temporadas y capitulos. "Seguir viendo" te deja donde lo dejaste, puedes
+saltar adelante y atras y al acabar un capitulo pasa al siguiente. El
+castellano y el latino van por separado y la ficha avisa del idioma real
+del audio cuando el titulo no lo dice.
+
+Guia TV: desde Canales, una parrilla como la de Movistar+ con la
+programacion de tus canales de la IPTV, la raya de "ahora" y la ficha
+del programa elegido.
+
+Agenda hibrida: hoy y mañana la guia de tu IPTV confirma el partido y su
+canal exacto, ayuda tambien a encontrar el AceStream y añade los partidos
+que solo salen en la guia. Sin IPTV todo sigue como antes.
+
+Agenda: en el ordenador ya no hay partido destacado, toda la pagina es el
+calendario. Los partidos de tus equipos llevan un aura de color y "En
+directo" enseña el marcador junto al minuto.
+
+Buscador de canales IPTV mejorado: los nombres raros de los proveedores
+("ES: LA 1 4K", "|ES| LA 1 FHD") ya no estorban y "la 1" da La 1 la
+primera.
+
+IPTV en directo sin parones con los proveedores que mandan la señal a
+golpes.
+
+Registro: el Umbrel guarda 45 dias de registro y en Ajustes puedes
+descargarlo con "Descargar logs". En Salud, "Descargar fallos" baja los
+errores, sin contraseñas.
+
+Y arreglos varios: escudos en la columna de Canales, abrir un partido
+con el mismo fundido que las pestañas, deslizar entre dias en el movil y
+los carteles de "Fuentes" que ya no se solapan.
+
 ## 0.8.4 (2026-10-03)
 
 Agenda: en "Para ti" ya no salen partidos de juveniles, filiales,
