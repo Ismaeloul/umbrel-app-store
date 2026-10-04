@@ -423,13 +423,17 @@ describe('VodProducer', () => {
     const r = await rig({
       behavior: { failAfter: (run) => (run === 0 ? 5 : run === 1 ? 2 : null) },
     });
-    expect(startOf(r, await r.get('index0.m4s'))).toBe(0);
+    /* Se pide el primer segmento sin esperar a que se sirva: en una máquina
+       rápida los dos fallos (y el cierre) pueden llegar antes que la respuesta,
+       y entonces ya no está. Lo que se prueba es el reintento y el cierre. */
+    const first = r.get('index0.m4s');
     await until(() => r.launcher.runs.length === 2, 'el reintento');
     /* El primero que faltaba es el 1 (6 s). */
     expect(r.launcher.starts).toEqual([0, 6.2]);
     await until(() => r.dropped.length === 1, 'el cierre');
     expect(r.dropped[0]?.code).toBe('vod_dropped');
     expect(r.launcher.runs).toHaveLength(2);
+    expect(['file', 'missing', 'not_yet']).toContain((await first).kind);
   });
 
   it('código 0 antes del final (la entrada se cortó): el segmento a medias se tira y se reintenta desde él', async () => {
