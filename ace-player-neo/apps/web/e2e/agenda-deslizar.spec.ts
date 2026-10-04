@@ -66,8 +66,10 @@ test('deslizar cambia de día sobre el título y sobre una fila que ya no tiene 
   const cdp = await page.context().newCDPSession(page);
   await expect(diaElegido(page)).toHaveText(/^Hoy/);
   // La primera fila de hoy (LaLiga, 3 partidos) no cabe en 390 px.
-  const sobra = await fila(page).evaluate((el) => el.scrollWidth - el.clientWidth);
-  expect(sobra).toBeGreaterThan(40);
+  //    Se espera a que la fila tenga sus tarjetas pintadas (máquina lenta).
+  await expect
+    .poll(() => fila(page).evaluate((el) => el.scrollWidth - el.clientWidth), { timeout: 10_000 })
+    .toBeGreaterThan(40);
 
   // 1. Fila al principio, dedo a la izquierda: se desplaza la fila, no el día.
   let sitio = await colocar(page);

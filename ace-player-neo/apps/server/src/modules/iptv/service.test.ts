@@ -622,9 +622,12 @@ describe('buscador y biblioteca (docs/iptv.md §14)', () => {
     });
     expect(r.service.classify(found.channels[0]?.id as string)).toBe('owned');
     const text = JSON.stringify(found);
-    for (const secret of [FAKE_IPTV_USER, FAKE_IPTV_PASSWORD, 'XXX', 'Telecinco.es', '110']) {
+    for (const secret of [FAKE_IPTV_USER, FAKE_IPTV_PASSWORD, 'XXX', 'Telecinco.es']) {
       expect(text).not.toContain(secret);
     }
+    /* El número del canal en el proveedor, suelto (los ids son hex aleatorios
+       y pueden llevar «110» dentro por casualidad). */
+    expect(text).not.toMatch(/(^|[^0-9a-f])110([^0-9a-f]|$)/);
   });
 
   it('«dazn»: una fila por canal con sus calidades; cualquier país, con el suyo, y el de España primero', async () => {
