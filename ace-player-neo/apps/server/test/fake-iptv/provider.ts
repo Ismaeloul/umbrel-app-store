@@ -16,7 +16,8 @@
    - `/xmltv.php` y `/guia.xml.gz`: guía con el partido de la demo en
      directo en «ES: M+ LaLiga TV 2 FHD», el mismo en «ES: M+ Liga de
      Campeones FHD» (no debe confirmarse), una repetición «(R)», un resumen y
-     una previa;
+     una previa; con `guiaCompleta` (Guía TV, docs/iptv.md §20.9), detrás, una
+     parrilla sintética (`guia.ts`) de los demás canales, en streaming;
    - `/live/<u>/<p>/<id>.ts` (TS continuo), `/<u>/<p>/<id>` (lo mismo) y
      `/live/<u>/<p>/<id>.m3u8` (HLS de segmentos TS en ventana).
 
@@ -50,13 +51,25 @@
    `/__iptv/fallar-primera?veces=&como=` hacen fallar las primeras pruebas de
    conexión (`player_api.php` sin `action`, la lista M3U y `get.php`) con 502,
    503, `corte`, `vacio`, `html`, `sin-user-info` o `auth0` (el 502 del primer
-   «Guardar», §16.8). */
+   «Guardar», §16.8).
+
+   Películas y series (docs/vod.md §15.3): las 6 acciones VOD de
+   `player_api.php`, los carteles en `/arte/…` y los modos de `/__iptv/vod`
+   viven en `vod.ts`; `vod: N` suma N películas sintéticas. */
 
 import http from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
-import { gzipSync } from 'node:zlib';
+import { Readable } from 'node:stream';
+import { createGzip, gzipSync } from 'node:zlib';
 import { colorFromSeed, generateSegment, TsMuxer, TS_PACKET_SIZE } from '../fake-engine/mpegts.js';
 import { bigCatalog, type BigChannel } from './catalogo-grande.js';
+import { fakeGuideChunks } from './guia.js';
+import {
+  createFakeVodHandler,
+  type FakeVodHandler,
+  type FakeVodOriginOptions,
+} from '../fake-vod/origin.js';
+import { createFakeVod, FAKE_VOD_MODES, type FakeVodMode } from './vod.js';
 
 export const FAKE_IPTV_USER = 'usuario-e2e';
 export const FAKE_IPTV_PASSWORD = 'Cl4ve-Secreta-E2E';
@@ -212,6 +225,25 @@ export interface FakeIptvOptions {
    * real) y relleno hasta el número pedido.
    */
   readonly grande?: number;
+  /** Películas sintéticas que se suman al catálogo VOD pequeño (docs/vod.md §15.3). */
+  readonly vod?: number;
+  /**
+   * Ficheros de vídeo de verdad para `/movie/<u>/<p>/<id>.<ext>` y
+   * `/series/<u>/<p>/<id>.<ext>` (VOD-5, docs/vod.md §15.3): `<id>.<ext>` →
+   * ruta en disco. Con Range/206 y las rarezas de `vodOrigen` (el manejador
+   * de test/fake-vod/origin.ts con las credenciales de este proveedor).
+   */
+  readonly vodFiles?: Readonly<Record<string, string>>;
+  readonly vodOrigen?: FakeVodOriginOptions;
+  /**
+   * Guía TV (docs/iptv.md §20.9): además de los programas de siempre, una
+   * parrilla sintética de ayer a dentro de 3 días para todos los demás
+   * canales (también los del catálogo grande), servida en streaming. Con
+   * `'hoy'`, como la del panel de Isma (Paso 0 del 3-oct): de ayer al final
+   * de hoy (UTC), nada que empiece mañana ni pasado y un bloque larguísimo
+   * que acaba a +36 h (Tele Noche, con solo «Programación no disponible»).
+   */
+  readonly guiaCompleta?: boolean | 'hoy';
 }
 
 export interface FakeIptv {
@@ -242,8 +274,12 @@ export interface FakeIptv {
    * sin `action`, la lista M3U y `get.php`) fallan de la forma `como` (§16.8).
    */
   fallarPrimera(veces: number, como: FakeIptvFailure): void;
+  /** Modo del catálogo VOD (`normal`, `rarezas`, `sin-vod`…; ver vod.ts). */
+  vodModo(mode: FakeVodMode): void;
   /** Canales del catálogo grande (vacío sin `grande`). */
   readonly grandes: readonly BigChannel[];
+  /** El proveedor de ficheros VOD (null sin `vodFiles`): estadísticas, `set` y `cutOpen`. */
+  readonly vodOrigen: FakeVodHandler | null;
   close(): Promise<void>;
 }
 
@@ -279,12 +315,14 @@ function xmltvDate(ms: number): string {
 
 const MIN = 60_000;
 
-/** Guía XMLTV del proveedor falso. */
-export function fakeGuideXml(matchStart: number): string {
+/** Guía XMLTV del proveedor falso (con `until`, sin programas que empiecen en ese instante o después). */
+export function fakeGuideXml(matchStart: number, until = Number.POSITIVE_INFINITY): string {
   const match = 'Real Sociedad - Villarreal';
   const p = (channel: string, start: number, stop: number, title: string, extra = ''): string =>
-    `  <programme start="${xmltvDate(start)}" stop="${xmltvDate(stop)}" channel="${channel}">\n` +
-    `    <title lang="es">${title}</title>\n${extra}  </programme>\n`;
+    start >= until
+      ? ''
+      : `  <programme start="${xmltvDate(start)}" stop="${xmltvDate(stop)}" channel="${channel}">\n` +
+        `    <title lang="es">${title}</title>\n${extra}  </programme>\n`;
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="fake-iptv">\n` +
     FAKE_IPTV_CHANNELS.map(
@@ -363,6 +401,14 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
     account.auth === 1;
 
   const base = (): string => `http://${publicHost}`;
+  const vod = createFakeVod(base, options.vod ?? 0);
+  const vodOrigen = options.vodFiles
+    ? createFakeVodHandler(options.vodFiles, {
+        ...options.vodOrigen,
+        user: FAKE_IPTV_USER,
+        password: FAKE_IPTV_PASSWORD,
+      })
+    : null;
 
   const m3u = (short: boolean): string => {
     const guide = short
@@ -633,6 +679,14 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           }
           controller.fallarPrimera(Number(url.searchParams.get('veces') ?? 1), como);
           json(res, { ok: true });
+        } else if (path === '/__iptv/vod') {
+          const modo = (url.searchParams.get('modo') ?? 'normal') as FakeVodMode;
+          if (!FAKE_VOD_MODES.includes(modo)) {
+            res.writeHead(400).end();
+            return;
+          }
+          vod.modo(modo);
+          json(res, { ok: true });
         } else if (path === '/__iptv/conexiones')
           json(res, { conexiones: controller.conexiones() });
         else if (path === '/__iptv/peticiones') json(res, { peticiones: controller.peticiones() });
@@ -643,6 +697,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           controller.cuenta({ status: 'Active', auth: 1 });
           controller.limpiarPeticiones();
           failing.veces = 0;
+          vod.modo('normal');
           json(res, { ok: true });
         } else res.writeHead(404).end();
         return;
@@ -670,6 +725,51 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           res.writeHead(401).end();
           return;
         }
+        if (options.guiaCompleta) {
+          /* La guía de siempre y, detrás, la sintética de los demás canales (sin tenerla entera en memoria). */
+          const day = 24 * 3_600_000;
+          const today = Math.floor((options.now?.() ?? Date.now()) / day) * day;
+          /* «Solo hoy»: nada empieza mañana (ni en la guía de siempre ni en la sintética). */
+          const until = options.guiaCompleta === 'hoy' ? today + day : Number.POSITIVE_INFINITY;
+          /* …y, como en la del panel de Isma, «algún programa largo acaba a +36 h»: el único de
+             Tele Noche, un relleno que no cuenta como programación (§20.4). */
+          const longBlock = options.guiaCompleta === 'hoy' ? 'TeleNoche.es' : null;
+          const now = options.now?.() ?? Date.now();
+          const base = fakeGuideXml(matchStart, until).replace(/<\/tv>\s*$/, '');
+          const covered = new Set(
+            [...base.matchAll(/<programme [^>]*channel="([^"]+)"/g)].map((m) => m[1]),
+          );
+          const ids = [
+            ...new Set([
+              ...FAKE_IPTV_CHANNELS.map((c) => c.epg),
+              ...(big?.channels ?? []).map((c) => c.epg),
+            ]),
+          ].filter((id) => !covered.has(id) && id !== longBlock);
+          const from = today - day;
+          const chunks = (function* () {
+            yield Buffer.from(base);
+            yield* fakeGuideChunks({
+              channels: 0,
+              ids,
+              from,
+              days: 4,
+              wrap: false,
+              logoEvery: 0,
+              until,
+            });
+            if (longBlock) {
+              yield Buffer.from(
+                `  <programme start="${xmltvDate(until - 3 * 3_600_000)}" stop="${xmltvDate(now + 36 * 3_600_000)}" channel="${longBlock}"><title lang="es">Programación no disponible</title></programme>\n`,
+              );
+            }
+            yield Buffer.from('</tv>\n');
+          })();
+          res.writeHead(200, { 'content-type': 'application/xml' });
+          const stream = Readable.from(chunks);
+          if (path.endsWith('.gz')) stream.pipe(createGzip()).pipe(res);
+          else stream.pipe(res);
+          return;
+        }
         const xml = Buffer.from(fakeGuideXml(matchStart));
         res.writeHead(200, { 'content-type': 'application/xml' });
         res.end(path.endsWith('.gz') ? gzipSync(xml) : xml);
@@ -694,7 +794,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
               status: account.status,
               exp_date: String(Math.floor(Date.now() / 1000) + 90 * 24 * 3600),
               max_connections: String(maxConnections),
-              active_cons: String(open.size + heldNow()),
+              active_cons: String(open.size + heldNow() + (vodOrigen?.stats.open ?? 0)),
               allowed_output_formats: formats,
             },
             server_info: { url: 'otro-host.example', port: '80', server_protocol: 'http' },
@@ -748,7 +848,28 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           json(res, { epg_listings: [] });
           return;
         }
+        const vodAnswer = vod.answer(action, url);
+        if (vodAnswer) {
+          if (vodAnswer.status !== 200) res.writeHead(vodAnswer.status).end();
+          else json(res, vodAnswer.body);
+          return;
+        }
         json(res, []);
+        return;
+      }
+      if (path.startsWith('/arte/')) {
+        const art = vod.art(path);
+        if (!art) {
+          res.writeHead(404).end();
+          return;
+        }
+        res.writeHead(200, { 'content-type': art.type, 'content-length': String(art.body.length) });
+        res.end(art.body);
+        return;
+      }
+      /* Ficheros VOD (Range/206, una conexión, rarezas del panel). */
+      if (vodOrigen && /^\/(?:movie|series|lb)\//.test(path)) {
+        vodOrigen.handler(req, res);
         return;
       }
       const live = /^\/live\/([^/]+)\/([^/]+)\/(\d+)\.(ts|m3u8)$/.exec(path);
@@ -841,8 +962,13 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
       failing.veces = Math.max(0, Math.floor(veces));
       failing.como = como;
     },
+    vodModo(mode) {
+      vod.modo(mode);
+    },
     grandes: big?.channels ?? [],
+    vodOrigen,
     async close() {
+      vodOrigen?.cutOpen();
       for (const res of open) res.destroy();
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve) => server.close(() => resolve()));

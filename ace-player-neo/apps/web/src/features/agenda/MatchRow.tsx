@@ -44,6 +44,7 @@ import {
 import type { MenuItem } from '../../ui/index.ts';
 import { matchGlow, signalTone, signalWord, versusSide, versusWhen } from './cards.ts';
 import { useMatchSignal } from './data.ts';
+import { GuideNote } from './GuideNote.tsx';
 import {
   keepUnitsTogether,
   madridClock,
@@ -217,8 +218,6 @@ export interface MatchRowViewProps {
   /** Tarjeta pequeña con siglas (columna del partido y «Luego»). */
   compact?: boolean;
   position?: RowPosition;
-  /** Solo la tarjeta que viaja al centro de partido lleva nombre (único en la página). */
-  transitionName?: string | null;
   /** `open`: el toque abre el partido; `select`: lo lleva al escenario (escritorio). */
   interaction?: 'open' | 'select';
   onOpen(match: FootballMatch): void;
@@ -241,7 +240,6 @@ export function MatchRowView({
   selected = false,
   compact = false,
   position = 'only',
-  transitionName = null,
   interaction = 'open',
   onOpen,
   onSelect,
@@ -325,7 +323,6 @@ export function MatchRowView({
           when={when}
           mine={mine}
           selected={selected}
-          transitionName={transitionName ?? undefined}
           className="agenda-row__versus"
         >
           {signal ? <SignalCapsule signal={signal} /> : null}
@@ -359,7 +356,8 @@ export function MatchRowView({
           {status ? (
             <span className={cx('agenda-row__note', `is-${status.phase}`)}>
               {live ? <LiveDot /> : null}
-              {keepUnitsTogether(status.text)}
+              {/* En el descanso, lo mismo que la cápsula de arriba (no «En directo»). */}
+              {live && when.label === 'Descanso' ? 'Descanso' : keepUnitsTogether(status.text)}
             </span>
           ) : null}
           {channels.length === 0 ? (
@@ -391,6 +389,8 @@ export function MatchRowView({
           ) : null}
         </div>
       )}
+      {/* Agenda híbrida: «Confirmado en tu guía: …» (solo si la guía de tu IPTV lo confirma). */}
+      {compact ? null : <GuideNote guide={match.guide} />}
       {menuItems?.length ? (
         <Menu
           open={context.menu.open}

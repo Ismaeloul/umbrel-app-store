@@ -1,0 +1,277 @@
+/* Títulos de Películas y series (docs/vod.md §4.4 y §15.1): limpieza
+   conservadora, año y distintivos. */
+
+import { describe, expect, it } from 'vitest';
+import { vodLangsOf } from '@ace/shared';
+import { cleanVodTitle, detectTags, tagBit, tagsOf } from './titles.js';
+
+const clean = (raw: string, category = '') => {
+  const out = cleanVodTitle(raw, category);
+  return { title: out.title, year: out.year, tags: tagsOf(out.tags) };
+};
+
+describe('cleanVodTitle', () => {
+  it('«ES| Oppenheimer (2023) 4K» → «Oppenheimer», 2023, castellano y 4k', () => {
+    expect(clean('ES| Oppenheimer (2023) 4K')).toEqual({
+      title: 'Oppenheimer',
+      year: 2023,
+      tags: ['castellano', '4k'],
+    });
+  });
+
+  it('«|LAT| Dune 4K» → «Dune», latino y 4k', () => {
+    expect(clean('|LAT| Dune 4K')).toEqual({ title: 'Dune', year: null, tags: ['latino', '4k'] });
+  });
+
+  it('conserva los acentos y quita la etiqueta del final', () => {
+    expect(clean('Amélie (2001) VOSE')).toEqual({ title: 'Amélie', year: 2001, tags: ['vose'] });
+  });
+
+  it('no toca lo que no es prefijo ni etiqueta', () => {
+    expect(clean('Mission: Impossible – Dead Reckoning (2023)')).toEqual({
+      title: 'Mission: Impossible – Dead Reckoning',
+      year: 2023,
+      tags: [],
+    });
+    expect(clean('Reserva (2018)').title).toBe('Reserva');
+    expect(clean('M+ Vamos: la película').title).toBe('M+ Vamos: la película');
+    expect(clean('M3GAN').title).toBe('M3GAN');
+    expect(clean('Blade Runner 2049')).toEqual({
+      title: 'Blade Runner 2049',
+      year: null,
+      tags: [],
+    });
+    expect(clean('Multiverso Spider-Man').title).toBe('Multiverso Spider-Man');
+  });
+
+  it('títulos no latinos se conservan', () => {
+    expect(clean('東京物語').title).toBe('東京物語');
+    expect(clean('Паразиты (2019)')).toEqual({ title: 'Паразиты', year: 2019, tags: [] });
+  });
+
+  it('corchetes, prefijos de calidad y varias etiquetas seguidas', () => {
+    expect(clean('[ES] 4K - Dune: Parte Dos [MULTI] (VOSE)')).toEqual({
+      title: 'Dune: Parte Dos',
+      year: null,
+      tags: ['castellano', 'vose', 'multi', '4k'],
+    });
+    expect(clean('Dune - 2021').year).toBe(2021);
+  });
+
+  it('la categoría también da distintivos («PELIS LATINO», «VOD | 4K»)', () => {
+    expect(clean('Coco', 'PELIS LATINO').tags).toEqual(['latino']);
+    expect(clean('Coco', 'VOD | 4K').tags).toEqual(['4k']);
+    expect(clean('Coco', 'ES | PELÍCULAS').tags).toEqual(['castellano']);
+    /* Latino manda sobre castellano. */
+    expect(clean('ES| Coco', 'PELIS LATINO').tags).toEqual(['latino']);
+  });
+
+  it('títulos que empiezan por mayúsculas y dos puntos NO son prefijos (lista cerrada)', () => {
+    for (const title of [
+      'CSI: Miami',
+      'UP: Una aventura de altura',
+      'ET: El extraterrestre',
+      'SOS: Rescate',
+      'IT: Capítulo 2',
+      'DE-LOVELY',
+      '[REC] 2',
+      'SD Gundam Force',
+    ]) {
+      expect(clean(title).title, title).toBe(title);
+    }
+    /* Y se encuentran al buscar: «csi» casa con el título entero. */
+    expect(clean('ES| CSI: Miami (2002)')).toEqual({
+      title: 'CSI: Miami',
+      year: 2002,
+      tags: ['castellano'],
+    });
+  });
+
+  it('los prefijos de la lista sí se van, también encadenados y con «|XX|» de cualquier código', () => {
+    expect(clean('EN - The Batman').title).toBe('The Batman');
+    expect(clean('VOSE: Parásitos').title).toBe('Parásitos');
+    expect(clean('|IT| Il padrino').title).toBe('Il padrino');
+    expect(clean('IT| Il padrino').title).toBe('Il padrino');
+    expect(clean('[IT] Il padrino').title).toBe('Il padrino');
+    expect(clean('|NL| De Tweeling').title).toBe('De Tweeling');
+    expect(clean('ES - LAT: Coco')).toEqual({ title: 'Coco', year: null, tags: ['latino'] });
+    expect(clean('[LAT] Coco').tags).toEqual(['latino']);
+    expect(clean('4K Dune').title).toBe('Dune');
+    expect(clean('FHD: Dune').title).toBe('Dune');
+  });
+
+  it('prefijos de lengua y calidad encadenados no dejan el separador delante («ES - 4K - Dune»)', () => {
+    expect(clean('ES - 4K - Dune')).toEqual({
+      title: 'Dune',
+      year: null,
+      tags: ['castellano', '4k'],
+    });
+    expect(clean('ES | 4K | Dune').title).toBe('Dune');
+    expect(clean('LAT - UHD - Coco')).toEqual({
+      title: 'Coco',
+      year: null,
+      tags: ['latino', '4k'],
+    });
+    expect(clean('ES: 4K - Dune').title).toBe('Dune');
+    expect(clean('[ES] FHD | Dune').title).toBe('Dune');
+    expect(clean('ES - 4K-Dune').title).toBe('4K-Dune');
+  });
+
+  it('con el guion entre espacios, los países de la lista («UK - », «MX - »)', () => {
+    expect(clean('UK - The Crown').title).toBe('The Crown');
+    expect(clean('UK – The Crown').title).toBe('The Crown');
+    expect(clean('MX - Coco')).toEqual({ title: 'Coco', year: null, tags: ['latino'] });
+    expect(clean('AR - Batman').title).toBe('Batman');
+    expect(clean('NL - De Tweeling').title).toBe('De Tweeling');
+    expect(clean('TR - Kış Uykusu').title).toBe('Kış Uykusu');
+    expect(clean('SE - Millennium').title).toBe('Millennium');
+    expect(clean('EXYU - Maratonci').title).toBe('Maratonci');
+    /* Con dos puntos o barra, igual. */
+    expect(clean('US: Dune').title).toBe('Dune');
+    expect(clean('UK| The Crown').title).toBe('The Crown');
+    /* Sin espacios alrededor del guion, no: «AC-DC», «X-MEN». */
+    expect(clean('AC-DC Live').title).toBe('AC-DC Live');
+    expect(clean('X-MEN').title).toBe('X-MEN');
+  });
+
+  it('con el guion, NUNCA cualquier código de 2-3 mayúsculas: muchos paneles cambian «:» por « - »', () => {
+    /* 1525a17 quitaba aquí cualquier código: «CSI - Miami» salía «Miami»,
+       «TED - 2» salía «2», y buscar «CSI» no encontraba ninguna CSI. */
+    for (const title of [
+      'CSI - Miami',
+      'CSI - NY',
+      'FBI - Most Wanted',
+      'JFK - Caso abierto',
+      'JFK: Caso abierto',
+      'TED - 2',
+      'UFC - 300',
+      'ET - El extraterrestre',
+      'UP - Una aventura de altura',
+      'SOS - Rescate',
+      'MIB - Hombres de negro',
+      'DC - Liga de la Justicia',
+      'BBC - Planeta Tierra',
+      'WWE - Raw',
+      'JAG - Alerta roja',
+      'AMZ - The Boys',
+      'IT - Capítulo 2',
+      'IT – Capítulo 2',
+    ]) {
+      expect(clean(title).title, title).toBe(title);
+    }
+    /* Tras un prefijo de verdad, el título se queda entero. */
+    expect(clean('ES - FBI - Most Wanted')).toEqual({
+      title: 'FBI - Most Wanted',
+      year: null,
+      tags: ['castellano'],
+    });
+    expect(clean('|ES| CSI - Miami (2002)')).toEqual({
+      title: 'CSI - Miami',
+      year: 2002,
+      tags: ['castellano'],
+    });
+    expect(clean('CSI - Vegas', 'ES | SERIES').title).toBe('CSI - Vegas');
+  });
+
+  it('«IT - » solo es Italia si la categoría es italiana («IT - Capítulo 2» es la película)', () => {
+    expect(clean('IT - Il padrino', 'IT | FILM').title).toBe('Il padrino');
+    expect(clean('IT - Il padrino', '|IT| CINEMA').title).toBe('Il padrino');
+    expect(clean('IT - Il padrino', 'Film italiani').title).toBe('Il padrino');
+    expect(clean('IT - Il padrino', 'ITALIA 4K').title).toBe('Il padrino');
+    expect(clean('IT - Capítulo 2', 'ES | TERROR').title).toBe('IT - Capítulo 2');
+    expect(clean('IT - Capítulo 2', 'ITV DRAMA').title).toBe('IT - Capítulo 2');
+    /* Con dos puntos, nunca: ni en una categoría italiana. */
+    expect(clean('IT: Capítulo 2', 'IT | FILM').title).toBe('IT: Capítulo 2');
+  });
+
+  it('la limpieza nunca deja un título vacío', () => {
+    expect(clean('4K').title).toBe('4K');
+    expect(clean('ES - ').title).toBe('ES');
+    expect(clean('(2020)').title).toBe('(2020)');
+  });
+});
+
+describe('idiomas del título y de la categoría (docs/vod.md §4.10)', () => {
+  const langs = (raw: string, category = '') => {
+    const out = cleanVodTitle(raw, category);
+    return { title: out.title, langs: vodLangsOf(out.langs), tags: tagsOf(out.tags) };
+  };
+
+  it('las marcas del título: se quitan y dicen el idioma', () => {
+    expect(langs('ES - Coco')).toMatchObject({ title: 'Coco', langs: ['castellano'] });
+    expect(langs('Coco (LAT)')).toMatchObject({ title: 'Coco', langs: ['latino'] });
+    expect(langs('Coco (lat)')).toMatchObject({ title: 'Coco', langs: ['latino'] });
+    expect(langs('Coco [VOSE]')).toMatchObject({ title: 'Coco', langs: ['vose'] });
+    expect(langs('Coco 4K ES')).toMatchObject({ title: 'Coco', langs: ['castellano'] });
+    expect(langs('COCO 4K ES')).toMatchObject({ title: 'COCO', langs: ['castellano'] });
+    expect(langs('Coco (2017) ES')).toMatchObject({ title: 'Coco', langs: ['castellano'] });
+    expect(langs('Dune - VO')).toMatchObject({ title: 'Dune', langs: ['ingles'] });
+    expect(langs('FR - Amélie')).toMatchObject({ title: 'Amélie', langs: ['frances'] });
+    expect(langs('Amélie [FR]')).toMatchObject({ title: 'Amélie', langs: ['frances'] });
+    expect(langs('Amélie VF')).toMatchObject({ title: 'Amélie', langs: ['frances'] });
+    expect(langs('ITA - Il padrino')).toMatchObject({ title: 'Il padrino', langs: ['italiano'] });
+    expect(langs('DE - Das Boot')).toMatchObject({ title: 'Das Boot', langs: ['aleman'] });
+    expect(langs('Cidade de Deus (PT)')).toMatchObject({
+      title: 'Cidade de Deus',
+      langs: ['portugues'],
+    });
+    expect(langs('CAT - Pa negre')).toMatchObject({ title: 'Pa negre', langs: ['catalan'] });
+    expect(langs('|NL| De Tweeling')).toMatchObject({ title: 'De Tweeling', langs: ['otros'] });
+    expect(langs('LATINO - Coco')).toMatchObject({ title: 'Coco', langs: ['latino'] });
+    expect(langs('Coco [Castellano]')).toMatchObject({ title: 'Coco', langs: ['castellano'] });
+  });
+
+  it('castellano y latino nunca se juntan por error; los distintivos siguen a los idiomas', () => {
+    expect(langs('ES - LAT: Coco')).toEqual({ title: 'Coco', langs: ['latino'], tags: ['latino'] });
+    expect(langs('ES| Coco', 'PELIS LATINO').langs).toEqual(['latino']);
+    expect(langs('Coco (LAT)', 'ES | ANIMACIÓN')).toEqual({
+      title: 'Coco',
+      langs: ['latino'],
+      tags: ['latino'],
+    });
+    expect(langs('Coco', 'CASTELLANO | ANIMACIÓN').langs).toEqual(['castellano']);
+    expect(langs('Coco', '|LAT| ANIMACION').langs).toEqual(['latino']);
+  });
+
+  it('el título manda: «Coco (FR)» en una categoría española es francés', () => {
+    expect(langs('Coco (FR)', 'ES | ANIMACIÓN').langs).toEqual(['frances']);
+    expect(langs('Amélie (2001) VOSE', 'ES | PELÍCULAS').langs).toEqual(['vose']);
+    /* Sin marcas, el de la categoría. */
+    expect(langs('Coco', 'FR | FILMS').langs).toEqual(['frances']);
+    expect(langs('Coco', 'ESTRENOS').langs).toEqual([]);
+  });
+
+  it('falsos amigos: ni se quitan ni dan idioma', () => {
+    for (const [raw, category] of [
+      ['La casa de papel', 'SERIES'],
+      ['En busca de la felicidad', ''],
+      ['EN BUSCA DEL ARCA PERDIDA', ''],
+      ['Frozen', ''],
+      ['IT', ''],
+      ['IT: Capítulo 2', ''],
+      ['De Niro', ''],
+      ['COCO ES', ''],
+      ['Mamma Mia! US', ''],
+      ['Kill Bill BR', ''],
+    ] as const) {
+      const out = langs(raw, category);
+      expect(out.title, raw).toBe(raw);
+      expect(out.langs, raw).toEqual([]);
+    }
+    expect(langs('La casa de papel', 'ES | SERIES').langs).toEqual(['castellano']);
+  });
+});
+
+describe('distintivos', () => {
+  it('códigos cortos solo como palabra y en mayúsculas', () => {
+    expect(tagsOf(detectTags('PELICULAS ESTRENOS'))).toEqual([]);
+    expect(tagsOf(detectTags('Sub-zero'))).toEqual([]);
+    expect(tagsOf(detectTags('SUB'))).toEqual(['vose']);
+    expect(tagsOf(detectTags('multi audio · UHD'))).toEqual(['multi', '4k']);
+    expect(tagsOf(detectTags('es-419'))).toEqual(['latino']);
+  });
+
+  it('bits en el orden de los chips', () => {
+    expect(tagsOf(tagBit('4k') | tagBit('castellano'))).toEqual(['castellano', '4k']);
+  });
+});

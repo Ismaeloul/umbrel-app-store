@@ -27,6 +27,7 @@ import {
   PLAYBACK_PROFILES,
   type PlaybackMode,
   type StreamProtocol,
+  type VodAudioTrack,
 } from '@ace/shared';
 import { api } from '../api/client.ts';
 import { setPlayerPresence } from '../app/player-presence.ts';
@@ -114,6 +115,10 @@ export interface PlayerStats {
   speedDown: number;
   speedUp: number;
   downloaded: number | null;
+  /** IPTV en directo: cada cuánto entrega el proveedor (ms) si va a golpes; null si llega seguido. */
+  cadenceMs?: number | null;
+  /** IPTV en directo: la puerta del relé deja pasar las costuras por pérdida. */
+  gateTolerant?: boolean;
   at: string;
 }
 
@@ -130,9 +135,78 @@ export interface LiveInfo {
 
 export type IdleReason = 'inicio' | 'detenido' | 'traspasado' | 'fallo' | 'sin-motor';
 
+// ---- Películas y series (docs/vod.md §12.7) ------------------------------------------
+
+/** Lo que se reproduce en modo VOD: una película o un episodio (id sellado de 40 hex). */
+export interface VodItem {
+  id: string;
+  kind: 'movie' | 'episode';
+  /** La película, o la serie de un episodio. */
+  title: string;
+  /** «T1 · E3 · Piloto» en un episodio. */
+  subtitle?: string | null;
+  seriesId?: string | null;
+}
+
+export interface VodPlayRequest extends VodItem {
+  /** Segundos; ausente = el progreso guardado (0 = desde el principio). */
+  startS?: number;
+  /** Pista de audio (su índice en el índice del servidor); ausente = la preferencia guardada. */
+  audio?: number;
+}
+
+/**
+ * La tarjeta del final de un episodio (§12.9): `countdown` con la cuenta
+ * atrás de 10 s (`endsAt`), `credits` sin cuenta («Ver créditos»), `still`
+ * «¿Sigues viendo?» (se suelta todo a `endsAt` si nadie contesta).
+ */
+export interface VodNextUp {
+  mode: 'countdown' | 'credits' | 'still';
+  endsAt: number | null;
+}
+
+/** Lo que publica el reproductor de una película o un episodio (medidor de 500 ms). */
+export interface VodPlayback {
+  id: string;
+  kind: 'movie' | 'episode';
+  seriesId: string | null;
+  title: string;
+  subtitle: string | null;
+  /** Dónde va el cabezal (o adónde va a saltar: los saltos seguidos se juntan). */
+  positionS: number;
+  durationS: number;
+  /** Hasta dónde hay vídeo cargado desde el cabezal. */
+  bufferedEndS: number;
+  audio: readonly VodAudioTrack[];
+  audioIndex: number;
+  next: { id: string; title: string; label: string } | null;
+  /** Sello del cartel (`vodArt`), si lo hay. */
+  poster: string | null;
+  /** «H.264 · AC-3 → AAC» para Datos técnicos. */
+  format: string | null;
+  /** Reconexiones en la posición (Datos técnicos, «Reinicios»). */
+  restarts: number;
+  /** Ha llegado al final (película: «Terminada»). */
+  ended: boolean;
+  nextUp: VodNextUp | null;
+  /** Arrancó en el progreso guardado: «Reanudado en 43:12» (con «Desde el principio»). */
+  resumedAtS: number | null;
+  /** Un salto en curso (lo que se enseña mientras llega). */
+  seekingTo: number | null;
+  /**
+   * Por qué no suena (§13): el código y qué ofrece el panel, «Reintentar»
+   * (sigue en la posición guardada), «Volver a la ficha» o «Ir a Ajustes».
+   */
+  failure: { code: string; action: 'retry' | 'retry-title' | 'title' | 'settings' } | null;
+}
+
 export interface PlayerState {
   /** La fase pública (machine.ts): idle, cargando, buffer, reproduciendo, pausado… */
   phase: PlayerPhase;
+  /** Un canal en directo o una película / un episodio (docs/vod.md §12.7). */
+  kind: 'live' | 'vod';
+  /** Solo con `kind: 'vod'`: posición, duración, audio, siguiente episodio… */
+  vod: VodPlayback | null;
   /** Estado de la conexión (detalle para el panel técnico y los tests). */
   conn: ConnState;
   channel: (PlayChannel & { hash: string }) | null;
@@ -180,6 +254,8 @@ export const IDLE_LIVE: LiveInfo = { available: false, atLive: true, behindS: 0,
 
 export const INITIAL_PLAYER_STATE: PlayerState = {
   phase: 'idle',
+  kind: 'live',
+  vod: null,
   conn: 'idle',
   channel: null,
   origin: null,
@@ -232,6 +308,7 @@ export function usePlayerSelector<S>(
 
 export type PlayerCommand =
   | { type: 'play'; channel: PlayChannel & { hash: string }; options: PlayOptions }
+  | { type: 'play-vod'; item: VodItem; startS?: number; audio?: number; route: Route }
   | { type: 'stop' }
   | { type: 'mode'; mode: PlaybackMode };
 
@@ -272,9 +349,70 @@ export function play(channel: PlayChannel, options: PlayOptions = {}): boolean {
       ...state,
       phase: 'cargando',
       conn: 'pidiendo',
+      kind: 'live',
+      vod: null,
       channel: command.channel,
       origin: options.origin ?? 'user',
       route: options.route ?? channelRoute(hash),
+      message: 'Preparando el reproductor…',
+      idleReason: null,
+    }));
+  }
+  return true;
+}
+
+/** Ruta del escenario de una película o un episodio (§12.8). */
+export function vodRoute(id: string): Route {
+  return { vista: 'sala', id };
+}
+
+/** El «canal» con el que el reproductor lleva una película (título, línea de estado, mini). */
+export function vodChannel(item: VodItem): PlayChannel & { hash: string } {
+  return {
+    hash: item.id,
+    title: item.title,
+    ...(item.subtitle ? { subtitle: item.subtitle } : {}),
+    iptv: true,
+  };
+}
+
+/**
+ * Reproduce una película o un episodio (§12.7): el mismo PlayerDock, el
+ * mismo <video> y el mismo store que el directo. Devuelve false si el id no
+ * vale. Con el título ya sonando y sin `startS`, no reinicia nada.
+ */
+export function playVod(request: VodPlayRequest, options: { route?: Route } = {}): boolean {
+  const id = normalizeHash(request.id);
+  if (!id) return false;
+  const item: VodItem = {
+    id,
+    kind: request.kind,
+    title: request.title.trim() || (request.kind === 'episode' ? 'Episodio' : 'Película'),
+    subtitle: request.subtitle ?? null,
+    seriesId: request.seriesId ?? null,
+  };
+  const route = options.route ?? vodRoute(id);
+  const command: PlayerCommand = {
+    type: 'play-vod',
+    item,
+    route,
+    ...(request.startS !== undefined ? { startS: Math.max(0, request.startS) } : {}),
+    ...(request.audio !== undefined ? { audio: request.audio } : {}),
+  };
+  setPlayerPresence({ active: true, route });
+  if (runtime) {
+    runtime.handle(command);
+  } else {
+    pending = command;
+    playerStore.set((state) => ({
+      ...state,
+      phase: 'cargando',
+      conn: 'pidiendo',
+      kind: 'vod',
+      vod: null,
+      channel: vodChannel(item),
+      origin: 'user',
+      route,
       message: 'Preparando el reproductor…',
       idleReason: null,
     }));

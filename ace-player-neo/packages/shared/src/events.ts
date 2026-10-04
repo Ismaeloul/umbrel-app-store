@@ -157,6 +157,14 @@ export const StreamStatsEventSchema = z.strictObject({
     speedDown: z.number().nonnegative(),
     speedUp: z.number().nonnegative(),
     downloaded: z.number().nonnegative().nullable(),
+    /**
+     * IPTV en directo (auditoría 0.9.0): cada cuánto entrega el proveedor, en ms
+     * (p90 de sus huecos sin bytes en el último minuto), si entrega a golpes; null
+     * si llega seguido. La web sube su colchón y su latencia a ≥ 1,5× esto.
+     */
+    cadenceMs: z.number().int().nonnegative().nullable().optional(),
+    /** IPTV en directo: la puerta TS del relé deja pasar las costuras por pérdida (modo tolerante). */
+    gateTolerant: z.boolean().optional(),
     at: IsoDateTimeSchema,
   }),
 });

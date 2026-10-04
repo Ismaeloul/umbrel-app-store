@@ -1,7 +1,8 @@
-/* Interruptores de desarrollo. Hoy solo `sistema`: la página de muestra de
-   componentes (?vista=sistema) sale siempre en desarrollo y, en producción,
-   solo si se activa a mano:
-   - una vez: ?vista=sistema&flag=sistema
+/* Interruptores de desarrollo:
+   - `sistema`: la página de muestra de componentes (?vista=sistema) sale
+     siempre en desarrollo y, en producción, solo si se activa a mano.
+   Cómo se activan:
+   - una vez: ?vista=sistema&flag=sistema (se conserva al navegar)
    - para siempre en ese navegador: localStorage['aceneo-flags'] = 'sistema' */
 
 import { readItem, STORAGE_KEYS } from './storage.ts';

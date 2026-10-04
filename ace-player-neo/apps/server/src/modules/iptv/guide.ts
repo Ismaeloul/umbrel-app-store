@@ -7,7 +7,12 @@
    - solo programas de canales del catálogo que pasan el filtro de país;
    - solo lo que parece un evento: texto con un separador de enfrentamiento
      entre dos grupos de palabras, o categoría deportiva;
-   - 60 000 programas como mucho (los más cercanos). */
+   - 60 000 programas como mucho (los más cercanos).
+
+   La guía COMPLETA de la Guía TV (todos los canales y programas) no vive
+   aquí: sale de la misma descarga (guide-full.ts) a `guia.db` (guide-db.ts,
+   docs/iptv.md §20). Esta ventana sigue siendo la que usan guide-match.ts y
+   la agenda. */
 
 import type { Readable } from 'node:stream';
 import { IPTV_GUIDE_LIMITS } from '@ace/shared';
@@ -68,46 +73,64 @@ export interface GuideBuildOptions {
   readonly maxProgrammes?: number;
 }
 
+/**
+ * Junta la ventana útil programa a programa (la usa `buildGuideWindow` y,
+ * en la misma pasada que la guía completa, guide-full.ts).
+ */
+export class GuideWindowCollector {
+  private readonly kept: StoredProgramme[] = [];
+  private readonly windowEnd: number;
+  private readonly max: number;
+
+  constructor(private readonly options: Omit<GuideBuildOptions, 'signal'>) {
+    this.windowEnd = options.now + (options.windowMs ?? IPTV_GUIDE_LIMITS.windowMs);
+    this.max = options.maxProgrammes ?? IPTV_GUIDE_LIMITS.maxProgrammes;
+  }
+
+  add(programme: XmltvProgramme): void {
+    const { options } = this;
+    const channel = programme.channel.trim().toLowerCase();
+    const shift = options.channels.get(channel);
+    if (shift === undefined) return;
+    if (programme.start === null || programme.stop === null) return;
+    const offset = programme.naiveTime ? shift * 3_600_000 : 0;
+    const start = programme.start + offset;
+    const stop = programme.stop + offset;
+    if (stop <= options.now || start >= this.windowEnd || stop <= start) return;
+    if (!looksLikeEvent(programme)) return;
+    this.kept.push({
+      channel,
+      start,
+      stop,
+      title: programme.title,
+      subTitle: programme.subTitle,
+      desc: programme.desc,
+      categories: programme.categories,
+      previouslyShown: programme.previouslyShown,
+      live: programme.live,
+    });
+    /* Tope: se quedan los más cercanos a ahora (se poda de vez en cuando). */
+    if (this.kept.length > this.max * 2) prune(this.kept, options.now, this.max);
+  }
+
+  finish(): GuideWindow {
+    prune(this.kept, this.options.now, this.max);
+    return windowFrom(this.kept, this.options.now);
+  }
+}
+
 /** Construye la ventana útil desde el cuerpo (ya descomprimido) de una guía XMLTV. */
 export async function buildGuideWindow(
   body: Readable,
   options: GuideBuildOptions,
 ): Promise<GuideWindow> {
-  const windowEnd = options.now + (options.windowMs ?? IPTV_GUIDE_LIMITS.windowMs);
-  const max = options.maxProgrammes ?? IPTV_GUIDE_LIMITS.maxProgrammes;
-  const kept: StoredProgramme[] = [];
+  const collector = new GuideWindowCollector(options);
   await parseXmltvStream(
     body,
-    {
-      onProgramme(programme) {
-        const channel = programme.channel.trim().toLowerCase();
-        const shift = options.channels.get(channel);
-        if (shift === undefined) return;
-        if (programme.start === null || programme.stop === null) return;
-        const offset = programme.naiveTime ? shift * 3_600_000 : 0;
-        const start = programme.start + offset;
-        const stop = programme.stop + offset;
-        if (stop <= options.now || start >= windowEnd || stop <= start) return;
-        if (!looksLikeEvent(programme)) return;
-        kept.push({
-          channel,
-          start,
-          stop,
-          title: programme.title,
-          subTitle: programme.subTitle,
-          desc: programme.desc,
-          categories: programme.categories,
-          previouslyShown: programme.previouslyShown,
-          live: programme.live,
-        });
-        /* Tope: se quedan los más cercanos a ahora (se poda de vez en cuando). */
-        if (kept.length > max * 2) prune(kept, options.now, max);
-      },
-    },
+    { onProgramme: (programme) => collector.add(programme) },
     options.signal ? { signal: options.signal } : {},
   );
-  prune(kept, options.now, max);
-  return windowFrom(kept, options.now);
+  return collector.finish();
 }
 
 function prune(list: StoredProgramme[], now: number, max: number): void {

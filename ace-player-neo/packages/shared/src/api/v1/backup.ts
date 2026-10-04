@@ -12,6 +12,7 @@
    - «Tu fútbol» (preferencias), vínculos partido-canal hechos a mano y
      correcciones de canal (lo aprendido);
    - ajustes v2 (política de mismo canal);
+   - los idiomas de Películas y series (`vod`, 0.9.0, si ya se eligieron);
    - la IPTV: tipo, nombre, si está en pausa, host y, en Xtream, servidor.
      El usuario y la contraseña (Xtream) o la URL entera (M3U, que los lleva
      dentro) SOLO si Isma lo pide, cifrados con una clave que escribe él
@@ -48,6 +49,7 @@ import {
   WebSourceSchema,
 } from '../../state/v1.js';
 import { IptvKindSchema, SameChannelPolicySchema } from '../../state/v2.js';
+import { VOD_LANGS, VodLangSchema } from './vod.js';
 
 /** Favorito o reciente de la copia: el de state.json y, si era de la IPTV, `iptv: true`. */
 export const BackupItemSchema = ItemSchema.extend({
@@ -130,6 +132,16 @@ export const BackupFileSchema = z.strictObject({
   settings: z.strictObject({ sameChannelPolicy: SameChannelPolicySchema }),
   iptv: BackupIptvSchema.nullable(),
   browser: BackupBrowserSchema.optional(),
+  /**
+   * Los idiomas elegidos para Películas y series (docs/vod.md §4.10). Solo
+   * si ya se eligieron (0.9.0): las copias de antes no lo traen.
+   */
+  vod: z
+    .strictObject({
+      langs: z.array(VodLangSchema).max(VOD_LANGS.length),
+      unknown: z.boolean(),
+    })
+    .optional(),
 });
 export type BackupFile = z.infer<typeof BackupFileSchema>;
 
@@ -214,6 +226,8 @@ export const BackupImportResponseSchema = z.strictObject({
   /** Cambian «Tu fútbol» y los ajustes de reproducción del servidor. */
   preferences: z.boolean(),
   settings: z.boolean(),
+  /** Cambian los idiomas de Películas y series (docs/vod.md §4.10). Opcional: un servidor anterior no lo manda. */
+  vodLanguages: z.boolean().optional(),
   iptv: BackupIptvOutcomeSchema,
   /** Lo del navegador que trae la copia, para que la web lo aplique (null si no trae). */
   browser: BackupBrowserSchema.nullable(),

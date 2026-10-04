@@ -36,7 +36,7 @@ describe('cápsula del marcador (sobre el vídeo)', () => {
   it('en directo: marcador TAPADO («Marcador») y el minuto a la vista', () => {
     const { container } = render(<Scoreboard match={live} score={score(2, 1)} now={NOW} />);
     const cover = screen.getByRole('button', { name: 'Ver marcador' });
-    expect(cover).toHaveTextContent('Marcador');
+    expect(cover).toHaveTextContent('Ver marcador');
     expect(screen.queryByLabelText(/Atlético de Madrid 2/)).toBeNull();
     // Num se lee entero con su texto oculto («Minuto 72»).
     expect(screen.getByText('Minuto 72')).toBeInTheDocument();

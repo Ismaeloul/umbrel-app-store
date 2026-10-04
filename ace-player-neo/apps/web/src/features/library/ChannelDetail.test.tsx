@@ -10,6 +10,7 @@ import { EMPTY_ON_AIR } from './on-air.ts';
 import { selectionStore } from './selection.ts';
 import { getPlayer } from '../../player/api.ts';
 import { makeLibrary, renderWithApp, resetPlayback } from './test-utils.tsx';
+import { liveScore, matchAt, scheduleOf } from '../agenda/test-utils.tsx';
 
 let net: ReturnType<typeof mockFetch>;
 
@@ -56,6 +57,54 @@ describe('ficha del canal (panel lateral)', () => {
       title: 'DAZN 1',
       kind: 'id',
     });
+  });
+
+  it('«Ahora» con los escudos de la agenda: el del servidor o, si no hay, el monograma con siglas', async () => {
+    const library = makeLibrary();
+    const live = matchAt(
+      -30,
+      {
+        home: 'Girona',
+        away: 'Sevilla',
+        channels: [{ id: 'dazn1', name: 'DAZN 1' }],
+        homeTeam: {
+          id: '133731',
+          name: 'Girona',
+          short: 'GIR',
+          crest: '/api/v1/football/teams/133731/crest?v=1',
+          colors: { primary: '#cd2534', secondary: '#ffffff' },
+        },
+      },
+      Date.now(),
+    );
+    net = mockFetch({
+      'GET /api/v1/library': library,
+      'GET /api/v1/football': scheduleOf({ [live.date]: [live] }),
+      'GET /api/v1/scores': {
+        available: true,
+        generatedAt: new Date().toISOString(),
+        source: 'espn',
+        attribution: 'ESPN',
+        leagues: 1,
+        scores: { [live.id]: liveScore(1, 1, "33'") },
+      },
+    });
+    selectionStore.set({ collection: 'favorites', id: library.favorites[0]!.id });
+    renderWithApp(<ChannelDetail />);
+    await screen.findByText('Sevilla');
+    const crests = document.querySelectorAll('.lib-now__crest');
+    expect(crests).toHaveLength(2);
+    // Del tamaño de las tarjetas pequeñas de la agenda (40 px, con placa), no dos círculos de 22.
+    for (const crest of crests) {
+      expect(crest).toHaveStyle({ '--s': '40px' });
+      expect(crest).toHaveClass('team--plate');
+    }
+    expect(crests[0]!.querySelector('img')).toHaveAttribute(
+      'src',
+      '/api/v1/football/teams/133731/crest?v=1',
+    );
+    expect(crests[1]!.querySelector('img')).toBeNull();
+    expect(crests[1]!.querySelector('.team__plate')).toHaveTextContent('SEV');
   });
 });
 

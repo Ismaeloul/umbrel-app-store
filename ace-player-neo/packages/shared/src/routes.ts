@@ -21,9 +21,15 @@
      IPTV (`iptv*`, docs/iptv.md §5.3: la IPTV solo se configura en la web)
      y `iptvChannels` (el buscador IPTV, §14.2; pasa a `any` cuando la app
      calque el buscador, D27) e `iptvBrowse` (la pestaña IPTV de Canales,
-     §16.2; D29) son `web`. También las 3 de la copia de seguridad
+     §16.2; D29) son `web`. Las 5 de la Guía TV (`iptvGuide*`, §20.6)
+     también nacen `web`. También las 3 de la copia de seguridad
      (`backup*`, decisiones.md D25: la copia lleva datos personales y la
-     IPTV solo se configura en la web).
+     IPTV solo se configura en la web) y `diagnosticsExport` («Descargar
+     fallos» de Salud, 0.9.0: lleva el registro del servidor, aunque
+     redactado), igual que las 3 de «Descargar logs» (`diagnosticsLogInfo`,
+     `diagnosticsLogDownload` y `diagnosticsWebLog`, Ajustes → Registro).
+     Las 8 de Películas y series (`vod*`, docs/vod.md §11.1) nacen `web`
+     (D-VOD19) y pasan a `any` cuando la app copie la pantalla.
      `video` es `any` desde la IPTV (docs/iptv.md §5.4): la web entra sin
      token (el login de Umbrel basta) y el iPhone con `video-token`.
 
@@ -53,6 +59,17 @@ import {
   DiagnosticsListResponseSchema,
   DiagnosticsQuerySchema,
 } from './api/v1/diagnostics.js';
+import {
+  DiagnosticsExportBodySchema,
+  DiagnosticsExportSchema,
+} from './api/v1/diagnostics-export.js';
+import {
+  DiagnosticsLogDownloadBodySchema,
+  DiagnosticsLogInfoSchema,
+  WebLogUploadBodySchema,
+  WebLogUploadResponseSchema,
+} from './api/v1/diagnostics-log.js';
+import { WEB_LOG_UPLOAD_MAX_ENTRIES, WEB_LOG_UPLOAD_PER_MINUTE } from './constants/limits.js';
 import { EngineRestartResponseSchema, EngineStatusSchema } from './api/v1/engine.js';
 import {
   BadgeVersionQuerySchema,
@@ -101,12 +118,40 @@ import {
   IptvViewSchema,
 } from './api/v1/iptv.js';
 import {
+  IptvGuideArtParamsSchema,
+  IptvGuideNowQuerySchema,
+  IptvGuideNowResponseSchema,
+  IptvGuideProgrammeDetailSchema,
+  IptvGuideProgrammeParamsSchema,
+  IptvGuideProgrammesQuerySchema,
+  IptvGuideProgrammesResponseSchema,
+  IptvGuideQuerySchema,
+  IptvGuideResponseSchema,
+  IptvGuideVersionQuerySchema,
+} from './api/v1/guide.js';
+import {
   BackupExportBodySchema,
   BackupFileSchema,
   BackupImportBodySchema,
   BackupImportResponseSchema,
 } from './api/v1/backup.js';
 import { SearchQuerySchema, SearchResponseSchema } from './api/v1/search.js';
+import {
+  VodArtParamsSchema,
+  VodArtQuerySchema,
+  VodBrowseQuerySchema,
+  VodBrowseResponseSchema,
+  VodGrantSchema,
+  VodHomeQuerySchema,
+  VodHomeSchema,
+  VodLanguagesBodySchema,
+  VodLanguagesSchema,
+  VodProgressBodySchema,
+  VodStreamQuerySchema,
+  VodTitleParamsSchema,
+  VodTitleQuerySchema,
+  VodTitleSchema,
+} from './api/v1/vod.js';
 import { SettingsResponseSchema, SettingsUpdateBodySchema } from './api/v1/settings.js';
 import {
   FeedbackBodySchema,
@@ -133,8 +178,12 @@ export const NATIVE_PREFIX = '/native';
 export type V1Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type RouteAccess = 'web' | 'native' | 'any';
 export type NativeCredential = 'none' | 'bearer' | 'video-token';
-/** `json` = respuesta JSON validada; `sse` = text/event-stream; `binary` = ficheros del remux y escudos (PNG). */
-export type RouteContent = 'json' | 'sse' | 'binary';
+/**
+ * `json` = respuesta JSON validada; `sse` = text/event-stream; `binary` =
+ * ficheros del remux, escudos (PNG) y carteles VOD; `empty` = 204 sin cuerpo
+ * (hoy, `vodProgress`: docs/vod.md §11.1).
+ */
+export type RouteContent = 'json' | 'sse' | 'binary' | 'empty';
 
 /** Módulos del backend (arquitectura §5.2): quién aporta el manejador de cada ruta. */
 export const SERVER_MODULES = [
@@ -170,9 +219,10 @@ export interface V1RouteDefinition {
   readonly params?: z.ZodType;
   readonly query?: z.ZodType;
   readonly body?: z.ZodType;
-  /** Esquema de la respuesta de éxito; `null` si no es JSON (SSE o ficheros). */
+  /** Esquema de la respuesta de éxito; `null` si no es JSON (SSE, ficheros o 204). */
   readonly response: z.ZodType | null;
-  readonly status: 200 | 201;
+  /** 204 solo con `content: 'empty'`. */
+  readonly status: 200 | 201 | 204;
   readonly content: RouteContent;
   /**
    * GET con efectos (abre una sesión, lanza una comprobación…): desde el
@@ -267,6 +317,21 @@ const IPTV_STREAM_ERRORS = [
   'iptv_unreachable',
   'iptv_timeout',
   'iptv_unsupported',
+] as const satisfies readonly ErrorCode[];
+
+/* Abrir un título de Películas y series (docs/vod.md §11.3 y §9.12). Los
+   `vod_*` son suyos: nunca agotan una fuente ni pasan a AceStream. */
+const VOD_STREAM_ERRORS = [
+  'vod_unavailable',
+  'vod_not_found',
+  'vod_unsupported',
+  'vod_busy',
+  'vod_timeout',
+  'vod_dropped',
+  'vod_provider_error',
+  'vod_disk_full',
+  'vod_account',
+  'remux_busy',
 ] as const satisfies readonly ErrorCode[];
 
 export const V1_ROUTES = {
@@ -690,6 +755,255 @@ export const V1_ROUTES = {
     legacyTwin: null,
   }),
 
+  // --- Guía TV (solo web por ahora, docs/iptv.md §20.6) ---
+  iptvGuide: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/guide',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Guía TV: estado de la guía y canales con programación por páginas (Favoritos o Todos)',
+    description:
+      'La parrilla de la Guía TV (docs/iptv.md §20). Da el estado de la guía, su sello (`version`), lo que cubre (`from`, `to`) y una página de canales: ' +
+      '`favorites` (tus favoritos en su orden, también los que no tienen guía) o `all` (todos los canales con programación, España y sin país primero, en el orden del proveedor). ' +
+      'Con `favorites` y ningún favorito con guía, responde `all` con `fellBack: true`. Sin IPTV activa responde 200 con `state: inactive`: no es un error. ' +
+      'Nunca lleva URL, `stream_id`, `tvg-id` ni credenciales.',
+    query: IptvGuideQuerySchema,
+    response: IptvGuideResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  iptvGuideProgrammes: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/guide/programmes',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Guía TV: los programas de un trozo de la parrilla (hasta 60 canales × 12 h)',
+    description:
+      'Programas que se solapan con [`from`, `to`) de cada canal de la guía pedido, ordenados y sin solaparse entre sí, con título y marcas (docs/iptv.md §20.6). ' +
+      'Con la `v` de ahora, `private, max-age=86400, immutable` (el trozo de una guía no cambia nunca); con otra, 409 `guide_stale`. Sin guía, 409 `guide_unavailable`.',
+    query: IptvGuideProgrammesQuerySchema,
+    response: IptvGuideProgrammesResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: ['guide_unavailable', 'guide_stale'],
+    legacyTwin: null,
+  }),
+  iptvGuideProgramme: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/guide/programmes/:id',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Guía TV: la ficha de un programa (sinopsis, episodio, edad, nota, reparto…)',
+    description:
+      'Lo que la guía dice de un programa, para «Más info» (docs/iptv.md §20.6). El id solo vale con su `v`: con otra, 409 `guide_stale`; uno que no existe, 404 `not_found`.',
+    params: IptvGuideProgrammeParamsSchema,
+    query: IptvGuideVersionQuerySchema,
+    response: IptvGuideProgrammeDetailSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: ['guide_unavailable', 'guide_stale'],
+    legacyTwin: null,
+  }),
+  iptvGuideNow: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/guide/now',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Guía TV: «ahora / después» de unos canales IPTV (para Canales)',
+    description:
+      'Para cada id IPTV pedido (los de las filas de la pestaña IPTV o del buscador), lo que echa ahora y lo siguiente según la guía (docs/iptv.md §20.6). ' +
+      'Sin guía o sin IPTV activa, 200 con `available: false`: no es un error.',
+    query: IptvGuideNowQuerySchema,
+    response: IptvGuideNowResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  iptvGuideArt: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/guide/art/:ref',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Guía TV: logo de un canal o imagen de un programa (JPEG, PNG o WebP) por el proxy propio',
+    description:
+      'Solo recibe referencias de la guía, nunca URLs (docs/iptv.md §20.6). Con la `v` de ahora, `private, max-age=86400, immutable`; con otra, 409 `guide_stale`. ' +
+      "`If-None-Match` da 304. Solo imágenes raster por bytes mágicos, con `nosniff` y `Content-Security-Policy: default-src 'none'`. Sin imagen, 404 `not_found`; con la cola llena, 503 `guide_busy` con `Retry-After`.",
+    params: IptvGuideArtParamsSchema,
+    query: IptvGuideVersionQuerySchema,
+    response: null,
+    status: 200,
+    content: 'binary',
+    sideEffects: false,
+    errors: ['guide_unavailable', 'guide_stale', 'guide_busy'],
+    legacyTwin: null,
+  }),
+
+  // --- Películas y series (solo web por ahora, docs/vod.md §11.1, D-VOD19) ---
+  vodHome: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Portada de Películas y series en una petición: «Seguir viendo», novedades, series actualizadas, categorías y distintivos',
+    description:
+      'Estado del catálogo VOD (docs/vod.md §4.8 y §6.4, D-VOD28). «Novedades en películas» y «Series actualizadas» van sin adultos (D-VOD7). ' +
+      'Sin IPTV activa, en pausa, con M3U o sin VOD responde 200 con `active: false` o su `state`: no es un error. Nunca lleva URL, `stream_id` ni credenciales. ' +
+      'Con `langs` (y `unknown`), novedades, categorías y distintivos van filtrados por idioma (§4.10); `langs` y `noLang` cuentan siempre el catálogo entero.',
+    query: VodHomeQuerySchema,
+    response: VodHomeSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  vodBrowse: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod/browse',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Rejilla y buscador de películas o series: categoría, distintivo, texto y orden, por páginas',
+    description:
+      'Por tipo (`kind`), con `otherKindTotal` para «Ver 3 series» (docs/vod.md §6, D-VOD5). Con `q` (2 a 80 letras) manda la relevancia; sin ella, `added` o `name`. ' +
+      'Los 2 000 mejores como mucho (`capped`); un cursor de otro catálogo da la primera página con `stale: true`. El texto buscado no va al registro.',
+    query: VodBrowseQuerySchema,
+    response: VodBrowseResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    /* Una consulta o un cursor mal formados: `validation_error` (de COMMON_V1_ERRORS). */
+    errors: ['empty_query'],
+    legacyTwin: null,
+  }),
+  vodTitle: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod/titles/:id',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Ficha de una película o una serie (con temporadas y episodios)',
+    description:
+      'Pide la ficha al proveedor por una cola (1 en vuelo, 300 ms, 60 por minuto; docs/vod.md §7, D-VOD30). Nunca queda en blanco: si el proveedor falla, ' +
+      'lo que se sabe por la lista con `info: failed`; con `pre=1` y la cola ocupada, `info: pending`.',
+    params: VodTitleParamsSchema,
+    query: VodTitleQuerySchema,
+    response: VodTitleSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: ['vod_not_found', 'vod_unavailable'],
+    legacyTwin: null,
+  }),
+  vodArt: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod/titles/:id/art/:art',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Cartel, fondo o fotograma de un título (JPEG, PNG o WebP) por el proxy propio',
+    description:
+      'Solo recibe ids, nunca URLs (docs/vod.md §8, D-VOD8). Con la `v` correcta, `private, max-age=31536000, immutable`; sin ella o con otra, `private, no-cache`. ' +
+      "`If-None-Match` da 304. Solo imágenes raster por bytes mágicos, con `nosniff` y `Content-Security-Policy: default-src 'none'`. Sin imagen, 404 `vod_not_found`.",
+    params: VodArtParamsSchema,
+    query: VodArtQuerySchema,
+    response: null,
+    status: 200,
+    content: 'binary',
+    sideEffects: false,
+    errors: ['vod_not_found'],
+    legacyTwin: null,
+  }),
+  vodStream: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod/titles/:id/stream',
+    access: 'web',
+    credential: 'bearer',
+    module: 'playback',
+    summary: 'Abrir una película o un episodio y recibir su lista HLS VOD completa',
+    description:
+      'Sesión IPTV del relé VOD y del productor (docs/vod.md §9): la web recibe `hls` en `/api/v1/video/<sid>/index.m3u8` sin token y el iPhone `hls-fmp4` con `?t=`, los dos con `source: iptv`. ' +
+      'No espera al primer segmento: la lista sale del índice. Tope de 40 s en el servidor (§9.12). Dos cosas por IPTV a la vez siguen la regla de la casa: la nueva corta la anterior.',
+    params: VodTitleParamsSchema,
+    query: VodStreamQuerySchema,
+    response: VodGrantSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: VOD_STREAM_ERRORS,
+    legacyTwin: null,
+  }),
+  vodProgress: defineRoute({
+    method: 'POST',
+    path: '/api/v1/vod/titles/:id/progress',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Guardar el progreso de una película o un episodio, o marcarlo (204 sin cuerpo)',
+    description:
+      'Progreso por casa en `v2/vod.json` (docs/vod.md §10, D-VOD17). `tick` se vuelca como mucho una vez por minuto; lo demás, al momento. ' +
+      'El servidor valida la posición contra la duración (`posS ≤ durS + 5`, ±10 % de la del índice); si no cumple, `validation_error` y no se guarda.',
+    params: VodTitleParamsSchema,
+    body: VodProgressBodySchema,
+    response: null,
+    status: 204,
+    content: 'empty',
+    sideEffects: true,
+    errors: ['vod_not_found'],
+    legacyTwin: null,
+  }),
+  vodLanguagesGet: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod/languages',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Los idiomas elegidos para Películas y series (castellano y latino, aparte)',
+    description:
+      'Por casa, en `v2/vod-idiomas.json` (docs/vod.md §4.10): valen en el PC y en el iPhone y no dependen del proveedor. ' +
+      '`chosen: false` hasta la primera elección (la web enseña el selector). `langs` vacía = todos los idiomas.',
+    response: VodLanguagesSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  vodLanguagesUpdate: defineRoute({
+    method: 'PUT',
+    path: '/api/v1/vod/languages',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Elegir los idiomas de Películas y series (sustituye la elección)',
+    description:
+      'Guarda la elección (`chosen` pasa a `true`) y la devuelve. Los idiomas repetidos se juntan. Entra en la copia de seguridad.',
+    body: VodLanguagesBodySchema,
+    response: VodLanguagesSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [],
+    legacyTwin: null,
+  }),
+
   // --- Emparejamiento y dispositivos ---
   pairingCreate: defineRoute({
     method: 'POST',
@@ -785,6 +1099,84 @@ export const V1_ROUTES = {
     content: 'json',
     sideEffects: true,
     errors: ['rate_limited'],
+    legacyTwin: null,
+  }),
+  diagnosticsExport: defineRoute({
+    method: 'POST',
+    path: '/api/v1/diagnostics/export',
+    access: 'web',
+    credential: 'bearer',
+    module: 'diagnostics',
+    summary: '«Descargar fallos» de Salud: un fichero con fallos y registro, redactado',
+    description:
+      'La web manda su anillo de errores (`web`) y recibe el fichero `ace-player-neo-fallos-AAAA-MM-DD-HHMM.json` ' +
+      '(`Content-Disposition: attachment`): versión, entorno, estado de motor/IPTV/remux, fallos clasificados en ' +
+      '«nuestro» y «de fuera» con un resumen, y el registro del servidor y de la web. Todo pasa por el redactor ' +
+      'de la IPTV y por el del informe: sin contraseñas, usuarios, tokens, cookies, URLs con credenciales ni IPs ' +
+      'públicas. Solo web: lleva el registro del servidor.',
+    body: DiagnosticsExportBodySchema,
+    response: DiagnosticsExportSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [],
+    legacyTwin: null,
+  }),
+  diagnosticsLogInfo: defineRoute({
+    method: 'GET',
+    path: '/api/v1/diagnostics/log',
+    access: 'web',
+    credential: 'bearer',
+    module: 'diagnostics',
+    summary: '«Descargar logs» de Ajustes → Registro: cuánto registro hay guardado en el disco',
+    description:
+      'El servidor guarda su registro (y los errores que manda la web) en `<DATA_DIR>/v2/registro/`, un fichero por día, ' +
+      'redactado al escribirse, unos 45 días y como mucho 40 MiB (docs/registro.md). Solo web.',
+    response: DiagnosticsLogInfoSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  diagnosticsLogDownload: defineRoute({
+    method: 'POST',
+    path: '/api/v1/diagnostics/log/download',
+    access: 'web',
+    credential: 'bearer',
+    module: 'diagnostics',
+    summary: '«Descargar logs»: un zip con el registro del último día, semana o mes, redactado',
+    description:
+      'La web manda el periodo y lo suyo (como en «Descargar fallos») y recibe `ace-player-neo-logs-AAAA-MM-DD-HHMM.zip` ' +
+      '(`Content-Disposition: attachment`, `no-store`) con LEEME.txt, resumen.json (LogsSummary), fallos.json ' +
+      '(DiagnosticsExport) y registro.jsonl (las líneas del periodo, de la más vieja a la más nueva). Todo redactado: ' +
+      'sin contraseñas, usuarios, tokens, cookies, URLs con credenciales ni IPs públicas. Solo web.',
+    body: DiagnosticsLogDownloadBodySchema,
+    response: null,
+    status: 200,
+    content: 'binary',
+    sideEffects: true,
+    errors: [],
+    legacyTwin: null,
+  }),
+  diagnosticsWebLog: defineRoute({
+    method: 'POST',
+    path: '/api/v1/diagnostics/web-log',
+    access: 'web',
+    credential: 'bearer',
+    module: 'diagnostics',
+    summary: 'La web manda sus errores importantes para que queden en el registro del servidor',
+    description:
+      'Excepciones, promesas sin capturar, errores de la consola, peticiones que fallan y avisos del reproductor ' +
+      `(nunca las notas), en tandas de ${WEB_LOG_UPLOAD_MAX_ENTRIES} como mucho. Por encima de ${WEB_LOG_UPLOAD_PER_MINUTE} ` +
+      'por minuto (en total) no se guardan y se cuentan en `dropped`; tampoco los fallos del reproductor que ya llegaron ' +
+      'por el registro de fallos. Se redactan antes de escribirse. Solo web.',
+    body: WebLogUploadBodySchema,
+    response: WebLogUploadResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [],
     legacyTwin: null,
   }),
 

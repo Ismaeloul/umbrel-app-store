@@ -35,6 +35,7 @@ import { useLayout } from '../../app/layout.tsx';
 import { useNavigate, useSearchParam } from '../../app/router.tsx';
 import { searchFor, VISTA_TITLE } from '../../app/routes.ts';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
+import { preloadView } from '../../app/views.tsx';
 import { useSwipe } from '../../lib/gestures.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
@@ -92,7 +93,11 @@ import { useOnScreenHash } from './play.ts';
 import { selectChannel, useSelection } from './selection.ts';
 import { useChannelActions } from './useChannelActions.tsx';
 import { VirtualList } from './VirtualList.tsx';
+import { registerIptvChannelsDemo } from '../search/demo-register.ts';
 import './library.css';
+
+/* En la demo, «En tu IPTV» del filtro sin haber pasado por Buscar. */
+registerIptvChannelsDemo();
 
 type Row =
   | { type: 'channel'; collection: LibraryCollection; item: Item }
@@ -343,6 +348,7 @@ export default function LibraryView({ active }: ViewProps) {
         onToggleFavorite={() => actions.toggleFavorite(item)}
         menuItems={actions.menuFor(item, collection, { withPlay: selectOnClick })}
         enterIndex={entering ? Math.min(index, 12) : null}
+        highlight={q}
       />
     );
   };
@@ -352,6 +358,20 @@ export default function LibraryView({ active }: ViewProps) {
       title={VISTA_TITLE.biblioteca}
       actions={
         <>
+          {/* La Guía TV es hija de Canales (docs/iptv.md §20): su entrada, aquí. */}
+          {withIptv ? (
+            <Button
+              variant="quiet"
+              size="sm"
+              icon="guia"
+              className="lib-guide-link"
+              onClick={() => navigate({ vista: 'guia' })}
+              onPointerEnter={() => preloadView('guia')}
+              onFocus={() => preloadView('guia')}
+            >
+              Guía TV
+            </Button>
+          ) : null}
           <IconButton
             icon="paste"
             label="Pegar un Content ID o enlace acestream://"
@@ -482,6 +502,7 @@ export default function LibraryView({ active }: ViewProps) {
                   onScreen={onScreen === channel.id}
                   onAir={onAir(iptvRow)}
                   iptv
+                  highlight={q}
                   ace={channel.library.length}
                   subtitle={iptvSubtitle(channel)}
                   tags={iptvTags(channel)}

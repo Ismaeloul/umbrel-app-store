@@ -13,7 +13,8 @@ import type { ChannelStreamQuery, IptvReason } from '@ace/shared';
 import type { FakeClock } from '../../core/clock.js';
 import type * as RemuxFiles from '../remux/files.js';
 import { ioTurns } from '../remux/test-support.js';
-import { IPTV_STALL_MIN_MS } from '../remux/service.js';
+import { IPTV_RELAY } from '@ace/shared';
+import { IPTV_FFMPEG_PROBE_MS, IPTV_STALL_MIN_MS } from '../remux/service.js';
 import type { IptvInput, IptvService } from '../iptv/types.js';
 import { partial, setupPlayback } from './test-support.js';
 import type { ViewerIdentity } from './types.js';
@@ -27,6 +28,9 @@ const query = (): ChannelStreamQuery => ({
   viewer: 'visor-web',
 });
 const web = (): ViewerIdentity => ({ viewerId: 'visor-web', deviceId: 'pc', device: null });
+/* Plazo de la generación nueva tras un reinicio por atasco (TD 2 s, entrega seguida): la conexión nueva
+   con el proveedor, el probe de ffmpeg y un segmento (auditoría 0.9.0: antes, 10 s fijos). */
+const PROGRESS_MS = IPTV_RELAY.headersMs + IPTV_FFMPEG_PROBE_MS + 2_000;
 
 /* Lecturas de index.m3u8 que el remux tiene a medias (E/S real). `step` no adelanta el reloj falso con una
    en curso: en la CI cargada una lectura empezada antes de `writeSegments` cruzaba varios pasos y acababa,
@@ -49,17 +53,33 @@ vi.mock('../remux/files.js', async (importOriginal) => {
 });
 
 /** Doble de la IPTV: un canal propio y un relé que avisa cuando el test quiere. */
-function fakeIptv() {
+function fakeIptv(
+  relay: {
+    /** Último byte del proveedor (null: no manda nada). */
+    readonly lastByteAt?: () => number | null;
+    readonly cadenceMs?: number | null;
+  } = {},
+) {
   const restarts: (() => void)[] = [];
   const drops: ((code: IptvReason) => void)[] = [];
+  const gateReleases: number[] = [];
   const input: IptvInput = {
     id: CANAL,
     inputUrl: 'http://127.0.0.1:41999/r/TICKET/in.ts',
     isHls: false,
     title: 'La 1 --> Mi IPTV',
-    stats: () => ({ bytes: 0, kbps: 0, lastByteAt: null }),
+    stats: () => ({
+      bytes: 0,
+      kbps: 0,
+      lastByteAt: relay.lastByteAt?.() ?? null,
+      cadenceMs: relay.cadenceMs ?? null,
+    }),
     onDropped: (listener) => drops.push(listener),
     onRestart: (listener) => restarts.push(listener),
+    releaseGate: () => {
+      gateReleases.push(1);
+      return true;
+    },
     close: async () => undefined,
   };
   const service = partial<IptvService>('iptv', {
@@ -68,7 +88,7 @@ function fakeIptv() {
     openInput: async () => input,
     subscribe: () => () => undefined,
   });
-  return { service, restart: () => restarts.forEach((listener) => listener()) };
+  return { service, gateReleases, restart: () => restarts.forEach((listener) => listener()) };
 }
 
 /** Deja correr la E/S real (con un tope en tiempo real) hasta que se cumpla `check`. */
@@ -130,7 +150,7 @@ describe('IPTV: reinicio continuo del remux (B2)', () => {
 });
 
 describe('IPTV: vigilante de salida (B3)', () => {
-  it('lista parada: reinicio continuo (el relé reconecta al engancharse el ffmpeg nuevo); sin segmento nuevo en 10 s, iptv_dropped', async () => {
+  it('lista parada: reinicio continuo (el relé reconecta al engancharse el ffmpeg nuevo); sin segmento nuevo en el plazo (conexión + probe + TD), iptv_dropped', async () => {
     const iptv = fakeIptv();
     const setup = await setupPlayback({ iptv: iptv.service });
     const { runtime, ffmpeg, events, remux, clock } = setup;
@@ -147,10 +167,10 @@ describe('IPTV: vigilante de salida (B3)', () => {
     /* Un segundo aviso del mismo atasco no lanza otro reinicio. */
     await remux.watchStalls();
     expect(ffmpeg.spawned).toHaveLength(2);
-    /* El ffmpeg nuevo tampoco escribe: justo antes de max(10 s, 3×TD) sigue abierta; pasado ese plazo (y
+    /* El ffmpeg nuevo tampoco escribe: justo antes del plazo sigue abierta; pasado ese plazo (y
        mucho antes de los 20 s de `iptv_timeout`), iptv_dropped y no remux_died. El reloj ya no avanza
        más: el cierre solo espera a la E/S real. */
-    await step(clock, IPTV_STALL_MIN_MS - 500);
+    await step(clock, PROGRESS_MS - 500);
     await ioTurns(50);
     expect(events.of('stream.closed')).toEqual([]);
     await step(clock, 1_500);
@@ -231,5 +251,69 @@ describe('IPTV: vigilante de salida (B3)', () => {
       expect.objectContaining({ sessionId: grant.session.id, seamless: true }),
     ]);
     expect(events.of('stream.closed')).toEqual([]);
+  });
+});
+
+describe('IPTV: vigilante de salida con un proveedor que entrega a golpes (auditoría 0.9.0)', () => {
+  it('lista parada con bytes entrando: suelta la puerta del relé y no reconecta; otro umbral igual, reinicio', async () => {
+    let clockRef: FakeClock | null = null;
+    const iptv = fakeIptv({ lastByteAt: () => clockRef?.now() ?? null });
+    const setup = await setupPlayback({ iptv: iptv.service });
+    const { runtime, ffmpeg, events, remux, clock } = setup;
+    clockRef = clock;
+    await runtime.service.acquire(CANAL, query(), web(), live());
+    await remux.watchStalls();
+    clock.advance(IPTV_STALL_MIN_MS + 1_000);
+    await remux.watchStalls();
+    await ioTurns(50);
+    /* El proveedor sigue mandando: ni reinicio ni reconexión, solo la puerta. */
+    expect(iptv.gateReleases).toHaveLength(1);
+    expect(ffmpeg.spawned).toHaveLength(1);
+    expect(events.of('stream.reopened')).toEqual([]);
+    /* Mismo aviso a la vuelta siguiente del vigilante: nada nuevo. */
+    await remux.watchStalls();
+    await ioTurns(20);
+    expect(ffmpeg.spawned).toHaveLength(1);
+    /* Otro umbral entero sin moverse: ahora sí, reinicio continuo. */
+    clock.advance(IPTV_STALL_MIN_MS + 1_000);
+    await remux.watchStalls();
+    await until('reinicio por atasco', () => ffmpeg.spawned.length === 2);
+    expect(iptv.gateReleases).toHaveLength(1);
+  });
+
+  it('a golpes y con un silencio más largo de lo normal pero dentro del plazo del relé (2× la cadencia): se espera', async () => {
+    let lastByteAt: number | null = null;
+    const iptv = fakeIptv({ cadenceMs: 10_000, lastByteAt: () => lastByteAt });
+    const setup = await setupPlayback({ iptv: iptv.service });
+    const { runtime, ffmpeg, remux, clock } = setup;
+    await runtime.service.acquire(CANAL, query(), web(), live());
+    lastByteAt = clock.now();
+    await remux.watchStalls();
+    /* 16 s sin bytes ni lista nueva: pasa el umbral (15 s) pero el relé aguanta 20 s. */
+    clock.advance(16_000);
+    await remux.watchStalls();
+    await ioTurns(50);
+    expect(ffmpeg.spawned).toHaveLength(1);
+    expect(iptv.gateReleases).toHaveLength(0);
+    /* 32 s: fuera del plazo del relé, reinicio. */
+    clock.advance(16_000);
+    await remux.watchStalls();
+    await until('reinicio por atasco', () => ffmpeg.spawned.length === 2);
+  });
+
+  it('con cadencia de 10 s la lista quieta 12 s no es atasco: el umbral es 1,5× la cadencia', async () => {
+    const iptv = fakeIptv({ cadenceMs: 10_000 });
+    const setup = await setupPlayback({ iptv: iptv.service });
+    const { runtime, ffmpeg, remux, clock } = setup;
+    await runtime.service.acquire(CANAL, query(), web(), live());
+    await remux.watchStalls();
+    clock.advance(12_000);
+    await remux.watchStalls();
+    await ioTurns(50);
+    expect(ffmpeg.spawned).toHaveLength(1);
+    clock.advance(4_000);
+    await remux.watchStalls();
+    /* 16 s y sin bytes del proveedor: reinicio. */
+    await until('reinicio por atasco', () => ffmpeg.spawned.length === 2);
   });
 });

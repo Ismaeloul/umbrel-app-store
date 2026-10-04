@@ -19,7 +19,8 @@
    - Modo demo: espera a que se decida (mode.ts) y, si es demo, contesta el
      módulo diferido demo/ sin red. */
 
-import { IPTV_CLIENT } from '@ace/shared';
+import { IPTV_CLIENT, VOD_CLIENT } from '@ace/shared';
+import { recordWebLog } from '../lib/web-log.ts';
 import { ApiError, errorFromResponse, isAbortError } from './errors.ts';
 import { isDemo, whenModeReady } from './mode.ts';
 import {
@@ -76,6 +77,13 @@ const TIMEOUTS: Partial<Record<JsonRouteId, number>> = {
   iptvChannels: IPTV_CLIENT.searchMs,
   /* La pestaña IPTV de Canales (§16.2): el servidor responde en < 100 ms con 30 000 canales. */
   iptvBrowse: IPTV_CLIENT.browseMs,
+  /* Películas y series (docs/vod.md §11.1 y §9.12): abrir tiene 40 s en el
+     servidor y 50 s aquí, bajo los 60 s de nginx; la ficha espera a la cola
+     de fichas del proveedor. */
+  vodHome: VOD_CLIENT.homeMs,
+  vodBrowse: VOD_CLIENT.browseMs,
+  vodTitle: VOD_CLIENT.titleMs,
+  vodStream: VOD_CLIENT.streamMs,
   engineRestart: 20_000,
   healthLive: 4_000,
 };
@@ -152,6 +160,15 @@ export function setFetch(next: typeof fetch | null): void {
   fetchImpl = next ?? ((...args) => globalThis.fetch(...args));
 }
 
+/**
+ * El mismo fetch que usa api() (el simulado en los tests), para las rutas
+ * que no son JSON: hoy, `vodProgress`, que responde 204 sin cuerpo
+ * (features/cine/data.ts).
+ */
+export function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  return fetchImpl(input, init);
+}
+
 /** Valida con zod en desarrollo. En producción esta rama desaparece del build. */
 async function validateInDev(id: JsonRouteId, data: unknown): Promise<void> {
   if (!import.meta.env.DEV) return;
@@ -165,7 +182,41 @@ async function validateInDev(id: JsonRouteId, data: unknown): Promise<void> {
   }
 }
 
+/**
+ * Las peticiones que fallan por algo que no es una respuesta normal (sin red,
+ * plazo, respuesta rara o un 5xx) se apuntan para «Descargar fallos»
+ * (src/lib/web-log.ts). Los 4xx y las cancelaciones, no.
+ */
+function noteFailure(id: JsonRouteId, error: unknown): void {
+  if (!(error instanceof ApiError)) return;
+  const unexpected =
+    error.code === 'network' ||
+    error.code === 'timeout' ||
+    error.code === 'bad_response' ||
+    error.code === 'invalid_response' ||
+    error.status >= 500;
+  if (!unexpected) return;
+  recordWebLog({
+    kind: 'api',
+    level: 'error',
+    code: error.code,
+    message: `${id}: ${error.message}${error.status ? ` (HTTP ${error.status})` : ''}`,
+  });
+}
+
 export async function api<Id extends JsonRouteId>(
+  id: Id,
+  ...args: ApiArgs<Id>
+): Promise<ApiResponse<Id>> {
+  try {
+    return await request(id, ...args);
+  } catch (error) {
+    noteFailure(id, error);
+    throw error;
+  }
+}
+
+async function request<Id extends JsonRouteId>(
   id: Id,
   ...[input]: ApiArgs<Id>
 ): Promise<ApiResponse<Id>> {

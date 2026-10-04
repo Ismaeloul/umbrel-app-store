@@ -16,6 +16,7 @@ import {
   FAKE_IPTV_USER,
 } from '../../../test/fake-iptv/provider.js';
 import { FAKE_IPTV_HOST } from '../../../test/fake-iptv/net.js';
+import { TOKEN_REFRESH_WAIT_MS } from './service.js';
 import {
   IPTV_TEST_MATCH_OFFSET_MS,
   createIptvTestRig,
@@ -304,6 +305,57 @@ describe('trabajos (§3.4 y §3.5)', () => {
   });
 });
 
+describe('guardar con la prueba rápida fallando (M7)', () => {
+  it('lo abortado (lista y guía en marcha) se vuelve a programar', async () => {
+    const r = await rig();
+    await r.service.start();
+    await saveXtream(r);
+    const timers = r.service['timers'];
+    /* La lista y la guía estaban descargándose: sus temporizadores ya se habían consumido. */
+    for (const name of ['list', 'guide']) {
+      r.core.clock.clearTimeout(timers.get(name));
+      timers.delete(name);
+    }
+    expect(
+      await codeOf(
+        r.service.save(
+          { kind: 'xtream', server: SERVER, username: FAKE_IPTV_USER, password: 'mala' },
+          signal(),
+        ),
+      ),
+    ).toBe('iptv_auth_failed');
+    expect(timers.has('list')).toBe(true);
+    expect(timers.has('guide')).toBe(true);
+  });
+});
+
+describe('token caducado de una M3U con la guía descargándose (M6)', () => {
+  it('el canal no espera a la guía: a los 10 s sigue sin la URL nueva, y la lista se refresca detrás', async () => {
+    const r = await rig();
+    await r.service.save({ kind: 'm3u', url: `${SERVER}/lista.m3u` }, signal());
+    await r.service.idle();
+    const id = r.service.resolve({ channels: ['La 1'], scorer }).candidates[0]?.id as string;
+    expect(id).toBeTruthy();
+    /* Una descarga de la guía larga ocupa el cerrojo de los trabajos pesados. */
+    let release: () => void = () => undefined;
+    const guide = r.service['runHeavy'](
+      'guide',
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    await r.core.clock.advanceAsync(2 * 60_000);
+    let settled = false;
+    const pending = r.service['refreshRef'](id).finally(() => (settled = true));
+    await r.core.clock.advanceAsync(TOKEN_REFRESH_WAIT_MS - 1);
+    expect(settled).toBe(false);
+    await r.core.clock.advanceAsync(2);
+    expect(await pending).toBeNull();
+    release();
+    await guide;
+    await r.service.idle();
+    expect(r.service.classify(id)).toBe('owned');
+  });
+});
+
 describe('emparejado con guía (§4.3 a §4.6)', () => {
   it('la guía pone primero M+ LaLiga TV 2; luego DAZN LaLiga (un cartel por resolución: 1080p, 720p y la reserva); nada de Champions, Hypermotion ni UK', async () => {
     const r = await rig();
@@ -570,9 +622,12 @@ describe('buscador y biblioteca (docs/iptv.md §14)', () => {
     });
     expect(r.service.classify(found.channels[0]?.id as string)).toBe('owned');
     const text = JSON.stringify(found);
-    for (const secret of [FAKE_IPTV_USER, FAKE_IPTV_PASSWORD, 'XXX', 'Telecinco.es', '110']) {
+    for (const secret of [FAKE_IPTV_USER, FAKE_IPTV_PASSWORD, 'XXX', 'Telecinco.es']) {
       expect(text).not.toContain(secret);
     }
+    /* El número del canal en el proveedor, suelto (los ids son hex aleatorios
+       y pueden llevar «110» dentro por casualidad). */
+    expect(text).not.toMatch(/(^|[^0-9a-f])110([^0-9a-f]|$)/);
   });
 
   it('«dazn»: una fila por canal con sus calidades; cualquier país, con el suyo, y el de España primero', async () => {
@@ -584,9 +639,9 @@ describe('buscador y biblioteca (docs/iptv.md §14)', () => {
     ).toEqual([
       ['DAZN 1', null, ['uhd', 'fhd', 'hd', 'sd']],
       ['DAZN LaLiga', null, ['fhd', 'hd']],
-      /* Otro país, detrás de todos los de España (§19). */
-      ['DAZN 1', 'UK', []],
+      /* Otro país, detrás de todos los de España (§19); entre ellos, la mejor calidad (0.9.0, docs/buscador.md). */
       ['DAZN 1', 'DE', ['hd']],
+      ['DAZN 1', 'UK', []],
     ]);
     /* La fila de «DAZN 1» arranca por la 1080p. */
     expect(dazn.channels[0]?.quality).toBe('fhd');
@@ -595,6 +650,21 @@ describe('buscador y biblioteca (docs/iptv.md §14)', () => {
     expect(r.service.searchChannels('canal+').channels.map((channel) => channel.country)).toEqual([
       'FR',
     ]);
+  });
+
+  it('un favorito IPTV desempata delante en Buscar y en la pestaña IPTV (docs/buscador.md), nunca de lo igual', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const laliga = r.service
+      .searchChannels('dazn laliga')
+      .channels.find((channel) => channel.title === 'DAZN LaLiga')?.id as string;
+    expect(r.service.searchChannels('dazn').channels[0]?.title).toBe('DAZN 1');
+    await favorite(r, laliga, 'DAZN LaLiga');
+    expect(r.service.searchChannels('dazn').channels[0]?.title).toBe('DAZN LaLiga');
+    const tab = await r.service.browse({ q: 'dazn' });
+    expect(tab.channels[0]?.title).toBe('DAZN LaLiga');
+    /* Lo igual sigue primero: «dazn 1» da DAZN 1 aunque DAZN LaLiga sea favorito. */
+    expect(r.service.searchChannels('dazn 1').channels[0]?.title).toBe('DAZN 1');
   });
 
   it('un canal con 5 variantes: 4 carteles 1080p, 4K, 720p y SD; la reserva, de respaldo del relé', async () => {

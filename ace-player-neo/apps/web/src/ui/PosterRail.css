@@ -1,6 +1,10 @@
 .prail {
   --prail-gap: 12px;
   --prail-pad: 0px;
+  /* Aire de arriba y de abajo de la pista (las sombras y los halos de los
+     carteles no se recortan): quien lo use puede ampliarlo. */
+  --prail-pad-top: 6px;
+  --prail-pad-bottom: 14px;
   --prail-item-w: 240px;
   position: relative;
   min-width: 0;
@@ -17,8 +21,7 @@
   gap: var(--prail-gap);
   overflow-x: auto;
   overflow-y: hidden;
-  /* Aire para las sombras de los carteles sin recortarlas. */
-  padding: 6px var(--prail-pad) 14px;
+  padding: var(--prail-pad-top) var(--prail-pad) var(--prail-pad-bottom);
   scroll-snap-type: x mandatory;
   scroll-padding-inline: var(--prail-pad);
   overscroll-behavior-x: contain;
@@ -41,14 +44,26 @@
 .prail__item {
   display: block;
 }
-/* Flechas: solo con ratón y desbordamiento; flotan sobre los bordes. */
+/* Flechas: solo con ratón y desbordamiento; flotan sobre los bordes. Se
+   centran con `translate` (no con `transform`): el apretón de `.press` es
+   `scale` y se suma; con `transform` lo pisaba al pulsar y la flecha bajaba
+   media altura de golpe (lo vio Isma en «Seguir viendo», 0.9.0). */
 .prail .prail__arrow {
   position: absolute;
   top: 50%;
   z-index: 1;
-  transform: translateY(-50%);
+  translate: 0 -50%;
   opacity: 0;
-  transition: opacity var(--dur-rapido) var(--ease-out);
+  transition:
+    opacity var(--dur-rapido) var(--ease-out),
+    scale var(--dur-rapido) var(--ease-rapido);
+}
+/* Apagada en su extremo: se ve tenue y no se aprieta, pero sigue recogiendo
+   el clic (si no, caería en el cartel de debajo) y el foco. */
+.prail .prail__arrow[aria-disabled='true'],
+.prail .prail__arrow[aria-disabled='true']:active {
+  cursor: default;
+  scale: none;
 }
 .prail__arrow--prev {
   left: calc(var(--prail-pad) + 6px);
@@ -60,6 +75,10 @@
   .prail--arrows:hover .prail__arrow,
   .prail__arrow:focus-visible {
     opacity: 1;
+  }
+  .prail--arrows:hover .prail__arrow[aria-disabled='true'],
+  .prail .prail__arrow[aria-disabled='true']:focus-visible {
+    opacity: 0.35;
   }
 }
 @media (min-width: 768px) {

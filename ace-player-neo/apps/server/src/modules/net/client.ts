@@ -27,7 +27,7 @@
 
 import { createGunzip, gunzipSync, type Gunzip } from 'node:zlib';
 import { PassThrough, type Readable } from 'node:stream';
-import { FETCH_MAX_BYTES, MAX_REDIRECTS, TIMEOUTS } from '@ace/shared';
+import { FETCH_MAX_BYTES, MAX_REDIRECTS, TIMEOUTS, VOD_TIMINGS } from '@ace/shared';
 import { AppError } from '../../core/errors.js';
 import type { Clock, TimerHandle } from '../../core/clock.js';
 import { redactUrl } from '../../core/logger.js';
@@ -46,6 +46,9 @@ import type {
 /** Accept por defecto (server.js:1374). */
 export const DEFAULT_ACCEPT =
   'application/json,text/plain,text/html,application/x-mpegURL,*/*;q=0.2';
+
+/** Espera como mucho al cierre del socket de una respuesta que no se usa (`identity`, P6). */
+const RELEASE_WAIT_MS = VOD_TIMINGS.socketReleaseMs;
 
 export interface FetcherDeps {
   readonly clock: Clock;
@@ -465,8 +468,58 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
     }
   }
 
+  /**
+   * Con `identity` (el relé VOD, docs/vod.md §9.3) se espera a que el socket
+   * de una respuesta que no se usa (redirección o fallo) se cierre de verdad
+   * antes de seguir: si no, el siguiente salto o el reintento de quien llama
+   * abren una segunda conexión con un proveedor de una sola plaza (P6). Como
+   * mucho `RELEASE_WAIT_MS`.
+   */
+  async function settleUnused(response: TransportResponse, identity: boolean): Promise<void> {
+    if (!identity || !response.closed) return;
+    let timer: TimerHandle | null = null;
+    await Promise.race([
+      response.closed,
+      new Promise<void>((resolve) => {
+        timer = clock.setTimeout(resolve, RELEASE_WAIT_MS);
+      }),
+    ]);
+    clock.clearTimeout(timer);
+  }
+
+  /**
+   * Una respuesta que llegó (o llega) tarde, tras vencer el plazo de
+   * cabeceras: se tira y se espera a su socket como con `settleUnused`. Si
+   * el transporte la rechazó (abortada), no hay nada que esperar. Como mucho
+   * `RELEASE_WAIT_MS` en total.
+   */
+  async function settleLate(pending: Promise<TransportResponse>): Promise<void> {
+    const started = clock.now();
+    let timer: TimerHandle | null = null;
+    const late = await Promise.race([
+      pending.catch(() => null),
+      new Promise<null>((resolve) => {
+        timer = clock.setTimeout(() => resolve(null), RELEASE_WAIT_MS);
+      }),
+    ]);
+    clock.clearTimeout(timer);
+    if (!late?.closed) return;
+    late.body.destroy();
+    const left = RELEASE_WAIT_MS - (clock.now() - started);
+    if (left <= 0) return;
+    let wait: TimerHandle | null = null;
+    await Promise.race([
+      late.closed,
+      new Promise<void>((resolve) => {
+        wait = clock.setTimeout(resolve, left);
+      }),
+    ]);
+    clock.clearTimeout(wait);
+  }
+
   async function openStream(url: string, options: OpenStreamOptions): Promise<OpenedStream> {
     const { iptv } = options;
+    const identity = options.identity === true;
     const deadline = options.totalMs === undefined ? null : clock.now() + options.totalMs;
     const visited = new Set<string>();
     let redirects = 0;
@@ -500,9 +553,10 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
         if (!controller.signal.aborted) controller.abort(new AppError('fetch_timeout'));
       }, headersMs);
       let response: TransportResponse;
+      let pending: Promise<TransportResponse> | null = null;
       try {
         if (controller.signal.aborted) throw reasonOf(controller.signal);
-        const pending = deps.transport({
+        pending = deps.transport({
           url: parsed,
           addresses,
           headers: requestHeaders(options.accept, options.headers),
@@ -517,7 +571,21 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
         response = await Promise.race([pending, whenAborted(controller.signal)]);
       } catch (error) {
         release();
-        if (controller.signal.aborted) throw reasonOf(controller.signal);
+        if (controller.signal.aborted) {
+          const reason = reasonOf(controller.signal);
+          /* Plazo de cabeceras con `identity`: el reintento de quien llama no
+             puede solaparse con este socket (proveedor de una plaza, P6). */
+          if (
+            identity &&
+            pending &&
+            reason instanceof AppError &&
+            reason.code === 'fetch_timeout'
+          ) {
+            clock.clearTimeout(headersTimer);
+            await settleLate(pending);
+          }
+          throw reason;
+        }
         throw error;
       } finally {
         clock.clearTimeout(headersTimer);
@@ -527,6 +595,7 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
       if (status >= 300 && status < 400 && location) {
         response.body.destroy();
         release();
+        await settleUnused(response, identity);
         if (redirects >= MAX_REDIRECTS) throw new AppError('redirect_limit');
         try {
           current = new URL(location, parsed).toString();
@@ -539,13 +608,15 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
       if (status < 200 || status >= 300) {
         response.body.destroy();
         release();
-        throw new AppError(`http_${status}`, { data: { status } });
+        await settleUnused(response, identity);
+        throw new AppError(`http_${status}`, { data: { status, redirects } });
       }
       const encoding = encodingOf(response);
-      const gzipHeader = iptv !== undefined && encoding === 'gzip';
+      const gzipHeader = iptv !== undefined && encoding === 'gzip' && !identity;
       if (encoding !== 'identity' && !gzipHeader) {
         response.body.destroy();
         release();
+        await settleUnused(response, identity);
         throw new AppError('unsupported_encoding', { detail: encoding.slice(0, 40) });
       }
       const declared = Number(headerValue(response.headers['content-length']));
@@ -556,6 +627,7 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
       ) {
         response.body.destroy();
         release();
+        await settleUnused(response, identity);
         throw new AppError('response_too_large', { detail: `Content-Length ${declared}` });
       }
       const body = guardBody(response.body, {
@@ -565,7 +637,7 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
         deadline,
         maxBytes: options.maxBytes ?? null,
         maxDecompressed: iptv?.maxDecompressedBytes ?? options.maxBytes ?? null,
-        gzip: gzipHeader ? 'header' : iptv ? 'sniff' : 'none',
+        gzip: gzipHeader ? 'header' : iptv && !identity ? 'sniff' : 'none',
         onClose: release,
       });
       return {
@@ -574,6 +646,7 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
         contentType: headerValue(response.headers['content-type']) ?? null,
         body,
         finalUrl: canonical,
+        ...(response.closed ? { released: response.closed } : {}),
       };
     }
   }

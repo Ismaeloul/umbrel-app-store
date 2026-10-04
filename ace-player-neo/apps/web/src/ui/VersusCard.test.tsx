@@ -116,7 +116,6 @@ describe('VersusCard', () => {
         as="button"
         aria-label="Ver canal para FC Barcelona - Juventus"
         onClick={onClick}
-        transitionName="partido-demo-1"
       >
         <Capsule tone="ok" size="sm" glass dot>
           Señal lista

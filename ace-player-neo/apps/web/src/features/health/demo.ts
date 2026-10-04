@@ -6,11 +6,20 @@
 
    Se registra una vez, al cargar el trozo de la sección (ajustes.tsx). */
 
-import type {
-  DiagnosticCause,
-  DiagnosticEntry,
-  DiagnosticsListResponse,
-  HealthResponse,
+import {
+  classifyCode,
+  classifyLogLine,
+  classifyWebEntry,
+  redactReportText,
+  redactReportValue,
+  summarizeFaults,
+  type DiagnosticCause,
+  type DiagnosticEntry,
+  type DiagnosticsExport,
+  type DiagnosticsListResponse,
+  type Fault,
+  type HealthResponse,
+  type WebDiagnostics,
 } from '@ace/shared';
 import { registerDemoHandlers } from '../../api/index.ts';
 import { CAUSES, DAY_MS } from './model.ts';
@@ -151,6 +160,107 @@ export function demoHealth(now = Date.now()): HealthResponse {
   };
 }
 
+/**
+ * «Descargar fallos» en la demo: el mismo fichero que montaría el servidor
+ * (clasificado y redactado con las funciones de @ace/shared) con los fallos
+ * de muestra, lo que haya apuntado esta pestaña y un registro de ejemplo.
+ */
+export function demoFaultsFile(web: WebDiagnostics, now = Date.now()): DiagnosticsExport {
+  const counter = { replaced: 0 };
+  const iso = (ago: number) => new Date(now - ago * MIN).toISOString();
+  const serverLog = [
+    {
+      time: iso(4),
+      level: 'warn',
+      module: 'playback',
+      msg: 'IPTV: la salida no avanza; se reconecta el relé',
+    },
+    {
+      time: iso(3),
+      level: 'info',
+      module: 'iptv',
+      msg: 'IPTV: abierta',
+      url: 'http://proveedor.example:8080/live/usuario/clave/1234.ts',
+    },
+    { time: iso(2), level: 'info', module: 'playback', msg: 'sesión abierta' },
+  ];
+  const log = redactReportValue(
+    serverLog,
+    redactReportText,
+    counter,
+  ) as DiagnosticsExport['serverLog'];
+  const cleanWeb = redactReportValue(web, redactReportText, counter) as WebDiagnostics;
+  const faults: Fault[] = [
+    ...demoEntries(now).map((entry): Fault => {
+      const kind = classifyCode(entry.code, entry.cause, entry.message);
+      const informative = entry.metrics !== undefined || entry.code === 'autoplay_blocked';
+      return {
+        at: entry.at,
+        ...kind,
+        from: 'servidor',
+        level: informative ? 'info' : entry.cause === 'client' ? 'warn' : 'error',
+        code: entry.code,
+        message: entry.message || '(métricas de la reproducción)',
+        ...(entry.channel ? { channel: entry.channel } : {}),
+        ...(entry.hash ? { source: entry.hash } : {}),
+      };
+    }),
+    {
+      at: iso(4),
+      ...classifyLogLine({ level: 'warn', module: 'playback', msg: String(serverLog[0]?.msg) }),
+      from: 'servidor' as const,
+      level: 'warn' as const,
+      code: 'playback',
+      message: String(serverLog[0]?.msg),
+    },
+    ...cleanWeb.log
+      .filter((entry) => entry.level !== 'info')
+      .map((entry): Fault => ({
+        at: entry.at,
+        ...classifyWebEntry(entry),
+        from: 'web',
+        level: entry.level,
+        code: (entry.code ?? entry.kind).slice(0, 60),
+        message: entry.message,
+      })),
+  ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return {
+    format: 'ace-player-neo-fallos',
+    formatVersion: 1,
+    createdAt: new Date(now).toISOString(),
+    appVersion: 'demo',
+    summary: summarizeFaults(faults),
+    environment: {
+      node: 'demo',
+      platform: 'demo',
+      arch: 'demo',
+      uptimeSeconds: 3 * 3600 + 25 * 60,
+      memoryMb: 180,
+      logLevel: 'info',
+      scanner: true,
+      autoSync: true,
+      allowPrivateUrls: false,
+      footballDemoOnly: true,
+      teams: true,
+      ai: false,
+      seedSource: 'ACE_SEED',
+      serverLog: true,
+    },
+    status: {
+      health: demoHealth(now),
+      iptv: null,
+      remux: { sessions: 0, max: 3, ffmpegMissing: false },
+    },
+    faults,
+    serverLog: log,
+    web: cleanWeb,
+    redaction: {
+      note: 'Demo: fallos de muestra. Redactado: sin contraseñas, usuarios, tokens, cookies, URLs con credenciales ni IPs públicas.',
+      replaced: counter.replaced,
+    },
+  };
+}
+
 let registered = false;
 
 /** Registra las respuestas de la demo (una sola vez). */
@@ -164,5 +274,6 @@ export function registerHealthDemo(): void {
         cause: query?.cause,
         limit: query?.limit === undefined ? undefined : Number(query.limit),
       }),
+    diagnosticsExport: ({ body }) => demoFaultsFile(body.web),
   });
 }

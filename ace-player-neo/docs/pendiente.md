@@ -2,15 +2,28 @@
 
 Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
 
-(vacío por ahora)
+## Después de la 0.9.0 (cortada el 4-oct)
+
+La 0.9.0 cierra todo lo pedido para ella (abajo, «Hecho en la 0.9.0»). Queda:
+
+1. **App de iPhone**, al final, con el Mac de su hermano (punto 14 de abajo, y la lista de `docs/vod.md` §17 para
+   Pelis y series). Incluye la idea de descargar películas y episodios para verlos sin conexión.
+2. **Subtítulos de Pelis y series** (VOD-8; Isma dijo que pueden esperar, `docs/vod.md` §19.4).
+3. **Lo demás de `docs/vod-estado.md` §4.7:** pistas de audio HLS, «Mi lista», modo sin índice (si el NAS ve muchos
+   `.ts`/`.avi` o MKV sin Cues), listas M3U con VOD, agrupar por TMDB.
+4. **Pruebas en su NAS** (`docs/vod-estado.md` §5.4): MKV con AC-3, MP4, HEVC y una serie larga; saltos con la app del
+   PC abierta; la medida de memoria del contenedor; y el iPhone con Safari.
+5. **Adultos en la portada** (`docs/vod-estado.md` §5.2): sigue la opción por defecto (D-VOD7) hasta que Isma diga.
+
+Decisión de Isma (4-oct): **el marcador del reproductor sigue tapado** con «Ver marcador».
 
 ## Pedido por Isma (2-oct, tras probar la 0.8.3)
 
 **Hecho en la 0.8.4 (3-oct):** 1 (controles), 2 («en directo» sin retraso), 3 (agenda), 5 (partido destacado en
 escritorio), 6 (animaciones, y revisión de todas), 8 (parámetros de la URL), 9 (Ajustes por secciones), 10 (logo) y,
 de las ideas del 13, arranque instantáneo (solo equipos favoritos), cambiar de canal rápido (flechas ↑↓ y deslizar
-a los lados) y copia de seguridad. Quedan para la 0.9.0: 4 y 7 (Pelis y series), 11 (Guía TV) y 12 (agenda
-híbrida).
+a los lados) y copia de seguridad. **Hechos en la 0.9.0 (4-oct):** 4 y 7 (Pelis y series), 11 (Guía TV) y 12
+(agenda híbrida). Solo queda el 14 (app de iPhone).
 
 1. **Los controles del reproductor tardan mucho en esconderse** al quitar el ratón de encima, y también en
    pantalla completa. Tienen que irse antes.
@@ -129,6 +142,13 @@ seguro de las transiciones nuevas por vista (`fix/navegacion`, `<ViewTransition 
 WebKit/iOS: la vista que sale no se retira (o la animación de salida no termina). Isma pide meterlo en la 0.9.0.
 
 ## Para la 0.9.0 — lo que pide Isma tras ver la vista previa de la 0.8.4 (3-oct)
+
+**Hecho en la 0.9.0 (4-oct):** los 9 puntos de esta lista (escudos en Canales, agenda en PC sin destacado con el aura
+de sus equipos, deslizar entre días, abrir un partido con el fundido, «En directo» con marcador, buscador IPTV y el de
+Pelis y series, «Descargar fallos» en Salud y los carteles de «Fuentes» que ya no se solapan), y además los puntos 4,
+7, 11 y 12 de la lista del 2-oct: Pelis y series (sin `?flag=cine`), Guía TV estilo Movistar+ y agenda híbrida. También
+el registro de 45 días con «Descargar logs» en Ajustes y la IPTV en directo sin parones con proveedores que mandan a
+golpes. Las vistas solapadas del iPhone se arreglaron en la 0.8.4.
 
 (El fundido de las pestañas en el móvil y las vistas solapadas del iPhone van en la 0.8.4: se están arreglando.)
 

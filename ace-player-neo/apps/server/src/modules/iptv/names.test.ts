@@ -210,6 +210,83 @@ describe('cleanIptvTitle', () => {
   });
 });
 
+describe('cleanIptvTitle con el corpus de nombres raros (0.9.0, docs/buscador.md)', () => {
+  it.each([
+    /* Cualquier símbolo separa el país, y puede haber adornos delante. */
+    ['ES► LA 1 HD', 'LA 1', 'la 1', 'hd', 'ES', false],
+    ['ES ► LA 1', 'LA 1', 'la 1', null, 'ES', false],
+    ['ES ✪ LA 1', 'LA 1', 'la 1', null, 'ES', false],
+    ['ES ★ LA 1 ★', 'LA 1', 'la 1', null, 'ES', false],
+    ['ES » LA 1 FHD', 'LA 1', 'la 1', 'fhd', 'ES', false],
+    ['◉ ES: LA 1 FHD', 'LA 1', 'la 1', 'fhd', 'ES', false],
+    ['ES 4K LA 1', 'LA 1', 'la 1', 'uhd', 'ES', false],
+    ['ES: LA 1 4K', 'LA 1', 'la 1', 'uhd', 'ES', false],
+    ['|ES| LA 1 FHD', 'LA 1', 'la 1', 'fhd', 'ES', false],
+    ['[ES] LA 1 FHD ⁺', 'LA 1', 'la 1', 'fhd', 'ES', false],
+    /* «#N» es el número del canal, no una copia: «LALIGA+ PPV #2» es otro evento que el #1 (como en la 0.8.4). */
+    ['ES: LALIGA+ PPV #1', 'LALIGA+ PPV 1', 'laligaplus ppv 1', null, 'ES', false],
+    ['ES: LALIGA+ PPV #2 FHD', 'LALIGA+ PPV 2', 'laligaplus ppv 2', 'fhd', 'ES', false],
+    ['ES: DAZN PPV # 3', 'DAZN PPV 3', 'dazn ppv 3', null, 'ES', false],
+    ['US: NBA LEAGUE PASS #2', 'NBA LEAGUE PASS 2', 'nba league pass 2', null, 'US', false],
+    ['ES: EVENTOS #2 ★', 'EVENTOS 2', 'eventos 2', null, 'ES', false],
+    ['ES: LA 1 #2', 'LA 1 2', 'la 1 2', null, 'ES', false],
+    /* La copia entre paréntesis sí lo es (docs/iptv.md §17). */
+    ['ES: LA 1 (2)', 'LA 1', 'la 1', null, 'ES', true],
+    /* «#0» es un canal de Movistar (se enseña con su «#»); «#VAMOS», otro. */
+    ['ES: M+ #0 HD', 'M+ #0', 'movistar 0', 'hd', 'ES', false],
+    ['ES: #0 FHD', '#0', '0', 'fhd', 'ES', false],
+    ['ES: #VAMOS FHD', 'VAMOS', 'vamos', 'fhd', 'ES', false],
+    /* RTVE: «LA 1 TVE» y «TVE 1» son La 1. */
+    ['ES: LA 1 TVE HD', 'LA 1', 'la 1', 'hd', 'ES', false],
+    ['ES: TVE 1', 'La 1', 'la 1', null, 'ES', false],
+    ['ES: CLAN TVE', 'CLAN', 'clan', null, 'ES', false],
+    /* Grafías que juntan variantes: Antena3 y, en España, los apodos Tele 5 y A3. */
+    ['ES: TELE5 SD', 'TELE5', 'telecinco', 'sd', 'ES', false],
+    ['ES: TELE 5 HD', 'TELE 5', 'telecinco', 'hd', 'ES', false],
+    ['ES: ANTENA3 FHD', 'ANTENA3', 'antena 3', 'fhd', 'ES', false],
+    ['ES: A3 HD', 'A3', 'antena 3', 'hd', 'ES', false],
+    ['ES: A3 SERIES HD', 'A3 SERIES', 'atreseries', 'hd', 'ES', false],
+    /* Lo que no es un país sigue sin serlo: la sigla pegada a «.», «&», «+», «!», «/» o «#» es parte del nombre. */
+    ['DR. HOUSE', 'DR. HOUSE', 'dr house', null, null, false],
+    [
+      'AT&T SPORTSNET PITTSBURGH',
+      'AT&T SPORTSNET PITTSBURGH',
+      'at t sportsnet pittsburgh',
+      null,
+      null,
+      false,
+    ],
+    ['BT+ SPORT HD', 'BT+ SPORT', 'bt sport', 'hd', null, false],
+    ['GO! TV', 'GO! TV', 'go tv', null, null, false],
+    ['CN+ NEWS', 'CN+ NEWS', 'cn news', null, null, false],
+    ['AC/DC LIVE', 'AC/DC LIVE', 'ac dc live', null, null, false],
+    ['UK: AT&T SPORTSNET', 'AT&T SPORTSNET', 'at t sportsnet', null, 'UK', false],
+  ])('%s', (title, display, key, quality, country, backup) => {
+    const clean = cleanIptvTitle(title);
+    expect(clean.display).toBe(display);
+    expect(clean.key).toBe(key);
+    expect(clean.quality).toBe(quality);
+    expect(clean.country).toBe(country);
+    expect(clean.backup).toBe(backup);
+  });
+
+  it('los apodos de España («TELE 5», «A3») solo si el canal es de España por su nombre o su categoría', () => {
+    /* De España por la categoría. */
+    expect(cleanIptvTitle('TELE 5 FHD', 'EU | ES | TDT').key).toBe('telecinco');
+    expect(cleanIptvTitle('A3', 'ES | GENERALISTAS').key).toBe('antena 3');
+    /* De fuera, o sin país que se deduzca («POLSKA», «GERMANY»): otro canal, con su nombre. */
+    expect(cleanIptvTitle('DE: TELE 5 HD').key).toBe('tele 5');
+    expect(cleanIptvTitle('TELE 5 FHD', 'POLSKA').key).toBe('tele 5');
+    expect(cleanIptvTitle('TELE 5', 'GERMANY').key).toBe('tele 5');
+    expect(cleanIptvTitle('TELE5', 'ALLEMAGNE').key).toBe('tele5');
+    expect(cleanIptvTitle('A3', 'UK | SPORTS').key).toBe('a3');
+    expect(cleanIptvTitle('A3 SERIES HD', 'VIP | SERIES').key).toBe('a3 series');
+    /* «TELE CINCO» y «ANTENA3» son grafías (no apodos): valen siempre. */
+    expect(cleanIptvTitle('TELE CINCO', 'VIP | TDT').key).toBe('telecinco');
+    expect(cleanIptvTitle('ANTENA3', 'VIP | TDT').key).toBe('antena 3');
+  });
+});
+
 describe('IptvRedactor', () => {
   const U = 'usuario-e2e';
   const P = 'Cl4ve-Secreta-E2E';

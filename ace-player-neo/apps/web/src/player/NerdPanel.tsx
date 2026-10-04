@@ -59,7 +59,46 @@ export function originText(state: Pick<PlayerState, 'streamSource' | 'channel'>)
   return source ? `AceStream · ${source}` : 'AceStream';
 }
 
+/**
+ * Datos técnicos de una película (docs/vod.md §12.7): «Formato»
+ * (H.264 · AC-3 → AAC), «Preparado» (segundos por delante) y «Reinicios».
+ */
+export function vodNerdRows(state: PlayerState): Array<[string, string]> {
+  const vod = state.vod;
+  const ahead = vod ? Math.max(0, vod.bufferedEndS - vod.positionS) : null;
+  return [
+    ['Origen', 'IPTV · película o episodio'],
+    ['Formato', vod?.format ?? '—'],
+    ['Preparado', seconds(ahead)],
+    ['Reinicios', vod ? String(vod.restarts) : '—'],
+    ['Reproductor', state.engine ? ENGINE_NAME[state.engine] : '—'],
+    ['Entrega', state.protocol ? (DELIVERY[state.protocol] ?? state.protocol) : '—'],
+    [
+      'Primera imagen',
+      state.ttffMs !== null
+        ? `${(state.ttffMs / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} s`
+        : '—',
+    ],
+    ['Sesión', state.sessionId ?? '—'],
+  ];
+}
+
+/**
+ * Cómo llega la IPTV en directo: «seguida» o «a golpes cada 10 s» (la cadencia que mide el relé), y
+ * « · sin esperar a la imagen» si la puerta del relé deja pasar las pérdidas (modo tolerante).
+ */
+export function iptvDeliveryText(stats: PlayerState['stats']): string {
+  if (!stats) return '—';
+  const cadence = stats.cadenceMs;
+  const base =
+    cadence && cadence > 0
+      ? `a golpes cada ${(cadence / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} s`
+      : 'seguida';
+  return stats.gateTolerant ? `${base} · sin esperar a la imagen (pierde paquetes)` : base;
+}
+
 export function nerdRows(state: PlayerState, engineText: string): Array<[string, string]> {
+  if (state.kind === 'vod') return vodNerdRows(state);
   const stats = state.stats;
   // IPTV (§8.1): sin pares (no hay enjambre) ni hash.
   const iptv = isIptvPlayback(state);
@@ -74,6 +113,8 @@ export function nerdRows(state: PlayerState, engineText: string): Array<[string,
     ['Entrega', state.protocol ? (DELIVERY[state.protocol] ?? state.protocol) : '—'],
     ['Pares', stats && !iptv ? String(stats.peers) : '—'],
     ['Bajada', formatSpeed(stats?.speedDown)],
+    // IPTV (auditoría 0.9.0): cómo entrega el proveedor y si la puerta del relé va tolerante.
+    ...(iptv ? ([['Llegada', iptvDeliveryText(stats)]] as Array<[string, string]>) : []),
     ['Subida', formatSpeed(stats?.speedUp)],
     ['Estado del motor', stats?.status || '—'],
     ['Colchón', seconds(state.bufferAheadS)],

@@ -60,6 +60,12 @@ resolución** en el panel de fuentes (4 como mucho), que arranca por la 1080p y 
 de saltar a AceStream. El anexo §17 lo diseña y **manda** sobre §0.3, §3.4, §4.2 a §4.4, §6.1, §8.1, §14.2, §14.3,
 §14.7 y D9, D23 y D25.
 
+**Guía TV (0.9.0, `equipo/guia-servidor`, 3-oct-2026):** la guía **completa** de la IPTV (todos los canales y
+programas, de 24 h antes a 80 h después de la descarga) se guarda compacta en disco (`v2/iptv/guia.db`, SQLite) en la
+misma descarga que la guía de partidos, y la web la pide por trozos (canales × horas) para la parrilla estilo
+Movistar+ con «Favoritos | Todos». El anexo §20 lo diseña y **manda** sobre §2.1 (ficheros) y §3.6 (qué se guarda y
+el plazo de la descarga). La guía de partidos (`guia.enc`, §4.5) no cambia.
+
 Las rutas de ficheros son relativas a `ace-player-neo/` salvo que se diga otra cosa. Los textos entre «comillas» son
 **literales**: se copian tal cual en el código, porque la app nativa los genera desde la web (`generar-textos.mjs`) y
 los compara en `TextosTests`.
@@ -266,6 +272,7 @@ la tarjeta enseña «Actualizando la lista de «{Casa}»…». Sin SSE, se sonde
 | `v2/iptv.json` | configuración, secretos **cifrados**, `revision` y estado de la última sincronización, de la guía y de la cuenta (sin listas de ids) | `IptvFileSchema` (`packages/shared/src/state/v2.ts`), con `createDocumentStore` (escritura atómica, `.bak`, apartar lo corrupto) |
 | `v2/iptv/catalogo.enc` | catálogo en caché, con las URLs de stream y la de la guía | AES-256-GCM sobre JSON en gzip |
 | `v2/iptv/guia.enc` | ventana útil de la guía (ahora → +48 h), ya filtrada | AES-256-GCM sobre JSON en gzip |
+| `v2/iptv/guia.db` | Guía TV: la guía **completa** (−24 h → +80 h, todos los canales del catálogo) (§20.2) | SQLite **sin cifrar** (no lleva credenciales; decisiones.md D31.1), 0600 |
 | `v2/iptv/clave` | 32 bytes aleatorios, **solo** si no hay `ACE_SEED` / `ENGINE_CONTROL_TOKEN` | binario, 0600 |
 
 - **Nada en `settings.json`.** Es `strictObject`, y un campo nuevo haría que la 0.8.0 lo apartara como corrupto y
@@ -553,7 +560,12 @@ Cliente: `modules/iptv/xtream.ts`. Todas las llamadas son `GET {server}/player_a
   - tope de **8 KiB por texto** (`<desc>`, `<title>`…) **y por atributo**: lo que pase se descarta sin acumularlo;
   - profundidad máxima de 8 niveles y 64 atributos por elemento; si se pasa, se salta el elemento entero.
 - **Fechas:** `YYYYMMDDhhmmss ±hhmm`. Sin zona se toma UTC, más el `tvg-shift` del canal o el global de la M3U.
-- **Topes:** 64 MiB comprimida, 512 MiB descomprimida y procesada (no se guarda), 180 s en total y 30 s de inactividad.
+  Desde la 0.9.0 también `±hh:mm` y las abreviaturas sin dudas (`UTC`, `GMT`, `BST`, `CET`, `CEST`, `EST`…; §20.4).
+- **Topes:** **256 MiB** por cable y **1 GiB** descomprimida y procesada (no se guarda; hasta la 0.8.4, 64 MiB y
+  512 MiB: la guía del panel de Isma ya pesa 47 MB sin gzip, §20.10 G5), **300 s** en total (180 s hasta la 0.8.4;
+  sube porque cada programa se escribe en `guia.db` mientras se lee, §20.3) y 30 s de inactividad.
+- **La misma descarga** escribe también la guía completa de la Guía TV (§20). Lo de abajo (qué va a `guia.enc`) no
+  cambia.
 
 **Qué se guarda** (en `guia.enc` y en memoria, `Map<tvgId, Programme[]>`):
 - solo la ventana **de ahora a +48 h**;
@@ -563,7 +575,8 @@ Cliente: `modules/iptv/xtream.ts`. Todas las llamadas son `GET {server}/player_a
 - Tope de 60 000 programas; si se pasa, se quedan los más cercanos.
 
 **Refresco:**
-- cada **8 h** (3 veces al día), al arrancar si tiene más de 8 h y tras una sincronización que cambie la URL de guía;
+- cada **8 h** (3 veces al día), al arrancar si tiene más de 8 h (o si falta la guía completa, §20.3) y tras una
+  sincronización que cambie la URL de guía;
 - con el cerrojo único de trabajos pesados (§3.5): nunca a la vez que una sincronización;
 - se retrasa hasta 2 h si hay alguien viendo algo;
 - tras un fallo, espera de 30 min a 8 h.
@@ -575,7 +588,9 @@ Cliente: `modules/iptv/xtream.ts`. Todas las llamadas son `GET {server}/player_a
 
 **Sin guía,** todo funciona igual: el emparejado es solo por nombre.
 
-**Estado visible:** `guide` en `iptvGet` (canales con guía y fecha) y la línea de §1.3. Nada más.
+**Estado visible:** `guide` en `iptvGet` (canales con guía y fecha) y la línea de §1.3. Desde la 0.9.0, «N canales con
+programación» cuenta **todos** los canales del catálogo con guía (la completa, §20.7), no solo los que tienen partidos;
+y la parrilla de la Guía TV (§20).
 
 ---
 
@@ -734,9 +749,12 @@ Entrada: el partido de la agenda (`home`, `away`, `competition`, `start`) y los 
 IPTV queda **confirmada por la guía** solo si **todo** esto se cumple:
 
 1. **Hora.**
-   - El programa empieza entre **30 min antes y 15 min después** del saque inicial.
+   - El programa empieza entre **60 min antes y 15 min después** del saque inicial (eran 30 antes; cambia con
+     §4.7: hay guías que meten la previa en el mismo programa).
    - Dura entre 80 y 240 min.
-   - Acaba al menos 90 min después del saque.
+   - Acaba al menos 90 min después del saque. Si empieza **más de 30 min antes** (la previa dentro), tiene que cubrir
+     el partido entero: acabar al menos **105 min** después del saque. Un directo de 20:15 a 22:30 no es un partido de
+     las 21:00 (acabaría a las 22:50): es uno de antes, y la agenda híbrida lo mueve (§4.7).
 2. **Equipos.**
    - Los dos equipos aparecen **en el mismo campo** (`title`, `sub-title` o `desc`), a menos de 40 caracteres uno de
      otro y separados por un separador de enfrentamiento (`-`, `–`, `vs`, `v`, `x`, `×`, `contra`, `/`).
@@ -746,14 +764,22 @@ IPTV queda **confirmada por la guía** solo si **todo** esto se cumple:
      - la clave sin prefijos (`real`, `club`, `cd`, `ud`, `sd`, `rcd`, `rc`, `ca`, `fc`, `cf`) si queda con 5 letras o
        más;
      - la tabla curada `EPG_TEAM_ALIASES`: barça/barca → barcelona; atleti/atlético → atletico madrid; athletic →
-       athletic club; betis → real betis; celta; espanyol; rayo → rayo vallecano; osasuna; etc.;
+       athletic club; betis → real betis; celta; espanyol; rayo → rayo vallecano; osasuna; etc. Vale en los **dos
+       sentidos** (0.9.0): cualquier forma de un grupo trae el grupo entero, así «Nápoles», «Oporto», «Brujas»,
+       «Estrella Roja», «Sparta de Praga», «Salzburgo», «Copenhague» u «O. Lyonnais», como escribe futbolenlatv,
+       encuentran «Napoli», «Porto», «Club Brugge», «Crvena Zvezda», «Sparta Praha», «Salzburg», «Copenhagen» o
+       «Olympique de Lyon», y al revés;
      - si `teams` los tiene, `strTeamAlternate` y `strTeamShort`.
+   - Las siglas de club pegadas al separador no estorban: «Girona FC - Sevilla FC», «Atalanta BC - ACF Fiorentina»,
+     «Sporting CP - SL Benfica» (fc, cf, ud, cd, sd, rcd, rc, ac, afc, acf, bc, sad, ssc, as, ss, sl, cp, sc, sv,
+     bsc, vfb, vfl, tsg, fk, us, ogc).
    - Las abreviaturas de 3 letras (`RMA`, `BAR`) **solo** valen en el patrón compacto `AAA-BBB` / `AAA v BBB`, con las
      dos como abreviatura.
    - Nunca valen como alias sueltos `real`, `madrid`, `sporting`, `racing`, `union`, `deportivo`, `club` ni `city`.
    - Un alias seguido de ` B`, `C`, `II`, `Femenino`, `Fem`, `Sub-19`, `Juvenil`, `Atlètic`, `Castilla`, `Atlético`
      (Sevilla Atlético), `Deportivo` (Betis Deportivo) o `Promesas` no cuenta: es el filial o el equipo femenino.
-     «Bilbao Athletic» no cuenta como Athletic Club.
+     «Bilbao Athletic» no cuenta como Athletic Club. Tampoco «Leyendas» o «Veteranos» detrás o delante («Real Madrid
+     Leyendas», «Leyendas del Real Madrid»).
 3. **Marcas de «no es el partido».** Sobre `title`, `sub-title` y `desc`, sin tildes y por palabra, cualquiera de estas
    lo descarta:
    - `(R)`, `[R]`, `R:` al principio, `(D)`;
@@ -771,9 +797,12 @@ IPTV queda **confirmada por la guía** solo si **todo** esto se cumple:
      («La 1», «DAZN 1») sin la competición en la guía, no se confirma: mejor no emparejar que emparejar mal.
    - Sin familia conocida del partido (un amistoso), no se exige.
    - Tampoco valen, en ningún campo ni categoría: otros deportes (baloncesto, ACB, Liga Endesa, Euroliga, fútbol
-     sala, futsal, balonmano, voleibol, hockey, rugby, tenis, pádel…), el femenino («Femenino», «(Fem.)», «Femenina»,
-     «Women»; salvo que el partido sea de Liga F) ni las categorías inferiores (Youth League, juvenil, Sub-19…).
-     «(Dif.)» cuenta como diferido y «Barcelona SC» como otro equipo.
+     sala, futsal, balonmano, EHF, voleibol, hockey, rugby, tenis, pádel, dardos, snooker, golf, boxeo, UFC, NFL y
+     fútbol americano, béisbol, Fórmula 1, MotoGP, ciclismo, eSports, eLaLiga, Kings League, fútbol 7, fútbol para
+     ciegos…: lo que se llama como una competición de fútbol sin serlo, «EHF Champions League», «Premier League
+     Darts»), el femenino («Femenino», «(Fem.)», «Femenina», «Women»; salvo que el partido sea de Liga F) ni las
+     categorías inferiores (Youth League, juvenil, Sub-19, Premier League 2, Primavera…). «(Dif.)» cuenta como
+     diferido y «Barcelona SC» como otro equipo.
 5. **Canal.**
    - **País ES explícito**, más estricto que el filtro general: un canal sin país (`null`) solo vale si además casa
      (≥ 70) con algún canal emisor de la agenda. Si la agenda no trae canales, solo valen canales ES explícitos. Así un
@@ -801,13 +830,16 @@ IPTV queda **confirmada por la guía** solo si **todo** esto se cumple:
 `choices`. Si no encuentra nada, devuelve `not_found` **sin trabajo del comprobador**, y la web se queda en
 `no_channels` con «El canal todavía no está anunciado», como hoy, sin abrir «Encontrar canal». La agenda no cambia.
 
-**Pista para AceStream.** Los nombres de canal confirmados por la guía (2 como mucho) se añaden a los canales de la
-resolución como **pistas**.
+**Pista para AceStream.** Los nombres de canal confirmados por la guía (2 como mucho, un canal una vez: «M+ LaLiga TV»
+y su «Bar» o su «UHD» gastan una sola) se añaden a los canales de la resolución como **pistas**.
 - Una candidata AceStream que solo casa con una pista (≥ 70, las reglas de siempre) entra con esa pista como
   `matchedChannel`.
 - Su nivel de marca queda **topado en el de ≥ 70**, así que nunca adelanta a una candidata que casa ≥ 92 con un canal
   de la agenda.
 - No cambia el umbral, ni Hypermotion, ni las reglas aprendidas.
+- **Cambia con §4.7 (agenda híbrida):** en un partido, una AceStream que **es** el canal de la guía según la regla de
+  la IPTV (`sameChannelScore` ≥ 92) cuenta con su puntuación entera, el canal de la guía se busca el **primero** en el
+  motor y sus fuentes van **delante** de todas. El tope en 91 queda para lo que solo se parece (70-91).
 
 ### 4.6 Orden final
 
@@ -844,6 +876,118 @@ cartel no ofrece «Favorito» (§8.1). Un canal de AceStream favorito que tiene 
 - `found` si la primera es IPTV (≥ 92) o lo de siempre;
 - `candidate` = la IPTV.
 - `checked` suma `'iptv'` cuando la capa se consultó.
+
+**Cambia con §4.7:** las fuentes del canal que confirma la guía van delante de todas (`preferred` de
+`mergeResolutionCandidates`); dentro de ellas y en el resto, este mismo orden.
+
+### 4.7 Agenda híbrida: la guía de hoy y mañana sobre la agenda (0.9.0, decisiones.md D27)
+
+Lo pidió Isma (docs/pendiente.md, punto 12). **Días 1-14, futbolenlatv como siempre. Hoy y mañana** (lo que cubre la
+guía), la guía de la IPTV:
+
+1. **Confirma** el partido y su canal exacto. Es `confirmByGuide` (§4.5) sobre los **mismos candidatos** que la
+   resolución (`guideCandidates`, layer.ts): lo que se enseña en la agenda es lo que luego suena primero. Dos canales
+   como mucho y uno por canal («M+ LaLiga TV» y su «Bar» cuentan una vez). **La descripción no dice de qué partido es
+   un programa** (las guías reales la traen en todos y a menudo anuncia el siguiente partido): si el título o el
+   subtítulo traen **otro** enfrentamiento, lo que diga la descripción no confirma este partido; sin enfrentamiento
+   en el título («El Clásico (Directo)», «Fútbol») sí, como en la resolución. Un programa que confirma otro partido
+   de la agenda con sus dos equipos en el título es de ese partido: no vale para este.
+2. **Mueve la hora** si futbolenlatv se equivoca: a su hora la guía no confirma nada (tampoco un programa que no puede
+   ser un partido de esa hora, regla 1 de §4.5), pero ese mismo día tiene el partido **en directo** (marca obligatoria:
+   `<live/>`, «directo», «en vivo», «(L)») con los dos equipos **en el título o el subtítulo** (nunca solo en la
+   descripción: «Sevilla - Betis (Directo)» con «Esta noche, Real Madrid - Barcelona» no lleva el Clásico a las 18:30)
+   y en un programa que no es ya de otro partido de la agenda. Manda el primer programa así del día; el saque es su
+   inicio redondeado al cuarto de hora siguiente (20:50 → 21:00) si así cubre el partido entero (regla 1), o su inicio
+   tal cual (`kickoffFromProgramme`). Nunca a otro día. El id del partido no cambia. También si a su hora solo está el
+   partido **sin** marca y la guía lo tiene en directo **antes** ese día (con las mismas condiciones): lo de la hora de
+   la agenda es la repetición (una repetición va siempre después del directo). Un directo posterior no mueve nada:
+   ahí se fía de la agenda y del programa a su hora.
+3. **Añade** un partido que la guía trae y la agenda no, con cuidado: en directo (marca obligatoria), de una
+   competición de `COMPETITION_FAMILIES` (la del texto y ninguna otra o, si el texto no nombra ninguna, la del canal),
+   en un canal de España, con los dos equipos claros en el título o el subtítulo (`extractGuideMatchup`), sin
+   filiales, cantera ni femenino (salvo Liga F), con las reglas 1 a 6 de §4.5, nada de leyendas, benéficos, homenajes,
+   despedidas ni exhibiciones, con alguna categoría de deportes si el programa trae categorías, y **solo si no está ya
+   en la agenda escrito de otra forma** (`sameMatch`; mejor no añadir uno que añadirlo dos veces, pero sin perder los
+   que de verdad faltan):
+   - ninguno de los dos equipos juega en la agenda ese día, el anterior o el siguiente (clave, alias o nombre sin
+     siglas: «Atalanta BC» es «Atalanta»; un equipo no juega dos días seguidos: así «Barça - Atleti» no duplica «FC
+     Barcelona - Atlético de Madrid»);
+   - los dos nombres no se parecen a los de un partido de la agenda de ese día, a la hora que sea, ni uno solo si es
+     de la misma competición. «Se parece» (`teamsAlike`): cada palabra del nombre más corto se parece a una palabra
+     distinta del otro (la inicial, el principio, la abreviatura o una o dos letras cambiadas en una palabra larga) y
+     alguna pareja pesa (ninguna débil). «Sheffield Wed» y «Sheffield Wednesday», «Leeds Utd» y «Leeds United»,
+     «Qairat» y «Kairat Almaty», «Olympiakos» y «Olympiacos», sí; «Manchester City» y «Manchester United»,
+     «Newcastle United» y «Newcastle Jets» o «Real Madrid» y «Atlético de Madrid», no;
+   - ese canal (≥ 70) no da a esa misma hora (el programa cae a su saque, o ±30 min) un partido de la agenda: un canal
+     da un partido a la vez;
+   - y no es, en el **mismo** canal (≥ 92) y de la misma competición, un partido de la agenda de ese día que la guía no
+     encuentra y cuyo canal, a la hora de la agenda, no da nada que pueda ser un partido (que dure lo de un partido,
+     no sea una repetición y, en un canal sin competición en el nombre, traiga un enfrentamiento o una competición): es
+     él con la hora mal y los dos nombres de otra forma.
+   - La misma competición a la misma hora, sola, **no** basta (cambia tras la segunda revisión): en una noche de
+     Champions con ocho partidos a la vez se añade el noveno que trae la guía, y un Everton - Fulham de DAZN 2 a la hora
+     del Arsenal - Chelsea de DAZN 1, también. Con alias de verdad («Estrella Roja» es «Crvena Zvezda», §4.5), la guía
+     mueve la hora del partido de la agenda en vez de añadirlo otra vez. Lo que sigue sin poder saberse: los dos nombres
+     distintos sin alias, otra hora **y** otro canal.
+   - Los equipos salen de `extractGuideMatchup`, que no saca nada de un título con dos enfrentamientos («Real Madrid -
+     Juventus y Liverpool - Bayern»), de equipos por decidir («Por confirmar», «Ganador A») ni con el mismo nombre a
+     los dos lados; «El Clásico - Real Madrid vs Barcelona» da Real Madrid - Barcelona. Sus canales son los programas
+     en directo con los dos equipos en el título que no son ya un partido de la agenda.
+
+   Id `guia-<fecha>-<hash>`, rótulo de competición el que ya use la agenda para esa familia (nunca el de su femenina o
+   su cantera, salvo en Liga F) o `COMPETITION_FAMILY_LABELS`, canales los de la guía.
+
+**Por qué mover y añadir piden la marca de directo:** las repeticiones sin marca son muy comunes en las guías reales
+(§15) y, sin la hora de futbolenlatv como ancla, no hay otra forma segura de distinguirlas (el partido de anoche repetido
+a las 10:00 parecería uno de hoy). Si la guía no marca el directo, solo confirma. `scripts/epg-sondeo.mjs` lo mide con
+la misma regla que la app: `conCampo.directoCualquiera` (`<live/>` o la marca en el título o el subtítulo) y, sobre
+todo, `pareceUnPartidoConDirecto` (de los programas «X - Y» de 80-240 min, cuántos llevan la marca). Si da ~0 %, con
+esa guía la agenda híbrida solo confirma partido y canal.
+
+**Piezas:**
+- `modules/iptv/guide-agenda.ts` (puro) y `IptvService.guideAgenda(request)`: confirmaciones (con la hora movida) y
+  partidos añadidos; `null` sin IPTV activa o sin guía. Caché por la lista, la guía y la agenda (`request.key`): el
+  mismo objeto mientras no cambie nada.
+- **Coste con una guía grande** (también con la guía entera en disco): lo que no depende de la agenda (los programas
+  que pueden ser un partido de hoy y mañana y los que van en directo, `prepareGuideAgenda`) se prepara **una vez por
+  guía, catálogo y días** (memoria por ventana en `buildGuideAgenda`); cada cambio de la agenda (cada 30 min) solo
+  repasa lo preparado (`guideAgendaFrom`). Antes de normalizar el texto va lo barato: duración, día (con memoria por
+  cuarto de hora) y un separador de enfrentamiento en el texto tal cual. Un programa se normaliza una vez (y los
+  títulos y categorías repetidos, una vez en toda la guía). En el PC de Isma, con 3000 canales y 160 000 programas:
+  0,05-0,1 s la primera vez y 0,01-0,02 s por cambio de la agenda (antes 2,2 s y 0,9 s); con la mitad de los
+  programas con « - » en el título, 0,25-0,3 s una vez por guía y 0,05-0,15 s por cambio. Es síncrono (en el hilo
+  principal), pero ya no cuesta lo bastante para notarse en el relé.
+- `modules/football/guide-overlay.ts` (puro) lo pinta sobre la agenda: el partido confirmado lleva `guide` y el canal
+  de la guía el **primero** en `channels` (el de la agenda con su nombre si es el mismo canal, `sameChannelScore` ≥ 92;
+  si no, uno nuevo con el nombre de la IPTV e id `<partido>-guia-<n>`); si la guía mueve la hora cambian `time` y
+  `start` y `guide.agendaTime` guarda la de la agenda; un partido añadido entra en su día con `guide.added`. Cada día
+  tocado se reordena por hora. Sin nada de la guía, la misma agenda (el mismo objeto).
+- `FootballService.schedule()` = la agenda de siempre + la guía (solo con la IPTV activa). El catálogo de programación
+  recuerda la híbrida: la resolución, el precalentado y «Arranque instantáneo» ven lo mismo que la web. `resolve()` y
+  `prepareMatch()` la refrescan antes de usarla: si la IPTV se pausa, vuelven los canales y la hora de siempre al
+  momento.
+- Contrato: `FootballMatch.guide` (`FootballGuideInfoSchema`: `channel`, `time`, `agendaTime?`, `added`), opcional,
+  solo en `GET /api/v1/football`. La ruta antigua sirve la agenda híbrida **sin** `guide` (la forma de la 0.6.59).
+- Resolución (`football/resolution.ts`): con canales de la guía (las pistas, 2 como mucho) en un partido, el motor se
+  consulta **primero** por ellos (tal cual y sin la marca del operador: «M+ LaLiga TV 2» y «laliga tv 2»), una AceStream
+  o una de tu biblioteca que es ese canal según la regla de la IPTV cuenta con su puntuación entera, y las fuentes de
+  ese canal van **delante** de todas (también de la IPTV por nombre de otro canal que anuncie futbolenlatv). También al
+  reutilizar un precalentado (`overlayIptv`). Canal suelto y partido sin canales (`scope=guide`): como antes.
+- Web: `features/agenda/GuideNote.tsx`, una línea bajo los canales de la tarjeta (dos como mucho en el móvil) y en
+  «Dónde se emite» del partido. Tres casos, cada uno con su icono (check, reloj, más) y que se **ven** también sin
+  ratón: «Confirmado en tu guía: M+ LaLiga TV 2 · 21:00», «Hora de tu guía: DAZN LaLiga 2 · 21:30 · antes 21:00» y
+  «Añadido por tu guía: M+ LaLiga TV · 19:00».
+  Canal, hora y hora de antes van de una pieza: si no caben, el canal se recorta con «…» y la hora se queda. En «Dónde
+  se emite», debajo, la frase entera («Tu guía lo pone a las 21:30; la agenda decía 21:00.», «No salía en la agenda:
+  lo añade tu guía.»). `iptv.status` vuelve a pedir la agenda solo si la IPTV se pausa, se quita o vuelve, o si llega
+  otra guía.
+  Demo (`?demo=1`): RSO–VIL confirmado, Betis–Athletic añadido y Barça–Atleti con la hora movida.
+
+**Sin IPTV, en pausa, sin guía o sin datos del partido: todo exactamente como antes** (la misma agenda; las consultas
+y el orden de la resolución de siempre). Lo prueban `guide-overlay.test.ts`, `agenda-hibrida.test.ts` (servicio),
+`iptv.test.ts` de football («sin guía: las consultas y el orden de siempre»), `guide-agenda-service.test.ts` y
+`test/integration/agenda-hibrida.test.ts` (de punta a punta con el proveedor falso y el motor falso: las consultas a
+AceStream empiezan por el canal de la guía y su fuente va delante).
 
 ---
 
@@ -1123,8 +1267,17 @@ proveedor ──(net: SSRF, IP fijada, UA)──► relé 127.0.0.1:<p>/r/<ticke
   3. 403, 429, 456, 458 y 509 cuentan como «plaza ocupada» (el proveedor aún cuenta el socket viejo) y se reintentan
      igual, sin gastar variantes;
   4. mientras tanto **no cierra** la conexión con ffmpeg.
-  - El peor caso son 10 + (1 + 8) + (2 + 8) + (4 + 8) = **41 s** sin bytes (49 s si después abre otra variante),
-    por debajo del `-rw_timeout` de ffmpeg (55 s, §6.3). ffmpeg nunca muere antes de que el relé termine de
+  - **Cadencia (auditoría 0.9.0).** Hay proveedores que entregan **a golpes**: el de Isma manda lo retenido de una
+    vez cada 8-11 s (alguna vez 15 s), sin perder nada. El relé mide sus huecos sin bytes (los de 1 s o más dentro
+    de una conexión, sin contar las reconexiones ni el rato que el propio relé para el cuerpo; p90 en 60 s) y, por
+    encima de 4 s, el plazo de «no manda bytes» pasa a **2× la cadencia** (entre 10 y 30 s). El primer minuto, sin
+    cadencia medida aún, el plazo es de **15 s** (el primer silencio llega antes de haber visto ninguno). Ese
+    vigilante es de la sesión del relé; el de `net` va a 30 s. La cadencia sale en `stream.stats` (`cadenceMs`): el
+    vigilante de salida del remux pasa a `max(10 s, 3×TD, 1,5×cadencia)`, playback no reinicia mientras el último
+    byte esté dentro de ese plazo del relé (o siga llegando, y entonces solo suelta la puerta TS), y la web sube su
+    colchón y su latencia a ≥ 1,5× la cadencia (`apps/web/src/player/cadence.ts`).
+  - El peor caso son 30 + (1 + 8) + (2 + 8) + (4 + 8) = **61 s** sin bytes (69 s si después abre otra variante),
+    por debajo del `-rw_timeout` de ffmpeg (75 s, §6.3). ffmpeg nunca muere antes de que el relé termine de
     intentarlo.
 - **Otra base de tiempos tras reconectar.** El relé mira el primer PTS y el PCR de lo que llega tras reconectar. Si
   saltan más de **5 s** respecto a lo último que pasó (hacia delante o hacia atrás), **no empalma**: corta la entrada
@@ -1191,8 +1344,8 @@ HLS H.264 con AAC. No entra ahora.
   cumple `HASH_RE`.
 - **`buildRemuxArgs` con `origin: 'iptv'`:**
   - sin `-reconnect*` (reconecta el relé);
-  - con `-rw_timeout 55000000` (**en microsegundos**, como el `20000000` de hoy en `args.ts`; «15s» no es un valor
-    válido y haría fallar la apertura). 55 s es más que el peor caso del relé (41 s, y 49 s si además abre otra
+  - con `-rw_timeout 75000000` (**en microsegundos**, como el `20000000` de hoy en `args.ts`; «15s» no es un valor
+    válido y haría fallar la apertura). 75 s es más que el peor caso del relé (61 s con un proveedor a golpes, y 69 s si además abre otra
     variante, §6.1);
   - con `-protocol_whitelist http,tcp,crypto` (solo le llegan URLs del relé en `127.0.0.1`);
   - con `-live_start_index -3` si la entrada es HLS;
@@ -1293,9 +1446,9 @@ HLS H.264 con AAC. No entra ahora.
 | Cabeceras del proveedor (relé) | < 2 s | 8 s | `iptv_timeout` (o reintento si la plaza estaba recién cerrada) |
 | Lista lista (2 segmentos de 2 s) | 4–8 s | 20 s | `iptv_timeout` |
 | `channelStream` completo | 5–10 s | 60 s (el de hoy) | — |
-| Corte: sin bytes | — | 10 s | reconexión del relé |
+| Corte: sin bytes | — | 10 s (15 s el primer minuto; 2× la cadencia, hasta 30 s, con un proveedor a golpes) | reconexión del relé |
 | Reconexión del relé | < 3 s | esperas de 1, 2 y 4 s, 8 s de cabeceras cada una, 3 en 60 s (peor caso 41 s) | otra variante si la hay; si no, `stream.closed remux_failed` + `iptv_dropped` |
-| ffmpeg sin datos (`-rw_timeout`) | — | 55 s | nunca antes que el relé (41 s, 49 s con otra variante) |
+| ffmpeg sin datos (`-rw_timeout`) | — | 75 s | nunca antes que el relé (61 s, 69 s con otra variante) |
 | Base de tiempos distinta tras reconectar | — | salto > 5 s | reinicio del remux + `stream.reopened remux_restart` |
 | Del corte definitivo a pedir AceStream | inmediato | — | la web salta sin sus 3 reconexiones (§7.2) |
 
@@ -4447,3 +4600,305 @@ técnicos: «AceStream · NEW ERA» y la fila «IPTV» con el porqué).
 3. **Categoría mixta:** el umbral «3 canales y 1 de cada 5» sale de la lista real; una categoría de plataforma pequeña
    con 3 canales repetidos también pasaría a mixta (sus canales, emparejables solo por el nombre tal cual).
 4. **«(tu cuenta admite N conexión)»** solo si el estado de la IPTV ya se pudo pedir; si no, la frase sin paréntesis.
+
+---
+
+## 20. Anexo: Guía TV (0.9.0): la guía completa en disco y la API por trozos
+
+Lo pidió Isma (docs/pendiente.md, punto 11; docs/traspaso-0.9.0.md §4.2): una vista «Guía TV» con parrilla estilo
+Movistar+ e interruptor «Favoritos | Todos», donde «Todos» son todos los canales con guía que dé su proveedor. Hasta la
+0.8.4 la app solo guardaba la guía de partidos (~93 canales: España, 48 h y lo que parece un evento, §3.6). Aquí está
+el **servidor y el contrato** (`equipo/guia-servidor`); la vista la hace `guia-web` sobre esta rama. La investigación
+de diseño y técnica de partida está en `docs/investigacion/guia-tv.md`; §20.12 dice qué se tomó y qué cambió.
+
+### 20.1 En pocas palabras
+
+- **Una descarga, dos salidas.** La misma lectura en streaming de `xmltv.php` / `url-tvg` (con el cerrojo único de
+  trabajos pesados, §3.5) da la guía de partidos de siempre (`guia.enc`, sin cambios: `guide-match.ts`, la agenda
+  híbrida y la pestaña de partidos la siguen leyendo igual) **y** la guía completa en `v2/iptv/guia.db`.
+- **La guía completa nunca está en memoria.** Cada programa se escribe en SQLite (`node:sqlite`, que trae Node 24: sin
+  dependencias) mientras se lee. Con 3 000 canales × 3 días (~237 000 programas): 58 MB en disco, +38 MB de montón y el
+  hilo nunca parado más de ~40 ms (§20.9).
+- **La web pide solo lo que se ve:** canales por páginas (`iptvGuide`), programas de hasta 60 canales × 12 h
+  (`iptvGuideProgrammes`), la ficha al elegir uno (`iptvGuideProgramme`), «ahora / después» para Canales
+  (`iptvGuideNow`) y logos e imágenes por un proxy propio (`iptvGuideArt`). Todo versionado con el sello de la guía.
+- **El directo no espera:** la construcción cede el hilo cada 12 ms; mientras se construye una guía nueva, la API
+  sigue leyendo la de antes, y la nueva se cambia de golpe.
+
+### 20.2 Guardado (`guide-db.ts`)
+
+**Fichero:** `v2/iptv/guia.db` (`V2_FILES.iptvGuideDb`, `paths.iptvGuideDbFile`), 0600 en la carpeta 0700. Se
+construye en `guia.db.next` y se instala con `rename` (cerrando antes la abierta: en Windows no se puede renombrar
+encima de un fichero abierto). Un fichero de otro proveedor, de otro esquema o ilegible se borra al arrancar y se
+vuelve a descargar.
+
+**Tablas** (esquema 1):
+
+| Tabla | Qué | Notas |
+|---|---|---|
+| `meta (k, v)` | `schema` y `meta` (JSON: proveedor, `builtAt`, `version`, `from`, `to`, `maxDurationMin`, `programmes`, `channels`, `source`, `truncated`) | `version` = `builtAt` en base 36 |
+| `ch (g, tvg, icon, n, first, last)` | un canal de la guía por `tvg-id` en minúsculas **que está en el catálogo**, de cualquier país, con algún programa de verdad | `g` es el número de la API; cambia con cada `version`. `n`, `first` y `last` sin contar el relleno |
+| `p (g, s, e, t, f, d)` WITHOUT ROWID, clave (g, s) | la parrilla: minuto de inicio y de fin (UTC), título, marcas (`GUIDE_FLAGS`) y ficha | contigua por canal en disco: pocas páginas por trozo |
+| `det (id, h, sub, descr, cats, season, episode, eptext, year, rating, stars, directors, actors, icon)` | la ficha, aparte y **sin repetir** (hash de 64 bits) | solo se lee con «Más info» |
+
+**Qué se guarda** (`IPTV_GUIDE_STORE`):
+- todos los programas de los `tvg-id` que tienen algún canal en el catálogo (de cualquier país), de **24 h antes a
+  80 h después** de la descarga: la web enseña de hoy 00:00 a pasado mañana 24:00 en *su* zona (72 h como mucho) y
+  quedan 8 h de margen hasta la siguiente descarga;
+- títulos a 200 letras, subtítulos a 300, sinopsis a 800, 8 categorías, 3 directores y 5 actores (recortes por palabra
+  con «…»);
+- imágenes: solo URL http(s) sin usuario ni contraseña y que el redactor no toque (si llevan algo de las credenciales,
+  no se guardan). Nunca salen del módulo.
+
+**Topes:** 2 000 000 de programas y 512 MiB de fichero (se mira el tamaño cada 256 programas; un tope duro de
+`max_page_count` un 10 % por encima). Si se llega, se deja de guardar, lo guardado vale y queda dicho
+(`truncated`, en el registro). Si el disco falla de verdad, la guía completa se deshace y **la de partidos sigue**.
+
+**Memoria:** caché de páginas de 16 MiB al construir y 8 MiB al leer; en el montón, solo el mapa `tvg → g`.
+
+**Sin cifrar (decisiones.md D31.1):** SQLite de Node no cifra y la guía no lleva credenciales (las URL de la guía siguen en
+`catalogo.enc`; las de imagen con credenciales se descartan). Lleva títulos y sinopsis de la tele, nada de Isma. Si se
+quisiera «todo lo de la IPTV cifrado», haría falta un formato propio sellado por bloques (el plan B de la
+investigación).
+
+### 20.3 Una descarga, dos salidas (`guide-full.ts`, `service.ts`)
+
+- `doGuide` abre la guía como siempre (`net.openStream`, filtro IPTV, gzip, topes de §3.6) y la pasa a
+  `buildFullGuide`, que con **una** pasada del tokenizador (`xmltv.ts`):
+  - mete en la ventana de partidos lo de siempre (`GuideWindowCollector`, la misma lógica que `buildGuideWindow`);
+  - escribe en `guia.db` todo lo de los canales del catálogo (con su `tvg-shift`).
+- El tokenizador cede el hilo (`setImmediate`) cada 12 ms de trabajo seguido, y un trozo enorme se procesa en pedazos
+  de 64 KiB. Arreglar los horarios (§20.4) va canal a canal con el mismo límite.
+- **Éxito:** si la ventana de partidos tiene algo **o** la guía completa tiene programas. Antes bastaba la ventana: una
+  guía sin un solo partido daba `iptv_empty`; ahora vale para la parrilla.
+- **Una guía sin un solo partido** (y sin respaldo que los dé) **no borra la ventana de partidos de antes** mientras le
+  queden partidos por delante, como antes de la Guía TV: `guide-match.ts` y la agenda los siguen viendo hasta la
+  siguiente descarga. La guía completa sí se cambia por la nueva.
+- **Fallos aislados:** si el disco falla al escribir la completa, se deja de escribir, se termina la de partidos y la
+  completa se deshace (`fullGuideFailed`). Abortar (guardar, pausar, eliminar, apagar) deshace la completa a medias.
+- **Respaldo de Xtream** (`get_short_epg`, 40 canales deportivos): entra, como antes, si la guía falla **o llega sin
+  un solo partido**, y la ventana de partidos sale entonces de ahí. Con la guía completa:
+  - si el XMLTV llegó, la completa es la suya (el respaldo solo da los partidos);
+  - si el XMLTV **falló** (plazo, 5xx: el panel de Isma a veces no contesta) y hay una completa del XMLTV de una
+    descarga anterior **que aún sirve** (le queda programación por delante), **se queda esa**: no se cambian ~3 500
+    canales por 40 durante 8 h. Queda dicho (`guide.ok: false`, `failedAt`; Ajustes: «Guía: no se pudo actualizar; se
+    usa la del…») y se reintenta con espera creciente (30 min, 1 h… hasta 8 h);
+  - si no hay una que sirva (la primera vez, o la de antes ya se acabó), el respaldo se escribe en ella con
+    `source: 'short'` y la API lo dice con `partial: true`; como el XMLTV falló, también se reintenta antes de 8 h.
+- **Una guía que llega cortada sin error de red** (sin `</tv>`: un `xmltv.php` que se pasa de tiempo o de memoria;
+  PHP escribe su «Fatal error» y cierra la respuesta con un 200 como si nada). Si hay una completa del XMLTV de antes
+  que aún sirve, es un fallo como un corte a medias (`iptv_unreachable`, detalle `xmltv_cortada`): lo suyo se deshace
+  y se sigue como arriba (se queda la de antes, `failedAt`, reintento con espera creciente; los partidos, del respaldo
+  o los de antes). Si no la hay, se usa lo que llegó (mejor que nada, como antes de la Guía TV) y se reintenta antes
+  de 8 h. Lo que venga detrás de un `</tv>` (un aviso de PHP) no cuenta: esa guía llegó entera.
+- **Con dos URL de guía** (M3U con dos `url-tvg`) se leen las dos. La ventana de partidos es la de la primera que trae
+  alguno (como antes). La guía completa las junta con **una fuente por canal**: un canal se queda con la parrilla de
+  la primera guía que trae programas suyos (no se mezclan dos parrillas). Cada guía es un SAVEPOINT: una que se corta a
+  medias se deshace entera y lo de la otra vale.
+- **Primera vez tras la 0.9.0:** con `guia.enc` guardada y sin `guia.db`, la guía cuenta como vieja y se descarga a los
+  15 s del arranque (con alguien viendo, se retrasa como siempre). La edad que cuenta para la siguiente descarga es la
+  de la guía completa (la ventana de partidos puede ser del respaldo o la de antes).
+- **Sello:** nunca repite el de la guía que hay (`builtAt` + 1 si coinciden).
+- **Al instalar:** se cierra la de antes, `rename`, se abre la nueva de solo lectura y se tiran las filas calculadas y
+  la caché de imágenes. Como todo es síncrono, ninguna consulta ve un fichero a medias.
+
+### 20.4 Arreglos de una guía real (XMLTV raros)
+
+| Caso | Qué se hace |
+|---|---|
+| Zona con número (`+0200`, `+02:00`) | se aplica |
+| Zona con abreviatura sin dudas (`UTC`, `GMT`, `Z`, `WET`, `WEST`, `BST`, `CET`, `CEST`, `EET`, `EEST`, `MSK`, `EST`, `EDT`, `CDT`, `MST`, `MDT`, `PST`, `PDT`) | se aplica; las ambiguas (`CST`, `IST`…) cuentan como sin zona |
+| Sin zona | UTC más el `tvg-shift` de su canal (o el global de la M3U) |
+| Fecha imposible (mes 13, hora 25…) | el programa se descarta |
+| Sin `stop` | acaba cuando empieza el siguiente si es antes de 12 h; si no, 30 min; marca `noStop` |
+| Se solapa con el siguiente | se recorta hasta el inicio del siguiente |
+| Hueco de menos de 2 min | se pega al anterior (los de 2 min o más los pinta la web como «Sin información») |
+| El mismo título a menos de 2 min (dos fuentes) | se queda el segundo |
+| Mismo minuto de inicio y mismo canal (la clave es el minuto) | el **más largo** (un corte de 12:00:00 a 12:00:30 no tapa la película de las 12:00:30); sin fin cuenta como 30 min y, si los dos son sin fin, el último; iguales, el primero. Con `clumpidx` (franja compartida), «Noticias / El tiempo» |
+| Más de 12 h, sin título o «Programación no disponible», «Sin información», «To be announced»… | marca `filler` (la web lo pinta como «Sin información»), sin ficha. **No es programación:** no alarga `coveredFrom`/`coveredTo` (en la guía de Isma «algún programa largo acaba a +36 h» y no por eso hay «Mañana») ni hace que un canal tenga guía |
+| Más de 24 h | se recorta a 24 h |
+| Título, subtítulo y sinopsis en varios idiomas | el de `lang="es"` si lo hay; si no, el primero |
+| Entidades dobles (`&amp;amp;`), `<br>`, `<p>`, `<b>`… en la sinopsis | se limpian al guardar |
+| Dice latin1 y trae UTF-8 («FÃºtbol») | cada texto se vuelve a leer como UTF-8 (si así queda bien) |
+| Dice UTF-8 (o nada) y trae bytes latin1 | desde ese trozo se lee como latin1 |
+| `tvg-id` con mayúsculas o espacios; canal repetido | se pasa a minúsculas y sin espacios; uno por id |
+| Canal del XML que no está en el catálogo, sin programas o con solo relleno | no se guarda / no sale en «Todos» ni cuenta en «N canales con programación» |
+| Temporada y episodio | `xmltv_ns` (empieza en cero: «1.0.0/1» es T2 E1) u `onscreen` («S02E05», «T2 Ep. 5», «2x05», «Ep. 12»); si no se entiende, el texto tal cual |
+| Año, edad, nota | `<date>` (año creíble), `<rating><value>` y `<star-rating><value>` tal cual |
+
+El cambio de hora del 25 de octubre con horas sin zona y un `tvg-shift` fijo seguirá dejando 1 h mal lo de después
+(es la guía la que está mal; no hay forma de saberlo).
+
+### 20.5 Filas: «Todos» y «Favoritos» (`guide-api.ts`)
+
+- **Una fila es un canal como en el buscador** (§17): misma clave limpia y mismo país (España y sin país juntos). Su
+  guía es la del primer `tvg-id` de sus variantes (de mejor a peor) que tenga programas. Suena (`id`) la variante que
+  arranca primero (`planVariants`, el mismo id que da `iptvChannels`): se abre como un canal tocado en el buscador.
+- **«Todos» (decisiones.md D31.2):** las filas con programación; primero España y sin país, luego los demás países, cada
+  grupo en el orden del proveedor (la primera aparición de cualquiera de sus variantes). El **número** de un canal es
+  su puesto en «Todos» (1, 2, 3…) y es el mismo en «Favoritos», para poder saltar tecleándolo. (Xtream trae `num`, pero
+  hoy el catálogo no lo guarda; si un día se guarda, puede sustituir al puesto.)
+- **«Favoritos» (decisiones.md D31.3):** tus favoritos en su orden: un id IPTV es su canal; un canal de tu lista de
+  AceStream es el canal de la IPTV que es él (≥ 92, el mismo emparejado que el buscador, `libraryGroups`). Los que no
+  tienen guía salen igual (`guide: null`, `number: null`): la web pinta la fila entera «Sin información» y «Ver»
+  sigue funcionando. Si **ninguno** tiene guía, la respuesta es «Todos» con `fellBack: true`.
+- Las filas se montan a trozos (cediendo el hilo cada 10 ms) una vez por catálogo y guía, y se guardan; las páginas
+  siguientes son un `slice`. Los favoritos se calculan en cada petición (son pocos).
+
+### 20.6 API (contrato en `packages/shared/src/api/v1/guide.ts`, `routes.ts`)
+
+Las 5 rutas son del módulo `iptv`, `access: 'web'` (desde /native, 403) y sin efectos. Horas en epoch ms (UTC): la web
+las pinta en su zona con `Intl`. Nada del proveedor sale salvo el nombre limpio del canal y lo que dice la guía de cada
+programa.
+
+| Ruta | Qué | Errores propios |
+|---|---|---|
+| `GET /api/v1/iptv/guide?scope=favorites\|all&offset=&limit=` (`iptvGuide`) | `state` (`ready`, `preparing`, `none`, `failed`, `inactive`), `version`, `provider`, `from`/`to` (la ventana guardada: de −24 h a +80 h de la descarga), `coveredFrom`/`coveredTo` (hasta dónde llega **de verdad** la programación de las filas del ámbito; con la guía de Isma, que solo cubre hoy, acaba hoy), `updatedAt`, `failedAt`, `partial`, `scope` y `fellBack`, recuentos (`favorites`, `all`, `total`) y la página de filas (`guide`, `id`, `number`, `name`, `country`, `favorite`, `logo`). Por defecto `favorites` y 200 filas (1 000 como mucho; `limit=0`, solo el estado). Sin IPTV activa, 200 con `inactive` | — |
+| `GET /api/v1/iptv/guide/programmes?v=&ch=1,2,…&from=&to=` (`iptvGuideProgrammes`) | por cada canal pedido (en su orden, sin repetir; uno que no existe, vacío), los programas que se solapan con [`from`, `to`), ordenados y sin solaparse: `id` (`<g>.<minuto>`), `start`, `end`, `title`, `flags`. Hasta 60 canales, 12 h y 400 programas por canal; se recorta a la ventana guardada (`from`/`to`). Con la `v` buena, `Cache-Control: private, max-age=86400, immutable` | `guide_unavailable` (409), `guide_stale` (409), `validation_error` (trozo al revés o de más de 12 h) |
+| `GET /api/v1/iptv/guide/programmes/:id?v=` (`iptvGuideProgramme`) | la ficha: lo de la parrilla más `subTitle`, `description`, `categories`, `season`, `episode`, `episodeText`, `year`, `rating`, `stars`, `directors`, `actors`. Caché inmutable | `guide_unavailable`, `guide_stale`, `not_found` |
+| `GET /api/v1/iptv/guide/now?ids=<id IPTV>,…` (`iptvGuideNow`) | para Canales: por cada id IPTV (hasta 100; los de las filas de la pestaña IPTV o del buscador), `guide`, `now` y `next`. Una variante sin `tvg-id` usa el de su canal. Sin guía o sin IPTV activa, 200 con `available: false` | — |
+| `GET /api/v1/iptv/guide/art/:ref?v=` (`iptvGuideArt`) | `c<g>` (logo del canal, de `<channel><icon>`) o `p<id>` (imagen del programa): los bytes por el proxy propio (`guide-art.ts`: sin red de casa, 512 KiB, 8 s, solo JPEG/PNG/WebP por bytes mágicos, `nosniff`, `default-src 'none'`, LRU de 16 MiB, un fallo se recuerda 1 h). `ETag` y 304. Inmutable un día con la `v` buena | `guide_unavailable`, `guide_stale`, `guide_busy` (503 con `Retry-After: 2`, 2 a la vez y 32 en cola), `not_found` |
+
+**Marcas** (`GUIDE_FLAGS`, se suman): 1 `live` (`<live/>`), 2 `new` (estreno), 4 `repeat` (`<previously-shown/>`),
+8 `detail` (tiene ficha), 16 `filler` («Sin información»), 32 `noStop` (fin calculado), 64 `image`. `hasGuideFlag()`
+las lee por nombre.
+
+**Errores nuevos:** `guide_unavailable` (409), `guide_stale` (409) y `guide_busy` (503), con prefijo `guide_`: los 16
+`iptv_*` están fijados y significan «pasa a AceStream» (T14).
+
+**Cómo debería usarla la web** (recomendado, no obligatorio; `IPTV_GUIDE_API`):
+- pedir `iptvGuide` (estado, sello y las primeras 200 filas) y el resto de filas por páginas al desplazarse;
+- pedir programas por **teselas de 6 h alineadas en UTC × bloques de 30 canales**, con la clave
+  `['guia', version, bloque, tesela]` y `staleTime: Infinity` (manda `version`); un programa que cruza dos teselas
+  llega en las dos con el mismo `id`;
+- calcular «Sin información» en los huecos de una tesela ya llegada;
+- **días con `coveredTo`, no con `to`:** la guía real de Isma solo cubre hoy (Paso 0 del 3-oct: nada empieza mañana
+  ni pasado), así que un chip de día solo sale si `coveredTo` llega a ese día, y el final de la parrilla («Fin de la
+  guía disponible») es `coveredTo`; no hace falta pedir teselas más allá;
+- con 409 `guide_stale`, volver a pedir `iptvGuide` (hay guía nueva). El cambio también se ve en el evento de siempre
+  (`iptv.status`: `guide.updatedAt`): **no hay evento nuevo**;
+- la selección sobrevive a una guía nueva por (fila, hora de inicio), no por `id` (los `g` cambian);
+- logos: `logo: true` → `iptvGuideArt` con `c<guide>`; si no, o si falla, el `ChannelMark` de siempre (el sistema de
+  diseño no pinta marcas oficiales: es decisión de `guia-web` si los usa).
+
+### 20.7 Ajustes y lo que ya había
+
+- **«N canales con programación»** (`IptvStatus.guide.channelsWithGuide`) cuenta ya **todos** los canales con guía
+  completa: los mismos que salen en «Todos» (un canal con varias variantes, aunque tengan `tvg-id` distintos, cuenta
+  una vez). Antes, solo los `tvg-id` de la ventana de partidos («93»). `available` es verdad si hay ventana de partidos
+  o guía completa; `updatedAt`, la de la guía completa (la que cuenta los canales) y, sin ella, la de la ventana. Si
+  el XMLTV falla y se sigue con la completa de antes, `failedAt` es posterior y la web ya dice «Guía: no se pudo
+  actualizar; se usa la del…» (§20.3).
+- `guide-match.ts`, `layer.ts` y la agenda híbrida no cambian: siguen leyendo la ventana (`this.guide`). Si algún día
+  quieren más (por ejemplo, partidos que no parecen un evento), `GuideReader` permite consultar la completa.
+- Guardar con otro proveedor y eliminar la IPTV borran `guia.db` (y su `.next`); pausar no la borra (la API dice
+  `inactive`). Volver a la 0.8.x deja el fichero en disco sin usarlo (no lleva credenciales).
+
+### 20.8 Guía de ejemplo (demo de la web) y proveedor falso
+
+- **`packages/shared/src/demo/guide.ts`** (exportado por `@ace/shared`): guía de ejemplo pura y determinista para la
+  demo de la web (`?demo=1`, sin servidor), los ejemplos de fixtures/ y las pruebas. 55 canales con nombres como los de
+  una IPTV española (3 de otros países, al final de «Todos»), partidos en directo por la tarde, huecos de madrugada en
+  dos regionales, un bloque de relleno de 14 h y un favorito sin guía. El sello cambia cada 8 h. Funciones:
+  `demoGuide(query, now)`, `demoGuideProgrammes(query, now)`, `demoGuideProgramme(id, { v }, now)`,
+  `demoGuideNow({ ids }, now)`, `demoGuideStamp(now)` y `demoGuideChannels()`. Un sello viejo o un trozo mal pedido
+  lanzan `DemoGuideError` con el `code` y el `status` que daría el servidor. Sin logos ni imágenes (`logo` e `image`,
+  siempre false). **«Solo hoy»:** las cinco aceptan un último argumento `{ onlyToday: true }` que la deja como la guía
+  real del panel de Isma (de ayer a hoy, nada que empiece después del día UTC de la «descarga»; `coveredTo` lo dice),
+  con su propio sello. Conviene diseñar la parrilla con las dos (por ejemplo, `?demo=1&guia=hoy`). Para `guia-web`,
+  en `features/guia/demo.ts`:
+
+  ```ts
+  registerDemoHandlers({
+    iptvGuide: ({ query }) => demoGuide(query ?? {}, Date.now()),
+    iptvGuideProgrammes: ({ query }) => demoOrApiError(() => demoGuideProgrammes(query, Date.now())),
+    iptvGuideProgramme: ({ params, query }) =>
+      demoOrApiError(() => demoGuideProgramme(params.id, query, Date.now())),
+    iptvGuideNow: ({ query }) => demoGuideNow(query, Date.now()),
+  });
+  // demoOrApiError: si lanza DemoGuideError, throw new ApiError({ code, status, route }).
+  ```
+
+- **Proveedor falso:** `createFakeIptv({ guiaCompleta: true })` y el CLI con `--guia-completa` sirven, detrás de la
+  guía de siempre, una parrilla sintética (`test/fake-iptv/guia.ts`) de ayer a dentro de 3 días para todos los demás
+  canales (también los de `--grande N`), en streaming. Sirve para ver la parrilla con el backend de verdad (§15). Con
+  `guiaCompleta: 'hoy'` / `--guia-hoy`, la misma pero como la del panel de Isma: de ayer al final de hoy (UTC), sin
+  nada que empiece mañana, y Tele Noche con un único «Programación no disponible» que acaba a +36 h (un relleno: no
+  sale en «Todos» ni alarga `coveredTo`).
+
+### 20.9 Pruebas y medidas
+
+| Fichero | Qué prueba |
+|---|---|
+| `packages/shared/test/guide.test.ts` | las 5 rutas (solo web, módulo iptv), los 3 `guide_*` y los 16 `iptv_*` intactos, esquemas (60 canales, ids, refs de imagen), marcas, ejemplos de fixtures y la guía de ejemplo (determinista, coherente entre trozos, sin solapes, estados, errores) |
+| `iptv/xmltv.test.ts` | lo nuevo del tokenizador: episodio, año, edad, nota, reparto, imagen, `clumpidx`, logo del canal, idioma, zonas y fechas imposibles, latin1/UTF-8 cruzados, ceder el hilo, si llegó entera (`</tv>`) o se cortó sin error (PHP «Fatal error»); y que la ventana por `GuideWindowCollector` da lo mismo que `buildGuideWindow` |
+| `iptv/guide-text.test.ts` | limpieza, recortes, relleno, temporada y episodio, año, edad y nota |
+| `iptv/guide-db.test.ts` | ventana, arreglos de §20.4, franja compartida, mismo minuto (se queda el más largo, también sin fin), varias fuentes (una por canal, deshacer la que se corta), hasta dónde llega (`coverage`, sin contar el relleno; un canal con solo relleno no tiene guía), trozos por solape, ficha sin repetir, imagen, «ahora / después» con huecos, topes de programas y de tamaño, instalar con la de antes abierta, otro proveedor o fichero roto, abortar, reabrir |
+| `iptv/guide-full.test.ts` | una pasada con dos salidas (la ventana, igual que antes), zonas, caracteres raros y HTML, ids repetidos y sin programas, solapes y sin fin, relleno, imágenes con credenciales, fallo del disco a mitad, respaldo `get_short_epg`, guía mediana |
+| `iptv/guide-api.test.ts` | filas, «Todos», «Favoritos» (con uno sin guía y la vuelta a «Todos»), páginas, estados, trozos, errores, ficha, «ahora / después», el proxy (cabeceras, 304, caché, no raster, cola llena) |
+| `iptv/guide-routes.test.ts` | las rutas por HTTP: sin IPTV, validación, /native, caché inmutable, 304, 503 con `Retry-After` |
+| `iptv/guide-service.test.ts` | de punta a punta con el proveedor falso: las dos salidas, Ajustes, la parrilla con el partido, reabrir sin descargar, la primera vez tras la 0.9.0, eliminar y otro proveedor, una guía que solo cubre hoy (`coveredTo`, también con un relleno que acaba a +36 h), un fallo pasajero del XMLTV con respaldo (se queda la completa de antes, `failedAt`, reintento a los 30 min), un `xmltv.php` que se corta sin error (sin `</tv>`: se queda la de antes, `failedAt`, reintento; sin una que sirva, se usa lo que llegó y se reintenta antes), sin completa que sirva (el respaldo entra, `partial`), una guía sin partidos (la ventana de antes se queda), M3U con dos `url-tvg` (una fuente por canal; una cortada a medias no deja nada) y **el directo no espera** (un canal sonando por el relé mientras se construye una guía de 400+ canales; la API responde con la de antes; margen proporcional al reposo: reloj < 3 × reposo + 100 ms, relé < 2 × reposo + 150 ms, con un segundo intento; un bloqueo de 700 ms metido a mano lo hace fallar) |
+| `iptv/guide-grande.test.ts` (`@lento`) | 3 000 canales × 3 días |
+
+**Medidas en el PC de desarrollo** (Windows, CPU al 100 % con otros equipos trabajando):
+- **@lento:** 237 361 programas de 3 000 canales; leer y escribir 5,3 s, arreglar 0,4 s, instalar 3 ms; fichero
+  57,7 MB (unos 243 B por programa con sinopsis distinta en cada uno: una guía real repite muchas); montón +38 MB, RSS
+  +84 MB; hilo p99 26 ms y máximo 42 ms; trozo de 60 canales × 6 h, mediana 3,6 ms; «ahora / después» de 100 canales,
+  3,7 ms; una ficha, 0,25 ms.
+- **El directo no espera:** construir una guía de ~400 canales con un canal sonando: el relé siguió mandando con su
+  peor hueco como sin construir (60-110 ms frente a 56-93 ms) y un reloj de 10 ms llegó tarde 34-60 ms como mucho.
+- En el N100/N300 contar con 3-5 veces más tiempo (no con más memoria). Si el sondeo da más de ~1 M de programas en la
+  ventana, medir el hilo con el relé activo allí antes de darlo por bueno.
+
+### 20.10 Decisiones propuestas y lo que falta
+
+- **decisiones.md D31.1:** `guia.db` sin cifrar (§20.2).
+- **decisiones.md D31.2:** orden de «Todos»: España y sin país primero, luego los demás países; dentro, el del proveedor;
+  número = puesto (§20.5).
+- **decisiones.md D31.3:** en «Favoritos» cuentan también los canales de tu lista de AceStream que son un canal de la IPTV
+  (≥ 92), y los favoritos sin guía salen con «Sin información» (§20.5).
+- **decisiones.md D31.4:** «N canales con programación» en Ajustes cuenta todos los canales con guía (§20.7).
+- **decisiones.md D31.5:** con el sondeo del panel de Isma (Paso 0 del 3-oct: 47 MB sin gzip, 4 391 canales, 137 126
+  programas, solo de ayer a hoy), los topes de tamaño de la descarga suben de 64 MiB / 512 MiB a **256 MiB / 1 GiB**
+  (con 64 MiB quedaba un 30 % de margen y pasarse tira la guía entera); el plazo total, 300 s. `guia.db` sigue con
+  `IPTV_GUIDE_STORE.maxBytes` (512 MiB). Falta medir el tamaño real de `guia.db` en el Umbrel.
+- **decisiones.md D31.6:** fallos de la descarga (§20.3): un fallo pasajero del XMLTV no cambia una completa que aún sirve
+  por la del respaldo (queda dicho y se reintenta antes); una guía sin partidos no borra la ventana de antes; dos
+  `url-tvg` se juntan con una fuente por canal.
+- **La vista** (`guia-web`, `apps/web/src/features/guia/README.md`): `?vista=guia`, hija de Canales (botón «Guía TV»
+  en su cabecera con IPTV activa); demo con `?demo=1&vista=guia` (`&guia=hoy`, `&guia=grande`).
+- **Falta (fuera de este equipo):** la app de iPhone (las rutas nacen `web`; pasan a `any`
+  cuando la app copie la pantalla, con sus ejemplos de `web/v1/` movidos a `v1/`).
+
+### 20.11 Riesgos
+
+1. **Guías enormes:** con 10 000 canales y 7 días un panel puede pasar de 1 GB descomprimido y del tope de 1 GiB: se
+   corta la descarga (`response_too_large`) y no hay guía nueva (sigue la de antes). La de Isma pesa 47 MB (G5).
+2. **Guía que solo cubre hoy:** es lo que da el panel de Isma (Paso 0). La parrilla tiene que vivir con mañana y pasado
+   vacíos: `coveredTo` lo dice (§20.6) y la demo y el proveedor falso tienen un modo «solo hoy» (§20.8).
+3. **Disco:** en el peor caso razonable, ~250-350 MB de `guia.db` (tope duro 512 MiB + 10 %).
+4. **`g` y los `id` de programa cambian con cada guía:** la web tiene que volver a pedir con 409 `guide_stale`; una
+   pestaña abierta 8 h verá ese 409 una vez.
+5. **Zonas mal puestas por el proveedor** (horas sin zona y `tvg-shift` fijo): 1 h mal tras el cambio de hora.
+6. **Logos de terceros:** muchos bloquean el enlace directo o son `http`; el proxy los pide desde el Umbrel y si fallan
+   no se reintentan en 1 h. La red de casa nunca vale para imágenes.
+7. **`node:sqlite`** es «release candidate» en Node 24 (sin aviso en 24.15; la imagen fija es la 24.19). Si un día
+   cambia su API, el fallo se ve en las pruebas; el plan B es el formato propio de la investigación.
+
+### 20.12 Qué se tomó de la investigación y qué cambió
+
+- **Tomado:** una lectura y dos salidas; `node:sqlite` con la parrilla `WITHOUT ROWID` y la ficha aparte; ventana
+  −24 h / +80 h; versionado y caché inmutable; trozos de ≤ 60 canales; los arreglos de §4 de la investigación; el proxy
+  de imágenes; sin evento SSE nuevo (se usa `iptv.status`).
+- **Cambiado:**
+  - la lista de canales va **por páginas** (`offset`/`limit`) y no entera: con miles de canales serían cientos de KB
+    en cada apertura;
+  - sin `initial` en `iptvGuide` (la primera tesela se pide aparte): así el estado no depende de la hora;
+  - programas como **objetos** (`{ id, start, end, title, flags }`) y no tuplas: el contrato se lee y la app iOS lo
+    decodifica sin trucos (pesa poco más);
+  - títulos sin internar (un `TEXT` por programa: más simple y unos MB más en disco);
+  - diario en memoria en vez de `journal_mode=OFF` (con OFF un fallo a mitad no se puede deshacer);
+  - errores `guide_*` en vez de `iptv_guide_*` (los `iptv_*` están fijados);
+  - `version` = la hora de la descarga en base 36 (sin hash: la ventana se mueve con cada descarga, así que el
+    contenido nunca coincide);
+  - el número del canal es su puesto en «Todos» (el catálogo no guarda `num`).

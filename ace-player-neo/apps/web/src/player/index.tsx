@@ -70,7 +70,9 @@ import {
   type FavoriteChannel,
 } from './favorite-zap.ts';
 import { playChannel } from '../features/library/play.ts';
+import { VOD_SEEK_STEP_S } from './vod/timeline.ts';
 import './player.css';
+import './vod/vod.css';
 
 export * from './api.ts';
 export { PlayerSurface } from './PlayerSurface.tsx';
@@ -186,6 +188,18 @@ function DemoPicture() {
   );
 }
 
+/** La ficha de lo que suena: la película, o la serie de un episodio. */
+function vodTitleRoute(state: PlayerState): { vista: 'cine'; id: string } | null {
+  const vod = state.vod;
+  if (!vod) return state.channel ? { vista: 'cine', id: state.channel.hash } : null;
+  return { vista: 'cine', id: vod.kind === 'episode' && vod.seriesId ? vod.seriesId : vod.id };
+}
+
+/** La «imagen» de una película en la demo: no hay vídeo, solo un fondo (el rótulo dice el título). */
+function VodDemoPicture() {
+  return <div className="vod-demo-picture" aria-hidden="true" />;
+}
+
 // ---- El dock ---------------------------------------------------------------------
 
 export default function PlayerDock({ presentation, route, onMinimize, onExpand }: PlayerDockProps) {
@@ -203,6 +217,8 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
   const nerdHosted = useNerdHosted();
   const stage = presentation === 'stage';
   const compact = layoutKind === 'mobile';
+  /** Una película o un episodio (docs/vod.md §12.7): sin zapping, favoritos ni directo. */
+  const isVod = state.kind === 'vod';
   /* Modo teatro (escritorio sin pantalla completa): solo en grande y con algo
      que ver; al detener o salir del partido se quita solo. */
   const [theaterWanted, setTheaterWanted] = useState(false);
@@ -430,6 +446,28 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
       onMinimize();
     },
     expand: onExpand,
+    seekBy: (delta) => {
+      haptic('selection');
+      runtime?.vodSeekBy(delta);
+    },
+    seekTo: (seconds) => runtime?.vodSeekTo(seconds),
+    nextEpisode: () => {
+      haptic('rigid');
+      runtime?.vodNext();
+    },
+    watchCredits: () => runtime?.vodWatchCredits(),
+    keepWatching: () => runtime?.vodKeepWatching(),
+    leaveVod: () => {
+      const target = vodTitleRoute(playerStore.get());
+      runtime?.vodLeave();
+      if (target) navigate(target);
+    },
+    replay: () => runtime?.vodReplay(),
+    setAudio: (index) => runtime?.vodSetAudio(index),
+    openTitle: () => {
+      const target = vodTitleRoute(playerStore.get());
+      if (target) navigate(target);
+    },
   };
 
   const copy = (text: string, ok: string, fail: string) => {
@@ -440,128 +478,248 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
 
   const channel = state.channel;
   const wantsPlay = state.desiredPlaying || state.phase === 'buffer';
-  const allMenuItems: MenuItem[] = channel
-    ? [
-        {
-          id: 'pausa',
-          label: wantsPlay ? 'Pausar' : 'Reproducir',
-          icon: wantsPlay ? 'pause' : 'play',
-          shortcut: 'K',
-          onSelect: actions.toggle,
-        },
-        {
-          id: 'atras',
-          label: 'Retroceder 30 s',
-          icon: 'back',
-          shortcut: 'J',
-          disabled: !(state.conn === 'activa' && state.started) || state.demo,
-          onSelect: actions.back,
-        },
-        { id: 'directo', label: 'Ir al directo', icon: 'directo', onSelect: actions.goLive },
-        { id: 'detener', label: 'Detener', icon: 'stop', danger: true, onSelect: actions.stop },
-        ...(canZap
-          ? [
-              {
-                id: 'anterior',
-                label: 'Canal anterior',
-                icon: 'chev-l' as const,
-                shortcut: '←',
-                separated: true,
-                onSelect: () => zap(-1),
-              },
-              {
-                id: 'siguiente',
-                label: 'Canal siguiente',
-                icon: 'chev-r' as const,
-                shortcut: '→',
-                onSelect: () => zap(1),
-              },
-            ]
-          : []),
-        {
-          id: 'nerd',
-          label: 'Datos técnicos',
-          icon: 'nerd',
-          shortcut: 'S',
-          checked: state.nerdOpen,
-          separated: !canZap,
-          onSelect: actions.toggleNerd,
-        },
-        {
-          id: 'donde',
-          label: 'Dónde se está reproduciendo',
-          icon: 'tv',
-          onSelect: () => navigate({ vista: 'ajustes', seccion: 'donde' }),
-        },
-        ...(abilities.fullscreen
-          ? [
-              {
-                id: 'completa',
-                label: 'Pantalla completa',
-                icon: 'full' as const,
-                shortcut: 'F',
-                onSelect: actions.toggleFullscreen,
-              },
-            ]
-          : []),
-        ...(abilities.pip
-          ? [
-              {
-                id: 'pip',
-                label: 'Imagen dentro de imagen',
-                icon: 'pip' as const,
-                shortcut: 'P',
-                onSelect: actions.togglePip,
-              },
-            ]
-          : []),
-        {
-          id: 'abrir',
-          label: 'Abrir en la app de AceStream',
-          icon: 'externo',
-          separated: true,
-          onSelect: () => openExternal(acestreamLink(channel.hash)),
-        },
-        {
-          id: 'url',
-          label: 'Copiar URL del stream (VLC)',
-          icon: 'link',
-          onSelect: () =>
-            copy(
-              externalStreamUrl(channel.hash, channel.kind),
-              'URL del stream copiada: pégala en VLC',
-              'No se pudo copiar',
-            ),
-        },
-        {
-          id: 'enlace',
-          label: 'Copiar enlace acestream://',
-          icon: 'copy',
-          onSelect: () =>
-            copy(acestreamLink(channel.hash), 'Enlace acestream:// copiado', 'No se pudo copiar'),
-        },
-        {
-          id: 'hash',
-          label: 'Copiar hash',
-          icon: 'hash',
-          disabled: !/^[a-f0-9]{40}$/.test(channel.hash),
-          onSelect: () => copy(channel.hash, 'Hash copiado', 'No se pudo copiar el hash'),
-        },
-      ]
-    : [];
+  const vodReady = state.conn === 'activa' && (state.vod?.durationS ?? 0) > 0;
+  const vodMenuItems = (): MenuItem[] => [
+    {
+      id: 'pausa',
+      label: wantsPlay ? 'Pausar' : 'Reproducir',
+      icon: wantsPlay ? 'pause' : 'play',
+      shortcut: 'K',
+      onSelect: actions.toggle,
+    },
+    {
+      id: 'atras',
+      label: 'Retroceder 10 s',
+      icon: 'back',
+      shortcut: 'J',
+      disabled: !vodReady,
+      onSelect: () => actions.seekBy(-VOD_SEEK_STEP_S),
+    },
+    {
+      id: 'adelante',
+      label: 'Avanzar 10 s',
+      icon: 'chev-r',
+      shortcut: 'L',
+      disabled: !vodReady,
+      onSelect: () => actions.seekBy(VOD_SEEK_STEP_S),
+    },
+    ...(state.vod?.next
+      ? [
+          {
+            id: 'siguiente-episodio',
+            label: `Siguiente episodio (${state.vod.next.label})`,
+            icon: 'play' as const,
+            shortcut: 'N',
+            onSelect: actions.nextEpisode,
+          },
+        ]
+      : []),
+    { id: 'detener', label: 'Detener', icon: 'stop', danger: true, onSelect: actions.stop },
+    {
+      id: 'ficha',
+      label: 'Ver ficha',
+      icon: 'cine',
+      separated: true,
+      onSelect: actions.openTitle,
+    },
+    {
+      id: 'nerd',
+      label: 'Datos técnicos',
+      icon: 'nerd',
+      shortcut: 'S',
+      checked: state.nerdOpen,
+      onSelect: actions.toggleNerd,
+    },
+    {
+      id: 'donde',
+      label: 'Dónde se está reproduciendo',
+      icon: 'tv',
+      onSelect: () => navigate({ vista: 'ajustes', seccion: 'donde' }),
+    },
+    ...(abilities.fullscreen
+      ? [
+          {
+            id: 'completa',
+            label: 'Pantalla completa',
+            icon: 'full' as const,
+            shortcut: 'F',
+            onSelect: actions.toggleFullscreen,
+          },
+        ]
+      : []),
+    ...(abilities.pip
+      ? [
+          {
+            id: 'pip',
+            label: 'Imagen dentro de imagen',
+            icon: 'pip' as const,
+            shortcut: 'P',
+            onSelect: actions.togglePip,
+          },
+        ]
+      : []),
+  ];
+  const allMenuItems: MenuItem[] =
+    channel && isVod
+      ? vodMenuItems()
+      : channel
+        ? [
+            {
+              id: 'pausa',
+              label: wantsPlay ? 'Pausar' : 'Reproducir',
+              icon: wantsPlay ? 'pause' : 'play',
+              shortcut: 'K',
+              onSelect: actions.toggle,
+            },
+            {
+              id: 'atras',
+              label: 'Retroceder 30 s',
+              icon: 'back',
+              shortcut: 'J',
+              disabled: !(state.conn === 'activa' && state.started) || state.demo,
+              onSelect: actions.back,
+            },
+            { id: 'directo', label: 'Ir al directo', icon: 'directo', onSelect: actions.goLive },
+            { id: 'detener', label: 'Detener', icon: 'stop', danger: true, onSelect: actions.stop },
+            ...(canZap
+              ? [
+                  {
+                    id: 'anterior',
+                    label: 'Canal anterior',
+                    icon: 'chev-l' as const,
+                    shortcut: '←',
+                    separated: true,
+                    onSelect: () => zap(-1),
+                  },
+                  {
+                    id: 'siguiente',
+                    label: 'Canal siguiente',
+                    icon: 'chev-r' as const,
+                    shortcut: '→',
+                    onSelect: () => zap(1),
+                  },
+                ]
+              : []),
+            {
+              id: 'nerd',
+              label: 'Datos técnicos',
+              icon: 'nerd',
+              shortcut: 'S',
+              checked: state.nerdOpen,
+              separated: !canZap,
+              onSelect: actions.toggleNerd,
+            },
+            {
+              id: 'donde',
+              label: 'Dónde se está reproduciendo',
+              icon: 'tv',
+              onSelect: () => navigate({ vista: 'ajustes', seccion: 'donde' }),
+            },
+            ...(abilities.fullscreen
+              ? [
+                  {
+                    id: 'completa',
+                    label: 'Pantalla completa',
+                    icon: 'full' as const,
+                    shortcut: 'F',
+                    onSelect: actions.toggleFullscreen,
+                  },
+                ]
+              : []),
+            ...(abilities.pip
+              ? [
+                  {
+                    id: 'pip',
+                    label: 'Imagen dentro de imagen',
+                    icon: 'pip' as const,
+                    shortcut: 'P',
+                    onSelect: actions.togglePip,
+                  },
+                ]
+              : []),
+            {
+              id: 'abrir',
+              label: 'Abrir en la app de AceStream',
+              icon: 'externo',
+              separated: true,
+              onSelect: () => openExternal(acestreamLink(channel.hash)),
+            },
+            {
+              id: 'url',
+              label: 'Copiar URL del stream (VLC)',
+              icon: 'link',
+              onSelect: () =>
+                copy(
+                  externalStreamUrl(channel.hash, channel.kind),
+                  'URL del stream copiada: pégala en VLC',
+                  'No se pudo copiar',
+                ),
+            },
+            {
+              id: 'enlace',
+              label: 'Copiar enlace acestream://',
+              icon: 'copy',
+              onSelect: () =>
+                copy(
+                  acestreamLink(channel.hash),
+                  'Enlace acestream:// copiado',
+                  'No se pudo copiar',
+                ),
+            },
+            {
+              id: 'hash',
+              label: 'Copiar hash',
+              icon: 'hash',
+              disabled: !/^[a-f0-9]{40}$/.test(channel.hash),
+              onSelect: () => copy(channel.hash, 'Hash copiado', 'No se pudo copiar el hash'),
+            },
+          ]
+        : [];
   // Sin teclado físico a la vista (táctil), las teclas del menú solo estorban.
   const menuItems = finePointer
     ? allMenuItems
     : allMenuItems.map(({ shortcut: _shortcut, ...item }) => item);
 
-  useMediaSession(state, {
-    play: () => void runtime?.resume('media-session'),
-    pause: () => void runtime?.pause('media-session'),
-    stop: () => stop(),
-    back: () => void runtime?.back(),
-    previous: canZap ? () => zap(-1) : null,
-    next: canZap ? () => zap(1) : null,
-  });
+  useMediaSession(
+    state,
+    isVod
+      ? {
+          play: () => {
+            runtime?.vodInteraction();
+            void runtime?.resume('media-session');
+          },
+          pause: () => {
+            runtime?.vodInteraction();
+            void runtime?.pause('media-session');
+          },
+          stop: () => stop(),
+          back: () => runtime?.vodSeekBy(-VOD_SEEK_STEP_S),
+          forward: () => runtime?.vodSeekBy(VOD_SEEK_STEP_S),
+          seekTo: (seconds) => runtime?.vodSeekTo(seconds),
+          previous: null,
+          next: state.vod?.next ? () => runtime?.vodNext() : null,
+        }
+      : {
+          play: () => void runtime?.resume('media-session'),
+          pause: () => void runtime?.pause('media-session'),
+          stop: () => stop(),
+          back: () => void runtime?.back(),
+          previous: canZap ? () => zap(-1) : null,
+          next: canZap ? () => zap(1) : null,
+        },
+  );
+
+  /* «¿Sigues viendo?» (§12.9): una tecla o un toque en cualquier sitio dice que
+     hay alguien delante; solo los saltos solos seguidos cuentan. */
+  useEffect(() => {
+    if (!isVod || !runtime) return;
+    const touched = () => runtime.vodInteraction();
+    const events = ['pointerdown', 'keydown', 'touchstart'] as const;
+    for (const name of events) document.addEventListener(name, touched, { passive: true });
+    return () => {
+      for (const name of events) document.removeEventListener(name, touched);
+    };
+  }, [isVod, runtime]);
 
   // ---- Atajos (registro central: salen solos en la ayuda «?») ----
   const has = () => playerStore.get().channel !== null;
@@ -635,7 +793,7 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
     keys: ['g'],
     label: 'Favorito del canal que suena',
     group,
-    when: has,
+    when: () => has() && playerStore.get().kind !== 'vod',
     handler: actions.toggleFavorite,
   });
   useShortcut({
@@ -661,6 +819,7 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
   const verticalZap = () =>
     stageRef.current &&
     has() &&
+    !vodRef.current &&
     canZapFavorites &&
     verticalKeysForZap(rootRef.current, immersiveRef.current);
   const immersiveRef = useRef(immersive);
@@ -682,6 +841,39 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
     group,
     when: verticalZap,
     handler: () => zapFavorite(1),
+  });
+
+  /* Con una película (docs/vod.md §12.7): ← / → y J / L, ±10 s (no cambian de
+     canal; las pulsaciones seguidas se juntan en un salto); N, el siguiente
+     episodio. Van detrás: con la misma tecla gana el último cuyo `when` vale. */
+  const vodRef = useRef(isVod);
+  vodRef.current = isVod;
+  const vodKeys = () => stageRef.current && has() && vodRef.current;
+  useShortcut({
+    id: 'reproductor.vod-atras',
+    keys: ['ArrowLeft', 'j'],
+    display: ['←', 'J'],
+    label: 'Película: retrocede 10 s',
+    group,
+    when: () => vodKeys() && !arrowsBusy(),
+    handler: () => actions.seekBy(-VOD_SEEK_STEP_S),
+  });
+  useShortcut({
+    id: 'reproductor.vod-adelante',
+    keys: ['ArrowRight', 'l'],
+    display: ['→', 'L'],
+    label: 'Película: avanza 10 s',
+    group,
+    when: () => vodKeys() && !arrowsBusy(),
+    handler: () => actions.seekBy(VOD_SEEK_STEP_S),
+  });
+  useShortcut({
+    id: 'reproductor.vod-siguiente',
+    keys: ['n'],
+    label: 'Siguiente episodio',
+    group,
+    when: () => vodKeys() && playerStore.get().vod?.next != null,
+    handler: actions.nextEpisode,
   });
 
   // Desarrollo: gancho para las capturas y para probar a mano desde la consola.
@@ -729,6 +921,9 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
         data-presentation={presentation}
         data-phase={state.phase}
         data-immersive={immersive ? 'true' : 'false'}
+        // Móvil en vertical con una película: los controles van en una franja
+        // bajo la imagen, sin taparla (player.css, «Franja de controles»).
+        data-strip={stage && compact && !immersive && isVod ? 'true' : 'false'}
         data-ambient={colors ? 'true' : 'false'}
         aria-label={channel ? `Reproductor: ${channel.title}` : 'Reproductor'}
         style={style}
@@ -748,7 +943,13 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
             tabIndex={-1}
             aria-label={channel?.title ?? 'Vídeo'}
           />
-          {state.engine === 'demo' && state.started ? <DemoPicture /> : null}
+          {state.engine === 'demo' && state.started ? (
+            isVod ? (
+              <VodDemoPicture />
+            ) : (
+              <DemoPicture />
+            )
+          ) : null}
           {cut.n > 0 ? <span key={cut.n} className="player-cut" aria-hidden="true" /> : null}
           {stage ? <PlayerSurface /> : null}
         </div>

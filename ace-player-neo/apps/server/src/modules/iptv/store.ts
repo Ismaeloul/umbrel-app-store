@@ -2,6 +2,11 @@
    y `v2/iptv/guia.enc`, con 0600 en una carpeta 0700. La configuración
    (`v2/iptv.json`) la lleva el documento de `state` (`state.iptv()`).
 
+   También `v2/iptv/vod.enc` y la carpeta `v2/iptv/arte/` de Películas y
+   series (docs/vod.md §4.6 y §8): `removeAll` las borra con lo demás, porque
+   todos los ids cambian con otro proveedor. Quien los escribe y los lee es
+   `vod/catalog.ts` y `vod/art.ts`.
+
    Escritura atómica en binario (tmp + rename). Un fichero que no se puede
    descifrar o no tiene la forma esperada se ignora (y se borra): se vuelve a
    descargar. */
@@ -10,6 +15,7 @@ import { chmod, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import type { IptvKeys } from '../../config/keys.js';
 import type { Logger } from '../../core/logger.js';
 import { Catalog } from './catalog.js';
+import { vodAudioFileOf } from './vod/audio-check.js';
 import {
   FILE_MODE,
   catalogAad,
@@ -25,9 +31,14 @@ export interface IptvFilePaths {
   readonly iptvDir: string;
   readonly iptvCatalogFile: string;
   readonly iptvGuideFile: string;
+  /** Catálogo VOD (docs/vod.md §4.6); opcional en los tests que montan rutas a mano. */
+  readonly vodCatalogFile?: string;
+  /** Caché de carteles (docs/vod.md §8). */
+  readonly vodArtDir?: string;
 }
 
-async function writeSecret(file: string, dir: string, data: Buffer): Promise<void> {
+/** Escritura atómica de un fichero cifrado de la IPTV (0600 en la carpeta 0700). */
+export async function writeSecret(file: string, dir: string, data: Buffer): Promise<void> {
   ensureIptvDir(dir);
   const tmp = `${file}.tmp`;
   await writeFile(tmp, data, { mode: FILE_MODE });
@@ -107,15 +118,23 @@ export class IptvFiles {
     return null;
   }
 
-  /** Borra catálogo y guía (y sus restos). La clave local, si la hay, se queda. */
+  /**
+   * Borra catálogo y guía (y sus restos), el catálogo VOD y la caché de
+   * carteles (docs/vod.md §10.5). La clave local, si la hay, se queda.
+   */
   async removeAll(): Promise<void> {
+    const vod = this.paths.vodCatalogFile;
     for (const file of [
       this.paths.iptvCatalogFile,
       `${this.paths.iptvCatalogFile}.tmp`,
       this.paths.iptvGuideFile,
       `${this.paths.iptvGuideFile}.tmp`,
+      ...(vod ? [vod, `${vod}.tmp`, vodAudioFileOf(vod), `${vodAudioFileOf(vod)}.tmp`] : []),
     ]) {
       await rm(file, { force: true }).catch(() => undefined);
+    }
+    if (this.paths.vodArtDir) {
+      await rm(this.paths.vodArtDir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
 

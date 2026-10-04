@@ -322,6 +322,18 @@ describe('hls.js', () => {
     expect(engine.liveSyncPosition()).toBe(42);
   });
 
+  it('setLiveLatency (IPTV a golpes, auditoría 0.9.0): sube máxima, búfer y objetivo sin reconectar; nunca baja', () => {
+    const { engine, hls } = start();
+    const live = hls as unknown as { targetLatency?: number };
+    engine.setLiveLatency?.(15, 29, 39);
+    expect(hls.config).toMatchObject({ liveMaxLatencyDuration: 29, maxBufferLength: 39 });
+    expect(live.targetLatency).toBe(15);
+    engine.setLiveLatency?.(8, 12, 20);
+    expect(hls.config).toMatchObject({ liveMaxLatencyDuration: 29, maxBufferLength: 39 });
+    expect(live.targetLatency).toBe(15);
+    expect(hls.destroyed).toBe(false);
+  });
+
   it('la latencia va en segundos (C1) y el hls.js DE VERDAD acepta los tres perfiles', () => {
     expect(hlsConfig(PLAYBACK_PROFILES.balanced)).toMatchObject({
       liveSyncDuration: 10,

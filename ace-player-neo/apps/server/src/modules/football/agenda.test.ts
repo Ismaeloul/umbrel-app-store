@@ -465,6 +465,8 @@ describe('Cadena de la agenda del servicio (B-123, B-124, B-125; arquitectura §
     core.clock.advance(FOOTBALL_CACHE_MS + 1);
     const stale = await football.schedule();
     expect(stale).toEqual({ ...fresh, stale: true });
+    /* La misma copia en cada llamada (la agenda híbrida la reconoce y no se rehace). */
+    expect(await football.schedule()).toBe(stale);
     expect(football.healthInfo()).toMatchObject({
       status: 'stale',
       generatedAt: fresh.generatedAt,

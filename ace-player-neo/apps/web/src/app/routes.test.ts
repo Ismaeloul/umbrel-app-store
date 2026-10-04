@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { scrollKey } from './scroll-memory.ts';
 import {
   formatVista,
+  navLabel,
+  navParent,
+  navVistas,
   parseRoute,
   parseVista,
   routeDepth,
@@ -8,10 +12,14 @@ import {
   searchFor,
   viewParams,
   VISTA_PARAMS,
+  VISTA_TITLE,
   type Route,
 } from './routes.ts';
+import { CINE_PARAMS } from '../features/cine/model.ts';
 import { FACET_PARAM } from '../features/library/iptv/model.ts';
 import { SEARCH_PARAM } from '../features/search/navigation.ts';
+
+const TITLE_ID = '4b5c6d7e8f9012345678abcdef0123457a8b9c0d';
 
 describe('rutas (?vista=)', () => {
   it('los accesos directos del manifiesto de la 0.6.59', () => {
@@ -93,7 +101,21 @@ describe('rutas (?vista=)', () => {
     for (const param of [...Object.values(FACET_PARAM), 'cat', 'pestana'])
       expect(VISTA_PARAMS.biblioteca).toContain(param);
     expect(VISTA_PARAMS.buscar).toContain(SEARCH_PARAM);
+    for (const param of [...CINE_PARAMS, 'temporada']) expect(VISTA_PARAMS.cine).toContain(param);
     for (const global of ['demo', 'flag', 'vista']) expect(names).not.toContain(global);
+  });
+
+  it('los filtros de Pelis y series no viajan a otras vistas y vuelven al regresar', () => {
+    const cine = '?vista=cine&flag=cine&cine=series&cinecat=d4e5f6071829&cineq=office';
+    expect(searchFor({ vista: 'biblioteca' }, cine)).toBe('?vista=biblioteca&flag=cine');
+    expect(viewParams('cine', cine)).toBe('cine=series&cinecat=d4e5f6071829&cineq=office');
+    expect(
+      searchFor(
+        { vista: 'cine', id: null },
+        '?vista=biblioteca&flag=cine',
+        viewParams('cine', cine),
+      ),
+    ).toBe('?vista=cine&flag=cine&cine=series&cinecat=d4e5f6071829&cineq=office');
   });
 
   it('sentido de la transición y comparación', () => {
@@ -108,5 +130,88 @@ describe('rutas (?vista=)', () => {
         { vista: 'partido', id: 'b', canal: null },
       ),
     ).toBe(false);
+  });
+});
+
+describe('Guía TV (docs/iptv.md §20)', () => {
+  it('es `?vista=guia`, hija de Canales en la barra y un paso adelante de ella', () => {
+    expect(parseVista('guia')).toEqual({ vista: 'guia' });
+    expect(parseVista(formatVista({ vista: 'guia' }))).toEqual({ vista: 'guia' });
+    expect(navParent('guia')).toBe('biblioteca');
+    expect(navParent('biblioteca')).toBe('biblioteca');
+    expect(navParent('partido')).toBeNull();
+    expect(routeDepth({ vista: 'guia' })).toBeGreaterThan(routeDepth({ vista: 'biblioteca' }));
+    // «Favoritos | Todos» viaja con la guía y no se queda en Canales.
+    expect(searchFor({ vista: 'biblioteca' }, '?vista=guia&ambito=todos&demo=1')).toBe(
+      '?vista=biblioteca&demo=1',
+    );
+  });
+});
+
+describe('Películas y series (docs/vod.md §12.1 y §12.2)', () => {
+  it('cine es la portada; cine/<40 hex>, la ficha; lo demás detrás, la portada', () => {
+    expect(parseVista('cine')).toEqual({ vista: 'cine', id: null });
+    expect(parseVista(`cine/${TITLE_ID.toUpperCase()}`)).toEqual({ vista: 'cine', id: TITLE_ID });
+    expect(parseVista('cine/no-es-un-id')).toEqual({ vista: 'cine', id: null });
+    expect(parseVista('cine/123')).toEqual({ vista: 'cine', id: null });
+    const routes: Route[] = [
+      { vista: 'cine', id: null },
+      { vista: 'cine', id: TITLE_ID },
+    ];
+    for (const route of routes) expect(parseVista(formatVista(route))).toEqual(route);
+    expect(searchFor({ vista: 'cine', id: TITLE_ID }, '?vista=cine&flag=cine&cine=series')).toBe(
+      `?vista=cine/${TITLE_ID}&flag=cine&cine=series`,
+    );
+  });
+
+  it('la temporada abierta no pasa a otra ficha ni a la portada (vod-estado §4.2, arreglo 3)', () => {
+    const other = 'b'.repeat(40);
+    const inSeries = `?vista=cine/${TITLE_ID}&cine=series&cinecat=d4e5f6071829&temporada=3`;
+    expect(searchFor({ vista: 'cine', id: other }, inSeries)).toBe(
+      `?vista=cine/${other}&cine=series&cinecat=d4e5f6071829`,
+    );
+    expect(searchFor({ vista: 'cine', id: null }, inSeries)).toBe(
+      '?vista=cine&cine=series&cinecat=d4e5f6071829',
+    );
+    // La misma ficha (replace del router) la conserva.
+    expect(searchFor({ vista: 'cine', id: TITLE_ID }, inSeries)).toBe(inSeries);
+  });
+
+  it('la ficha es un paso adelante de la portada y la portada va entre Canales y Buscar', () => {
+    const home = routeDepth({ vista: 'cine', id: null });
+    expect(home).toBeGreaterThan(routeDepth({ vista: 'biblioteca' }));
+    expect(home).toBeLessThan(routeDepth({ vista: 'buscar' }));
+    expect(routeDepth({ vista: 'cine', id: TITLE_ID })).toBe(9);
+  });
+
+  it('cada ficha empieza arriba y la portada guarda su sitio (scrollKey)', () => {
+    expect(scrollKey({ vista: 'cine', id: null })).toBe('cine:portada');
+    expect(scrollKey({ vista: 'cine', id: TITLE_ID })).toBe(`cine:${TITLE_ID}`);
+    expect(scrollKey({ vista: 'agenda' })).toBe('agenda');
+  });
+
+  it('«Pelis y series» solo con features.vod (sin interruptor desde la 0.9.0), entre Canales y Buscar', () => {
+    const cuatro = ['agenda', 'biblioteca', 'buscar', 'ajustes'];
+    expect(navVistas(undefined)).toEqual(cuatro);
+    expect(navVistas({ vod: false })).toEqual(cuatro);
+    expect(navVistas({ vod: true })).toEqual(['agenda', 'biblioteca', 'cine', 'buscar', 'ajustes']);
+  });
+
+  it('el rótulo corto en la barra y el título entero en la vista', () => {
+    expect(navLabel('cine')).toBe('Pelis y series');
+    expect(VISTA_TITLE.cine).toBe('Películas y series');
+    expect(navLabel('biblioteca')).toBe('Canales');
+  });
+});
+
+describe('sala (docs/vod.md §12.2 y §12.8)', () => {
+  const ID = 'c1d2e3f4a5b60718293a4b5c6d7e8f9012345678';
+  it('`sala/<40 hex>` es el escenario de una película; sin id válido, la portada de cine', () => {
+    expect(parseVista(`sala/${ID.toUpperCase()}`)).toEqual({ vista: 'sala', id: ID });
+    expect(parseVista('sala/xyz')).toEqual({ vista: 'cine', id: null });
+    expect(formatVista({ vista: 'sala', id: ID })).toBe(`sala/${ID}`);
+    expect(routeDepth({ vista: 'sala', id: ID })).toBe(12);
+    expect(scrollKey({ vista: 'sala', id: ID })).toBe(`sala:${ID}`);
+    expect(navParent('sala')).toBe('cine');
   });
 });

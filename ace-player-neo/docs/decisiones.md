@@ -475,3 +475,366 @@ conservador). Todas se pueden revertir.
   `iptv.status`.
 - **Vuelta atrás**: no cambia el formato de ningún fichero de `data/`;
   volver a la 0.8.3 es seguro (solo se pierden las rutas nuevas).
+
+## D26. Pelis y series «como los partidos» (0.9.0, equipo/vod-web)
+
+Lo pidió Isma (pendiente.md, punto 7)
+y sale de la investigación de otras apps (`docs/investigacion/pelis-y-series.md`,
+§5 «Qué hemos adoptado y por qué»); el detalle de pantallas, en docs/vod.md
+§12.12.
+
+- **Portada en filas y rejilla aparte.** La portada es como la agenda: una
+  fila por categoría del proveedor (20 títulos, pedida al acercarse a la
+  pantalla; 12 filas de entrada). La rejilla de carteles es OTRA pantalla
+  (`cinecat`, `cinetag` o una búsqueda) con su entrada en el historial, para
+  que «Atrás» vuelva a la portada. Sin parámetros nuevos en la URL.
+- **Carteles grandes, sin interruptor de densidad.** 2 columnas en el móvil
+  (antes 3) y una menos en cada ancho; título de 15 px. La investigación
+  proponía enseñar las dos densidades tras un interruptor: se dejó la grande
+  porque es lo que Isma pidió literalmente.
+- **El texto del botón principal de una serie lo pone la web** por la acción
+  y el episodio («Continuar T2 · E3», «Siguiente capítulo: T2 · E4»); el
+  `label` del servidor queda de respaldo. La app de iPhone, que irá basada en
+  la web, debe copiar estos textos.
+- **Lo que el proveedor no da no se pinta**, y «0» de nota o de edad es «sin
+  dato». Los géneros de TMDB en inglés y los países como código se ven en
+  castellano (en la web, sin contrato).
+- **Tráiler, estreno y duración de los episodios**: campos opcionales del
+  contrato. El tráiler abre YouTube en otra pestaña (`noopener`): no se
+  incrusta (la CSP no lo deja y no gasta la única conexión IPTV).
+- **Adultos como los demás** (decisión de Isma, cambia D-VOD7): en la
+  portada y en «Todas», con su «+18». La web ya lo enseña así; falta el
+  servidor.
+
+## D27. Agenda híbrida: la guía de la IPTV para hoy y mañana (0.9.0)
+
+Lo pidió Isma (docs/pendiente.md,
+punto 12); diseño completo en docs/iptv.md §4.7.
+
+- **Qué hace**: días 1-14, futbolenlatv como siempre. Hoy y mañana, la guía
+  de la IPTV **confirma** el partido y su canal exacto («Confirmado en tu
+  guía: M+ LaLiga TV 2 · 21:00» en la tarjeta de la agenda y en «Dónde se
+  emite» del partido), **mueve la hora** si la de futbolenlatv no cuadra
+  («Hora de tu guía: DAZN LaLiga 2 · 21:30 · antes 21:00») y **añade** el
+  partido que futbolenlatv no trae («Añadido por tu guía: …»). Lo de la
+  hora movida y el partido añadido se ve en la tarjeta, también en el móvil.
+  El canal de la guía va el primero en `channels` y guía también la
+  búsqueda de AceStream.
+- **Las mismas reglas que la resolución**: la confirmación es
+  `confirmByGuide` (§4.5) sobre los mismos candidatos (`guideCandidates`),
+  así lo que se enseña en la agenda es lo que luego suena primero.
+- **Mover la hora y añadir piden la marca de directo** (`<live/>`,
+  «directo», «en vivo», «(L)»): las repeticiones sin marca son muy
+  comunes en las guías reales (§15) y sin la hora de futbolenlatv no hay
+  otra forma segura de distinguirlas. Si la guía de Isma no marca el
+  directo, la guía solo confirma (que no necesita la marca: la ancla es la
+  hora de futbolenlatv). `scripts/epg-sondeo.mjs` lo mide con la misma regla
+  (`pareceUnPartidoConDirecto`). Mover la hora: solo el mismo día y si a la
+  hora de futbolenlatv la guía no confirma nada (o solo el partido sin marca
+  y la guía lo tiene en directo antes ese día: una repetición va siempre
+  después del directo); manda el primer programa en directo del día; el
+  saque es el inicio del programa redondeado al cuarto de hora siguiente
+  (20:50 → 21:00) si así el programa cubre el partido entero.
+- **La descripción no dice de qué partido es un programa** (segunda
+  revisión): para mover la hora, los dos equipos tienen que estar en el
+  título o el subtítulo, y un programa que ya es de otro partido de la
+  agenda (sus equipos en el título) no mueve ni confirma este. Si el título
+  trae otro enfrentamiento, la descripción tampoco confirma este a su hora.
+  Así «Sevilla - Betis (Directo)» con «Esta noche, Real Madrid - Barcelona»
+  en la descripción no lleva el Clásico a las 18:30.
+- **Añadir, con cuidado** (mejor no añadir uno que añadirlo dos veces):
+  solo de una competición conocida (familia del texto o, si no nombra
+  ninguna, del canal), en un canal de España, con los dos equipos claros en
+  el título o el subtítulo, sin filiales, cantera, femenino (salvo Liga F),
+  leyendas, benéficos ni otros deportes que se llaman como una competición de
+  fútbol («EHF Champions League», «Premier League Darts», «eLaLiga»), con
+  alguna categoría de deportes si el programa trae categorías, y solo si no
+  está ya en la agenda escrito de otra forma: ninguno de los dos equipos
+  juega en la agenda ese día, el anterior o el siguiente; los dos nombres no
+  se parecen a los de un partido de ese día, ni uno solo si es de la misma
+  competición; ese canal no da a esa hora un partido de la agenda; y no es,
+  en el mismo canal y de la misma competición, un partido de la agenda que
+  la guía no encuentra a su hora (con la hora mal). La misma competición a
+  la misma hora, sola, **no** basta: en una noche de Champions se añade el
+  partido que le falta a la agenda. Id `guia-<fecha>-<hash>`.
+- **Alias en los dos sentidos**: la tabla curada de la guía
+  (`EPG_TEAM_ALIASES`) vale desde cualquiera de sus formas («Nápoles»,
+  «Oporto», «Brujas», «Estrella Roja», «Salzburgo», «Copenhague», como
+  futbolenlatv, encuentran «Napoli», «Porto», «Club Brugge», «Crvena
+  Zvezda», «Salzburg», «Copenhagen», y al revés): así la guía mueve la hora
+  en vez de añadir el partido otra vez.
+- **Preferir la guía**: las fuentes del canal confirmado van delante de
+  todas (IPTV y AceStream; dentro, el orden de siempre), también por delante
+  de la IPTV por nombre de otro canal que anuncie futbolenlatv. Una AceStream
+  que es ese canal según la regla de la IPTV (`sameChannelScore` ≥ 92: «M+ LA
+  LIGA TV 2», «M. LALIGA TV 2»…) cuenta con su puntuación entera. **Cambia**
+  la regla de §4.5 («la pista de la guía, topada en 91, nunca adelanta a una
+  ≥ 92 de la agenda»), que era la prudente antes de que Isma pidiera
+  preferir la guía.
+- **Tolerancia de hora de la guía**: el programa puede empezar hasta 60 min
+  antes del saque (antes, 30): hay guías que meten la previa en el mismo
+  programa. Si empieza más de 30 min antes, tiene que cubrir el partido
+  entero (acabar 105 min después del saque); si no, no es un partido de esa
+  hora y, con la marca de directo, la guía mueve la hora. Vale también para
+  la resolución IPTV de la 0.8.3.
+- **Sin IPTV, en pausa, sin guía o sin datos de ese partido**: exactamente
+  como antes (la misma agenda, el mismo objeto; consultas y orden de
+  siempre). La ruta antigua `/api/football` lleva la agenda híbrida sin el
+  campo `guide`.
+
+## D28. Agenda en PC sin héroe, aura de tus equipos, marcador en «En directo» y deslizar entre días (0.9.0, equipo/agenda-pantalla)
+
+- **Escritorio sin héroe** (pedido de Isma tras la vista previa de la 0.8.4):
+  desde 1024 px toda la página es el calendario (tira de días y filas arriba).
+  El destacado (`featuredMatch`) sale de entrada en el panel de la derecha y
+  su tarjeta de la lista va elegida; el panel enseña SIEMPRE el elegido. Así
+  se arregla además que tocar el directo que era el del héroe (RSO–VIL en la
+  demo) dejara debajo los de «Luego». Se quita la banda compacta de la 0.8.4.
+  En el móvil y la tableta el héroe no cambia.
+- **«Tu equipo» con aura VERDE** (`--ok`) por fuera de la tarjeta, en la lista
+  y en «Luego»; solo equipos (`isMine`), no ligas. Isma dejaba elegir oro o
+  verde: en oro, con capturas, no se distinguía de la tarjeta elegida (aro oro
+  por dentro) y no se sabía cuál enseñaba el panel. Excepción consciente a
+  «los colores de estado no se usan para nada más» (sistema.md): es un aro
+  alrededor de la tarjeta entera, no un indicador pequeño junto a un estado,
+  y la estrella oro «Tu equipo» sigue diciendo lo mismo.
+- **«En directo» con marcador**: «RSO 1–0 VIL · 33'» (vuelve al injerto B1 de
+  `diseno/eleccion.md`, que la corrección 1 había tapado). Se tapa el partido
+  que estás viendo (regla 29) hasta destaparlo y el que tapes a mano en el
+  panel o el menú (`useScoreCovered`); las tarjetas, el escenario y el héroe
+  siguen tapados. Dos cápsulas por línea y como mucho dos líneas a la vista:
+  con más de cuatro directos la tira se desplaza (a mano) y el título dice
+  cuántos hay, para que el panel y «Ver canal» no bajen fuera de la pantalla.
+- **Deslizar entre días (móvil, web)**: Touch Events pasivos
+  (`features/agenda/day-swipe.ts`) en vez de Pointer Events. Una fila de
+  tarjetas solo se queda el gesto si aún puede desplazarse hacia ese lado (si
+  cabe entera o está en su final, cambia de día, como las vistas paginadas
+  nativas); el eje se fija a 10 px con el criterio de Chrome con `pan-y` y,
+  si la página se desplaza SIGUIENDO al dedo, no cambia de día (un salto de
+  scroll de la barra del navegador al final de la página no cuenta). El
+  cuerpo de la agenda del móvil recorta lo que se sale por los lados: la
+  entrada del día nuevo y el arrastre ensanchaban la página (414 px en un
+  iPhone de 390) y el navegador reajustaba la ventana en mitad del gesto, que
+  era el «a veces no» que quedaba. Probado con dedo de verdad en Chrome
+  (`e2e/agenda-deslizar.spec.ts`, también con la página abajo del todo); en
+  Safari de iOS falta probarlo en el iPhone de Isma (sin Safari de verdad en
+  este PC).
+- **Dirección del gesto, A CONFIRMAR CON ISMA**: dedo a la IZQUIERDA = día
+  siguiente, como en la 0.8.4 y en las vistas paginadas del iPhone (el día
+  nuevo entra por la derecha, como en la tira de días). En pendiente.md Isma
+  escribió «derecha = día siguiente»; se lee como «el día siguiente está a la
+  derecha», pero si quería decir el dedo hacia la derecha, es cambiar una
+  línea (`directionOf`). Al revés chocaría con las filas de tarjetas: el
+  mismo dedo a la izquierda las desplaza hacia delante y, en su final, sigue
+  al día siguiente. Hacia un lado sin día (Hoy, el primero, dedo a la
+  derecha) la lista apenas se mueve (16 px) para que no parezca un gesto que
+  falla.
+- **Canales**: en «Ahora» de la ficha (columna derecha) los escudos van a
+  40 px como en las tarjetas pequeñas de la agenda: el del servidor o el
+  monograma con siglas (a 22 px eran dos círculos del color del club). En el
+  cartel de «Emitiendo ahora» y en la fila del canal, junto a «Girona 1–1
+  Sevilla» (el texto que citó Isma), sin escudo de imagen va una placa
+  pequeña del color del club con las siglas (`TeamMark plate`) en vez de los
+  dos círculos lisos; con escudo, el escudo.
+
+## D29. Buscador IPTV: el orden y las filas tras la revisión (0.9.0, equipo/buscador-iptv)
+
+Detalle y pruebas en docs/buscador.md §9.
+
+- **D29.1 · Lo flojo detrás de lo bueno de cualquier país.** Cambia la regla de docs/iptv.md
+  §19 («España o sin país delante en cualquier nivel») solo para las coincidencias flojas (en otro orden, por
+  dentro, sin la marca, por la categoría): «tv3» da los TV3 de Suecia, Dinamarca… antes que «M+ LaLiga TV 3»;
+  «sport 1» da el SPORT 1 alemán antes que «Eurosport 1». Entre lo bueno, España sigue primero («dazn 1» →
+  DAZN 1 y DAZN 1 BAR de aquí antes que el alemán).
+- **D29.2 · En la pestaña IPTV, España y sin país son una fila** (cambia docs/iptv.md §16.3,
+  que las separaba): como en Buscar (§17). Antes salían dos filas iguales.
+- **D29.3 · Tus favoritos IPTV desempatan delante, nunca delante de lo igual** (Buscar y
+  pestaña).
+- **D29.4 · A igualdad de todo, la mejor calidad antes que el orden del proveedor.**
+- **D29.5 · «#N» es el número del canal, nunca una copia** (como en la 0.8.4): «LALIGA+ PPV
+  #2» es otro evento que el #1. Una copia es «(N)» o «[N]» (docs/iptv.md §17). Si la lista real de Isma
+  usara «#2» para copias de un mismo canal, saldrían como filas aparte (molesta, pero no se pierde nada);
+  juntarlas por error escondía canales y el relé saltaba a otro evento.
+- **D29.6 · Los apodos de España («Tele 5» = Telecinco, «A3» = Antena 3, «A3 Series» =
+  Atreseries) solo juntan canales que se sabe que son de España** (por su nombre o su categoría); lo escrito
+  los busca como alias. El TELE 5 alemán o el polaco siempre son otro canal.
+
+## D30. «Descargar fallos» en Salud y la web sin elementos compartidos (0.9.0, equipo/pulido)
+
+- **Para qué**: Isma pulsa «Descargar fallos» (Ajustes → Salud) y pasa el
+  fichero; de un vistazo se ve qué es nuestro (motor, decodificación, relé de
+  la IPTV, remux, reproductor de la web, errores de la web, servidor, datos)
+  y qué no (una fuente que no va, el proveedor IPTV, la red, futbolenlatv o
+  los escudos).
+- **Ruta**: `POST /api/v1/diagnostics/export` (`module: 'diagnostics'`,
+  `access: 'web'`, anti-CSRF). POST porque la web manda lo suyo: el anillo
+  de sus últimos 200 errores (`src/lib/web-log.ts`, solo en memoria) y cómo
+  se está viendo. Responde el fichero
+  `ace-player-neo-fallos-AAAA-MM-DD-HHMM.json` (hora de Madrid) como
+  descarga, `no-store`; nunca se guarda en el NAS.
+- **Qué lleva**: versión, entorno (interruptores y de dónde salen las
+  claves, nunca las claves), la salud de siempre, la IPTV sin servidor ni
+  usuario, el remux, los fallos (registro de fallos + líneas `warn`/`error`
+  del servidor + lo de la web, sin contar dos veces el mismo código en el
+  mismo segundo) con `side` (`nuestro` / `de_fuera` / `sin_clasificar`),
+  `piece` y un resumen en frases, y el registro del servidor (anillo de 2000
+  líneas / 1 MiB en `core/logger.ts`) y el de la web.
+- **Clasificación** (`@ace/shared`, `domain/faults.ts`): por código (catálogo
+  y registro de fallos), después por la causa y, en el log, por módulo y
+  frase. Los cortes del relé (`iptv_dropped`, «se reconecta el relé») cuentan
+  como nuestros, como los ve Isma; un ffmpeg que muere por el códec es
+  decodificación. Las métricas de fin de reproducción y el autoplay
+  bloqueado no cuentan como fallo. Lo que no encaja queda «sin clasificar».
+  Cuando el reproductor agota una fuente sin código del servidor, apunta el
+  del ÚLTIMO fallo (`playerFailureCode`): `player_decode_failed` (hls.js,
+  mpegts.js o el `<video>` que no decodifican: nuestro, causa `codec`),
+  `player_stalled` (imagen parada con 2 s o más de búfer: el reproductor) o,
+  si no, `player_source_failed` (la fuente). Un `player_source_failed` de
+  antes (o de la app de iPhone) mira la frase: si delata la decodificación o
+  el relé, es nuestro.
+- **Redacción** (sobre TODO el fichero, dos capas): el redactor de la IPTV
+  (conoce usuario, contraseña y URLs guardadas) y `redactReportText`
+  (credenciales en URLs y en texto, tramos Xtream con y sin esquema,
+  `?username=&password=`, `t=`, tickets del relé, `Authorization`, cookies,
+  JSON con secretos, JWT, correos, el usuario del sistema en las pilas e IPs
+  públicas). Se quedan los hashes AceStream, los ids IPTV y las IPs privadas
+  y de Tailscale (dicen qué contenedor falla).
+- **Transiciones de la web** (punto 4 de Isma): abrir un partido es el mismo
+  fundido que cambiar de pestaña, a la ida y a la vuelta (también con el
+  botón atrás: donde las vistas van con View Transitions, el router lanza la
+  vuelta justo después del `popstate`, que React pinta sin View Transition;
+  tras el gesto de volver del móvil, `hasUAVisualTransition`, en el acto y
+  sin fundido, porque ya lo animó el navegador). Fuera la transición
+  compartida de los escudos (`partido-<id>`); el reproductor lleva un
+  nombre por presentación (`ace-reproductor-mini`/`-stage`) para fundirse
+  en vez de viajar, salvo en
+  WebKit, donde no lleva `<ViewTransition>` (con fix/transicion-safari, abrir
+  un partido allí es solo el fundido CSS de las vistas; probado con WebKit de
+  Playwright: sin transiciones del documento y sin vistas superpuestas). La
+  animación de los escudos queda para la app de iPhone.
+- **Vuelta atrás**: no cambia ningún fichero de `data/`; volver a la 0.8.4 es
+  seguro (se pierde la ruta nueva).
+
+## D31. Guía TV: la guía completa en disco y la API por trozos (0.9.0, equipo/guia-servidor)
+
+Diseño entero en `docs/iptv.md` §20.
+
+- **Para qué**: la vista «Guía TV» (parrilla estilo Movistar+ con «Favoritos |
+  Todos», docs/pendiente.md punto 11) necesita la guía entera de la IPTV, no
+  solo los ~93 canales con partidos de la 0.8.x.
+- **G1 · Sin cifrar**: `v2/iptv/guia.db` es SQLite (`node:sqlite`, que viene
+  con Node 24) y no se cifra: SQLite de Node no sabe y la guía no lleva
+  credenciales (las URL de la guía siguen en `catalogo.enc`; las de imagen que
+  llevarían algo de las credenciales se descartan). 0600 en la carpeta 0700,
+  como lo demás de la IPTV.
+- **G2 · Orden de «Todos»**: España y sin país primero, luego los demás
+  países; dentro de cada grupo, el orden del proveedor. El número de un canal
+  es su puesto ahí (el catálogo no guarda el `num` de Xtream).
+- **G3 · «Favoritos»**: tus favoritos en su orden; un canal de tu lista de
+  AceStream cuenta si es un canal de la IPTV (≥ 92, el mismo emparejado que el
+  buscador). Un favorito sin guía sale con «Sin información»; si ninguno
+  tiene guía, se enseña «Todos» (`fellBack`).
+- **G4 · Ajustes**: «N canales con programación» cuenta ya todos los canales
+  con guía (antes, solo los que tenían partidos).
+- **G5 · Topes**: con la medida del panel de Isma (Paso 0 del 3-oct: 47 MB
+  sin comprimir ni gzip, solo de ayer a hoy), los de tamaño de la descarga
+  suben de 64 MiB / 512 MiB a **256 MiB por cable y 1 GiB descomprimida**:
+  con 64 MiB quedaba un 30 % de margen y pasarse tira la guía entera (también
+  la de partidos). No se retiene nada en memoria. El plazo total sube de 180
+  a 300 s porque cada programa se escribe en disco mientras se lee.
+  `guia.db`: 2 M de programas y 512 MiB como mucho (lo que pase no se guarda
+  y se dice).
+- **G6 · Fallos de la descarga**: un fallo pasajero del XMLTV no cambia una
+  guía completa que aún sirve por la parcial de `get_short_epg` (40 canales):
+  los partidos salen del respaldo, la Guía TV sigue con la de antes, Ajustes
+  dice «no se pudo actualizar; se usa la del…» y se reintenta con espera
+  creciente (30 min a 8 h). Sin una que sirva, el respaldo sí entra
+  (`partial`) y el XMLTV también se reintenta antes de 8 h. Una guía sin un
+  solo partido no borra la ventana de partidos de antes. Con dos `url-tvg`,
+  la Guía TV junta las dos (una fuente por canal).
+- **Lo que no cambia**: la guía de partidos (`guia.enc`), `guide-match.ts` y
+  la agenda híbrida; un solo trabajo pesado de la IPTV a la vez; con alguien
+  viendo, la descarga periódica se retrasa como siempre, y si coincide, la
+  construcción cede el hilo cada 12 ms (el directo no espera).
+- **Vuelta atrás**: la 0.8.x no conoce `guia.db` y lo deja en disco sin
+  usarlo; nada más cambia de formato.
+
+## D32. La rueda baja la página; flechas y halos de los carruseles (0.9.0, equipo/carruseles)
+
+Lo pidió Isma al ver la vista
+previa de Pelis y series; afecta a TODOS los carruseles (`ui/PosterRail`:
+filas de Pelis y series, filas por competición de la agenda, «Emitiendo
+ahora» de Canales, Sistema) y a la tira de días.
+
+- **La rueda vertical baja la página siempre** (cambia B-143, que venía de
+  la 0.6.59): con el ratón encima de una tarjeta no se podía bajar. A los
+  lados se va con el touchpad (deltaX, lo hace el navegador), Mayús + rueda
+  (Chrome, Edge y Safari ya la convierten; `shiftWheelToHorizontal` solo
+  la hace donde no) o las flechas. La ayuda («?») lo dice así.
+- **El apretón de `.press` es la propiedad `scale`**, no `transform:
+  scale()`: así se suma al transform propio del control. Con `transform`,
+  la flecha de un carrusel (centrada con translate(-50%)) bajaba media
+  altura al pulsarla; también «Toca para reproducir». Regla para lo nuevo:
+  quien centre algo con `.press` encima, con `translate`/`transform`, no
+  tiene que hacer nada; quien quiera quitar el apretón, `scale: none`.
+- **Las flechas se apagan en su extremo** (tenues, con `aria-disabled`,
+  NO con `disabled` ni `pointer-events: none`): «Anteriores» salía con la
+  fila al principio y no hacía nada. Siguen en su sitio recogiendo el clic
+  y el foco: ocultas y sin recoger clics, el clic de más al pulsar varias
+  veces caía en el cartel de debajo y lo abría, y con teclado el foco se
+  iba al body. Desplazan
+  solo en horizontal (`scrollBy`, nunca `scrollIntoView`) y respetan
+  «reducir movimiento».
+- **Halo en vez de velo en las tarjetas de cine**: al pasar el ratón o
+  pulsar, un fondo suave por detrás con 8 px de aire alrededor del cartel y
+  de su texto (y del «Más opciones» en «Seguir viendo»); el texto de
+  debajo del cartel entra 4 px. La pista tiene sitio para el halo (10 px de
+  relleno; en escritorio, a la izquierda con margen negativo).
+- **El título pintado en un cartel acaba siempre a la misma altura**
+  (anclado abajo, crece hacia arriba, 4 líneas como mucho), igual en el
+  cartel de respaldo (CSS) y en los carteles de la demo (SVG), con la misma
+  geometría comprobada por una prueba.
+
+## D33. Idiomas de Pelis y series (0.9.0, equipo/idiomas)
+
+Detalle en docs/vod.md §4.10.
+
+- **El idioma sale de la categoría y de las marcas del título** con una tabla
+  única en `@ace/shared` (servidor y demo la comparten); castellano y latino
+  siempre separados. Las pistas de audio no sirven (casi todas «und»).
+- **El título manda sobre la categoría**, y los distintivos de lengua salen de
+  los idiomas (cambia el detalle de D-VOD6: antes se unían).
+- **Los títulos sin idioma NO se ven por defecto** (cambiado el 4-oct, antes
+  de salir la 0.9.0; antes se veían). Isma: «que solo salgan en castellano y
+  ya está, ninguno más». El interruptor «Mostrar también los que no indican
+  idioma» sigue, apagado de entrada (selector de la primera vez y servidor:
+  `unknown` ausente = 0). Un título «sin indicar» cuyo audio real ya se
+  comprobó (docs/vod.md §4.11) cuenta con ese idioma y sale.
+- **La elección es por casa y aparte de `vod.json`** (`v2/vod-idiomas.json`):
+  sobrevive a cambiar de proveedor. Va en la copia de seguridad.
+- **Un solo mando de idioma en la web:** el botón del globo; los chips de
+  lengua de la rejilla desaparecen (quedan «Multi» y «4K»).
+- **La búsqueda, solo en tus idiomas** (4-oct): fuera «3 en latino · Ver»,
+  `otherLangs` de `vodBrowse` y `cineidioma`. Sin aciertos, «Nada con…» y
+  «Cambiar idiomas».
+
+## D34. Registro en disco de 45 días y «Descargar logs» en Ajustes (0.9.0, equipo/logs)
+
+- **Para qué**: Isma pidió un botón en Ajustes para descargar los logs y pasarlos si dentro de un mes algo
+  falla. stdout se pierde al actualizar y el anillo de «Descargar fallos» solo guarda este arranque.
+- **Dónde**: sección nueva **Ajustes → Registro** (`ajustes/registro`, después de Salud), con su propio trozo de
+  JS. Botón «Descargar logs» (la palabra que usa Isma) y periodo 1 / 7 / 30 días (por defecto 30). «Descargar
+  fallos» de Salud se queda como está; el zip lleva su fichero dentro (`fallos.json`).
+- **Registro en disco**: `core/log-store.ts`, por el mismo enganche de pino que el anillo; info o peor; un
+  fichero por día de Madrid en `<DATA_DIR>/v2/registro/`, días cerrados en gzip; 45 días, 40 MiB, 8/12 MiB por
+  día, límite de repetidos. Redactado en el acto (redactor de la IPTV) y al escribir (`redactReportValue`). Sin
+  transports ni hilos (empaquetado §7.2): cola en memoria y un `appendFile` por tanda.
+- **Contexto**: líneas `arranque` (con cómo terminó el anterior), `versión nueva`, `latido` cada 6 h,
+  `apagado limpio`, la caída (`uncaughtExceptionMonitor` + `flushSync`), cada fallo del registro de fallos con
+  canal y hash (`module: fallos`) y los errores de la web (`module: web`).
+- **Zip**: escritor propio en `@ace/shared` (`domain/zip.ts`, sin dependencias; el servidor comprime con zlib y
+  la demo lo monta almacenado). LEEME.txt + resumen.json + fallos.json + registro.jsonl. Se abre con el
+  Explorador de Windows (comprobado con Expand-Archive) y con «Archivos» del iPhone.
+- **Rutas**: `diagnosticsLogInfo`, `diagnosticsLogDownload` (binaria) y `diagnosticsWebLog`, las tres
+  `access: 'web'`.
+- **Vuelta atrás**: solo añade `v2/registro/`; volver a la 0.8.4 es seguro.

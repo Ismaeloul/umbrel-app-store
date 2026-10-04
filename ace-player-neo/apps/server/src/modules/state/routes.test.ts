@@ -40,6 +40,7 @@ import type { Services } from '../../services.js';
 import type { AuthService } from '../auth/types.js';
 import type { EngineService } from '../engine/types.js';
 import type { FootballService } from '../football/types.js';
+import type { IptvService } from '../iptv/types.js';
 import type { PlaybackService } from '../playback/types.js';
 import { normalizeChannelBinding } from './normalize.js';
 import { registerLegacyRoutes, registerV1Routes } from './routes.js';
@@ -687,5 +688,89 @@ describe('GET /api/v1/bootstrap', () => {
     expect(JSON.stringify(boot)).not.toContain(DEVICE.secretSha256);
     expect(boot.engine.status).toBe('unknown');
     expect(boot.playback.sessions).toEqual([]);
+  });
+
+  it('`features.vod` (docs/vod.md §11.4): en la web sí; en la app nativa, nunca (todavía no tiene la pantalla)', async () => {
+    const auth = {
+      authenticateBearer: async (token: string): Promise<AuthenticatedDevice> => {
+        if (token !== TOKEN) throw new AppError('unauthorized');
+        return { deviceId: DEVICE.id, device: DEVICE, via: 'bearer' };
+      },
+    } as unknown as AuthService;
+    const t = await stateApp({ auth, iptv: vodIptv(true) });
+    const webBoot = BootstrapResponseSchema.parse((await t.get('/api/v1/bootstrap')).data);
+    expect(webBoot.features).toMatchObject({ iptv: true, vod: true });
+    const res = await t.app.inject({
+      method: 'GET',
+      url: '/native/api/v1/bootstrap',
+      headers: native(TOKEN),
+    });
+    const nativeBoot = BootstrapResponseSchema.parse(res.json());
+    expect(nativeBoot.features.iptv).toBe(true);
+    expect(nativeBoot.features).not.toHaveProperty('vod');
+    /* Sin catálogo VOD (o con la IPTV fallando al preguntar), ausente. */
+    const off = await stateApp({ iptv: vodIptv(false) });
+    expect(
+      BootstrapResponseSchema.parse((await off.get('/api/v1/bootstrap')).data).features,
+    ).not.toHaveProperty('vod');
+    const broken = await stateApp({ iptv: vodIptv('lanza') });
+    expect(
+      BootstrapResponseSchema.parse((await broken.get('/api/v1/bootstrap')).data).features,
+    ).not.toHaveProperty('vod');
+  });
+});
+
+const VOD_ID = 'e'.repeat(40);
+
+/* Una IPTV de mentira con Películas y series: `VOD_ID` es un id VOD. */
+function vodIptv(feature: boolean | 'lanza'): IptvService {
+  return {
+    active: () => true,
+    classify: (id: string) => (id === VOD_ID ? 'iptv_gone' : 'engine'),
+    libraryIdStates: () => null,
+    isVodId: (id: string) => id === VOD_ID,
+    vod: {
+      feature: () => {
+        if (feature === 'lanza') throw new Error('la IPTV no responde');
+        return feature;
+      },
+    },
+  } as unknown as IptvService;
+}
+
+describe('POST /api/v1/library con un id de Películas y series (docs/vod.md §5.3)', () => {
+  it('ni a Favoritos ni a Recientes: validation_error (`detail: vod_id` en el registro); quitarlo sí se puede', async () => {
+    const t = await stateApp({ iptv: vodIptv(true) });
+    await seedState(t.services.state);
+    for (const action of ['favorite-upsert', 'history-upsert'] as const) {
+      for (const id of [VOD_ID, `acestream://${VOD_ID}`]) {
+        const res = await t.post('/api/v1/library', { action, item: { id, title: 'Dune' } });
+        expect([res.status, res.data], `${action} ${id}`).toEqual([
+          400,
+          { error: expect.objectContaining({ code: 'validation_error' }) },
+        ]);
+      }
+    }
+    expect(t.services.state.get().favorites.map((item) => item.id)).not.toContain(VOD_ID);
+    /* Un canal de verdad entra como siempre. */
+    const channel = await t.post('/api/v1/library', {
+      action: 'favorite-upsert',
+      item: { id: ID_C, title: 'Canal' },
+    });
+    expect(channel.status).toBe(200);
+    /* Uno que se coló antes se puede quitar. */
+    await t.services.state.enqueue(
+      (draft) => {
+        draft.favorites.unshift({ id: VOD_ID, title: 'Colado', type: 'fav' } as never);
+      },
+      { scopes: ['library'] },
+    );
+    const removed = await t.post('/api/v1/library', {
+      action: 'delete',
+      collection: 'favorites',
+      id: VOD_ID,
+    });
+    expect(removed.status).toBe(200);
+    expect(t.services.state.get().favorites.map((item) => item.id)).not.toContain(VOD_ID);
   });
 });

@@ -63,6 +63,36 @@
   color: #fff;
 }
 
+/* ---- Placa pequeña (`plate` por debajo de 40 px, sin escudo de imagen) -----
+   Para las líneas de texto (Canales: «Girona 1–1 Sevilla»): una pastilla del
+   color del club, con el secundario de aro, y dentro la misma placa oscura
+   con las siglas (11 px, el mínimo del sistema). Mide lo que su placa: un
+   poco más alta que el círculo de 18 px al que sustituye. */
+.team--tag {
+  width: auto;
+  height: auto;
+  min-width: var(--s);
+  padding: 2px;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 0 0 1px var(--team-2),
+    0 0 0 1px var(--line-soft);
+}
+.team--tag::after {
+  border-radius: inherit;
+}
+.team--tag .team__plate {
+  font-size: 11px;
+  padding: 0.2em 0.36em 0.16em;
+  border-radius: 6px;
+}
+/* Una placa junto a otra (o a un escudo) no se monta encima: las siglas se
+   taparían. */
+.team--tag + .team,
+.team + .team--tag {
+  margin-left: 3px;
+}
+
 /* ---- Escudo del backend: encima del monograma, que queda de respaldo -------- */
 .team__crest {
   position: absolute;

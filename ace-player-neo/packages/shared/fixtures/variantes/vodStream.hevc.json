@@ -1,0 +1,35 @@
+{
+  "session": { "id": "s_Q2FuYWxEZVBydWViYQ", "heartbeatMs": 15000, "expiresAfterMs": 45000 },
+  "url": "/api/v1/video/s_Q2FuYWxEZVBydWViYQ/index.m3u8",
+  "protocol": "hls",
+  "remux": true,
+  "codec": { "video": "hevc", "audio": "aac", "source": "ffprobe" },
+  "latency": { "mode": "balanced", "initialBufferS": 6, "rebuildS": 8, "liveSync": null },
+  "stats": { "via": "sse" },
+  "handoff": false,
+  "source": "iptv",
+  "vod": {
+    "id": "5c6d7e8f9012345678abcdef01234567a8b9c0d1",
+    "kind": "movie",
+    "seriesId": null,
+    "title": "Oppenheimer",
+    "subtitle": null,
+    "durationS": 10860,
+    "startS": 0,
+    "resumed": false,
+    "audio": [
+      {
+        "index": 0,
+        "label": "Castellano",
+        "lang": "spa",
+        "codec": "aac",
+        "channels": 2,
+        "converted": false
+      }
+    ],
+    "audioIndex": 0,
+    "video": { "codec": "hevc", "codecs": "hvc1.2.4.L153.B0", "width": 3840, "height": 2160 },
+    "next": null,
+    "poster": "5d0e7b44"
+  }
+}

@@ -14,7 +14,7 @@
 //   - en el móvil en horizontal, con un canal sonando, el vídeo ocupa la
 //     pantalla y los controles se ocultan solos (CONTROLS_HIDE_MS).
 // Con --axe pasa además axe-core (WCAG 2.2 AA) en móvil (390×844) y
-// escritorio (1440×900), en oscuro y en claro: cero violaciones serias o críticas.
+// escritorio (1440×900 y 1536×864), en oscuro y en claro: cero violaciones serias o críticas.
 // Con --teclado recorre cada vista con Tab (móvil y escritorio, en oscuro):
 // todo lo enfocable se alcanza, el foco no se pierde ni cae en algo
 // invisible, y siempre se ve.
@@ -31,7 +31,9 @@
 //   Opciones: --capturas <carpeta>  guarda <carpeta>/<vista>/<vista>-<ancho>x<alto>-<tema>.png
 //             --axe  --movimiento  --teclado  --vistas a,b  --tamanos 390x844,1440x900  --no-build
 //             --paralelo <n> (contextos a la vez, 3 por defecto)
+//             --host <ip> (dónde escucha vite preview; ::1 por defecto)
 //             --indice (con --capturas: solo rehace README.md desde su revision.json)
+//   Variable ACE_CHROME: ruta de otro Chrome (si no, el canal 'chrome' instalado).
 // Deja el informe en <capturas o carpeta temporal>/revision.json.
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -69,6 +71,8 @@ const PARALLEL = Math.max(1, Number(option('paralelo', '3')) || 3);
 const ONLY_VIEWS = option('vistas')?.split(',') ?? null;
 const ONLY_SIZES = option('tamanos')?.split(',') ?? null;
 const PREVIEW_PORT = Number(option('puerto', '4181'));
+/** Dónde escucha vite preview (sin IPv6, `--host 127.0.0.1`). */
+const PREVIEW_HOST = option('host', '::1');
 
 // ---------------------------------------------------------------------------
 // Tamaños (prompt): móvil vertical y horizontal, tableta, portátil, escritorio
@@ -85,12 +89,14 @@ const SIZES = [
   { width: 1024, height: 1366, touch: true },
   { width: 1280, height: 800, touch: false },
   { width: 1440, height: 900, touch: false, light: true },
+  // El portátil de Isma (auditoría web 0.9.0).
+  { width: 1536, height: 864, touch: false },
   { width: 1920, height: 1080, touch: false },
   { width: 2560, height: 1440, touch: false },
 ].filter((size) => !ONLY_SIZES || ONLY_SIZES.includes(`${size.width}x${size.height}`));
 
 /** Donde se pasa axe: móvil y escritorio, en los dos temas. */
-const AXE_SIZES = new Set(['390x844', '1440x900']);
+const AXE_SIZES = new Set(['390x844', '1440x900', '1536x864']);
 
 const sizeKey = (size) => `${size.width}x${size.height}`;
 const isPhoneLandscape = (size) => size.width > size.height && size.height <= 540;
@@ -111,6 +117,34 @@ const NO_FAVORITES = [
 
 async function waitPlaying(page, timeout = 25_000) {
   await page.waitForSelector('.player[data-phase="reproduciendo"]', { timeout });
+}
+
+/** Películas y series la primera vez pide los idiomas (§4.10): se pasa con
+    «Ver películas y series» (lo marcado de serie) para llegar a la portada.
+    Sin esto la portada nunca se revisaba (salía antes el selector). */
+async function passCineLanguages(page) {
+  const welcome = page.locator('.cine-welcome');
+  const shown = await welcome
+    .waitFor({ state: 'visible', timeout: 6000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!shown) return;
+  await page.getByRole('button', { name: 'Ver películas y series' }).click();
+  await welcome.waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
+  // El ratón, fuera: si no, se queda sobre una fila y enseña sus flechas.
+  await page.mouse.move(0, 0);
+}
+
+/** Abre la primera película de la portada y le da a reproducir: la sala (`sala/<id>`). */
+async function openSala(page) {
+  await page.locator('.cine-row .cine-card').first().click();
+  await page.waitForSelector('.cine-hero__title', { timeout: 10_000 });
+  await page
+    .getByRole('button', { name: /^(Reproducir|Seguir viendo|Continuar|Ver T)/ })
+    .first()
+    .click();
+  await page.waitForSelector('.sala', { timeout: 10_000 });
+  await waitPlaying(page).catch(() => {});
 }
 
 async function dialogOpen(page) {
@@ -232,6 +266,11 @@ const VIEWS = [
   { name: 'ajustes-reproduccion', search: '?vista=ajustes/reproduccion', ready: 'main' },
   { name: 'ajustes-donde', search: '?vista=ajustes/donde', ready: 'main' },
   { name: 'ajustes-motor', search: '?vista=ajustes/motor', ready: 'main' },
+  { name: 'ajustes-iptv', search: '?vista=ajustes/iptv', ready: 'main' },
+  { name: 'ajustes-copia', search: '?vista=ajustes/copia', ready: 'main' },
+  { name: 'ajustes-registro', search: '?vista=ajustes/registro', ready: 'main' },
+  // Guía TV de la IPTV (docs/iptv.md §20).
+  { name: 'guia', search: '?vista=guia', ready: '.guia' },
   {
     name: 'dispositivos',
     search: '?vista=ajustes/dispositivos',
@@ -271,6 +310,64 @@ const VIEWS = [
     },
   },
   { name: 'sistema', search: '?vista=sistema&flag=sistema' },
+  // Películas y series (docs/vod.md §12.11): sin interruptor desde la 0.9.0; en vivo solo
+  // salen si el servidor ya tiene películas y series. La portada va en filas
+  // (`.cine-row`); la rejilla (`.cine-grid`) es otra pantalla.
+  // La primera vez, el selector de idiomas (antes de pasarlo).
+  { name: 'cine-idiomas', search: '?vista=cine', ready: '.cine-welcome' },
+  { name: 'cine', search: '?vista=cine', cine: true, ready: '.cine-row .cine-card' },
+  {
+    name: 'cine-categoria',
+    cine: true,
+    search: '?vista=cine',
+    ready: '.cine-row .cine-card',
+    prepare: async (page) => {
+      // «Ver todo» de la fila de la categoría: abre su rejilla.
+      await page
+        .getByRole('button', { name: /^Ver todo: 4K/ })
+        .first()
+        .click();
+      await page.waitForSelector('.cine-grid .cine-card', { timeout: 10_000 });
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: 'cine-busqueda',
+    search: '?vista=cine&cineq=dune',
+    cine: true,
+    ready: '.cine-grid',
+  },
+  {
+    name: 'cine-pelicula',
+    cine: true,
+    search: '?vista=cine',
+    ready: '.cine-row .cine-card',
+    prepare: async (page) => {
+      await page.locator('.cine-row .cine-card').first().click();
+      await page.waitForSelector('.cine-hero__title', { timeout: 10_000 });
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: 'cine-serie',
+    cine: true,
+    search: '?vista=cine&cine=series',
+    ready: '.cine-row .cine-card',
+    prepare: async (page) => {
+      await page.locator('.cine-row .cine-card').first().click();
+      await page.waitForSelector('.cine-episodes', { timeout: 10_000 });
+      await page.waitForTimeout(700);
+    },
+  },
+  // La sala de una película (`sala/<id>`, docs/vod.md §12.8) con ella sonando.
+  {
+    name: 'sala',
+    search: '?vista=cine',
+    cine: true,
+    ready: '.cine-row .cine-card',
+    player: true,
+    prepare: openSala,
+  },
 ].filter((view) => !ONLY_VIEWS || ONLY_VIEWS.includes(view.name));
 
 // ---------------------------------------------------------------------------
@@ -310,14 +407,14 @@ async function startPreview() {
       '--outDir',
       flag('no-build') ? path.join(WEB, 'dist') : outDir,
       '--host',
-      '::1',
+      PREVIEW_HOST,
       '--port',
       String(PREVIEW_PORT),
       '--strictPort',
     ],
     { cwd: WEB, stdio: 'ignore' },
   );
-  const base = `http://[::1]:${PREVIEW_PORT}`;
+  const base = `http://${PREVIEW_HOST.includes(':') ? `[${PREVIEW_HOST}]` : PREVIEW_HOST}:${PREVIEW_PORT}`;
   await waitForServer(`${base}/`);
   return {
     base,
@@ -409,7 +506,10 @@ function auditInPage({ width, touch }) {
     // avisos de la línea de estado) se recortan a propósito y solo se apuntan
     // en el informe para revisarlos a ojo.
     else if (hidesX && el.scrollWidth > el.clientWidth + 1 && style.textOverflow === 'ellipsis') {
-      if ((el.textContent ?? '').trim().length <= 20)
+      // En la Guía TV un programa mide lo que dura: un título corto en un
+      // programa corto (o del que asoma un trozo) va con «…» por fuerza, y el
+      // nombre entero está en la celda (aria-label) y en la franja de abajo.
+      if ((el.textContent ?? '').trim().length <= 20 && !el.closest('.guia-block'))
         cut.add(`${describe(el)} con «…» siendo corto (${el.scrollWidth} > ${el.clientWidth})`);
       else ellipsis.add(describe(el));
     }
@@ -636,8 +736,11 @@ async function checkKeyboard(page) {
      el navegador sigue desde ahí), dar la vuelta por la barra del navegador
      y encontrar controles que se montan mientras se avanza (en Ajustes, Salud
      y Acerca de se montan cuando el foco entra), que no estaban en la cuenta
-     inicial. Con el tope justo se quedaba sin llegar a los últimos. */
-  for (let step = 0; step < Math.max(tabbables * 2 + 20, 60) && step < 300; step += 1) {
+     inicial. Con el tope justo se quedaba sin llegar a los últimos. La
+     portada de Películas y series pide sus filas al acercarse: al contar
+     hay ~50 controles y el recorrido entero da ~130 paradas (de ahí el
+     mínimo de 200). */
+  for (let step = 0; step < Math.max(tabbables * 2 + 20, 200) && step < 300; step += 1) {
     await page.keyboard.press('Tab');
     await page.waitForTimeout(40);
     let info = await page.evaluate(focusInfo);
@@ -730,7 +833,18 @@ function focusInfo() {
     el.focus({ preventScroll: true });
     ring = withFocus !== without;
   }
-  const key = el.getAttribute('data-revision-tab') ?? label;
+  /* Lo que se montó después de contar (las filas perezosas de Películas y
+     series) lleva su propia marca: con el texto como clave, la misma película
+     en «Novedades» y en su categoría parecía «ya visitada» y el recorrido
+     acababa antes de tiempo. */
+  let key = el.getAttribute('data-revision-tab');
+  if (key === null) {
+    key = el.getAttribute('data-revision-extra');
+    if (key === null) {
+      key = `extra-${document.querySelectorAll('[data-revision-extra]').length}`;
+      el.setAttribute('data-revision-extra', key);
+    }
+  }
   return { key, label, visible, ring };
 }
 
@@ -811,6 +925,7 @@ async function openView(page, base, view, size) {
           .catch(() => false);
         if (demo) throw new Error('cayó en la demo');
       }
+      if (view.cine) await passCineLanguages(page);
       if (view.ready) await page.waitForSelector(view.ready, { timeout: 15_000 });
       await page.waitForFunction(() => !document.querySelector('.view-skeleton'), null, {
         timeout: 15_000,
@@ -991,6 +1106,17 @@ const VIEW_TITLES = {
   preferencias: 'Preferencias (tus ligas y equipos)',
   ayuda: 'Ayuda de atajos («?»)',
   sistema: 'Página del sistema de diseño',
+  cine: 'Películas y series · portada y rejilla',
+  'cine-categoria': 'Películas y series · una categoría',
+  'cine-busqueda': 'Películas y series · búsqueda',
+  'cine-pelicula': 'Películas y series · ficha de una película',
+  'cine-serie': 'Películas y series · ficha de una serie con temporadas',
+  'cine-idiomas': 'Películas y series · la primera vez, el selector de idiomas',
+  sala: 'Sala: una película sonando (`sala/<id>`)',
+  guia: 'Guía TV de la IPTV',
+  'ajustes-iptv': 'Ajustes · IPTV',
+  'ajustes-copia': 'Ajustes · Copia de seguridad',
+  'ajustes-registro': 'Ajustes · Registro',
 };
 
 /** docs/capturas/fase2/README.md: una tabla por vista con cada tamaño y tema. */
@@ -1058,7 +1184,10 @@ async function main() {
   }
   const preview = EXTERNAL_BASE ? null : await startPreview();
   const base = EXTERNAL_BASE ?? preview.base;
-  const browser = await chromium.launch({ channel: 'chrome' });
+  // ACE_CHROME: otro Chrome (con H.264), p. ej. uno descomprimido sin instalar.
+  const browser = await chromium.launch(
+    process.env.ACE_CHROME ? { executablePath: process.env.ACE_CHROME } : { channel: 'chrome' },
+  );
   let report;
   try {
     const tasks = [];

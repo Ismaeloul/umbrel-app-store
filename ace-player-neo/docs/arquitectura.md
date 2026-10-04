@@ -738,7 +738,9 @@ anti-CSRF de `isAllowedMutation` (`server.js:1257-1274`, T-033) para el origen
   **sobrescribiendo** el del cliente; Fastify lo usa como `req.id`
   (`requestIdHeader`). El mismo id sale en el log de nginx y en el de Node.
 - **Logs**: pino a stdout, JSON, sin transports (empaquetado §7.2), con
-  redacción de secretos (§5.12).
+  redacción de secretos (§5.12). Desde la 0.9.0, lo de nivel info o peor va
+  también a un registro en disco de 45 días (`core/log-store.ts`,
+  docs/registro.md) que se descarga en Ajustes → Registro.
 
 **Plazos** (en `@ace/shared/constants/timeouts`):
 

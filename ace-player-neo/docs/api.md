@@ -989,6 +989,23 @@ Ejemplo (`fixtures/variantes/iptvBrowse.categoria.json`, recortado):
 
 Implementado en la rama `rediseno/iptv` (servidor y web), para la 0.8.1 sin publicar. Pruebas: unitarias del contrato, del servidor y de la web; integración del servidor con el proveedor falso (`apps/server/test/fake-iptv`); E2E `apps/web/e2e/iptv.spec.ts` contra la pila entera con ffmpeg de verdad (configurar M3U y Xtream, la IPTV primero en un partido y en un canal suelto, el puente en los dos sentidos, volver con un toque y la búsqueda de la contraseña y el usuario en todas las respuestas, el SSE, la página y los ficheros de datos y logs).
 
+### 7.9 Guía TV (0.9.0, `docs/iptv.md` §20)
+
+Todas `access: 'web'` (hasta que la app copie la pantalla), módulo `iptv`, sin efectos. Esquemas en `packages/shared/src/api/v1/guide.ts` y `constants/guide.ts`. Horas en epoch ms (UTC).
+
+| id | Método y ruta | Consulta | Respuesta | Errores propios |
+|---|---|---|---|---|
+| `iptvGuide` | `GET /api/v1/iptv/guide` | `scope` (`favorites` por defecto, `all`), `offset`, `limit` (0 a 1 000, por defecto 200) | `IptvGuideResponse`: `state` (`ready`, `preparing`, `none`, `failed`, `inactive`), `version`, `from`/`to` (la ventana guardada), `coveredFrom`/`coveredTo` (hasta dónde llega de verdad la programación de las filas del ámbito: con una guía que solo cubre hoy, acaba hoy), `updatedAt`, `failedAt`, `partial`, `scope`, `fellBack`, recuentos y una página de filas `{ guide, id, number, name, country, favorite, logo }` | — (sin IPTV activa, `200` con `inactive`) |
+| `iptvGuideProgrammes` | `GET /api/v1/iptv/guide/programmes` | `v` (sello), `ch` (hasta 60 canales de la guía, por comas), `from`, `to` (12 h como mucho) | `{ version, from, to, channels: [{ guide, programmes: [{ id, start, end, title, flags }] }] }`; caché `private, max-age=86400, immutable` | `guide_unavailable` (409), `guide_stale` (409) |
+| `iptvGuideProgramme` | `GET /api/v1/iptv/guide/programmes/:id` | `v` | la ficha: lo de la parrilla más subtítulo, sinopsis, categorías, temporada, episodio, año, edad, nota, directores y actores | `guide_unavailable`, `guide_stale`, `404 not_found` |
+| `iptvGuideNow` | `GET /api/v1/iptv/guide/now` | `ids` (hasta 100 ids IPTV, por comas) | `{ available, version, items: [{ id, guide, now, next }] }` | — (sin guía, `200` con `available: false`) |
+| `iptvGuideArt` | `GET /api/v1/iptv/guide/art/:ref` | `ref` = `c<canal>` o `p<programa>`; `v` | JPEG, PNG o WebP (proxy propio; `ETag`, 304, `nosniff`) | `guide_unavailable`, `guide_stale`, `503 guide_busy` (con `Retry-After`), `404 not_found` |
+
+- **Marcas** (`flags`, `GUIDE_FLAGS`): 1 en directo, 2 estreno, 4 repetición, 8 tiene ficha, 16 relleno («Sin información»), 32 fin calculado, 64 imagen.
+- **Sello.** `version` cambia con cada descarga de la guía; con uno viejo, `409 guide_stale` y se vuelve a pedir `iptvGuide`. El cambio también llega por `iptv.status` (`guide.updatedAt`): no hay evento SSE nuevo.
+- **Errores nuevos:** `guide_unavailable`, `guide_stale` y `guide_busy`, públicos y sin estado antiguo; los 16 `iptv_*` no cambian.
+- **Ejemplos.** `fixtures/web/v1/iptvGuide.json`, `iptvGuideProgrammes.json`, `iptvGuideProgramme.json` e `iptvGuideNow.json`; variantes `iptvGuide.{todos,solo-hoy,inactiva,preparando}` e `iptvGuideNow.sin-guia`. Salen de la guía de ejemplo (`packages/shared/src/demo/guide.ts`), la misma que puede usar la demo de la web (`solo-hoy`, con `{ onlyToday: true }`: como la guía real del panel de Isma). `fixtures/v1/` y `fixtures/events/` no cambian.
+
 ## 8. Copia de seguridad de tus ajustes (0.8.4, solo `/api/v1`, D25)
 
 Todas `access: 'web'`, módulo `state`, con la regla anti-CSRF.
@@ -1003,3 +1020,50 @@ Todas `access: 'web'`, módulo `state`, con la regla anti-CSRF.
 - **Errores**: `400 backup_invalid` (no es una copia, o no cumple el esquema), `422 backup_version_unsupported` (`schemaVersion` mayor que la que sabe leer), `413 backup_too_large` (más de 2 MiB), `422 backup_passphrase_wrong`.
 - **Eventos**: al aplicar, `state.changed` con `library`, `directories`, `preferences`, `bindings` y `learning`; `settings` si cambia la política; `iptv.status` si se restaura la IPTV.
 - Ejemplos: `packages/shared/fixtures/web/v1/backup*.json` (rutas solo web: la app iOS no las usa).
+
+## 9. Películas y series (0.9.0 en preparación, solo `/api/v1`)
+
+Contrato del VOD de la IPTV (diseño completo en `docs/vod.md` §11; esquemas en `packages/shared/src/api/v1/vod.ts` y `constants/vod.ts`; referencia generada en `docs/openapi-v2.yaml`). Solo Xtream en la v1 (D-VOD1). La 0.6.59 y las rutas antiguas no cambian.
+
+**Estado (30-sep-2026):** solo el contrato (paquete VOD-1). En el servidor las 6 rutas existen, validan su entrada y responden `501 not_implemented`; el catálogo llega con VOD-2 y la reproducción con VOD-5 (`docs/vod.md` §16).
+
+### 9.1 Rutas (todas `access: 'web'` hasta que la app copie la pantalla, D-VOD19)
+
+| id | Método y ruta | Entrada | Respuesta | Errores propios |
+|---|---|---|---|---|
+| `vodHome` | `GET /api/v1/vod` | — | `VodHome` | — |
+| `vodBrowse` | `GET /api/v1/vod/browse` | `kind` (`movie`/`series`, por defecto `movie`), `cat` (12 hex o `all`), `tag`, `q` (2 a 80 letras), `sort` (`added`/`name`), `cursor`, `limit` (1 a 100, por defecto 60) | `VodBrowseResponse` | `empty_query` |
+| `vodTitle` | `GET /api/v1/vod/titles/:id` | `pre` (`1` = precarga) | `VodTitle` (película o serie, por `kind`) | `vod_not_found`, `vod_unavailable` |
+| `vodArt` | `GET /api/v1/vod/titles/:id/art/:art` | `art` = `poster`/`backdrop`/`still`; `v` (8 hex) | JPEG, PNG o WebP | `vod_not_found` |
+| `vodStream` | `GET /api/v1/vod/titles/:id/stream` (con efectos) | `client`, `viewer`, `device`, `start` (s), `audio` (índice), `hevc` (`0`/`1`) | `VodGrant` | los 8 `vod_*`, `remux_busy` |
+| `vodProgress` | `POST /api/v1/vod/titles/:id/progress` (con efectos) | `VodProgressBody` (`event`, `posS`, `durS`, `audio?`, `subtitle?`) | `204` sin cuerpo | `vod_not_found` |
+
+- **Ids.** `:id` es un id sellado de 40 hex (cumple `HashSchema` y lleva la misma etiqueta que los canales IPTV, `docs/vod.md` §5): un id VOD que se cuele por un camino de canales falla cerrado y nunca llega al motor AceStream.
+- **Nada del proveedor.** Ninguna respuesta lleva URLs, usuario, contraseña, `stream_id`, `series_id`, `episode_id`, `container_extension`, `direct_source` ni las URLs de los carteles: los carteles se piden por id a `vodArt` con la `v` que dan las tarjetas y las fichas.
+- **Concesión.** `VodGrant` es un `StreamGrant` de siempre (`source: 'iptv'`; `hls` en `/api/v1/video/<sid>/index.m3u8` para la web, `hls-fmp4` con `?t=` para el iPhone) más `vod`: duración real, punto de inicio (`resumed` si sale del progreso), pistas de audio, vídeo con su cadena RFC 6381 (`codecs`) y el siguiente episodio. `StreamSourceSchema` y `VideoParamsSchema` no cambian.
+- **204.** `vodProgress` es la primera ruta con `content: 'empty'`: el manejador no devuelve nada y `app.ts` responde `204` sin cuerpo.
+- **Registro.** `vodBrowse` está en `QUIET_QUERY_ROUTES`: el texto buscado no va al registro.
+
+### 9.2 Errores
+
+8 códigos `vod_*`, públicos y sin estado antiguo. No son `iptv_*` porque esos significan «pasa a AceStream» (T14): un `vod_*` nunca tiene puente.
+
+| Código | HTTP | `error.data` |
+|---|---|---|
+| `vod_unavailable` | 503 | — |
+| `vod_not_found` | 404 | — |
+| `vod_unsupported` | 422 | `{ reason }`: `formato`, `video`, `hevc`, `indice` o `sin_saltos` |
+| `vod_busy` | 503 | `{ retryAfterS }` opcional: el panel tarda en soltar la plaza y la web reintenta una vez sola |
+| `vod_timeout` | 504 | — |
+| `vod_dropped` | 502 | — |
+| `vod_disk_full` | 507 | — |
+| `vod_account` | 403 | — |
+
+`ApiError.data` pasa a ser una de tres formas, nunca mezcladas: `{ attempts }` (Guardar IPTV), `{ reason }` o `{ retryAfterS }`.
+
+### 9.3 Lo demás que ve un cliente
+
+- **`bootstrap.features.vod`** (opcional): IPTV Xtream activa con catálogo VOD `ready` con algún título (o `preparing`). No va en `fixtures/v1/bootstrap.json`.
+- **`IptvStatus.vod`** (opcional): `{ state, movies, series, builtAt, truncated, skipped, stale }`. Llega por `iptv.status` (solo web); ningún evento SSE nuevo.
+- **Ejemplos.** `fixtures/web/v1/vodHome.json`, `vodBrowse.json`, `vodTitle.json` y `vodStream.json`; variantes `vodHome.{preparing,none,unsupported}`, `vodBrowse.{search,vacio}`, `vodTitle.{series,info-failed}` y `vodStream.hevc`. `fixtures/v1/` y `fixtures/events/` no cambian.
+- **Plazos de la web** (`VOD_CLIENT`): portada y rejilla 8 s, ficha 25 s, abrir 50 s (el servidor corta a los 40 s; nginx da 60 s a `/api/`), progreso 5 s.

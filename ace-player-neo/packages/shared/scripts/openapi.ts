@@ -83,10 +83,34 @@ const BINARY_RESPONSES: Readonly<Record<string, JsonObject>> = {
       'Escudo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).',
     content: { 'image/png': { schema: { type: 'string', format: 'binary' } } },
   },
+  vodArt: {
+    description:
+      "Cartel, fondo o fotograma en JPEG, PNG o WebP (por bytes mágicos), con `ETag`, `X-Content-Type-Options: nosniff` y `Content-Security-Policy: default-src 'none'`; inmutable con la `v` correcta y 304 con `If-None-Match` (docs/vod.md §8).",
+    content: {
+      'image/jpeg': { schema: { type: 'string', format: 'binary' } },
+      'image/png': { schema: { type: 'string', format: 'binary' } },
+      'image/webp': { schema: { type: 'string', format: 'binary' } },
+    },
+  },
   footballCompetitionLogo: {
     description:
       'Logo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).',
     content: { 'image/png': { schema: { type: 'string', format: 'binary' } } },
+  },
+  iptvGuideArt: {
+    description:
+      "Logo de canal o imagen de programa de la Guía TV en JPEG, PNG o WebP (por bytes mágicos), con `ETag`, `X-Content-Type-Options: nosniff` y `Content-Security-Policy: default-src 'none'`; `private, max-age=86400, immutable` con la `v` de la guía y 304 con `If-None-Match` (docs/iptv.md §20.6).",
+    content: {
+      'image/jpeg': { schema: { type: 'string', format: 'binary' } },
+      'image/png': { schema: { type: 'string', format: 'binary' } },
+      'image/webp': { schema: { type: 'string', format: 'binary' } },
+    },
+  },
+  diagnosticsLogDownload: {
+    description:
+      'Zip `ace-player-neo-logs-AAAA-MM-DD-HHMM.zip` (`Content-Disposition: attachment`, `no-store`) con LEEME.txt, ' +
+      'resumen.json (LogsSummary), fallos.json (DiagnosticsExport) y registro.jsonl, todo redactado.',
+    content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } },
   },
 };
 
@@ -97,6 +121,7 @@ function successResponse(route: V1RouteEntry): JsonObject {
       content: { 'text/event-stream': { schema: { type: 'string' } } },
     };
   }
+  if (route.content === 'empty') return { description: 'Correcto, sin cuerpo.' };
   if (route.content === 'binary') {
     const documented = BINARY_RESPONSES[route.id];
     if (!documented) throw new Error(`la ruta binaria ${route.id} no dice qué tipo devuelve`);

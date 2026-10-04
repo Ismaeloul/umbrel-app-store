@@ -1,0 +1,13 @@
+{
+  "active": true,
+  "state": "none",
+  "counts": { "movies": 0, "series": 0 },
+  "builtAt": null,
+  "truncated": false,
+  "stale": false,
+  "continue": [],
+  "newMovies": [],
+  "updatedSeries": [],
+  "categories": { "movie": [], "series": [] },
+  "tags": { "movie": [], "series": [] }
+}

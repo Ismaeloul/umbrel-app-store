@@ -147,19 +147,31 @@
    su tono (ChannelMark), el número de la fuente, «En pantalla» en oro y un
    filo alrededor de la tesela con el color Y el trazo del estado (lleno,
    discontinuo, punteado); debajo, el canal, el anillo con su palabra, los
-   datos técnicos (una etiqueta por dato) y la frase. Dos por fila en el móvil y en el panel lateral; en la
-   vista ancha, tantos de ~160 px como quepan. */
+   datos técnicos (una etiqueta por dato) y la frase. Dos por fila en el móvil
+   y en el panel lateral; en la vista ancha, tantos de ~160 px como quepan.
+
+   El elegido («En pantalla») se marca SOLO con el filo, nunca más grande que
+   los demás (Isma, 0.9.0, punto 9). Lo que lo hacía crecer y tapar al de al
+   lado era el orden de las hojas: la tesela y «En pantalla» se colocan
+   pisando reglas de ui/ (`.dorsal`, `.capsule`: position: relative, ancho y
+   alto propios) con la MISMA especificidad, y en el build los trozos de ui/
+   pueden llegar después que este. Por eso aquí van con dos clases
+   (`.src-poster__tile > …`, gana sea cual sea el orden) y la tesela no crece
+   nunca con su contenido (min-height: 0, align-self: start). */
 .src-list {
   display: grid;
   gap: var(--s-3);
   min-width: 0;
 }
 .src-list__rows {
+  /* Aire para el filo más gordo (3 px + 2 px de separación): nunca se corta
+     en el borde del panel. */
+  --ring-room: 6px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: var(--s-5) var(--s-3);
   margin: 0;
-  padding: 4px 4px 0;
+  padding: var(--ring-room) var(--ring-room) 0;
   list-style: none;
 }
 .src-list--rack .src-list__rows,
@@ -173,15 +185,20 @@
 }
 .src-item {
   min-width: 0;
+  /* Con subgrid (abajo) es una rejilla: su única columna, la de su celda. */
+  grid-template-columns: minmax(0, 1fr);
 }
 .src-poster {
   --ring: var(--line-strong);
   --ring-style: solid;
   --ring-w: 2px;
   display: grid;
+  /* Una columna que nunca pasa del ancho de su celda. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   align-content: start;
   width: 100%;
+  min-width: 0;
   padding: 0;
   border-radius: var(--r-m);
   text-align: left;
@@ -222,7 +239,11 @@
 .src-poster__tile {
   position: relative;
   display: block;
+  width: 100%;
+  /* 16:9 siempre: sin el mínimo automático, lo de dentro no la estira. */
+  min-height: 0;
   aspect-ratio: 16 / 9;
+  align-self: start;
   border-radius: var(--r-m);
   background: var(--surface-2);
   outline: var(--ring-w) var(--ring-style) var(--ring);
@@ -230,8 +251,9 @@
   container-type: inline-size;
   box-shadow: var(--shadow-poster);
 }
-/* La tesela del canal ocupa el cartel entero, sea cual sea su ancho. */
-.src-poster__mark {
+/* La tesela del canal ocupa el cartel entero, sea cual sea su ancho (dos
+   clases: gana a `.dorsal` y `.dorsal--tile` en cualquier orden). */
+.src-poster__tile > .src-poster__mark {
   --s: calc(100cqw * 9 / 16) !important;
   position: absolute;
   inset: 0;
@@ -287,8 +309,9 @@
   top: 36px;
 }
 /* «En pantalla»: abajo a la izquierda; al cambiar de fuente se desliza de un
-   cartel al otro (FLIP con transform en SourceList). */
-.src-poster__onair {
+   cartel al otro (FLIP con transform en SourceList). Dos clases: gana a
+   `.capsule` (position: relative) en cualquier orden. */
+.src-poster__tile > .src-poster__onair {
   position: absolute;
   left: 6px;
   bottom: 6px;

@@ -28,9 +28,20 @@ import { haptic } from '../lib/haptics.ts';
 import { prefersReducedMotion } from '../lib/media.ts';
 import { toast } from '../notices/toasts.ts';
 import { IconButton } from '../ui/Button.tsx';
-import { play, stop, usePlayer, type PlayerState } from './api.ts';
+import { ProgressBar } from '../ui/ProgressBar.tsx';
+import { play, playVod, stop, usePlayer, type PlayerState, type VodPlayback } from './api.ts';
 import { usePlayerContext, type PlayerContextValue } from './context.ts';
 import { Equalizer } from './PlayerSurface.tsx';
+import { clockText, durationWords } from './vod/timeline.ts';
+
+/** La segunda línea del mini con una película: «T1 · E3 · quedan 12 min». */
+export function vodMiniLine(
+  vod: Pick<VodPlayback, 'subtitle' | 'positionS' | 'durationS'>,
+): string {
+  const label = vod.subtitle?.split(' · ').slice(0, 2).join(' · ') ?? '';
+  const left = vod.durationS > 0 ? `quedan ${durationWords(vod.durationS - vod.positionS)}` : null;
+  return [label, left].filter(Boolean).join(' · ');
+}
 
 export function miniKicker(state: PlayerState): string {
   switch (state.phase) {
@@ -104,7 +115,9 @@ function Mini({
   const wantsPlay = state.desiredPlaying || state.phase === 'buffer';
   const title = state.channel?.title ?? 'Ace Player Neo';
   const matchId = state.route?.vista === 'partido' ? (state.route.id ?? null) : null;
-  const subtitle = state.channel?.subtitle ?? null;
+  const vod = state.kind === 'vod' ? state.vod : null;
+  // Una película: «T1 · E3 · quedan 12 min» y una barra fina (docs/vod.md §12.7).
+  const subtitle = vod ? vodMiniLine(vod) : (state.channel?.subtitle ?? null);
   const armed = useRef(false);
 
   const move = (dx: number, dy: number) => {
@@ -135,6 +148,7 @@ function Mini({
     const channel = state.channel;
     const route = state.route;
     const origin = state.origin ?? 'user';
+    const film = state.kind === 'vod' ? state.vod : null;
     const finish = () => {
       stop();
       if (channel)
@@ -144,7 +158,17 @@ function Mini({
           ms: 6000,
           action: {
             label: 'Deshacer',
-            onAction: () => play(channel, route ? { origin, route } : { origin }),
+            onAction: () =>
+              film
+                ? playVod({
+                    id: film.id,
+                    kind: film.kind,
+                    title: film.title,
+                    subtitle: film.subtitle,
+                    seriesId: film.seriesId,
+                    startS: film.positionS,
+                  })
+                : play(channel, route ? { origin, route } : { origin }),
           },
         });
     };
@@ -195,6 +219,14 @@ function Mini({
             ) : null}
             {subtitle ? <span>{subtitle}</span> : null}
           </span>
+        ) : null}
+        {vod && vod.durationS > 0 ? (
+          <ProgressBar
+            className="player-mini__progress"
+            size="thin"
+            value={vod.positionS / vod.durationS}
+            label={`${clockText(vod.positionS)} de ${clockText(vod.durationS)}`}
+          />
         ) : null}
       </button>
       <IconButton

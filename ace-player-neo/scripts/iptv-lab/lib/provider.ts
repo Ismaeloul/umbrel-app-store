@@ -45,6 +45,8 @@ export interface TsNet {
   readonly jitter?: {
     readonly everyS: readonly [number, number];
     readonly pauseS: readonly [number, number];
+    /** Cada `everyN` parones, uno dura `pauseS` en vez de lo de arriba (el «uno de 15 s» de Isma). */
+    readonly long?: { readonly everyN: number; readonly pauseS: number };
   };
   /** Corte de la conexión a los `afterS` segundos (la primera, o todas con `every`). */
   readonly cut?: {
@@ -414,6 +416,7 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
     });
     /* Parones periódicos. */
     let nextPauseAt = net.jitter ? opened + rand(net.jitter.everyS) * 1000 : Infinity;
+    let pauses = 0;
     const cap = net.capFactor ? net.capFactor * bytesPerSecond : Infinity;
     let tokens = 0;
     let lastPump = Date.now();
@@ -446,7 +449,10 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
         return;
       }
       if (now >= nextPauseAt && net.jitter) {
-        const pauseMs = rand(net.jitter.pauseS) * 1000;
+        pauses += 1;
+        const long = net.jitter.long;
+        const pauseMs =
+          (long && pauses % long.everyN === 0 ? long.pauseS : rand(net.jitter.pauseS)) * 1000;
         state.pauseUntil = now + pauseMs;
         nextPauseAt = now + pauseMs + rand(net.jitter.everyS) * 1000;
         event('ts.pause', { conn: id, ms: Math.round(pauseMs) });
@@ -476,8 +482,12 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
         sent += piece.length;
         if (!res.write(piece)) {
           waitingDrain = true;
+          /* Al vaciarse, se sigue mandando YA (y no al siguiente tic de 20 ms): con un tic por
+             vaciado, el proveedor no pasaba de ~1 MB/s y lo retenido en un parón no llegaba
+             nunca de golpe (auditoría 0.9.0, ts-golpes-10s). */
           res.once('drain', () => {
             waitingDrain = false;
+            pump();
           });
           break;
         }

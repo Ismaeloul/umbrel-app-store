@@ -2,7 +2,8 @@
 
    Exportar: lo que Isma tendría que volver a montar a mano si reinstala o
    formatea el Umbrel (favoritos, recientes, listas, «Tu fútbol», vínculos,
-   correcciones, ajustes y la IPTV) en un JSON versionado
+   correcciones, ajustes, la IPTV y los idiomas de Películas y series) en un
+   JSON versionado
    (`BackupFileSchema` de @ace/shared). Sin dispositivos, tokens, sesiones,
    «quién tiene el mando», informes ni estadísticas. La contraseña de la
    IPTV solo si se pide, cifrada con la clave de Isma (backup-crypto.ts).
@@ -17,7 +18,10 @@
         copia → cambio → normalización → tmp + fsync → .bak → rename), con
         el plan calculado DENTRO de la cola sobre el estado vigente;
       - la política de mismo canal (settings.json, su propia cola);
-      - la IPTV (iptv.json, su propia cola) si la copia trae la contraseña.
+      - la IPTV (iptv.json, su propia cola) si la copia trae la contraseña;
+      - los idiomas de Películas y series (vod-idiomas.json, docs/vod.md
+        §4.10): en Reemplazar, los de la copia; en Combinar, solo si aquí
+        aún no se habían elegido (como «Tu fútbol»).
       Cada fichero se escribe atómicamente; si falla un paso posterior al
       estado, el error llega a la web y repetir la restauración es seguro
       (da lo mismo dos veces). Lo anterior queda en `state.json.bak` y en las
@@ -65,7 +69,7 @@ export interface BackupDeps {
   /** null en tests sin IPTV. */
   readonly iptv: Pick<
     IptvService,
-    'backupConfig' | 'restore' | 'adoptForeignId' | 'classify'
+    'backupConfig' | 'restore' | 'adoptForeignId' | 'classify' | 'vod'
   > | null;
   readonly appVersion: string;
   readonly clock: Clock;
@@ -305,6 +309,35 @@ export function createBackupService(deps: BackupDeps): BackupService {
     }
   }
 
+  /** Los idiomas de Películas y series que hay ahora (null si no hay VOD o falla). */
+  function vodLanguages() {
+    try {
+      return iptv?.vod?.languagesOf() ?? null;
+    } catch (error) {
+      logger.warn({ err: error }, 'copia: los idiomas de Películas y series no responden');
+      return null;
+    }
+  }
+
+  /**
+   * Los idiomas que quedan tras restaurar, o null si no cambian: en
+   * Reemplazar, los de la copia; en Combinar, solo si aún no se eligieron.
+   */
+  function vodLanguagesPlan(
+    backup: BackupFile,
+    mode: 'replace' | 'merge',
+  ): BackupFile['vod'] | null {
+    const incoming = backup.vod;
+    const current = vodLanguages();
+    if (!incoming || !current) return null;
+    if (mode === 'merge' && current.chosen) return null;
+    const same =
+      current.chosen &&
+      current.unknown === incoming.unknown &&
+      JSON.stringify([...current.langs].sort()) === JSON.stringify([...incoming.langs].sort());
+    return same ? null : incoming;
+  }
+
   async function exportFile(options: { readonly passphrase?: string } = {}): Promise<BackupFile> {
     const current = state.get();
     const mark = (item: Item): BackupItem =>
@@ -330,6 +363,7 @@ export function createBackupService(deps: BackupDeps): BackupService {
         secret,
       };
     }
+    const languages = vodLanguages();
     const file: BackupFile = {
       format: BACKUP_FORMAT,
       schemaVersion: BACKUP_SCHEMA_VERSION,
@@ -348,6 +382,10 @@ export function createBackupService(deps: BackupDeps): BackupService {
       channelFeedback: structuredClone(current.channelFeedback) as ChannelFeedback[],
       settings: { sameChannelPolicy: state.sameChannelPolicy() },
       iptv: iptvBlock,
+      /* Solo si ya se eligieron: así una copia sin elección la sigue leyendo la 0.8.4. */
+      ...(languages?.chosen
+        ? { vod: { langs: [...languages.langs], unknown: languages.unknown } }
+        : {}),
     };
     logger.info(
       {
@@ -413,6 +451,7 @@ export function createBackupService(deps: BackupDeps): BackupService {
       const policy = state.sameChannelPolicy();
       const plan = planImport(current, policy, backup, mode, adopt);
       const outcome = iptvOutcome(backup, mode, secrets, plan.relinkItems);
+      const languages = vodLanguagesPlan(backup, mode);
       const preview: BackupImportResponse = {
         applied: false,
         mode,
@@ -426,6 +465,7 @@ export function createBackupService(deps: BackupDeps): BackupService {
         result: countsOf(plan),
         preferences: !samePreferences(current.preferences, plan.preferences),
         settings: plan.sameChannelPolicy !== policy,
+        vodLanguages: languages !== null,
         iptv: outcome,
         browser: backup.browser ?? null,
       };
@@ -458,6 +498,8 @@ export function createBackupService(deps: BackupDeps): BackupService {
           enabled: backup.iptv.enabled,
         });
       }
+      /* 4. Los idiomas de Películas y series (no dependen de la IPTV ni de su proveedor). */
+      if (languages && iptv?.vod) await iptv.vod.saveLanguages(languages);
       const after = state.get();
       logger.info(
         {

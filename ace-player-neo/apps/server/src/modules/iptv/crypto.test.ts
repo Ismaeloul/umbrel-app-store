@@ -11,10 +11,13 @@ import {
   catalogAad,
   loadIptvKeys,
   openBlob,
+  openBlobBytes,
   openJson,
   sealBlob,
+  sealBlobBytes,
   sealJson,
   secretAad,
+  vodAad,
 } from './crypto.js';
 import { iptvChannelId, isIptvId, m3uKey, xtreamKey } from './ids.js';
 
@@ -51,6 +54,31 @@ describe('crypto.ts', () => {
     expect(blob.toString('latin1')).not.toContain('Canal');
     expect(openBlob(KEYS.secrets, catalogAad('p_Ab3dE5gH'), blob)).toEqual(value);
     expect(() => openBlob(KEYS.secrets, catalogAad('p_otro0000'), blob)).toThrow();
+  });
+
+  it('bytes (catálogo VOD, docs/vod.md §4.6): gzip asíncrono cifrado, en trozos o entero', async () => {
+    const bytes = Buffer.concat([
+      Buffer.from('Oppenheimer\nDune\n', 'utf8'),
+      Buffer.from(new Float64Array([1, 2, 3]).buffer),
+    ]);
+    const blob = await sealBlobBytes(KEYS.secrets, vodAad('p_Ab3dE5gH'), [
+      bytes.subarray(0, 5),
+      bytes.subarray(5),
+    ]);
+    expect(blob.toString('latin1')).not.toContain('Dune');
+    expect((await openBlobBytes(KEYS.secrets, vodAad('p_Ab3dE5gH'), blob)).equals(bytes)).toBe(
+      true,
+    );
+    /* Otro proveedor, el AAD del catálogo en directo o bytes rotos: ilegible. */
+    for (const [aad, data] of [
+      [vodAad('p_otro0000'), blob],
+      [catalogAad('p_Ab3dE5gH'), blob],
+      [vodAad('p_Ab3dE5gH'), Buffer.concat([blob.subarray(0, 40), Buffer.from('xx')])],
+    ] as const) {
+      await expect(openBlobBytes(KEYS.secrets, aad, data)).rejects.toMatchObject({
+        code: 'iptv_secret_unreadable',
+      });
+    }
   });
 
   it('con semilla usa las claves derivadas; sin semilla crea v2/iptv/clave (0600) y la reutiliza', () => {

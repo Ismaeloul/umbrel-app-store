@@ -42,6 +42,8 @@ import type {
   ReleaseBody,
   ReleaseResponse,
   StreamGrant,
+  VodGrant,
+  VodStreamQuery,
 } from '@ace/shared';
 import type { z } from 'zod';
 import type { AuthenticatedDevice, CoreDeps, Lifecycle } from '../../core/module.js';
@@ -138,6 +140,18 @@ export interface PlaybackService extends Lifecycle {
     viewer: ViewerIdentity,
     signal: AbortSignal,
   ): Promise<StreamGrant>;
+  /**
+   * GET /api/v1/vod/titles/:id/stream (docs/vod.md §9.8): abre la película o
+   * el episodio (relé VOD + productor) bajo el cerrojo de la casa y devuelve
+   * la lista VOD completa sin esperar al primer segmento. Corta el directo
+   * IPTV y otro VOD; convive con AceStream (D-VOD11). Tope de 40 s.
+   */
+  acquireVod(
+    id: string,
+    query: VodStreamQuery,
+    viewer: ViewerIdentity,
+    signal: AbortSignal,
+  ): Promise<VodGrant>;
   /** Latido de un visor; 410 `session_expired` si la sesión ya no existe. */
   heartbeat(
     sessionId: string,

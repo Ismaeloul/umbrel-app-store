@@ -72,6 +72,11 @@ export interface Engine {
   /** Solo hls.js: la ventana de la lista (para el −30 s y los huecos). */
   liveWindow?(): LiveWindow | null;
   /**
+   * Solo hls.js en directo: sube la latencia objetivo y la máxima (y el búfer) sin
+   * reconectar, para una IPTV que entrega a golpes (player/cadence.ts).
+   */
+  setLiveLatency?(syncS: number, maxLatencyS: number, maxBufferS: number): void;
+  /**
    * Solo hls.js: en qué segmento va el cabezal (para seguir ahí con otra
    * instancia, C3). Si acaba por un vídeo que no se puede decodificar, el
    * segmento de después del roto.
@@ -99,6 +104,13 @@ export interface EngineArgs {
   inPlaceUsed?: ReadonlyArray<{ at: number; position: number }>;
   /** Solo hls.js con IPTV: vigilar que la MEDIA-SEQUENCE no vaya hacia atrás (C3). */
   guardSequence?: boolean;
+  /**
+   * Una película o un episodio (docs/vod.md §12.7): la lista VOD completa y
+   * desde dónde empezar. hls.js va sin nada del directo (sin `liveSync*`, con
+   * el búfer de una película); el HLS nativo pone el cabezal ahí al tener
+   * metadatos (la lista ya lleva `EXT-X-START`, esto es el respaldo).
+   */
+  vod?: { startS: number } | null;
 }
 
 export type EngineFactory = (args: EngineArgs) => Engine;

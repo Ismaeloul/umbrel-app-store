@@ -7,7 +7,8 @@
    - NO se recoloca sola al repintar: conserva su scroll y solo se mueve para
      enseñar el día elegido la primera vez o cuando cambia (useKeepActiveVisible,
      nunca scrollIntoView). Tocarla cancela un centrado en curso.
-   - La rueda vertical del ratón la desplaza en horizontal.
+   - La rueda vertical del ratón baja la página (0.9.0); a los lados, el
+     touchpad, Mayús + rueda o las flechas (lib/scroll.ts).
    - Flechas ‹ › que desplazan un 80 % del ancho visible (mínimo 120 px), se
      deshabilitan en los extremos y se ocultan si no hay desbordamiento. Van
      solo con ratón (pointer: fine): en táctil se desliza la propia tira y las
@@ -19,7 +20,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { cx } from '../../lib/cx.ts';
 import { MEDIA, useMediaQuery } from '../../lib/media.ts';
-import { useKeepActiveVisible, wheelToHorizontal } from '../../lib/scroll.ts';
+import { shiftWheelToHorizontal, useKeepActiveVisible } from '../../lib/scroll.ts';
 import { IconButton, Num } from '../../ui/index.ts';
 import { dayLabel } from './domain.ts';
 
@@ -76,8 +77,8 @@ export function DayStrip({
     const track = trackRef.current;
     if (!track) return;
     measure();
-    const onWheel = (event: WheelEvent) => wheelToHorizontal(event, track);
-    // passive: false para poder quedarse la rueda (si no, movería la página).
+    const onWheel = (event: WheelEvent) => shiftWheelToHorizontal(event, track);
+    // passive: false solo para quedarse Mayús + rueda; la rueda sola baja la página.
     track.addEventListener('wheel', onWheel, { passive: false });
     const observer = new ResizeObserver(measure);
     observer.observe(track);

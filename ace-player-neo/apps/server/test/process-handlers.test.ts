@@ -29,8 +29,9 @@ function setup(options: { stop?: () => Promise<void>; ipc?: boolean } = {}) {
   const logger = createSilentLogger();
   const error = vi.spyOn(logger, 'error');
   const stop = vi.fn(options.stop ?? (async () => undefined));
-  installProcessHandlers(proc, { logger, clock, stop });
-  return { proc, clock, logger, error, stop };
+  const flushLogs = vi.fn();
+  installProcessHandlers(proc, { logger, clock, stop, flushLogs });
+  return { proc, clock, logger, error, stop, flushLogs };
 }
 
 async function turns(): Promise<void> {
@@ -80,6 +81,29 @@ describe('main: enganches del proceso (T-111, B-028, B-247)', () => {
     clock.advance(1);
     expect(proc.exit).toHaveBeenCalledWith(1);
     expect(SHUTDOWN_TIMINGS.forceExitMs).toBe(5000);
+  });
+
+  it('«Descargar logs»: la salida forzada escribe antes el registro en disco', () => {
+    const { proc, clock, flushLogs } = setup({ stop: () => new Promise<void>(() => undefined) });
+    proc.emit('SIGTERM');
+    clock.advance(SHUTDOWN_TIMINGS.forceExitMs);
+    expect(flushLogs).toHaveBeenCalledTimes(1);
+    expect(flushLogs.mock.invocationCallOrder[0]).toBeLessThan(
+      proc.exit.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('«Descargar logs»: una excepción sin capturar queda en el registro en disco antes de caerse', () => {
+    const { proc, logger, flushLogs } = setup();
+    const fatal = vi.spyOn(logger, 'fatal');
+    proc.emit('uncaughtExceptionMonitor', new Error('se rompió algo'), 'uncaughtException');
+    expect(fatal).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(Error), origin: 'uncaughtException' }),
+      'el servidor se cae: excepción sin capturar',
+    );
+    expect(flushLogs).toHaveBeenCalledTimes(1);
+    // Solo mira: no cambia lo que hace Node después (ni apaga ni sale).
+    expect(proc.exit).not.toHaveBeenCalled();
   });
 
   it('con canal IPC (como lo lanza scripts/smoke-bundle.mjs), el mensaje `shutdown` apaga', async () => {

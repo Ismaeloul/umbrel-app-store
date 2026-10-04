@@ -150,18 +150,20 @@ describe('filas y categorías (§16.3)', () => {
 });
 
 describe('texto (§16.3)', () => {
-  it('casa como el buscador: principio de palabra, dentro con 3 letras y clave sin espacios', () => {
+  it('casa y ordena como el buscador: principio de palabra, dentro de un compuesto y lo escrito pegado', () => {
     const index = buildBrowseIndex(catalogOf(SMALL));
+    /* Desde la 0.9.0, el orden de Buscar (docs/buscador.md): la familia «DAZN 1» antes, luego lo que empieza por
+       «dazn» con la familia más corta primero (F1 antes que LaLiga) y el de fuera detrás. */
     expect(titles(index, query(index, { q: 'dazn' }).rows)).toEqual([
       'DAZN 1/ES',
-      'DAZN LaLiga/ES',
       'DAZN F1/ES',
+      'DAZN LaLiga/ES',
       'DAZN 1/UK',
     ]);
-    /* «liga» está dentro de «laliga» en las dos (nivel 3): el orden del proveedor. */
+    /* «liga» está dentro de «laliga» en las dos (por dentro): la familia más corta primero («LA LIGA 1»). */
     expect(titles(index, query(index, { q: 'liga' }).rows)).toEqual([
-      'DAZN LaLiga/ES',
       'LA LIGA 1/ES',
+      'DAZN LaLiga/ES',
     ]);
     expect(titles(index, query(index, { q: 'antena' }).rows)).toHaveLength(3);
   });
@@ -217,7 +219,7 @@ describe('texto (§16.3)', () => {
     expect(languages.en).toBe(1);
   });
 
-  it('dentro de cada nivel, España y sin país antes que otro país (como el buscador, §18)', () => {
+  it('España y sin país son una fila, antes que otro país (como el buscador, §17 y §18)', () => {
     const channels = [
       raw(1, 'UK: DAZN 1', 'UK | SPORTS'),
       raw(2, 'DE: DAZN 1 HD', 'DE | SPORT'),
@@ -225,9 +227,14 @@ describe('texto (§16.3)', () => {
       raw(4, 'DAZN 1', ''),
     ];
     const index = buildBrowseIndex(catalogOf(channels));
-    const rows = titles(index, query(index, { q: 'dazn 1' }).rows);
-    expect(rows.slice(0, 2).sort()).toEqual(['DAZN 1/-', 'DAZN 1/ES']);
-    expect(rows.slice(2)).toEqual(['DAZN 1/UK', 'DAZN 1/DE']);
+    const result = query(index, { q: 'dazn 1' });
+    /* «ES: DAZN 1 FHD» y «DAZN 1» (sin país) son una fila, que dice España (0.9.0: antes eran dos filas iguales);
+       entre los de fuera, la mejor calidad (el alemán dice HD; el inglés, nada) y luego el orden del proveedor. */
+    expect(titles(index, result.rows)).toEqual(['DAZN 1/ES', 'DAZN 1/DE', 'DAZN 1/UK']);
+    const countries = Object.fromEntries(
+      (result.facets?.country ?? []).map((item) => [item.value, item.count]),
+    );
+    expect(countries).toMatchObject({ ES: 1, none: 1, UK: 1, DE: 1 });
   });
 
   it('las mismas claves que el buscador para la misma consulta (en lo que el buscador enseña)', () => {

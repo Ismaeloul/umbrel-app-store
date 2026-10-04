@@ -112,6 +112,31 @@ export function dispatchSse<T extends SseEventType>(
 
 // ---- Efecto en la caché de consultas ---------------------------------------------
 
+/* La última forma del catálogo VOD vista por cada caché (`state` y `builtAt`
+   de `iptv.status`): la portada, la rejilla y las fichas de Películas y
+   series solo se vuelven a pedir si cambia (docs/vod.md §11.1). Un
+   `iptv.status` de la guía o de la cuenta no las toca. */
+const lastVod = new WeakMap<QueryClient, string>();
+
+function vodSignature(data: unknown): string {
+  const vod = (data as SseEventData<'iptv.status'> | null)?.vod;
+  return vod ? `${vod.state}|${vod.builtAt ?? ''}` : 'sin-vod';
+}
+
+/* Agenda híbrida (docs/iptv.md §4.7): la agenda lleva lo que dice la guía de
+   la IPTV. Cambia si la IPTV se pausa, se quita o vuelve, o si llega otra
+   guía; entonces (y solo entonces: `iptv.status` llega casi en cada entrada)
+   se vuelve a pedir. Lo último visto, por cliente de consultas. */
+const lastGuideSignature = new WeakMap<QueryClient, string>();
+
+function guideSignature(status: SseEventData<'iptv.status'>): string {
+  return [
+    status.status === 'disabled' ? 'off' : 'on',
+    status.guide.available ? 'guia' : 'sin-guia',
+    status.guide.updatedAt ?? '',
+  ].join('|');
+}
+
 export function applyToCache(client: QueryClient, type: SseEventType, data: unknown): void {
   switch (type) {
     case 'state.changed': {
@@ -163,10 +188,29 @@ export function applyToCache(client: QueryClient, type: SseEventType, data: unkn
       void client.invalidateQueries({ queryKey: routePrefix('iptvChannels') });
       // La pestaña IPTV de Canales: otro catálogo, otras categorías y otros recuentos (§16.6).
       void client.invalidateQueries({ queryKey: routePrefix('iptvBrowse') });
+      // La Guía TV: estado, sello y filas (docs/iptv.md §20.6: no hay evento propio).
+      void client.invalidateQueries({ queryKey: routePrefix('iptvGuide') });
       void client.invalidateQueries({ queryKey: routePrefix('libraryGet') });
       // El bootstrap casi nunca tiene una vista suscrita (se siembra al
       // arrancar): 'all' lo vuelve a pedir igual, porque iptvActive() lo lee.
       void client.invalidateQueries({ queryKey: routePrefix('bootstrap'), refetchType: 'all' });
+      {
+        const signature = vodSignature(data);
+        if (lastVod.get(client) !== signature) {
+          lastVod.set(client, signature);
+          for (const id of ['vodHome', 'vodBrowse', 'vodTitle'] as const)
+            void client.invalidateQueries({ queryKey: routePrefix(id) });
+        }
+      }
+      {
+        // La agenda, si cambió lo que la guía puede decir de ella (agenda híbrida).
+        const signature = guideSignature(data as SseEventData<'iptv.status'>);
+        const previous = lastGuideSignature.get(client);
+        lastGuideSignature.set(client, signature);
+        if (previous !== undefined && previous !== signature) {
+          void client.invalidateQueries({ queryKey: routePrefix('footballSchedule') });
+        }
+      }
       break;
     case 'resync':
       // Lo que faltaba ya no está en el búfer del servidor: se pide todo otra vez.

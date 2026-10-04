@@ -389,6 +389,61 @@ export function guideLine(guide: IptvStatus['guide']): string | null {
   return null;
 }
 
+/** «hace 3 h», «hace 12 min», «hace 2 días» (para la línea de Películas y series). */
+export function agoText(value: string, now = Date.now()): string {
+  const ms = now - Date.parse(value);
+  if (!Number.isFinite(ms)) return '';
+  const minutes = Math.max(0, Math.round(ms / 60_000));
+  if (minutes < 1) return 'hace un momento';
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? 'hace 1 día' : `hace ${days} días`;
+}
+
+/** «1.234»: es-ES no agrupa las cifras de 4 dígitos sin `useGrouping: 'always'`. */
+function groupedCount(value: number): string {
+  return value.toLocaleString('es-ES', { useGrouping: 'always' });
+}
+
+/**
+ * Las líneas de Películas y series en la tarjeta (docs/vod.md §12.10):
+ * «Películas: 12.345 · Series: 1.234 · actualizado hace 3 h», «Preparando
+ * películas y series…», «Tu proveedor no ofrece películas ni series» o, con
+ * M3U, «Las películas y series solo funcionan con cuentas Xtream Codes.»; y
+ * con títulos que no se pudieron leer, «{n} títulos no se han podido leer.».
+ * Sin `vod` (un servidor sin películas y series) y sin M3U, nada.
+ */
+export function vodLines(
+  provider: Pick<IptvProviderView, 'kind' | 'vod'>,
+  now = Date.now(),
+): CardLine[] {
+  const vod = provider.vod;
+  if (provider.kind === 'm3u' || vod?.state === 'unsupported')
+    return [
+      { text: 'Las películas y series solo funcionan con cuentas Xtream Codes.', tone: 'plain' },
+    ];
+  if (!vod) return [];
+  const lines: CardLine[] = [];
+  if (vod.state === 'ready') {
+    const counts = `Películas: ${groupedCount(vod.movies)} · Series: ${groupedCount(vod.series)}`;
+    lines.push({
+      text: vod.builtAt ? `${counts} · actualizado ${agoText(vod.builtAt, now)}` : counts,
+      tone: 'plain',
+    });
+  } else if (vod.state === 'preparing')
+    lines.push({ text: 'Preparando películas y series…', tone: 'plain' });
+  else if (vod.state === 'none')
+    lines.push({ text: 'Tu proveedor no ofrece películas ni series', tone: 'plain' });
+  if (vod.skipped > 0)
+    lines.push({
+      text: `${groupedCount(vod.skipped)} ${vod.skipped === 1 ? 'título no se ha podido leer' : 'títulos no se han podido leer'}.`,
+      tone: 'weak',
+    });
+  return lines;
+}
+
 /** El nombre que se enseña: el guardado o, si falta, el que pone el servidor. */
 export function providerName(view: IptvView | undefined, fallback = IPTV_DEFAULT_NAME): string {
   return view?.provider?.name || fallback;

@@ -1,0 +1,101 @@
+{
+  "version": "dhrhuo",
+  "from": 1790186400000,
+  "to": 1790197200000,
+  "channels": [
+    {
+      "guide": 9,
+      "programmes": [
+        {
+          "id": "9.29836405",
+          "start": 1790184300000,
+          "end": 1790187600000,
+          "title": "Resumen de la jornada",
+          "flags": 10
+        },
+        {
+          "id": "9.29836460",
+          "start": 1790187600000,
+          "end": 1790189400000,
+          "title": "Previa del partido",
+          "flags": 9
+        },
+        {
+          "id": "9.29836490",
+          "start": 1790189400000,
+          "end": 1790191200000,
+          "title": "Goles de la jornada",
+          "flags": 12
+        },
+        {
+          "id": "9.29836520",
+          "start": 1790191200000,
+          "end": 1790191800000,
+          "title": "Resumen de la jornada",
+          "flags": 8
+        },
+        {
+          "id": "9.29836530",
+          "start": 1790191800000,
+          "end": 1790193300000,
+          "title": "Previa del partido",
+          "flags": 9
+        },
+        {
+          "id": "9.29836555",
+          "start": 1790193300000,
+          "end": 1790200500000,
+          "title": "LaLiga EA Sports: Athletic Club - Real Betis",
+          "flags": 9
+        }
+      ]
+    },
+    {
+      "guide": 11,
+      "programmes": [
+        {
+          "id": "11.29836360",
+          "start": 1790181600000,
+          "end": 1790187000000,
+          "title": "Tertulia de fútbol",
+          "flags": 9
+        },
+        {
+          "id": "11.29836450",
+          "start": 1790187000000,
+          "end": 1790189100000,
+          "title": "Resumen de la jornada",
+          "flags": 10
+        },
+        {
+          "id": "11.29836485",
+          "start": 1790189100000,
+          "end": 1790191200000,
+          "title": "Resumen de la jornada",
+          "flags": 8
+        },
+        {
+          "id": "11.29836520",
+          "start": 1790191200000,
+          "end": 1790191800000,
+          "title": "Resumen de la jornada",
+          "flags": 8
+        },
+        {
+          "id": "11.29836530",
+          "start": 1790191800000,
+          "end": 1790193300000,
+          "title": "Previa del partido",
+          "flags": 9
+        },
+        {
+          "id": "11.29836555",
+          "start": 1790193300000,
+          "end": 1790200500000,
+          "title": "LaLiga EA Sports: Atlético de Madrid - Osasuna",
+          "flags": 9
+        }
+      ]
+    }
+  ]
+}

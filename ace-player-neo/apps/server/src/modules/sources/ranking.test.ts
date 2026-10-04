@@ -279,6 +279,32 @@ describe('marca, familia y procedencia (B-042, B-043)', () => {
     expect(orden.map((c) => c.title)).toEqual(['DAZN LaLiga', 'DAZN LaLiga 1080', 'DAZN']);
   });
 
+  it('agenda híbrida: las del canal de la guía delante de todo (dentro, el orden de siempre); sin ellas, igual', () => {
+    const lista = [
+      señalDe(1, 'DAZN LaLiga', { matchedChannel: 'DAZN LaLiga', source: 'iptv' }),
+      señalDe(2, 'DAZN LaLiga 1080', { matchedChannel: 'DAZN LaLiga', availability: 90 }),
+      señalDe(3, 'M+ LaLiga TV 2', { matchedChannel: 'M+ LaLiga TV 2', source: 'acestream' }),
+      señalDe(4, 'M+ LaLiga TV 2 FHD', { matchedChannel: 'M+ LaLiga TV 2', source: 'iptv' }),
+    ];
+    const pedidos = { requestedChannels: ['DAZN LaLiga'] };
+    const idDe = (n: number): string => String(n).repeat(40).slice(0, 40);
+    const preferidas = new Set([idDe(3), idDe(4)]);
+    expect(
+      mergeResolutionCandidates(lista, { ...pedidos, preferred: preferidas }).map((c) => c.title),
+    ).toEqual(['M+ LaLiga TV 2 FHD', 'M+ LaLiga TV 2', 'DAZN LaLiga', 'DAZN LaLiga 1080']);
+    /* Sin preferidas (sin guía), el orden de siempre: IPTV, la lista y el buscador. */
+    const siempre = mergeResolutionCandidates(lista, pedidos).map((c) => c.title);
+    expect(siempre).toEqual([
+      'DAZN LaLiga',
+      'M+ LaLiga TV 2 FHD',
+      'DAZN LaLiga 1080',
+      'M+ LaLiga TV 2',
+    ]);
+    expect(
+      mergeResolutionCandidates(lista, { ...pedidos, preferred: new Set() }).map((c) => c.title),
+    ).toEqual(siempre);
+  });
+
   it('contraste con la 0.6.59 sobre 400 listas generadas', () => {
     let state = 99;
     const next = (): number => {

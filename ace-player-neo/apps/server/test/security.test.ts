@@ -43,6 +43,10 @@ const PARAM_VALUES: Record<string, string> = {
   /* Escudos y logos (módulo teams): ids de TheSportsDB. */
   teamId: '133738',
   competitionId: '4335',
+  /* Cartel de Películas y series (docs/vod.md §8). */
+  art: 'poster',
+  /* Logo de un canal de la Guía TV (docs/iptv.md §20.6). */
+  ref: 'c1',
 };
 
 function concretePath(route: V1RouteDefinition): string {
@@ -180,7 +184,7 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     expect(failures).toEqual([]);
   });
 
-  it('con token válido, las rutas solo web (healthLive, copia de seguridad, Ajustes → IPTV, el buscador IPTV y la pestaña IPTV) dan 403 origin_forbidden', async () => {
+  it('con token válido, las rutas solo web (healthLive, copia de seguridad, Ajustes → IPTV, el buscador IPTV, la pestaña IPTV, la Guía TV, Películas y series, «Descargar fallos» y «Descargar logs») dan 403 origin_forbidden', async () => {
     const s = await setup();
     const failures: string[] = [];
     const webOnly = V1.filter(([, route]) => route.access === 'web');
@@ -197,6 +201,25 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'iptvDelete',
       'iptvChannels',
       'iptvBrowse',
+      'iptvGuide',
+      'iptvGuideProgrammes',
+      'iptvGuideProgramme',
+      'iptvGuideNow',
+      'iptvGuideArt',
+      'vodHome',
+      'vodBrowse',
+      'vodTitle',
+      'vodArt',
+      'vodStream',
+      'vodProgress',
+      'vodLanguagesGet',
+      'vodLanguagesUpdate',
+      /* «Descargar fallos» (0.9.0): lleva el registro del servidor, aunque redactado. */
+      'diagnosticsExport',
+      /* «Descargar logs» (0.9.0): el registro en disco, su zip y los errores de la web. */
+      'diagnosticsLogInfo',
+      'diagnosticsLogDownload',
+      'diagnosticsWebLog',
     ]);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {

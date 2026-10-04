@@ -91,5 +91,6 @@
     "server": "http://proveedor.example:8080",
     "secret": null
   },
-  "browser": { "theme": "oscuro", "transparency": "normal", "playbackMode": "balanced" }
+  "browser": { "theme": "oscuro", "transparency": "normal", "playbackMode": "balanced" },
+  "vod": { "langs": ["castellano", "frances"], "unknown": true }
 }

@@ -1,10 +1,16 @@
-/* Tokenizador XMLTV en streaming, propio y mínimo (docs/iptv.md §3.6).
+/* Tokenizador XMLTV en streaming, propio y mínimo (docs/iptv.md §3.6 y §20.3).
 
-   Sin dependencias. Entiende `<channel id>` con `<display-name>` y
-   `<programme start stop channel>` con `<title>`, `<sub-title>`, `<desc>`,
-   `<category>`, `<previously-shown/>`, `<new/>` y `<live/>`; entidades (las 5
-   con nombre y las numéricas), CDATA y comentarios. El resto se salta sin
-   guardarlo.
+   Sin dependencias. Entiende `<channel id>` con `<display-name>` e `<icon>`
+   y `<programme start stop channel clumpidx>` con `<title>`, `<sub-title>`,
+   `<desc>` (de cada uno, el de `lang="es"` si lo hay; si no, el primero),
+   `<category>`, `<episode-num system>`, `<date>`, `<rating><value>`,
+   `<star-rating><value>`, `<credits>` (`<director>` y `<actor>`), `<icon>`,
+   `<previously-shown/>`, `<new/>` y `<live/>`; entidades (las 5 con nombre
+   y las numéricas), CDATA y comentarios. El resto se salta sin guardarlo.
+
+   Texto: si la guía dice latin1 pero trae UTF-8 («FÃºtbol»), cada texto se
+   vuelve a leer como UTF-8; y si dice UTF-8 (o nada) pero trae bytes que no
+   lo son, se pasa a latin1 desde ese trozo.
 
    Defensas ante guías hostiles:
    - `<!DOCTYPE>` y las entidades declaradas se IGNORAN (nada de «billion
@@ -14,16 +20,26 @@
      acumularlo;
    - profundidad máxima de 8 niveles y 64 atributos por elemento: si se pasa,
      se salta el elemento entero.
-   Fechas `YYYYMMDDhhmmss ±hhmm`; sin zona, UTC más el `tvg-shift` que diga
-   quien llama. */
+   Fechas `YYYYMMDDhhmmss ±hhmm` (también `±hh:mm` y las abreviaturas
+   europeas y de EE. UU. que no dan lugar a dudas: `UTC`, `GMT`, `BST`,
+   `CET`, `CEST`, `EST`…); sin zona (o con una que no se entiende), UTC más
+   el `tvg-shift` que diga quien llama. */
 
+import { isUtf8 } from 'node:buffer';
 import { StringDecoder } from 'node:string_decoder';
 import type { Readable } from 'node:stream';
+import { setImmediate as nextTurn } from 'node:timers/promises';
 import { IPTV_GUIDE_LIMITS } from '@ace/shared';
+
+/** Un `<episode-num>` tal cual (`xmltv_ns`, `onscreen`…). */
+export interface XmltvEpisodeNum {
+  readonly system: string;
+  readonly value: string;
+}
 
 export interface XmltvProgramme {
   readonly channel: string;
-  /** Epoch ms (null si la fecha no se entiende). */
+  /** Epoch ms (null si la fecha no se entiende o falta). */
   readonly start: number | null;
   readonly stop: number | null;
   /** `true` si la fecha no traía zona (se le aplica el `tvg-shift`). */
@@ -35,11 +51,25 @@ export interface XmltvProgramme {
   readonly previouslyShown: boolean;
   readonly isNew: boolean;
   readonly live: boolean;
+  /** `clumpidx="0/2"`: varios programas que comparten franja («Noticias» y «El tiempo»). */
+  readonly clump?: { readonly index: number; readonly total: number } | null;
+  readonly episodeNums?: readonly XmltvEpisodeNum[];
+  /** `<date>` tal cual («2019», «20190512»). */
+  readonly date?: string;
+  /** Primer `<rating><value>` (edad: «+7», «TP») y primer `<star-rating><value>` («3/5»). */
+  readonly rating?: string;
+  readonly stars?: string;
+  readonly directors?: readonly string[];
+  readonly actors?: readonly string[];
+  /** `src` del primer `<icon>`. */
+  readonly icon?: string;
 }
 
 export interface XmltvChannel {
   readonly id: string;
   readonly names: readonly string[];
+  /** `src` del primer `<icon>` del canal (su logo). */
+  readonly icon?: string;
 }
 
 export interface XmltvHandlers {
@@ -47,11 +77,28 @@ export interface XmltvHandlers {
   onProgramme?(programme: XmltvProgramme): void;
 }
 
+export interface XmltvStreamResult {
+  readonly programmes: number;
+  readonly channels: number;
+  /**
+   * Llegó entera: se vio el cierre `</tv>`. Un `xmltv.php` que se pasa de
+   * tiempo o de memoria (PHP: «Fatal error: Maximum execution time…») cierra
+   * la respuesta como si nada, sin error de red y sin `</tv>`: false.
+   */
+  readonly complete: boolean;
+}
+
 export interface XmltvOptions {
   readonly maxTextBytes?: number;
   readonly maxDepth?: number;
   readonly maxAttributes?: number;
   readonly signal?: AbortSignal;
+  /**
+   * Cede el hilo (`setImmediate`) cuando lleva tantos ms trabajando sin
+   * parar entre trozos: con la guía completa cada programa se guarda en
+   * disco, y la IPTV que alguien está viendo no puede esperar (§20.3).
+   */
+  readonly sliceMs?: number;
 }
 
 const NAMED_ENTITIES: Readonly<Record<string, string>> = {
@@ -89,25 +136,84 @@ export function decodeEntities(text: string): string {
 }
 
 /**
- * Fecha XMLTV (`20260926183000 +0200`, con o sin segundos, con o sin zona).
- * Sin zona se toma UTC y se suman `shiftHours` (el `tvg-shift`).
+ * Abreviaturas de zona que no dan lugar a dudas, en minutos respecto a UTC.
+ * Fuera quedan las ambiguas (`CST`, `IST`…): se toman como sin zona.
+ */
+const ZONE_ABBREVIATIONS: Readonly<Record<string, number>> = {
+  UTC: 0,
+  UT: 0,
+  GMT: 0,
+  Z: 0,
+  WET: 0,
+  WEST: 60,
+  BST: 60,
+  CET: 60,
+  CEST: 120,
+  MET: 60,
+  MEST: 120,
+  EET: 120,
+  EEST: 180,
+  MSK: 180,
+  EST: -300,
+  EDT: -240,
+  CDT: -300,
+  MST: -420,
+  MDT: -360,
+  PST: -480,
+  PDT: -420,
+};
+
+/**
+ * Fecha XMLTV (`20260926183000 +0200`, con o sin segundos, con zona en
+ * número, `±hh:mm` o abreviatura). Sin zona (o con una que no se entiende)
+ * se toma UTC y se suman `shiftHours` (el `tvg-shift`). Una fecha imposible
+ * (mes 13, hora 25…) da null.
  */
 export function parseXmltvDate(
   value: string,
   shiftHours = 0,
 ): { readonly at: number; readonly naive: boolean } | null {
   const match =
-    /^\s*(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*(?:([+-])(\d{2}):?(\d{2}))?/.exec(value);
+    /^\s*(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*(?:([+-])(\d{2}):?(\d{2})|([A-Za-z]{1,5})(?![A-Za-z]))?/.exec(
+      value,
+    );
   if (!match) return null;
-  const [, y, mo, d, h, mi, s, sign, zh, zm] = match;
-  const utc = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s ?? 0));
+  const [, y, mo, d, h, mi, s, sign, zh, zm, abbreviation] = match;
+  const month = Number(mo);
+  const day = Number(d);
+  const hour = Number(h);
+  const minute = Number(mi);
+  const second = Number(s ?? 0);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 60) {
+    return null;
+  }
+  const utc = Date.UTC(Number(y), month - 1, day, hour, minute, second);
   if (!Number.isFinite(utc)) return null;
   if (sign) {
     const offset = (Number(zh) * 60 + Number(zm)) * 60_000;
     return { at: sign === '+' ? utc - offset : utc + offset, naive: false };
   }
+  const zone = abbreviation ? ZONE_ABBREVIATIONS[abbreviation.toUpperCase()] : undefined;
+  if (zone !== undefined) return { at: utc - zone * 60_000, naive: false };
   /* Como el tvg-shift de Kodi: horas que se ADELANTA la guía. */
   return { at: utc + shiftHours * 3_600_000, naive: true };
+}
+
+/** ¿El texto huele a UTF-8 leído como latin1 («FÃºtbol», «Â¿»)? */
+const MOJIBAKE_RE = /[Â-ô][\u0080-¿]/;
+
+/**
+ * Una guía que dice latin1 pero trae UTF-8: el texto se vuelve a leer como
+ * UTF-8 si así queda bien (sin caracteres rotos); si no, tal cual.
+ */
+export function repairMojibake(text: string): string {
+  if (!MOJIBAKE_RE.test(text)) return text;
+  for (let index = 0; index < text.length; index += 1) {
+    if (text.charCodeAt(index) > 0xff) return text;
+  }
+  const bytes = Buffer.from(text, 'latin1');
+  if (!isUtf8(bytes)) return text;
+  return bytes.toString('utf8');
 }
 
 interface Frame {
@@ -116,6 +222,8 @@ interface Frame {
   text: string[] | null;
   textBytes: number;
   overflow: boolean;
+  /** `lang` (título, subtítulo y descripción) o `system` (`<episode-num>`). */
+  attr: string;
 }
 
 interface ProgrammeDraft {
@@ -123,15 +231,55 @@ interface ProgrammeDraft {
   start: string;
   stop: string;
   title: string;
+  titleSpanish: boolean;
   subTitle: string;
+  subTitleSpanish: boolean;
   desc: string;
+  descSpanish: boolean;
   categories: string[];
   previouslyShown: boolean;
   isNew: boolean;
   live: boolean;
+  clump: { index: number; total: number } | null;
+  episodeNums: XmltvEpisodeNum[];
+  date: string;
+  rating: string;
+  stars: string;
+  directors: string[];
+  actors: string[];
+  icon: string;
 }
 
-const CAPTURED = new Set(['title', 'sub-title', 'desc', 'category', 'display-name']);
+/** `lang` de español: «es», «es-ES», «spa». */
+function isSpanish(lang: string): boolean {
+  return /^(?:es|spa|esp)(?:[-_].*)?$/i.test(lang.trim());
+}
+
+/** `clumpidx="0/2"` → { index: 0, total: 2 }; null si no se entiende. */
+function parseClump(value: string | undefined): { index: number; total: number } | null {
+  const match = value ? /^\s*(\d{1,2})\s*\/\s*(\d{1,2})\s*$/.exec(value) : null;
+  if (!match) return null;
+  const index = Number(match[1]);
+  const total = Number(match[2]);
+  return total > 1 && index < total ? { index, total } : null;
+}
+
+/** Topes de lo que se junta de un programa (lo demás se ignora). */
+const MAX_EPISODE_NUMS = 3;
+const MAX_DIRECTORS = 3;
+const MAX_ACTORS = 5;
+const MAX_CATEGORIES = 8;
+
+/** Elementos de `<programme>` cuyo texto se guarda. */
+const PROGRAMME_TEXT = new Set(['title', 'sub-title', 'desc', 'category', 'episode-num', 'date']);
+
+/** ¿Se guarda el texto de este elemento? (según su padre). */
+function captures(name: string, parent: string | undefined): boolean {
+  if (parent === 'programme') return PROGRAMME_TEXT.has(name);
+  if (parent === 'credits') return name === 'director' || name === 'actor';
+  if (parent === 'rating' || parent === 'star-rating') return name === 'value';
+  return parent === 'channel' && name === 'display-name';
+}
 
 /* Atributos de una etiqueta: `nombre="valor"` o `nombre='valor'`. */
 function parseTagAttributes(
@@ -158,7 +306,7 @@ export async function parseXmltvStream(
   body: Readable,
   handlers: XmltvHandlers,
   options: XmltvOptions = {},
-): Promise<{ readonly programmes: number; readonly channels: number }> {
+): Promise<XmltvStreamResult> {
   const maxText = options.maxTextBytes ?? IPTV_GUIDE_LIMITS.maxTextBytes;
   const maxDepth = options.maxDepth ?? IPTV_GUIDE_LIMITS.maxDepth;
   const maxAttributes = options.maxAttributes ?? IPTV_GUIDE_LIMITS.maxAttributes;
@@ -171,12 +319,14 @@ export async function parseXmltvStream(
   /* >0: dentro de un elemento que se salta entero (demasiado hondo o raro). */
   let skipDepth = 0;
   let programme: ProgrammeDraft | null = null;
-  let channel: { id: string; names: string[] } | null = null;
+  let channel: { id: string; names: string[]; icon: string } | null = null;
   let programmes = 0;
   let channels = 0;
   let firstChunk = true;
   /* Resto de una etiqueta gigante que empezó en un trozo anterior. */
   let skipTagTail = false;
+  /* Se vio el cierre `</tv>` (o un `<tv/>` vacío) y ningún canal ni programa detrás. */
+  let ended = false;
 
   const top = (): Frame | undefined => stack[stack.length - 1];
 
@@ -213,27 +363,44 @@ export async function parseXmltvStream(
         start: attributes.get('start') ?? '',
         stop: attributes.get('stop') ?? '',
         title: '',
+        titleSpanish: false,
         subTitle: '',
+        subTitleSpanish: false,
         desc: '',
+        descSpanish: false,
         categories: [],
         previouslyShown: false,
         isNew: false,
         live: false,
+        clump: parseClump(attributes.get('clumpidx')),
+        episodeNums: [],
+        date: '',
+        rating: '',
+        stars: '',
+        directors: [],
+        actors: [],
+        icon: '',
       };
       if (selfClosing) finishProgramme();
     } else if (name === 'channel' && parent === 'tv') {
-      channel = { id: attributes.get('id') ?? '', names: [] };
+      channel = { id: attributes.get('id') ?? '', names: [], icon: '' };
       if (selfClosing) finishChannel();
     } else if (programme && parent === 'programme') {
       if (name === 'previously-shown') programme.previouslyShown = true;
       else if (name === 'new') programme.isNew = true;
       else if (name === 'live') programme.live = true;
+      else if (name === 'icon' && !programme.icon) programme.icon = attributes.get('src') ?? '';
+    } else if (channel && parent === 'channel' && name === 'icon' && !channel.icon) {
+      channel.icon = attributes.get('src') ?? '';
     }
     if (!selfClosing) {
-      const capture =
-        CAPTURED.has(name) &&
-        (parent === 'programme' || (parent === 'channel' && name === 'display-name'));
-      stack.push({ name, text: capture ? [] : null, textBytes: 0, overflow: false });
+      const capture = captures(name, parent);
+      const attr = capture
+        ? name === 'episode-num'
+          ? (attributes.get('system') ?? '')
+          : (attributes.get('lang') ?? '')
+        : '';
+      stack.push({ name, text: capture ? [] : null, textBytes: 0, overflow: false, attr });
     }
   };
 
@@ -256,6 +423,14 @@ export async function parseXmltvStream(
       previouslyShown: draft.previouslyShown,
       isNew: draft.isNew,
       live: draft.live,
+      clump: draft.clump,
+      episodeNums: draft.episodeNums,
+      date: draft.date,
+      rating: draft.rating,
+      stars: draft.stars,
+      directors: draft.directors,
+      actors: draft.actors,
+      icon: draft.icon,
     });
   };
 
@@ -264,7 +439,27 @@ export async function parseXmltvStream(
     channel = null;
     if (!draft || !draft.id) return;
     channels += 1;
-    handlers.onChannel?.({ id: draft.id, names: draft.names });
+    handlers.onChannel?.({
+      id: draft.id,
+      names: draft.names,
+      ...(draft.icon ? { icon: draft.icon } : {}),
+    });
+  };
+
+  /* Título, subtítulo o descripción: el primero, salvo que llegue luego uno en español. */
+  const pickLanguage = (
+    draft: ProgrammeDraft,
+    field: 'title' | 'subTitle' | 'desc',
+    text: string,
+    lang: string,
+  ): void => {
+    if (!text) return;
+    const spanishKey = `${field}Spanish` as 'titleSpanish' | 'subTitleSpanish' | 'descSpanish';
+    const spanish = lang !== '' && isSpanish(lang);
+    if (!draft[field] || (spanish && !draft[spanishKey])) {
+      draft[field] = text;
+      draft[spanishKey] = spanish;
+    }
   };
 
   const closeElement = (name: string): void => {
@@ -280,15 +475,29 @@ export async function parseXmltvStream(
       while (stack.length > index + 1) stack.pop();
     }
     const closed = stack.pop() as Frame;
-    const text = closed.text && !closed.overflow ? decodeEntities(closed.text.join('')).trim() : '';
+    let text = closed.text && !closed.overflow ? decodeEntities(closed.text.join('')).trim() : '';
+    if (latin1 && text) text = repairMojibake(text);
     const parent = top()?.name;
     if (programme && parent === 'programme' && closed.text) {
-      if (name === 'title' && !programme.title) programme.title = text;
-      else if (name === 'sub-title' && !programme.subTitle) programme.subTitle = text;
-      else if (name === 'desc' && !programme.desc) programme.desc = text;
-      else if (name === 'category' && text && programme.categories.length < 8) {
+      if (name === 'title') pickLanguage(programme, 'title', text, closed.attr);
+      else if (name === 'sub-title') pickLanguage(programme, 'subTitle', text, closed.attr);
+      else if (name === 'desc') pickLanguage(programme, 'desc', text, closed.attr);
+      else if (name === 'category' && text && programme.categories.length < MAX_CATEGORIES) {
         programme.categories.push(text);
-      }
+      } else if (name === 'episode-num' && text) {
+        if (programme.episodeNums.length < MAX_EPISODE_NUMS) {
+          programme.episodeNums.push({ system: closed.attr.trim().toLowerCase(), value: text });
+        }
+      } else if (name === 'date' && text && !programme.date) programme.date = text;
+    } else if (programme && closed.text && text) {
+      if (parent === 'credits') {
+        if (name === 'director' && programme.directors.length < MAX_DIRECTORS) {
+          programme.directors.push(text);
+        } else if (name === 'actor' && programme.actors.length < MAX_ACTORS) {
+          programme.actors.push(text);
+        }
+      } else if (parent === 'rating' && !programme.rating) programme.rating = text;
+      else if (parent === 'star-rating' && !programme.stars) programme.stars = text;
     } else if (channel && parent === 'channel' && name === 'display-name' && text) {
       if (channel.names.length < 4) channel.names.push(text);
     }
@@ -391,7 +600,9 @@ export async function parseXmltvStream(
       const tag = buffer.slice(index + 1, end);
       index = end + 1;
       if (tag.startsWith('/')) {
-        closeElement(tag.slice(1).trim().toLowerCase());
+        const closing = tag.slice(1).trim().toLowerCase();
+        if (closing === 'tv') ended = true;
+        closeElement(closing);
         continue;
       }
       const selfClosing = tag.endsWith('/');
@@ -399,36 +610,90 @@ export async function parseXmltvStream(
       const nameMatch = /^([A-Za-z_:][A-Za-z0-9_.:-]*)/.exec(inner);
       if (!nameMatch) continue;
       const name = (nameMatch[1] as string).toLowerCase();
+      /* Lo que venga tras el cierre (avisos de PHP: `<br />`, `<b>`) no cuenta; otra guía, sí. */
+      if (name === 'tv' || name === 'programme' || name === 'channel') {
+        ended = name === 'tv' && selfClosing;
+      }
       openElement(name, inner.slice(name.length), selfClosing);
     }
     buffer = final ? '' : buffer.slice(index);
   };
 
+  /* La codificación se decide con los primeros 200 bytes (aunque lleguen en trozos de 1). */
+  let head: Buffer[] = [];
+  let headBytes = 0;
+  const decide = (): Buffer => {
+    const start = Buffer.concat(head);
+    head = [];
+    firstChunk = false;
+    const declared = start.subarray(0, 200).toString('latin1');
+    latin1 = /encoding\s*=\s*["'](?:iso-8859-1|latin-?1|windows-1252|cp1252)["']/i.test(declared);
+    decoder = latin1 ? null : new StringDecoder('utf8');
+    return start;
+  };
+
+  const feed = (chunk: Buffer): void => {
+    let text: string;
+    if (latin1) text = chunk.toString('latin1');
+    else {
+      text = (decoder as StringDecoder).write(chunk);
+      /* Dice UTF-8 (o nada) pero trae bytes que no lo son: desde aquí, latin1. */
+      if (text.includes('�') && !chunk.includes(REPLACEMENT_BYTES)) {
+        latin1 = true;
+        decoder = null;
+        text = chunk.toString('latin1');
+      }
+    }
+    if (skipTagTail) {
+      const close = text.indexOf('>');
+      if (close < 0) return;
+      skipTagTail = false;
+      skipDepth += 1;
+      text = text.slice(close + 1);
+    }
+    buffer += text;
+    pump(false);
+  };
+
+  const flushDecoder = (): void => {
+    if (decoder) buffer += decoder.end();
+  };
+
+  const sliceMs = options.sliceMs ?? 0;
+  let sliceStart = performance.now();
+
   try {
     for await (const value of body as AsyncIterable<Buffer | string>) {
       if (options.signal?.aborted) throw options.signal.reason ?? new Error('aborted');
-      const chunk = typeof value === 'string' ? Buffer.from(value) : value;
-      if (firstChunk) {
-        firstChunk = false;
-        const head = chunk.subarray(0, 200).toString('latin1');
-        latin1 = /encoding\s*=\s*["'](?:iso-8859-1|latin-?1|windows-1252|cp1252)["']/i.test(head);
-        decoder = latin1 ? null : new StringDecoder('utf8');
+      const whole = typeof value === 'string' ? Buffer.from(value) : value;
+      /* Un trozo enorme (un fichero entero de golpe) se procesa en pedazos de 64 KiB. */
+      for (let offset = 0; offset < whole.length; offset += PIECE_BYTES) {
+        const chunk =
+          whole.length <= PIECE_BYTES ? whole : whole.subarray(offset, offset + PIECE_BYTES);
+        if (firstChunk) {
+          head.push(chunk);
+          headBytes += chunk.length;
+          if (headBytes < 200) continue;
+          feed(decide());
+        } else feed(chunk);
+        if (sliceMs > 0 && performance.now() - sliceStart >= sliceMs) {
+          await nextTurn();
+          if (options.signal?.aborted) throw options.signal.reason ?? new Error('aborted');
+          sliceStart = performance.now();
+        }
       }
-      let text = latin1 ? chunk.toString('latin1') : (decoder as StringDecoder).write(chunk);
-      if (skipTagTail) {
-        const close = text.indexOf('>');
-        if (close < 0) continue;
-        skipTagTail = false;
-        skipDepth += 1;
-        text = text.slice(close + 1);
-      }
-      buffer += text;
-      pump(false);
     }
-    if (decoder) buffer += decoder.end();
+    if (firstChunk) feed(decide());
+    flushDecoder();
     pump(true);
   } finally {
     body.destroy();
   }
-  return { programmes, channels };
+  return { programmes, channels, complete: ended };
 }
+
+/** Pedazo máximo que se procesa de una vez. */
+const PIECE_BYTES = 64 * 1024;
+
+/** U+FFFD tal cual en UTF-8: si la guía lo trae escrito, no es un byte roto. */
+const REPLACEMENT_BYTES = Buffer.from([0xef, 0xbf, 0xbd]);

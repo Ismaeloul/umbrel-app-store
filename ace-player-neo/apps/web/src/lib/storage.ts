@@ -96,4 +96,6 @@ export const STORAGE_KEYS = {
   flags: 'aceneo-flags',
   /** Panel lateral plegado en escritorio. */
   aside: 'aceneo-panel',
+  /** Guía TV: «Favoritos | Todos» elegido (`favoritos` o `todos`). */
+  guideScope: 'aceneo-guia-ambito',
 } as const;

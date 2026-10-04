@@ -28,6 +28,7 @@
   },
   "preferences": true,
   "settings": false,
+  "vodLanguages": true,
   "iptv": {
     "action": "needs_secret",
     "protected": false,

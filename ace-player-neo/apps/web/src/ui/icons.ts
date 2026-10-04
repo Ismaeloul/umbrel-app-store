@@ -73,6 +73,13 @@ export const ICONS = {
   copia:
     '<rect x="3.5" y="4" width="17" height="5" rx="1.8"/><path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M10 13h4"/>',
   descargar: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
+  /* Guía TV (docs/iptv.md §20): una parrilla de programas con la raya de «ahora». */
+  guia: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9.5h18M3 14.5h18M8 4.5v15M14.5 9.5v5M11 14.5v5"/>',
+  /* Películas y series (docs/vod.md §12.1): una claqueta. */
+  cine: '<rect x="3.5" y="10" width="17" height="10.5" rx="2.5"/><path d="M3.5 10l15.9-4.5-.9-2.9-15.8 4.5z"/><path d="M8.8 8.5l.3-3.2M14.1 7l.3-3.2"/>',
+  /* Idiomas de Películas y series (docs/vod.md §4.10): un globo con sus meridianos. */
+  idioma:
+    '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5S9.7 5.9 12 3.5z"/>',
 } as const satisfies Record<string, string>;
 
 export type IconName = keyof typeof ICONS;

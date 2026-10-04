@@ -19,7 +19,8 @@
     var(--safe-bottom) + var(--tabbar-h) + var(--tabbar-gap) + var(--mini-h) + 36px
   );
 }
-.app[data-vista='partido'] .app-main {
+.app[data-vista='partido'] .app-main,
+.app[data-vista='sala'] .app-main {
   padding-bottom: calc(var(--safe-bottom) + 28px);
 }
 .app-main:focus-visible {
@@ -55,6 +56,14 @@
    relanzaría sus animaciones CSS): solo se apaga entero. */
 .view-fantasma * {
   animation: none !important;
+}
+/* Mientras la vista nueva aún se descarga (enseña su esqueleto), la vieja se
+   queda quieta encima y la nueva, escondida: nunca las dos a la vez. */
+.view-fantasma[data-espera] {
+  animation: none;
+}
+.view[data-espera] {
+  visibility: hidden;
 }
 .app[data-motion='css'] .app-aside {
   animation: ace-funde var(--dur-rapido) var(--ease-out);
@@ -118,6 +127,10 @@
 .stage:has(.player-chrome[data-visible='true'] .player-chrome__bottom) .stage__status {
   /* 52 px de la pausa grande + 8 de aire. */
   --status-lift: -60px;
+}
+/* Con una película, además la barra de tiempo (28 px + 4 de hueco). */
+.stage:has(.player-chrome[data-visible='true'] .vod-bottom) .stage__status {
+  --status-lift: -92px;
 }
 .stage__status .status-line {
   min-height: 34px;
@@ -212,7 +225,8 @@
   bottom: calc(var(--safe-bottom) + var(--tabbar-gap) + var(--tabbar-h) + 8px);
   min-height: var(--mini-h);
 }
-.app[data-layout='mobile'][data-vista='partido'] .dock[data-presentation='mini'] {
+.app[data-layout='mobile'][data-vista='partido'] .dock[data-presentation='mini'],
+.app[data-layout='mobile'][data-vista='sala'] .dock[data-presentation='mini'] {
   bottom: calc(var(--safe-bottom) + 12px);
 }
 .stage-placeholder {
@@ -276,7 +290,8 @@
    Cristal, márgenes de 12, radio 24 y la sombra larga de Palco. La píldora
    (::before) es la única pieza que se mueve: translateX hasta la columna --i. */
 .tabbar {
-  --n: 4;
+  /* --n (destinos) y --i (el activo) los pone Nav.tsx en línea con la lista
+     que se pinta: 4 o 5 con «Pelis y series» (T17 de docs/vod.md). */
   --i: 0;
   --tabbar-pad: 6px;
   position: fixed;
@@ -359,7 +374,7 @@
     pointer-events: none;
   }
   .topbar {
-    --n: 4;
+    /* --n lo pone Nav.tsx en línea (4 o 5 destinos), como en la barra inferior. */
     --i: 0;
     --topbar-item-w: 116px;
     grid-area: top;
@@ -497,6 +512,9 @@
   .stage:has(.player-chrome[data-visible='true'] .player-chrome__bottom) .stage__status {
     --status-lift: -64px;
   }
+  .stage:has(.player-chrome[data-visible='true'] .vod-bottom) .stage__status {
+    --status-lift: -100px;
+  }
   .stage-placeholder {
     border-radius: var(--r-xl);
   }
@@ -528,6 +546,11 @@
     padding-right: calc(16px + var(--safe-right));
     border-left: 1px solid var(--line-soft);
   }
+  /* Un panel que no tiene nada que enseñar (Películas y series mientras se
+     eligen los idiomas) no deja una columna vacía. */
+  .app-aside:empty {
+    display: none;
+  }
 }
 
 /* Barra superior más prieta cuando no cabe el nombre (tableta estrecha). */
@@ -544,6 +567,17 @@
   }
   .topbar__item {
     padding: 0 8px;
+  }
+  /* Con «Pelis y series» (5 destinos) no caben los iconos: van todos sin él,
+     por igual (docs/vod.md §12.1), en huecos de 96 px («Pelis y series» mide
+     ~68 px a 13 px), y el estado del motor se queda en su icono (medido con
+     revision-visual a 768 px: si no, «Ajustes» pisaba el motor). */
+  .topbar[data-n='5'] {
+    --topbar-item-w: 96px;
+  }
+  .topbar[data-n='5'] .topbar__item .icon,
+  .topbar[data-n='5'] .topbar__engine .engine__text {
+    display: none;
   }
 }
 

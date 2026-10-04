@@ -1,5 +1,6 @@
-/* Navegación principal con los mismos cuatro destinos (Agenda · Canales ·
-   Buscar · Ajustes), en la forma de «Palco» (plan de la fase 2, decisión W3):
+/* Navegación principal con cuatro destinos (Agenda · Canales · Buscar ·
+   Ajustes) o cinco con «Pelis y series» entre Canales y Buscar (docs/vod.md
+   §12.1: solo si el servidor tiene películas y series), en la forma de «Palco» (plan de la fase 2, decisión W3):
 
    - Móvil (< 768 px): barra inferior FLOTANTE de cristal (márgenes de 12,
      radio 24, sombra Palco) con una píldora que se desliza hasta el destino
@@ -14,7 +15,10 @@
    Son enlaces de verdad (`?vista=…`): se pueden abrir en otra pestaña; el
    clic normal navega sin recargar. Pasar el ratón por encima precarga el JS
    de la vista. Los nombres accesibles que usan las e2e (`navigation
-   'Principal'`, `link 'Agenda'`) no cambian. */
+   'Principal'`, `link 'Agenda'`) no cambian.
+
+   El número de destinos cambia: `--n` y el índice de la píldora (`--i`) salen
+   SIEMPRE de la lista que se pinta (T17), nunca de un 4 fijo. */
 
 import {
   useEffect,
@@ -24,6 +28,7 @@ import {
   type MouseEvent,
   type RefObject,
 } from 'react';
+import { useVodActive } from '../api/index.ts';
 import { cx } from '../lib/cx.ts';
 import { BrandMark } from '../ui/BrandMark.tsx';
 import { IconButton } from '../ui/Button.tsx';
@@ -31,18 +36,45 @@ import { Icon } from '../ui/Icon.tsx';
 import type { IconName } from '../ui/icons.ts';
 import { EngineIndicator } from './EngineIndicator.tsx';
 import { rememberedViewParams, useNavigate } from './router.tsx';
-import { NAV_VISTAS, searchFor, VISTA_TITLE, type NavVista, type Route } from './routes.ts';
+import {
+  navLabel,
+  navParent,
+  navVistas,
+  searchFor,
+  VISTA_TITLE,
+  type NavVista,
+  type Route,
+} from './routes.ts';
 import { preloadView } from './views.tsx';
 
 const NAV_ICON: Record<NavVista, IconName> = {
   agenda: 'agenda',
   biblioteca: 'biblioteca',
+  cine: 'cine',
   buscar: 'buscar',
   ajustes: 'ajustes',
 };
 
 function navRoute(vista: NavVista): Route {
-  return vista === 'ajustes' ? { vista: 'ajustes', seccion: null } : { vista };
+  if (vista === 'ajustes') return { vista: 'ajustes', seccion: null };
+  if (vista === 'cine') return { vista: 'cine', id: null };
+  return { vista };
+}
+
+/** Los destinos que se pintan ahora mismo (`cine` según `features.vod`). */
+function useNavVistas(): readonly NavVista[] {
+  const vod = useVodActive();
+  return navVistas({ vod });
+}
+
+/**
+ * Lo que se ve y lo que se lee de un destino: «Pelis y series» a la vista y
+ * «Películas y series» como nombre y `title` (docs/vod.md §12.1).
+ */
+function labelProps(vista: NavVista) {
+  const label = navLabel(vista);
+  const title = VISTA_TITLE[vista];
+  return label === title ? { label } : { label, 'aria-label': title, title };
 }
 
 function useNavLink(current: Route) {
@@ -54,7 +86,13 @@ function useNavLink(current: Route) {
       globalThis.location?.search ?? '',
       rememberedViewParams(vista),
     ),
-    'aria-current': current.vista === vista ? ('page' as const) : undefined,
+    // En una vista hija (la Guía TV), su madre se marca como «estás dentro».
+    'aria-current':
+      current.vista === vista
+        ? ('page' as const)
+        : navParent(current.vista) === vista
+          ? ('true' as const)
+          : undefined,
     onClick: (event: MouseEvent<HTMLAnchorElement>) => {
       if (
         event.defaultPrevented ||
@@ -73,27 +111,33 @@ function useNavLink(current: Route) {
   });
 }
 
-/** Índice del destino activo (−1 fuera de los cuatro: partido, sistema). */
-function activeIndex(route: Route): number {
-  return (NAV_VISTAS as readonly string[]).indexOf(route.vista);
+/** Índice del destino activo en la lista que se pinta (−1 fuera de ella: partido, sistema). */
+function activeIndex(route: Route, vistas: readonly NavVista[]): number {
+  const parent = navParent(route.vista);
+  return parent ? vistas.indexOf(parent) : -1;
 }
 
 export function TabBar({ route, hidden }: { route: Route; hidden?: boolean }) {
   const link = useNavLink(route);
-  const index = activeIndex(route);
+  const vistas = useNavVistas();
+  const index = activeIndex(route, vistas);
   return (
     <nav
       className={cx('tabbar', 'glass', 'glass--dense', index < 0 && 'tabbar--none')}
       aria-label="Principal"
       hidden={hidden}
-      style={{ '--i': Math.max(0, index), '--n': NAV_VISTAS.length } as CSSProperties}
+      data-n={vistas.length}
+      style={{ '--i': Math.max(0, index), '--n': vistas.length } as CSSProperties}
     >
-      {NAV_VISTAS.map((vista) => (
-        <a key={vista} className="tabbar__item" {...link(vista)}>
-          <Icon name={NAV_ICON[vista]} size={24} />
-          <span>{VISTA_TITLE[vista]}</span>
-        </a>
-      ))}
+      {vistas.map((vista) => {
+        const { label, ...named } = labelProps(vista);
+        return (
+          <a key={vista} className="tabbar__item" {...link(vista)} {...named}>
+            <Icon name={NAV_ICON[vista]} size={24} />
+            <span>{label}</span>
+          </a>
+        );
+      })}
     </nav>
   );
 }
@@ -120,7 +164,8 @@ function useScrolledPast(): [boolean, RefObject<HTMLDivElement | null>] {
 
 export function TopBar({ route, onHelp }: { route: Route; onHelp?: () => void }) {
   const link = useNavLink(route);
-  const index = activeIndex(route);
+  const vistas = useNavVistas();
+  const index = activeIndex(route, vistas);
   const [scrolled, sentinel] = useScrolledPast();
   return (
     <>
@@ -128,7 +173,8 @@ export function TopBar({ route, onHelp }: { route: Route; onHelp?: () => void })
       <nav
         className={cx('topbar', scrolled && 'topbar--solid', index < 0 && 'topbar--none')}
         aria-label="Principal"
-        style={{ '--i': Math.max(0, index), '--n': NAV_VISTAS.length } as CSSProperties}
+        data-n={vistas.length}
+        style={{ '--i': Math.max(0, index), '--n': vistas.length } as CSSProperties}
       >
         <a
           className="topbar__brand"
@@ -140,12 +186,15 @@ export function TopBar({ route, onHelp }: { route: Route; onHelp?: () => void })
           <span className="topbar__name">Ace Player Neo</span>
         </a>
         <div className="topbar__items">
-          {NAV_VISTAS.map((vista) => (
-            <a key={vista} className="topbar__item" {...link(vista)}>
-              <Icon name={NAV_ICON[vista]} size={20} />
-              <span>{VISTA_TITLE[vista]}</span>
-            </a>
-          ))}
+          {vistas.map((vista) => {
+            const { label, ...named } = labelProps(vista);
+            return (
+              <a key={vista} className="topbar__item" {...link(vista)} {...named}>
+                <Icon name={NAV_ICON[vista]} size={20} />
+                <span>{label}</span>
+              </a>
+            );
+          })}
         </div>
         <div className="topbar__right">
           <EngineIndicator className="topbar__engine" />

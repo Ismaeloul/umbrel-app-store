@@ -49,9 +49,12 @@ describe('views (registro por carpetas)', () => {
     expect(Object.values(FEATURE_FOLDER)).toEqual([
       'agenda',
       'biblioteca',
+      'guia',
+      'cine',
       'buscar',
       'ajustes',
       'partido',
+      'sala',
     ]);
   });
 

@@ -13,13 +13,15 @@
    - player/MiniPlayer.tsx: hacia arriba lo abre, a un lado lo detiene (con
      «Deshacer»);
    - ui/Menu.tsx (useContextMenu): pulsación larga de 500 ms o clic derecho;
-   - agenda/DayStrip.tsx: la rueda desplaza a los lados;
+   - agenda/DayStrip.tsx: Mayús + rueda desplaza a los lados (la rueda sola
+     baja la página, 0.9.0);
    - agenda/MatchRow.tsx: en escritorio, doble clic abre el partido;
    - sources/SourcesPanel.tsx: deslizar la barra «Emitiendo» del partido pasa
      a la fuente siguiente o a la anterior;
    - ui/Sheet.tsx: deslizar el asa de una hoja hacia abajo la cierra;
-   - ui/PosterRail.tsx (filas de partidos por competición, «Luego» y
-     «Emitiendo ahora» de Canales): la rueda desplaza a los lados.
+   - ui/PosterRail.tsx (filas de partidos por competición, «Luego»,
+     «Emitiendo ahora» de Canales y las filas de Pelis y series): Mayús +
+     rueda desplaza a los lados; la rueda sola baja la página.
    Con el rediseño «Palco» (fase 2) la biblioteca se llama «Canales».
    Si una vista añade un gesto, que lo añada aquí. */
 
@@ -96,7 +98,7 @@ export const MOUSE_GESTURES: readonly GestureHelp[] = [
   },
   {
     id: 'rueda',
-    gesture: 'Rueda del ratón',
+    gesture: 'Mayús + rueda del ratón',
     label: 'Desplaza a los lados la tira de días y las filas de carteles',
   },
 ];

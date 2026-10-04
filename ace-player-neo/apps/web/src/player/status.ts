@@ -16,6 +16,8 @@
 
 import type { StatusContent } from '../notices/statusLine.ts';
 import { isIptvPlayback, type PlayerState } from './api.ts';
+import { VOD_TEXT } from './vod/texts.ts';
+import { clockText, remainingText } from './vod/timeline.ts';
 
 /** «Conectando con AceStream…» o, si la fuente es de la IPTV, «Conectando con tu IPTV…» (§8.3). */
 function connectingText(state: PlayerState): string {
@@ -27,8 +29,60 @@ function withLead(lead: string | undefined, text: string): string {
   return clean ? `${clean} ${text}` : text;
 }
 
+/**
+ * La línea de estado con una película o un episodio (docs/vod.md §12.7):
+ * «Preparando la película…», «Buscando…», «Cargando…», «En pausa» y, sonando,
+ * lo que queda. Nunca un aviso encima del vídeo.
+ */
+export function vodStatusFor(state: PlayerState): StatusContent | null {
+  const vod = state.vod;
+  const clock =
+    vod && vod.durationS > 0
+      ? `${clockText(vod.positionS)} / ${clockText(vod.durationS)}`
+      : undefined;
+  switch (state.phase) {
+    case 'cargando':
+      return {
+        text: state.message ?? VOD_TEXT.preparingMovie,
+        signal: 'checking',
+      };
+    case 'reconectando':
+      return { text: state.message ?? VOD_TEXT.preparingMovie, signal: 'checking', tone: 'warn' };
+    case 'error':
+      return {
+        text: state.message ?? 'No se ha podido abrir el vídeo.',
+        signal: 'fail',
+        tone: 'err',
+      };
+    case 'buffer':
+      return { text: VOD_TEXT.loading, signal: 'weak', ...(clock ? { meta: clock } : {}) };
+    case 'buscando':
+      return { text: VOD_TEXT.seeking, icon: 'refresh', ...(clock ? { meta: clock } : {}) };
+    case 'pausado':
+      return {
+        text: vod?.ended ? VOD_TEXT.ended : VOD_TEXT.paused,
+        // Terminada no es una pausa: la marca de hecho, no el icono de pausa.
+        icon: vod?.ended ? 'check' : 'pause',
+        ...(clock ? { meta: clock } : {}),
+      };
+    case 'reproduciendo':
+      if (!vod || !(vod.durationS > 0)) return { text: VOD_TEXT.loading, signal: 'ok' };
+      if (vod.ended) return { text: VOD_TEXT.ended, icon: 'check' };
+      return {
+        text: remainingText(vod.positionS, vod.durationS),
+        signal: 'ok',
+        ...(state.demo ? { meta: 'demo' } : clock ? { meta: clock } : {}),
+      };
+    case 'bloqueado':
+      return { text: 'Toca el vídeo para reproducir.', icon: 'play' };
+    default:
+      return null;
+  }
+}
+
 /** Estado base de la línea de estado (null: que la ponga el centro de partido). */
 export function statusFor(state: PlayerState): StatusContent | null {
+  if (state.kind === 'vod' && state.phase !== 'idle') return vodStatusFor(state);
   const lead = state.channel?.lead;
   switch (state.phase) {
     case 'idle':
@@ -140,6 +194,30 @@ export function stageMessage(state: PlayerState): {
   text: string;
   tone: 'idle' | 'busy' | 'error';
 } | null {
+  if (state.kind === 'vod') {
+    switch (state.phase) {
+      case 'cargando':
+        if (state.conn === 'activa') return null;
+        return {
+          title:
+            state.vod?.kind === 'episode' ? 'Preparando el episodio' : 'Preparando la película',
+          text: state.vod?.title ?? state.channel?.title ?? '',
+          tone: 'busy',
+        };
+      case 'reconectando':
+        return { title: 'Reconectando', text: state.message ?? '', tone: 'busy' };
+      case 'error':
+        return state.vod?.failure?.code === 'vod_idle'
+          ? { title: 'En pausa', text: state.message ?? '', tone: 'idle' }
+          : {
+              title: 'No se puede reproducir',
+              text: state.message ?? 'No se ha podido abrir el vídeo.',
+              tone: 'error',
+            };
+      default:
+        break;
+    }
+  }
   switch (state.phase) {
     case 'idle':
       if (state.waiting && state.waitingFinal)

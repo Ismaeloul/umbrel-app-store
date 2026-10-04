@@ -33,7 +33,8 @@ describe('arranque de la capa de datos', () => {
       },
     });
     expect(result.mode).toBe('demo');
-    expect(result.notice?.text).toBe('Modo demo: sin backend, canales de muestra cargados');
+    // Sin aviso: la cabecera de cada vista ya dice «Modo demo» (el aviso tapaba botones).
+    expect(result.notice).toBeNull();
     expect(realtimeStore.get().status).toBe('demo');
     expect(modeStore.get().mode).toBe('demo');
   });

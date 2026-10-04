@@ -7,8 +7,9 @@
 
    - `ACESTREAM_SCANNER_HOST` y `ENGINE_CONTROL_HOST` se sanean igual que
      `ACESTREAM_HOST` (backend-modulos §9.10: hoy no se sanean).
-   - Variables nuevas: `ACE_SEED`, `ACE_SAME_CHANNEL_POLICY`, `ACE_LOG_LEVEL`
-     y `APP_VERSION` (la inyecta el build, T-102).
+   - Variables nuevas: `ACE_SEED`, `ACE_SAME_CHANNEL_POLICY`, `ACE_LOG_LEVEL`,
+     `ACE_LOOPBACK` (solo desarrollo: el relé de la IPTV en `::1`) y
+     `APP_VERSION` (la inyecta el build, T-102).
    - Un valor que no vale se sustituye por el defecto y queda un aviso en
      `warnings` (main.ts los escribe en el log). Solo las de seguridad hacen
      fallar el arranque (`ConfigError`): un `ACE_SEED` demasiado corto. */
@@ -75,7 +76,13 @@ export interface AppConfig {
     readonly iptvDir: string;
     readonly iptvCatalogFile: string;
     readonly iptvGuideFile: string;
+    /** Guía TV completa (docs/iptv.md §20.2): SQLite sin cifrar, 0600. */
+    readonly iptvGuideDbFile: string;
     readonly iptvKeyFile: string;
+    /** Películas y series (docs/vod.md §4.1): progreso, catálogo binario y caché de carteles. */
+    readonly vodFile: string;
+    readonly vodCatalogFile: string;
+    readonly vodArtDir: string;
   };
   readonly engine: {
     readonly host: string;
@@ -133,6 +140,12 @@ export interface AppConfig {
   readonly playback: {
     /** Política de mismo canal si no hay ajuste guardado (D5). */
     readonly sameChannelPolicy: SameChannelPolicy;
+    /**
+     * Dirección de bucle local del relé de la IPTV (directo y VOD): `ACE_LOOPBACK`,
+     * `127.0.0.1` (defecto) o `::1`. Solo para PC de desarrollo con filtros de red que
+     * cortan 127.0.0.1 (el de Isma); siempre es loopback.
+     */
+    readonly relayLoopback: '127.0.0.1' | '::1';
   };
   readonly security: {
     /** De dónde sale el material de las claves. `ephemeral` = aleatorio de este arranque. */
@@ -230,6 +243,16 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
     warnings.push(`ACE_SAME_CHANNEL_POLICY=${JSON.stringify(rawPolicy)} no vale; se usa "share"`);
   }
 
+  // --- Bucle local del relé de la IPTV (solo desarrollo) ---
+  let relayLoopback: '127.0.0.1' | '::1' = '127.0.0.1';
+  const rawLoopback = String(env.ACE_LOOPBACK || '')
+    .trim()
+    .replace(/^\[(.*)\]$/, '$1');
+  if (rawLoopback === '::1' || rawLoopback === '127.0.0.1') relayLoopback = rawLoopback;
+  else if (rawLoopback) {
+    warnings.push(`ACE_LOOPBACK=${JSON.stringify(rawLoopback)} no vale; se usa "127.0.0.1"`);
+  }
+
   // --- Nivel de log ---
   let logLevel: LogLevel = 'info';
   const rawLevel = String(env.ACE_LOG_LEVEL || '')
@@ -288,7 +311,11 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
       iptvDir: path.join(dataDir, V2_FILES.iptvDir),
       iptvCatalogFile: path.join(dataDir, V2_FILES.iptvCatalog),
       iptvGuideFile: path.join(dataDir, V2_FILES.iptvGuide),
+      iptvGuideDbFile: path.join(dataDir, V2_FILES.iptvGuideDb),
       iptvKeyFile: path.join(dataDir, V2_FILES.iptvKey),
+      vodFile: path.join(dataDir, V2_FILES.vod),
+      vodCatalogFile: path.join(dataDir, V2_FILES.vodCatalog),
+      vodArtDir: path.join(dataDir, V2_FILES.vodArt),
     },
     engine: {
       host: sanitizeHost(env.ACESTREAM_HOST, DEFAULTS.acestreamHost),
@@ -340,7 +367,7 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
       timeoutMs: intVar('OLLAMA_TIMEOUT_MS', 1500, 15_000, 6500),
       enabled: ollamaConfigured(ollamaBaseUrl, embedModel),
     },
-    playback: { sameChannelPolicy },
+    playback: { sameChannelPolicy, relayLoopback },
     security: { seedSource, keys },
   };
 

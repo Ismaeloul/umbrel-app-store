@@ -9,6 +9,10 @@
    - channelStream: GET /api/v1/channels/:id/stream (§6.3).
    - sessionHeartbeat / sessionRelease: POST /api/v1/sessions/:sid/{heartbeat,release}.
    - playbackStatus: GET /api/v1/playback.
+   - vodStream: GET /api/v1/vod/titles/:id/stream (docs/vod.md §9.8): relé
+     VOD + productor; la lista VOD completa sale del índice (VOD-5).
+     `channelStream` con un id de película o episodio → `validation_error`
+     con `detail: 'vod_id'` (§5.3).
 
    La URL de vídeo de la app nativa se firma AQUÍ con `services.auth`
    (arquitectura §7.1: "firmar t con sid, dispositivo y caducidad"): playback
@@ -34,6 +38,7 @@ export const V1_ROUTE_IDS: readonly string[] = [
   'sessionHeartbeat',
   'sessionRelease',
   'playbackStatus',
+  'vodStream',
 ];
 
 export function registerLegacyRoutes(router: LegacyRouter, services: Services): void {
@@ -97,4 +102,13 @@ export function registerV1Routes(router: V1Router, services: Services): void {
     ),
   );
   router.handle('playbackStatus', () => services.playback.status());
+  router.handle('vodStream', async (input, ctx) => {
+    const grant = await services.playback.acquireVod(
+      input.params.id,
+      input.query,
+      identity(input.query.viewer, input.query.device, ctx),
+      ctx.signal,
+    );
+    return { ...grant, url: signed(services, grant.url, grant.session.id, ctx) };
+  });
 }

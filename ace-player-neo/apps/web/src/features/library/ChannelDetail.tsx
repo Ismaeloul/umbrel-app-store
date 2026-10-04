@@ -5,7 +5,8 @@
    - «Ver canal» como acción principal y, al lado, favorito, copiar enlace,
      renombrar y eliminar (con deshacer), más «Abrir en…» (D7);
    - «Ahora»: el partido que da en este momento, con el minuto en el círculo
-     central y el marcador TAPADO si es el que estás viendo (regla 29);
+     central, los ESCUDOS de los dos equipos (los mismos que la agenda) y el
+     marcador TAPADO si es el que estás viendo (regla 29);
    - «Después»: lo que da hoy más tarde, con su hora;
    - el hash, con su botón de copiar.
 
@@ -147,13 +148,17 @@ export function ChannelDetail({ active = true }: { active?: boolean }) {
                   : []),
               ].map((team) => (
                 <p key={team.name} className="lib-now__team">
+                  {/* Escudo como en la agenda (0.9.0): el del backend o, si no
+                      lo hay, el monograma con sus siglas (a 40 px sale la placa;
+                      a 22 eran dos círculos del color del club). */}
                   <TeamMark
                     name={team.name}
                     short={teamShort(live.match, team.side)}
                     colors={teamPalette(live.match, team.side)}
                     crest={teamCrest(live.match, team.side)}
-                    size={22}
+                    size={40}
                     lit
+                    className="lib-now__crest"
                   />
                   <span className="lib-now__name">{team.name}</span>
                   {!hidden && typeof team.goals === 'number' ? (

@@ -36,6 +36,14 @@
   display: flex;
   padding-top: var(--s-3);
 }
+/* Con el escenario montado (en la app, siempre que hay centro de partido) la
+   cápsula va SOBRE el vídeo; en su sitio solo sin armazón (los tests). Al
+   abrir un partido, el reproductor publica su hueco un instante después del
+   primer pintado: pintada aquí mientras tanto, empujaba la cabecera 74 px
+   hacia abajo y subía de golpe en mitad del fundido de entrada (0.9.0). */
+.stage ~ .views .mc-scap-inline {
+  display: none;
+}
 .mc-scap {
   display: inline-flex;
   align-items: center;
@@ -135,10 +143,8 @@
     background: rgb(255 255 255 / 0.1);
   }
 }
-/* Vídeo estrecho (móvil): la cápsula se aprieta y sin barras de censura
-   (la palabra «Marcador» y el ojo ya lo dicen). */
+/* Vídeo estrecho (móvil): la cápsula se aprieta y sin escudos. */
 @container (max-width: 479px) {
-  .mc-scap .mc-censor--sm,
   .mc-scap__crest {
     display: none;
   }
@@ -172,16 +178,6 @@
   border-radius: 8px;
   background: var(--text-3);
   opacity: 0.55;
-}
-.mc-censor--sm {
-  gap: 4px;
-}
-.mc-censor--sm i {
-  width: 11px;
-  height: 16px;
-  border-radius: 4px;
-  background: var(--on-video);
-  opacity: 0.4;
 }
 /* Cifras que giran como una paleta (B5): al cambiar o al destapar. */
 .mc-flip.is-turning {

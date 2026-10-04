@@ -10,7 +10,7 @@
    (`iptv`), así se ve cómo un canal sale una sola vez. Los ids son los mismos
    que da la resolución de la demo. */
 
-import type { IptvChannelsResponse, SearchResponse } from '@ace/shared';
+import { rankByName, type IptvChannelsResponse, type SearchResponse } from '@ace/shared';
 import { registerDemoHandler } from '../../api/index.ts';
 import { foldText } from '../library/model.ts';
 import { DEMO_IPTV_SEARCH, demoIptvId, fakeHash } from './demo-ids.ts';
@@ -56,19 +56,21 @@ const DEMO_QUALITIES: Readonly<Record<string, ('uhd' | 'fhd' | 'hd' | 'sd')[]>> 
   'DAZN LaLiga': ['fhd', 'hd'],
 };
 
+/** Como el servidor (docs/buscador.md): las mismas palabras, niveles y orden de `@ace/shared`. */
 export function demoIptvChannels(query: string): IptvChannelsResponse {
   const q = foldText(query).slice(0, 80);
-  const channels = DEMO_IPTV_SEARCH.filter(([title]) => foldText(title).includes(q)).map(
-    ([title, quality]) => ({
-      id: demoIptvId(title),
-      title,
-      quality,
-      qualities: DEMO_QUALITIES[title] ?? [quality],
-      country: null,
-      provider: 'Casa',
-      library: [],
-    }),
-  );
+  const channels = rankByName(DEMO_IPTV_SEARCH, q, ([title, quality]) => ({
+    name: title,
+    quality: DEMO_QUALITIES[title]?.[0] ?? quality,
+  })).map(([title, quality]) => ({
+    id: demoIptvId(title),
+    title,
+    quality,
+    qualities: DEMO_QUALITIES[title] ?? [quality],
+    country: null,
+    provider: 'Casa',
+    library: [],
+  }));
   return { query: q, total: channels.length, capped: false, channels };
 }
 

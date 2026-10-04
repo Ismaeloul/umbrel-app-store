@@ -5,7 +5,14 @@ Lo pidió Isma el 29-sep-2026: su IPTV «viene con series y pelis», y quiere qu
 para elegir entre pelis o series. Parte de la 0.8.2 publicada. La web va primero; la app de iOS llega después y la API
 se diseña para las dos (§17).
 
-**Estado: propuesta (29-sep-2026). No hay nada implementado.** Este documento sale de tres diseños hechos con lentes
+**Estado: publicado en la 0.9.0 (4-oct-2026), ya sin `?flag=cine`: «Pelis y series» sale con `features.vod`.**
+Fuera de la 0.9.0 quedan los subtítulos (VOD-8), lo de `docs/vod-estado.md` §4.7 y la app de iOS (§17).
+Diseño original: propuesta del 29-sep-2026, con las respuestas de Isma del 30-sep (§19.4). Dónde está cada pieza, qué está
+hecho, qué falla y el plan hasta la 0.9.0: **`docs/vod-estado.md`** (manda sobre lo que diga aquí de ramas y
+paquetes). Hecho: el contrato (VOD-1: `packages/shared` y las 6 rutas como esqueleto que responde 501), el guion del
+Paso 0 (`scripts/vod-sondeo.mjs`, §3) y la web de navegar (VOD-3: §12.1-§12.6, §12.10 y §12.11, con «Reproducir»
+como aviso «Próximamente» hasta VOD-6; se ve con `?demo=1&flag=cine`); en la rama de la 0.9.0 se unen con el catálogo
+(VOD-2, sin revisar) y el principio de la reproducción (VOD-4). Este documento sale de tres diseños hechos con lentes
 distintas (lo más simple y robusto, la mejor experiencia y la escala con seguridad) y de una revisión que los puntuó
 contra el código real. Gana el primero, con injertos de los otros dos. El anexo §20 dice qué viene de dónde y qué se
 descartó.
@@ -32,7 +39,7 @@ empieza en ficheros nuevos; los enganches de una línea en esos ficheros se unen
 ## 0. En pocas palabras
 
 1. **Un destino nuevo en la navegación: «Pelis y series».** La vista se titula «Películas y series». Solo aparece si
-   la IPTV es Xtream Codes **y** su proveedor tiene VOD. Hasta que salga la 0.9.0, además, solo con `?flag=cine`.
+   la IPTV es Xtream Codes **y** su proveedor tiene VOD. (Hasta la 0.9.0 hacía falta además `?flag=cine`; ya no.)
    - Arriba, «Seguir viendo», «Novedades en películas» y «Series actualizadas», en **una sola petición**.
    - Un selector «Películas | Series», las categorías del proveedor, chips de lengua y calidad («Castellano»,
      «Latino», «VOSE», «Multi», «4K») y un buscador.
@@ -53,8 +60,9 @@ empieza en ficheros nuevos; los enganches de una línea en esos ficheros se unen
 6. **Una sola conexión al proveedor, siempre.** Un relé VOD nuevo (`relay-vod.ts`) va **en serie**: corta la petición
    anterior y espera a que se cierre su socket antes de abrir la siguiente. Sin él, ffmpeg abre 2 conexiones en cada
    salto (medido) y un panel con `max_connections = 1` falla.
-7. **Una cosa a la vez en casa (D5).** Una película corta el directo IPTV, el AceStream o la película de otro aparato,
-   sin preguntar, como un canal.
+7. **Una cosa por IPTV a la vez en casa (D5, D-VOD11 cambiada el 30-sep).** Una película corta el directo IPTV o la
+   película de otro aparato, sin preguntar, como un canal. **Con AceStream convive:** un partido por AceStream y una
+   película por IPTV pueden sonar a la vez, porque no comparten conexión.
 8. **Progreso en el servidor** (`v2/vod.json`), compartido entre la web y el iPhone: reanudar, «Seguir viendo»,
    «Marcar hasta aquí como visto», siguiente episodio con cuenta atrás y «¿Sigues viendo?» tras 3 episodios seguidos.
 9. **Un audio por sesión** (castellano por defecto, recordado por serie). Cambiarlo reabre en el mismo punto (2-4 s).
@@ -227,8 +235,22 @@ export const VOD_REFRESH_MS = 24 * HOUR;
   `IptvStatus.vod.skipped` (§11.4), para que un tope escaso no pase desapercibido otra vez (T5).
 - **Parámetros de `player_api`:** la acción es una unión cerrada (las 6 de arriba) y `extra` solo admite `category_id`,
   `vod_id` y `series_id` con valores `/^\d{1,12}$/`. No hay forma de inyectar parámetros.
-- **«Sin VOD»:** una respuesta que no es un array, `[]`, `{}` o un objeto con `user_info` (paneles con el VOD apagado),
-  en las dos listas, es el estado `none`. No es un error.
+- **«Sin VOD»:** `[]`, `{}`, un objeto con solo `user_info`/`server_info`, `null` o `false` (paneles con el VOD
+  apagado), en las dos listas, es el estado `none`. No es un error. **Un objeto de error (`{"error":"Too many
+  requests"}` con HTTP 200), una página HTML, un texto o un cuerpo cortado sí son un fallo** (0.9.0): no pueden vaciar
+  el catálogo que ya había. Para distinguirlos, la respuesta que no empieza por `[` se mira **entera** (hasta 64 KiB):
+  solo es «sin VOD» si es `null`, `false` o un objeto JSON completo sin más claves que `user_info` y `server_info`;
+  «not found», «forbidden», un `{"user_info":` cortado o `{"error":…}` son un fallo.
+- **Con catálogo guardado, un «sin VOD» no borra nada a la primera, y es por tipo** (0.9.0): si la lista de un tipo
+  dice «sin VOD» y el catálogo guardado tiene títulos de ese tipo, se sigue con la tabla de antes de ese tipo
+  (`holdIfNone` en `syncVodCatalog`, sacada de `vod.enc` si no está en memoria) y se confirma en la siguiente, 15 min
+  después; si entonces lo repite, va en serio y ese tipo se vacía. Antes solo se miraba el caso de las dos listas, y
+  un `[]` pasajero en `get_series` dejaba 0 series guardadas 24 h. Con las dos listas «sin VOD», `held`: se sigue con
+  todo tal cual (`stale`, como un fallo). La confirmación pendiente (y un reintento tras un fallo) sobreviven a pausar
+  y reanudar la IPTV; tras reiniciar el servidor se pierde y la siguiente vuelve a guardar una vez.
+- **Modo por categorías con todo fallando:** si fallan todas las categorías de un tipo y no llega ni un título, es un
+  fallo (se lanza el último error), nunca «sin VOD»: con 4 categorías o menos no se llega a rendir (5 seguidas) y ese
+  tipo se guardaba vacío.
 - **`direct_source` se ignora siempre** (nunca se sigue).
 
 ### 4.3 Parseo tolerante (`parse.ts`)
@@ -254,9 +276,20 @@ Los paneles Xtream son PHP y mandan de todo. Se reutilizan `looseNumber`, `loose
 
 `cleanVodTitle(raw, categoryName) → { title, year, tags }`. **No reutiliza nada de la limpieza de canales** (T8).
 
-- **Prefijos al principio** (una vez cada uno, solo al principio): `^(?:\|?[A-Z]{2,3}\|?\s*[-:|]\s*)+` («ES - »,
-  «|ES| », «LAT: »), `^\[[A-Z0-9 ]{2,8}\]\s*` y `^(4K|UHD|FHD|HD|SD)[\s\-|:]+`. Se quitan y **pasan a distintivo** si
-  dicen lengua o calidad.
+- **Prefijos al principio** (solo al principio, encadenados como mucho 4 veces), con una **lista cerrada** de códigos:
+  `ES ESP SPA CAST LAT LATAM EN ENG VOSE VOS SUB MULTI DUAL FR DE PT UK US MX AR CO CL PE VE EC UY NL BE CH AT SE DK
+  FI HU CZ BG HR RS UA EXYU TR PL BR RU GR RO 4K UHD FHD HD SD` seguidos de `:`, `|` o `-`/`–` con espacio detrás
+  («ES - », «LAT: », «ES| », «UK - The Crown»); entre barras, cualquier código («|ES| », «|NL| »); entre corchetes,
+  los de la lista («[ES] », «[4K] »); `IT` con `|` o corchetes siempre, con guion **solo si la categoría es
+  italiana** («IT - Il padrino» en «IT | FILM» o «ITALIA») y con dos puntos nunca («IT: Capítulo 2» e «IT - Capítulo
+  2» son la película); y `4K`/`UHD`/`FHD` con un espacio o su separador («4K Dune», «ES - 4K - Dune»). Un separador
+  que se queda delante al quitar un prefijo («- Dune») se quita también. Se quitan y **pasan a distintivo** si dicen
+  lengua o calidad (`MX` cuenta como latino; `AR` no, que en los paneles multipaís suele ser árabe). El guion
+  **nunca** vale con cualquier código de 2-3 mayúsculas: muchos paneles cambian «:» por « - » (los nombres salen de
+  nombres de fichero), y «CSI - Miami», «TED - 2», «FBI - Most Wanted» o «UFC - 300» son títulos (en una ronda de la
+  0.9.0 se quitaba y las tres CSI salían «Miami», «NY» y «Vegas», y buscar «CSI» no las encontraba). Un código que
+  falte se añade a la lista. **Corregido en la 0.9.0:** la regla de antes (`^(?:\|?[A-Z]{2,3}\|?\s*[-:|]\s*)+`)
+  dejaba «CSI: Miami» en «Miami» y se comía «UP:», «ET:», «SOS:» y «[REC]».
 - **Etiquetas al final**, entre corchetes o paréntesis o sueltas: `[4K]`, `(MULTI)`, `(VOSE)`, `(LATINO)`,
   `CASTELLANO`, `UHD`, `FHD`, `1080p`, `HEVC`, `HDR`, `DUAL`. Se quitan y pasan a distintivo.
 - **Año:** `\((18|19|20)\d{2}\)` al final, o `\b(19|20)\d{2}$`. Pasa a `year` si la lista no lo trae.
@@ -268,7 +301,7 @@ Los paneles Xtream son PHP y mandan de todo. Se reutilizan `looseNumber`, `loose
 | Distintivo | Se detecta con |
 |---|---|
 | `castellano` | `ES`, `ESP`, `SPA`, «castellano», «español», «españa» (no si también dice latino) |
-| `latino` | `LAT`, `LATAM`, «latino», «latinoamérica», `es-419` |
+| `latino` | `LAT`, `LATAM`, `MX`, «latino», «latinoamérica», `es-419` |
 | `vose` | `VOSE`, `VOS`, «subtitulad[ao]», `SUB` |
 | `multi` | `MULTI`, `DUAL`, «multi audio» |
 | `4k` | `4K`, `UHD`, `2160p` |
@@ -347,7 +380,11 @@ exige retenido < 45 MB con 150 000 + 30 000.
 ### 4.7 Sincronización, cadencia y cerrojos (D-VOD2)
 
 - **Cerrojo:** `runHeavy('vod', doVodSync)`, un tipo nuevo de trabajo pesado. Nunca coincide con la lista en directo ni
-  con la guía. Otra petición de sincronizar se engancha a la que está en marcha.
+  con la guía. Otra petición de sincronizar se engancha a la que está en marcha. **El VOD cede el sitio** (0.9.0,
+  fallo 8 de `vod-estado.md` §4.1): si llega una sincronización del directo o de la guía con una VOD en marcha o en
+  cola, la VOD se aborta (`VodPreemptedError`, no cuenta como fallo) y se vuelve a pedir sola, detrás. Lo ya
+  descargado que solo falta guardar sí se guarda, y entonces **no** se vuelve a pedir (antes se repetía entera).
+  La lista del directo empieza en menos de 1 s (`vod/cerrojo.test.ts`).
 - **Pasos:** las dos listas de categorías → películas en streaming → series en streaming → índices (`byAdded`,
   `byCat`, `bySource`) por trozos de 5 000 filas con `setImmediate` → guardar.
 - **Aplicar** solo si `provider.id` y `revision` no han cambiado (como `doSync`). Guardar, pausar o eliminar la IPTV
@@ -362,8 +399,19 @@ exige retenido < 45 MB con 150 000 + 30 000.
   - **Ajustes → IPTV → «Actualizar»** sincroniza el directo y, si el VOD tiene más de 1 h, también el VOD. Sin ruta
     nueva.
 - **Modo por categorías** (respaldo automático): si una lista completa falla por tiempo, tamaño o 5xx, se recorre
-  `&category_id=X` de una en una, con 250 ms entre llamadas, los mismos topes y el mismo cerrojo. Se apunta `mode:
-  'por_categorias'` en `vod.enc` para empezar por ahí la próxima vez.
+  `&category_id=X` de una en una, con 250 ms entre llamadas, los mismos topes y el mismo cerrojo. Desde la 0.9.0:
+  - Solo se apunta `mode: 'por_categorias'` en `vod.enc` (para empezar por ahí la próxima vez) si la lista entera **no
+    cabe** (`iptv_too_large`), que no cambia de un día para otro. Un plazo o un 5xx pueden ser un mal rato del panel:
+    la próxima vez se prueba otra vez la lista entera, que son 2 peticiones frente a cientos (el panel de Isma tiene
+    444 + 384 categorías y da la lista entera en 4 s).
+  - Empieza de cero (lo leído de la lista entera que murió no cuenta).
+  - Una categoría que falla se salta, y se rinde con 5 fallos seguidos o más de max(5, 20 %); un 401 o la cuenta
+    caducada lo paran al momento. Si fallan todas y no llega ni un título, es un fallo (§4.2).
+  - Tope de **30 min por tipo**. Lo que no se ha podido leer (las categorías que fallan y las que no caben en el tope)
+    **se queda como estaba** en el catálogo anterior (el de memoria o `vod.enc`, que se carga solo si hace falta), y la
+    próxima vez se empieza por la primera que no cupo (**rotación**, en memoria): ninguna categoría se queda fuera para
+    siempre. Solo sin catálogo anterior (la primera vez) faltan títulos de verdad, y entonces sale `truncated` (la web
+    no dice «más de 200.000» si no se ha llegado al tope de títulos: ver §13).
 - **Descartado: catálogo perezoso por categoría.** Sin los nombres de todo no hay buscador global, que es lo que pidió
   Isma.
 
@@ -382,9 +430,91 @@ exige retenido < 45 MB con 150 000 + 30 000.
 
 ### 4.9 Adultos (D-VOD7)
 
-Siguiendo D25 («todo desbloqueado»): los títulos y categorías para adultos **se ven** en su categoría y en la
-búsqueda, con la cápsula «+18». **No salen** en la portada ni en «Todas» sin texto buscado, y sus categorías van al
-final de la lista. La portada la ve toda la casa. Isma puede pedir que salgan también ahí.
+**Decisión de Isma (3-oct-2026): los títulos para adultos salen en la portada como los demás.** Siguiendo D25
+(«todo desbloqueado»), se ven en todas partes: la portada («Novedades en películas» y «Series actualizadas»),
+«Todas» sin texto buscado, su categoría y la búsqueda, con la cápsula «+18» (`adult: true` en la tarjeta, la ficha
+y la categoría). Sus categorías van en el orden del panel, como las demás.
+
+**Un solo sitio para cambiarlo:** `apps/server/src/modules/iptv/vod/adultos.ts` (`VOD_ADULT_POLICY`: `home`, `all`
+y `categoriesLast`). En su categoría y en la búsqueda salen siempre, sea cual sea la política. Qué es «para adultos»
+no cambia (§4.3: `is_adult` o el nombre de la categoría).
+
+Antes (hasta el 3-oct): fuera de la portada y de «Todas» sin texto, y sus categorías al final; «la portada la ve
+toda la casa». Isma lo cambió al contestar la pregunta 4 de §19.3.
+
+### 4.10 Idiomas (equipo idiomas, 3-oct; D33)
+
+Lo pidió Isma al ver la vista previa: «al meterme a Pelis y series, que me des a elegir el idioma; castellano y
+latino separados; y que luego lo pueda editar: cambio el idioma al francés y busco».
+
+- **Idiomas** (`VOD_LANGS`, en el orden del selector): `castellano`, `latino`, `vose` (VO con subtítulos en
+  español), `ingles` (inglés o V.O.), `frances`, `italiano`, `aleman`, `portugues`, `catalan` y `otros` (una lengua
+  que se reconoce y no está en la lista). Un título puede tener varios (MULTI con las lenguas nombradas) o ninguno
+  («sin indicar»).
+- **De dónde salen:** del nombre de la categoría y de las marcas que la limpieza quita del título (las pistas de audio
+  vienen «und», Paso 0). Una sola tabla, pura y compartida: `packages/shared/src/domain/vod-langs.ts`
+  (`detectVodLangs`, `combineVodLangs`), probada con ~190 casos reales y falsos amigos
+  (`packages/shared/test/vod-langs.test.ts`); la usan el servidor (`titles.ts`) y la demo de la web. Reglas:
+  - los códigos solo en MAYÚSCULAS y como palabra; en una categoría, los de dos letras (y «POR», «CAT», «FIN»…) solo
+    como marca: «ES | », « - EN», «[DE]», «|IT|», «(EN)», «4K ES» o «ES/EN» («ES» también al principio o al final con
+    espacio). Así «PELÍCULAS EN ESPAÑOL», «CINE DE TERROR», «PELÍCULAS POR GÉNERO» o «LA CASA DE PAPEL» no engañan;
+  - las nacionalidades que no son de España ni Latinoamérica solo cuentan sueltas, al principio, como marca o tras
+    «en», «audio», «idioma», «doblaje», «versión»: «CINE FRANCÉS», «SERIES TURCAS», «ANIME JAPONÉS» y «SERIES USA»
+    dicen el origen (pueden ir dobladas) y no dan idioma; «CINE ESPAÑOL» o «CINE MEXICANO», sí;
+  - «Español», «ES», «ESP», «SPA», «Spanish» son castellano flojo: con latino es latino («ES | LATINO»), con VOSE son
+    los subtítulos («VOSE | ESPAÑOL»), salvo MULTI/DUAL. «Castellano», «CAST», «España» son firmes;
+  - el título manda: «Coco (FR)» en «ES | ANIMACIÓN» es francés; «ES - Coco» en «PELIS LATINO», latino.
+  - La limpieza quita ahora también «Coco 4K ES», «Dune - VO», «Amélie [FR]», «CAT - Pa negre» (código suelto al final
+    solo si el título no es todo mayúsculas o va tras un separador o una marca; nunca «IT», «DE» ni «BR»).
+- **Distintivos:** castellano/latino/VOSE salen de los idiomas (antes se unían título y categoría: «Amélie (2001)
+  VOSE» en «ES | PELÍCULAS» era castellano y VOSE; ahora, VOSE). En la web, los chips de la rejilla se quedan en
+  «Multi» y «4K».
+- **Tabla y `vod.enc`:** columna `langs` (Uint16). `VOD_CODEC_VERSION` 2: un `vod.enc` de antes no se lee, se descarta
+  y se vuelve a bajar (la 0.9.0 no ha salido).
+- **Filtro:** `langs=castellano,frances` y `unknown=0|1` (por defecto 0: los que no indican idioma no salen) en `vodHome` y `vodBrowse`. Portada:
+  novedades, categorías (las que se quedan a 0 no salen), distintivos y `shown` (lo que se ve) filtrados; `counts`,
+  `langs` y `noLang` son siempre del catálogo entero. Búsqueda: el filtro va DENTRO del recorrido (no sobre los 2 000
+  mejores) y lo de otros idiomas ni sale ni se cuenta (fuera `otherLangs` y «3 en latino · Ver», 4-oct); `otherKindTotal`,
+  también en tus idiomas. Caché de portada por filtro (4) y de búsqueda con el filtro en la clave.
+- **Los que no indican idioma:** NO se ven por defecto («Mostrar también los que no indican idioma» apagado; cambiado
+  el 4-oct a petición de Isma: «que solo salgan en castellano y ya está»). Si el audio real de uno ya se comprobó
+  (§4.11), cuenta con ese idioma y sale. Quien los quiera enciende el interruptor.
+- **La elección:** `GET/PUT /api/v1/vod/languages` (`vodLanguagesGet`/`vodLanguagesUpdate`, `web`) en
+  `v2/vod-idiomas.json` (`z.object` no estricto, como el arranque instantáneo), por casa: vale en el PC y en el
+  iPhone y sobrevive a eliminar la IPTV o cambiar de proveedor (no va en `vod.json`). `chosen: false` hasta la
+  primera vez; `langs: []` = todos. Entra en la copia de seguridad (`vod`, solo si se eligió; Reemplazar la pone,
+  Combinar solo si aquí no se había elegido; `vodLanguages` en la vista previa).
+- **Web** (`features/cine/Languages.tsx`): la primera vez, antes de la portada, «¿En qué idiomas las quieres ver?» en
+  la propia vista (castellano marcado de entrada y el interruptor de «sin indicar» apagado; «Ahora no, ver todo»); el botón del globo en la cabecera
+  («Castellano y Francés») abre la hoja; también en Ajustes → IPTV. La búsqueda no ofrece otros idiomas: sin
+  aciertos en los tuyos, «Nada con…» y «Cambiar idiomas». La cápsula
+  de idioma de una tarjeta no sale si solo se ve un idioma. Si el servidor no sabe de idiomas o falla, se ve todo; si
+  guardar falla, la elección vale en esa pestaña.
+
+### 4.11 Lo que dice el fichero (0.9.0, «audio real»)
+
+Isma buscó «Mr. Robot» y la versión «sin indicar» sonó en inglés: el índice tenía UNA pista, `eng`. La app no se
+equivocó, pero no lo dijo antes. Ahora:
+
+- **La ficha** de una película o serie «sin indicar» (`langs: []`) lee el índice del fichero
+  (`remux/vod/index.ts` → `readVodTracks`: en un MKV la cabecera y `Tracks`, 64 KiB y sin los Cues; en un MP4, el
+  `moov`), por el relé VOD con Range. En una serie, el primer episodio de la temporada del botón principal (o el
+  primero que haya). La precarga (`pre=1`) no lee.
+- **Nunca quita la conexión a Isma** (`IptvServiceImpl.vodReadFree`): sin ninguna sesión IPTV (directo o VOD), sin
+  sonda, sin un cierre de hace menos de 20 s y con plaza en la cuenta; si no, se deja para la próxima vez que se
+  abra la ficha. La lectura va como «sonda»: una reproducción que empieza la corta y espera. Sesión del relé sin
+  reintentos, plazo de 10 s, de una en una (`vod/audio-check.ts`); lo que falla no se repite en 10 min; lo que la
+  ficha deja de pedir en 8 s (se ha cerrado) se quita de la cola y se corta.
+- **Caché** `v2/iptv/vod-audio.json` (junto a `vod.enc`, tope de 5 000 títulos, del proveedor vigente; se borra con
+  la IPTV). La rellena también la reproducción (el productor ya lee el índice). Claves de lengua con las etiquetas de
+  `remux/vod/audio.ts` (castellano y latino aparte, `es-419` o «Latino» en el nombre; `und`/vacía = no lo dice).
+- **Filtro de idiomas:** un título «sin indicar» toma los idiomas de su audio (y VOSE si no hay audio en español y sí
+  subtítulos de texto en español), en memoria sobre el catálogo cargado; las consultas y la portada se recalculan.
+- **Contrato:** `vodTitle` lleva `detectedAudio` (`{ audio, subtitles }`, etiquetas) y `audioPending`; cada episodio,
+  su `detectedAudio` si se conoce. La web pinta «Audio: Inglés» y «Subtítulos: Español» en la ficha (y en el
+  episodio), «Comprobando el audio…» mientras se lee (vuelve a pedir la ficha cada 2,5 s) y nada si no se pudo.
+- **Registro:** «VOD: productor abierto» lleva `audioTracks` (lang, nombre recortado a 40, códec, defecto) y
+  `audioChosen`; la lectura de la ficha, «VOD: audio del fichero comprobado».
 
 ---
 
@@ -507,9 +637,9 @@ Los empates van por `added` (más reciente primero) y luego por título.
 
 Una sola petición (D-VOD28) con:
 - «Seguir viendo» (§10.3), 20 como mucho;
-- «Novedades en películas»: 20 por `byAdded`, sin adultos;
-- «Series actualizadas»: 20 por `last_modified`, sin adultos;
-- las categorías de los dos tipos, con su número (las de adultos al final);
+- «Novedades en películas»: 20 por `byAdded` (los adultos, como los demás: D-VOD7);
+- «Series actualizadas»: 20 por `last_modified` (ídem);
+- las categorías de los dos tipos, con su número en el orden del panel (las de adultos también, D-VOD7);
 - los distintivos con número por tipo, para pintar solo los chips que tienen algo.
 
 Se calcula una vez por catálogo y versión de progreso, y se guarda (LRU de 4). Objetivo: < 30 ms. Las filas por
@@ -536,9 +666,12 @@ Se guarda ya limpia; el JSON crudo se tira.
 
 - **Película:** título, título original, año, sinopsis (≤ 2 000), géneros (≤ 8), reparto (≤ 12 nombres), dirección,
   país, edad, nota, duración, fondo, `video: {codec, width, height, bitDepth}`, `audio0: {codec, channels, lang}`,
-  extensión y alta.
-- **Serie:** los mismos textos, y `seasons: [{number, name, episodes: [{source, number, title, plot ≤ 600, durationS,
-  still, ext}]}]`. Topes: 100 temporadas, 500 episodios por temporada, 3 000 en total; pasarlos da `truncated: true`.
+  extensión y alta. Desde la 0.9.0, también estreno (`releaseDate`) y tráiler (`trailer`, el id de YouTube).
+- **Serie:** los mismos textos, y `seasons: [{number, name, plot, airDate, episodes: [{source, number, title, plot ≤
+  600, durationS, still, ext, airDate, rating}]}]`, más `episodeDurationS` (`episode_run_time`). La sinopsis y la fecha
+  de cada temporada salen de `seasons[].overview` y `seasons[].air_date`. El cartel propio de cada temporada
+  (`cover`) **no** llega a la ficha: pediría una ruta de carteles nueva (la web usa el de la serie). Topes: 100
+  temporadas, 500 episodios por temporada, 3 000 en total; pasarlos da `truncated: true`.
   - Temporadas deducidas de las claves de `episodes` si `seasons` viene vacío; la 0 es «Especiales» y va al final.
   - Episodios por `episode_num` y, a igualdad, por id.
   - El título del episodio pierde el prefijo «Serie - S01E03 - »; si no queda nada, «Episodio 3».
@@ -686,9 +819,11 @@ tapa.
   4. solo entonces abre `Range: bytes=<inicio>-[fin]` por `relay.connect()` (SSRF, redirecciones, reintento por
      ocupado).
   - **Nunca 409:** ffmpeg abre la segunda petición antes de cerrar la primera en cada salto (hallazgo 1).
-- **Salto corto hacia delante sin reabrir.** Si el nuevo inicio está como mucho `forwardSkipBytes` (**32 MiB**) por
-  delante de la posición de la conexión abierta, se lee y se tira hasta ahí en vez de reabrir. Ahorra un ciclo de
-  conexión, que es lo caro con paneles que siguen contando el cierre 30-120 s.
+- **Salto corto hacia delante sin reabrir.** Si el nuevo inicio está poco por delante de la posición de la conexión
+  abierta, se lee y se tira hasta ahí en vez de reabrir. Ahorra un ciclo de conexión, que es lo caro con paneles que
+  siguen contando el cierre 30-120 s. «Poco» (auditoría 0.9.0) es lo que se lee en `forwardSkipS` (1,5 s) con el
+  caudal medido, entre 512 KiB y 32 MiB; sin caudal medido, `forwardSkipBytes` (**2 MiB**). Con 32 MiB fijos, un
+  salto leía y tiraba hasta 6-7 s antes de dar el primer byte.
 - **Qué recibe ffmpeg:** `206` con el `Content-Range` y el `Content-Length` de arriba, `Accept-Ranges: bytes` y
   `Content-Type: application/octet-stream`. `HEAD` devuelve el tamaño cuando se conoce. Varios rangos → 416. Si el
   proveedor responde **200 a una petición con inicio > 0**, la sesión pasa a `rangeless`, se devuelve 416 y el
@@ -783,7 +918,7 @@ ffmpeg -hide_banner -loglevel warning -nostdin
 
 - **Nunca `first_pts=0`** (T11, hallazgo 7). Nada se comparte con los `hlsFlags` del directo: fichero aparte, y así
   `remux/args.ts` (zona del diagnóstico) no se toca.
-- `-rw_timeout` 55 s (`IPTV_FFMPEG_RW_TIMEOUT_US`), por encima del peor caso de reapertura del relé (≈ 31 s) y de los
+- `-rw_timeout` 55 s (`VOD_FFMPEG_RW_TIMEOUT_US`; el directo va a 75 s), por encima del peor caso de reapertura del relé (≈ 31 s) y de los
   reintentos por ocupado.
 - **Probado junto en el navegador:** todo menos `-protocol_whitelist`, `-rw_timeout`, `-threads` y `-metadata` (vienen
   del remux del directo) y `-tag:v hvc1` (probado aparte: la salida sale como `hvc1`).
@@ -814,8 +949,10 @@ ffmpeg -hide_banner -loglevel warning -nostdin
   - **Reinicios agrupados:** entre dos reinicios pasan al menos `restartMinGapMs` = 1,5 s y **solo cuenta la última
     petición** (arrastrar la barra no lanza cinco reinicios). Cada reinicio es, como mucho, un ciclo de conexión.
 - **Contrapresión:** se deja de leer `pipe:1` (`stdout.pause()`) cuando lo producido va más de **60 s** por delante del
-  último segmento pedido, y se sigue por debajo de 30 s (medido). ffmpeg se para, deja de leer del relé y el relé deja
-  de leer del proveedor: no se descarga la película entera (hallazgo de D).
+  **final** del último segmento pedido, y se sigue por debajo de 30 s (medido). ffmpeg se para, deja de leer del relé y
+  el relé deja de leer del proveedor: no se descarga la película entera (hallazgo de D). **Nunca con el segmento pedido
+  a medias** (VOD-4, encontrado con ffmpeg de verdad): un segmento solo se cierra cuando llega el fotograma clave del
+  siguiente o el final del fichero, así que parar antes lo dejaba sin cerrar y al reproductor esperando para siempre.
 - **Espera de un segmento:** hasta `segmentWaitMs` = 15 s; después, `503` con `Retry-After: 1` y hls.js reintenta
   (§12.7).
 - **Ventana en disco:** se guardan los segmentos desde `último pedido − 120 s` **y** como mucho 256 MiB por detrás; lo
@@ -840,8 +977,10 @@ ffmpeg -hide_banner -loglevel warning -nostdin
 - **Ruta propia `vodStream`** (`channelStream` y sus ejemplos fijados para iOS no cambian). El manejador llama a
   `playback.acquireVod(id, {client, viewer, device, startS, audio, hevc, signal})`: el mismo `acquireInternal`, bajo el
   cerrojo de la casa y con el mismo `placeWaitingLocked`.
-  - **Cierra lo que esté sonando** (directo IPTV, AceStream u otra película) y **espera a que el relé suelte el
-    socket** antes de abrir. «Un canal a la vez en casa» (D5) y `max_connections = 1` salen gratis.
+  - **Cierra lo que esté sonando por la IPTV** (directo IPTV u otra película) y **espera a que el relé suelte el
+    socket** antes de abrir. `max_connections = 1` sale gratis. **Una sesión AceStream no se toca** (D-VOD11, cambiada
+    el 30-sep): convive con la película. Al revés igual: abrir un canal AceStream no cierra el VOD, y abrir un canal
+    IPTV sí (la plaza es una).
   - **Sin confirmación** antes de cortar a otro aparato, como los canales (D-VOD12). El otro aparato recibe el
     `playback.handoff` de siempre.
 - **`openSessionLocked`** gana `if (request.vod) return openVodLocked(request)`:
@@ -859,7 +998,7 @@ ffmpeg -hide_banner -loglevel warning -nostdin
   en la posición.
 - **Latido** de 15 s / 45 s como hoy. Con `ENDLIST` el reproductor no vuelve a pedir la lista, y en pausa no pide
   segmentos: la sesión la mantienen los latidos.
-- **Cierres del servidor:** `stream.closed` con `reason: 'remux_failed'` y el código `vod_dropped` o `vod_busy`.
+- **Cierres del servidor:** `stream.closed` con `reason: 'remux_failed'` y el código `vod_dropped`, `vod_provider_error` (el servidor del proveedor da 5xx antes de servir nada) o `vod_busy`.
 - **Concesión:** `vodLatency()` da `liveSync: null`. Web: `protocol: 'hls'` en `/api/v1/video/<sid>/index.m3u8`.
   iPhone: `hls-fmp4` con `?t=`.
 
@@ -943,7 +1082,7 @@ búfer).
 | Índices | 8 × ~50 KB | LRU |
 | Caché del relé | ≤ 40 MiB por sesión | una sesión a la vez |
 | ffmpeg VOD | 55-70 MB, 0,05 núcleos (AC-3 → AAC) | uno en todo el servidor, `nice 10`, `-threads 2` |
-| Disco de la sesión | ~150 MB a 6 Mb/s, ~600 MB a 25 Mb/s (estimado) | 256 MiB por detrás + 60 s por delante; tope de 1,5 GiB; ≥ 2 GiB libres |
+| Disco de la sesión | ~150 MB a 6 Mb/s, ~600 MB a 25 Mb/s (estimado) | 256 MiB por detrás + 120 s por delante (0.9.0); tope de 1,5 GiB; ≥ 2 GiB libres |
 | Disco de carteles | ≤ 256 MiB, 5 000 ficheros | LRU |
 
 **La caché de páginas cuenta.** `remuxDir` es `/data/remux`, en disco, pero lo que se escribe pasa por la caché de
@@ -1130,8 +1269,8 @@ export const VodHomeSchema = z.strictObject({
   truncated: z.boolean(),
   stale: z.boolean(),
   continue: z.array(VodContinueSchema).max(20),
-  newMovies: z.array(VodCardSchema).max(20),       // «Novedades en películas», sin adultos
-  updatedSeries: z.array(VodCardSchema).max(20),   // «Series actualizadas», sin adultos
+  newMovies: z.array(VodCardSchema).max(20),       // «Novedades en películas» (adultos: D-VOD7)
+  updatedSeries: z.array(VodCardSchema).max(20),   // «Series actualizadas» (adultos: D-VOD7)
   categories: z.strictObject({
     movie: z.array(VodCategorySchema).max(2_000),
     series: z.array(VodCategorySchema).max(2_000),
@@ -1187,6 +1326,7 @@ export const VodEpisodeSchema = z.strictObject({
   id: HashSchema, n: z.number().int().min(0).max(9_999), title: z.string().max(200),
   plot: z.string().max(600).nullable(), durationS: z.number().int().nullable(),
   still: VodArtStampSchema.nullable(), playable: VodPlayableSchema, progress: VodProgressSchema.nullable(),
+  container: z.string().max(8).optional(),             // «mkv», «avi»…: para el texto de `playable: 'no'`
 });
 export const VodSeriesSchema = z.strictObject({
   kind: z.literal('series'), id: HashSchema, info: VodInfoSchema,
@@ -1261,6 +1401,7 @@ export const VodProgressBodySchema = z.strictObject({
 | `vod_busy` | 503 | «Tu cuenta IPTV está en uso en otro aparato. Ciérralo y vuelve a intentarlo.» (`data.retryAfterS` opcional, §3) |
 | `vod_timeout` | 504 | «Tu IPTV tarda demasiado en dar el vídeo. Prueba otra vez.» |
 | `vod_dropped` | 502 | «El proveedor ha cortado el vídeo. Vuelve a intentarlo.» |
+| `vod_provider_error` | 502 | «Tu proveedor no está dando este título ahora mismo (error de su servidor). Prueba más tarde.» (el servidor del proveedor da 5xx al ABRIR, antes de servir un byte, y no cede con las reaperturas del presupuesto; el 3-oct pasó con todas las películas tras el 302. Un corte a mitad sigue siendo `vod_dropped`) |
 | `vod_disk_full` | 507 | «No queda espacio en el Umbrel para preparar el vídeo.» |
 | `vod_account` | 403 | «Tu cuenta IPTV no está activa. Revísala en Ajustes → IPTV.» |
 
@@ -1290,15 +1431,19 @@ export const VOD_PLAY = {
   segmentMinS: 6,
   restartAheadS: 30,          // el segmento pedido empieza > 30 s después de lo producido → reinicio allí
   restartMinGapMs: 1_500,     // reinicios agrupados: gana el último pedido
-  aheadMaxS: 60,              // contrapresión: se deja de leer pipe:1 por encima de +60 s…
-  aheadResumeS: 30,           // …y se sigue por debajo de +30 s
+  aheadMaxS: 120,             // contrapresión: se deja de leer pipe:1 por encima de +120 s… (0.9.0; antes 60)
+  aheadResumeS: 60,           // …y se sigue por debajo de +60 s (0.9.0; antes 30)
+  warmupS: 25,                // arranque y tras un salto: el segmento sale con 25 s producidos (0.9.0)
+  paceFloorS: 30, paceFloorUntilS: 60, // suelo del ritmo: bajo 30 s por delante, sin freno hasta 60 (0.9.0)
+  firstFragmentMs: 8 * SECOND, firstFragmentRetries: 2, // ejecución a mitad sin nada: se relanza (0.9.0)
   keepBehindS: 120,
   keepBehindMaxBytes: 256 * MIB,
   sessionDiskMaxBytes: 1.5 * GIB,
   diskFreeMinBytes: 2 * GIB,
   segmentWaitMs: 15 * SECOND, // después, 503 Retry-After: 1
   idleReleaseMs: 5 * MINUTE,  // pausa larga: se suelta el proveedor (lo ajusta el Paso 0)
-  forwardSkipBytes: 32 * MIB, // salto corto hacia delante sin reabrir
+  forwardSkipBytes: 2 * MIB,  // salto corto hacia delante sin reabrir (sin caudal medido; 0.9.0)
+  forwardSkipMinBytes: 512 * KIB, forwardSkipMaxBytes: 32 * MIB, forwardSkipS: 1.5, // con caudal medido
   relayHeadBytes: 2 * MIB,
   relayCacheMaxBytes: 40 * MIB,
   moovMaxBytes: 32 * MIB,
@@ -1366,7 +1511,7 @@ export const VOD_CLIENT = {
   Isma). **«Cine» es el respaldo** si `revision` muestra algún corte.
 - **Orden:** `['agenda', 'biblioteca', 'cine', 'buscar', 'ajustes']`.
 - **`navVistas(features, flags)`** sustituye a la constante `NAV_VISTAS` donde se pinta: `cine` solo con
-  `features.vod` **y**, hasta la 0.9.0, con `hasFlag('cine')` (`?flag=cine`).
+  `features.vod` (hasta la 0.9.0, también `?flag=cine`; ya no).
 - **T17:** `Nav.tsx:83` y `:125` ponen `--n` con la longitud de la lista **filtrada**, y el índice `--i` se busca en
   esa lista. Se quita el `--n: 4` de `shell.css:225` y `:308`: el valor en línea ya manda, y así no queda un 4 de
   recuerdo.
@@ -1578,6 +1723,48 @@ seguidas se juntan en un salto a los 300 ms); K o Espacio, reproducir o pausar; 
 - `revision-visual.mjs` recorre `cine`, una categoría, una búsqueda, la ficha de una película y la de una serie, sobre
   la demo.
 
+### 12.12 Rediseño de la 0.9.0: «como los partidos» (equipo vod-web, 3-oct)
+
+Sustituye lo que digan §12.4 y §12.6 donde choque. Lo pidió Isma (pendiente.md, punto 7) y sale de la investigación
+de otras apps (`docs/investigacion/pelis-y-series.md`, con «Qué hemos adoptado y por qué»).
+
+- **Portada en filas, como la agenda:** «Seguir viendo», «Novedades en películas» / «Series actualizadas» y una fila
+  por categoría del proveedor (en su orden; las de adultos al final, como las demás) con «Nombre 1.234 … Ver todo ›».
+  Cada fila: `vodBrowse({kind, cat, sort: 'added', limit: 20})`, pedida al acercarse a la pantalla; 12 filas y «Más
+  categorías»; al final «Ver las 1.234 películas». En el móvil, «Categorías» abre la hoja; en escritorio, el panel
+  lateral con «Inicio».
+- **La rejilla es otra pantalla:** con `cinecat` (id o `all`, que ahora sí se escribe), `cinetag` o una búsqueda.
+  Cabecera «‹ VOD | 4K · 9 películas» («‹ Resultados de «dune»» buscando), chips de categorías (solo en la tableta:
+  en el móvil está «Categorías» arriba y los carteles necesitan el sitio) y una fila con «Novedades | A-Z» y los
+  distintivos (en el móvil se desliza): a 360×740 la primera fila de carteles cabe entera. Abierta desde la portada,
+  con su entrada en el historial (Atrás vuelve, a su sitio y con el tipo elegido en la rejilla); el foco pasa del «Ver
+  todo» al título de la rejilla (h2 enfocable) y vuelve a él al cerrarla. Buscar dentro de una categoría se queda en
+  ella y lo dice: «3 películas en VOD | 4K» y «Buscar en todas las películas» (sin nada: «Nada con «wonka» en VOD |
+  4K» con esa acción delante); el panel lateral sigue marcando la categoría.
+- **Carteles con muchas filas:** una imagen perezosa no se pide hasta que su sitio se acerca a la pantalla
+  (IntersectionObserver; en un carrusel, lo visible y lo de al lado). Si falla (la cola de `art.ts` contesta 503 al
+  llenarse), 3 reintentos a 2, 6 y 15 s y, rendida, otro al salir de la pantalla y volver. Mientras carga o si falla,
+  el fotograma de un episodio enseña su número.
+- **Tarjeta:** cartel 2:3 grande (filas `clamp(136px, 38vw, 200px)`; rejilla de 2 columnas hasta 479 px, 3, 4, 5 y 6
+  desde 480, 768, 1024 y 1280), cápsulas encima del cartel (lengua y 4K, dos como mucho, «+18» delante), título de
+  15 px en 2 líneas y «2023 · ★ 7,4». Sin imagen, el cartel lleva el título.
+- **Ficha:** fondo 16:9 fundido con una máscara; sin fondo, el cartel desenfocado; sin nada, el color del título; el
+  cartel grande también en el móvil. «Película · VOD | 4K», título, título original y «2021 · 2 h 36 min · ★ 8,0
+  [+12]». El play grande: «Reproducir» o «Seguir viendo desde 43:12», con la barra y «Quedan 1 h 53 min · Termina a
+  las 23:47»; «Empezar desde el principio», «Marcar como vista» y «Tráiler» (YouTube en otra pestaña). «Detalles»:
+  dirección, reparto, géneros y país (en castellano), estreno, título original, categoría (enlace), vídeo, audio y
+  formato. Lo que no hay no se pinta; la nota o la edad «0», tampoco.
+- **Serie:** «2005 · 4 temporadas · ★ 8,9»; el botón «Ver T1 · E1» / «Continuar T2 · E3» / «Siguiente capítulo:
+  T2 · E4» / «Volver a ver T1 · E1» con el título del episodio y lo que queda; los episodios ANTES de los detalles.
+  «Temporada N» salvo nombre de verdad del proveedor; con más de 8, un desplegable. Episodio con fotograma (o su número
+  grande) o, si la temporada no tiene ninguno, la lista compacta con el número en un círculo; el del botón principal
+  con el aura dorada y «Continuar», «Siguiente» o «Empieza aquí».
+- **Contrato** (opcional, el mismo de vod-catalogo, que los rellena): película `releaseDate` y `trailer`; serie
+  `originalTitle`, `ageRating`, `releaseDate`, `trailer` y `episodeDurationS`; temporada `plot`; episodio `airDate` y
+  `rating` (§11.2). La web los enseña todos: título original y edad también en la serie, el resumen de cada temporada
+  (2 líneas con «Más») y «24 mar 2005 · ★ 7,4» en cada episodio.
+- **Demo:** 63 películas y 14 series, con fichas completas y casos pobres (§12.11 queda así).
+
 ---
 
 ## 13. Errores y estados vacíos: del servidor a la pantalla
@@ -1593,7 +1780,7 @@ Cada estado vacío tiene una salida (`EmptyState` con `actions`).
 | `preparing` | portada | esqueletos y «Preparando el catálogo… La primera vez tarda unos segundos.» | se refresca sola por SSE |
 | `error` sin catálogo | portada | «No se ha podido cargar el catálogo» | «Reintentar» |
 | `stale` | portada | nota bajo la cabecera: «Catálogo del 28 sep. No se ha podido actualizar.» | — |
-| `truncated` | portada | «Tu IPTV tiene más de 200.000 películas; se ven las primeras 200.000.» | — |
+| `truncated` | portada | «Tu IPTV tiene más de 200.000 películas; se ven las primeras 200.000.» (o las 50.000 series). Sin llegar a ningún tope (el modo por categorías se cortó por tiempo la primera vez, §4.7): «Faltan algunas categorías: tu IPTV tardaba demasiado en contestar. Se completarán en las próximas actualizaciones.» | — |
 | Categoría vacía | rejilla | «Esta categoría está vacía» | «Ver todas» |
 | Falla la página siguiente | rejilla | «No se han podido cargar más» | «Reintentar» |
 | `vod_not_found` | ficha | «Este título ya no está en tu IPTV.» | «Volver a películas» |
@@ -1602,6 +1789,7 @@ Cada estado vacío tiene una salida (`EmptyState` con `actions`).
 | `vod_busy` con `retryAfterS` | línea de estado | «El proveedor tarda en liberar la conexión…» | reintento solo, una vez |
 | `vod_timeout` | reproductor | «Tu IPTV tarda demasiado en dar el vídeo. Prueba otra vez.» | «Reintentar» |
 | `vod_dropped` | reproductor | «El proveedor ha cortado el vídeo.» | «Reintentar» (sigue en la posición guardada) |
+| `vod_provider_error` | reproductor | «Tu proveedor no está dando esta película ahora mismo (error de su servidor). Prueba más tarde.» | «Reintentar» y «Volver a la ficha» |
 | `vod_unsupported` `sin_saltos` | reproductor | «Tu proveedor no deja saltar dentro del vídeo; no se puede reproducir aquí.» | «Volver a la ficha» |
 | `vod_unsupported` `indice` | reproductor | «Este archivo no tiene índice; todavía no se puede reproducir.» | «Volver a la ficha» |
 | `vod_unsupported` `video` o `formato` | reproductor | «El vídeo usa un formato antiguo que no se puede reproducir.» | «Volver a la ficha» |
@@ -1658,8 +1846,8 @@ Cada estado vacío tiene una salida (`EmptyState` con `actions`).
 | `titles.test.ts` | «ES\| Oppenheimer (2023) 4K» → «Oppenheimer», 2023, castellano + 4k; «\|LAT\| Dune 4K» → «Dune», latino + 4k; «Amélie (2001) VOSE» conserva el acento; «Mission: Impossible – Dead Reckoning (2023)» intacto; «Reserva (2018)» intacto; «M+ …» sin cambiar; «M3GAN» no pierde letras; «東京物語» y «Паразиты (2019)» se conservan; la categoría «PELIS LATINO» da latino; la limpieza nunca deja un título vacío |
 | `table.test.ts`, `table-codec.test.ts` | Construcción, `bySource`, `byCat`, `byAdded`, recorte en el tope con `truncated`, textos internados; ida y vuelta binaria; AAD de otro proveedor rechazado; fichero corrupto → vacío y nueva sincronización; sin `JSON.parse` de filas al cargar |
 | `ids.test.ts` | Ida y vuelta por tipo; el episodio lleva su `series_id`; otra huella → `null`; etiqueta falsa → `null`; un id de canal → `null`; `isIptvId(idVod) === true`; 100 000 hashes al azar no descifran; otro proveedor → otro id; **`classify(idVod)` nunca es `'engine'`**; `channelStream` y `libraryMutate` → `validation_error` con `detail: 'vod_id'` |
-| `search.test.ts` | Plegado que conserva la longitud; niveles 0-4 con un caso cada uno; «spiderman» encuentra «Spider-Man»; año como filtro («dune 2021»); varias palabras; `otherKindTotal`; más de 2 000 → `capped`; cursor `stale`; 2-80 caracteres (`empty_query`); adultos en la búsqueda pero no en la portada |
-| `catalog.test.ts` | Pasos de la sincronización con `fakeTransport`; aplicar solo con el mismo proveedor y revisión; la primera **no** se aplaza con alguien viendo y las siguientes sí (1 h); esperas tras fallos; modo por categorías tras `too_large`; `none` con listas vacías u objeto `user_info`; `skipped` llega a `IptvStatus.vod`; guardar, pausar y eliminar abortan |
+| `search.test.ts` | Plegado que conserva la longitud; niveles 0-4 con un caso cada uno; «spiderman» encuentra «Spider-Man»; año como filtro («dune 2021»); varias palabras; `otherKindTotal`; más de 2 000 → `capped`; cursor `stale`; 2-80 caracteres (`empty_query`); adultos en la búsqueda y en su categoría siempre, y en «Todas» según `VOD_ADULT_POLICY` |
+| `catalog.test.ts` | Pasos de la sincronización con `fakeTransport`; aplicar solo con el mismo proveedor y revisión; la primera **no** se aplaza con alguien viendo y las siguientes sí (1 h); esperas tras fallos; modo por categorías tras `too_large`; `none` con listas vacías u objeto `user_info`; «sin VOD» en una sola lista sigue con la tabla de antes de ese tipo (`holdIfNone`) y con las dos, `held`; `skipped` llega a `IptvStatus.vod`; guardar, pausar y eliminar abortan |
 | `details.test.ts` | LRU por bytes; coalescencia (10 → 1 llamada); 1 en vuelo; 300 ms entre llamadas; 60 por minuto; con 8 en espera, `info: 'failed'`; precarga con cola ocupada → `pending`; serie de 8 MiB; TTL; topes de temporadas y episodios; temporadas deducidas; «Especiales» al final; prefijo del episodio quitado |
 | `art.test.ts` | Bytes mágicos (JPEG, PNG y WebP sí; SVG y HTML no); topes de bytes; imagen en la LAN rechazada aunque el proveedor esté en la LAN, salvo su host exacto; redirección a `127.0.0.1` bloqueada; `nosniff` y `CSP default-src 'none'`; LRU en disco; caché negativa; ETag y 304; `v` distinta → `no-cache`; tamaños de TMDB; 4 a la vez; ninguna URL ni host en los nombres de fichero |
 | `progress.test.ts` | Umbrales de visto de película y de episodio; reanudar desde 30 s; «Seguir viendo» con una entrada por serie e `isNext`; siguiente episodio (fin de temporada, «Especiales»); los 4 casos del botón principal; validación (`posS ≤ durS + 5`, ±10 %); `mark-through`; 2 000 con expulsión; volcado cada minuto y al momento con `pause`/`ended`; preferencias por serie; purga al cambiar de proveedor; 0600 |
@@ -1674,11 +1862,11 @@ Cada estado vacío tiene una salida (`EmptyState` con `actions`).
 | `fmp4.test.ts` | Cortes de trozo, tamaños de 64 bits, `tfdt` v0 y v1 |
 | `producer.test.ts` (ffmpeg falso que escribe cajas) | Regla de reinicio de 30 s; reinicios agrupados en 1,5 s (gana el último); contrapresión 60/30; caída tardía → un segmento antes; ventana de 120 s y 256 MiB por detrás; tope de 1,5 GiB; `statfs` < 2 GiB → `vod_disk_full`; pausa de 5 min → se mata ffmpeg y se suelta el relé; **código 0 = completo, sin `died`**; un reintento y después `vod_dropped`; espera de 15 s → 503; `stsd` distinto → `vod_dropped`; se sirve el primer init |
 | `args.test.ts` | `-noaccurate_seek -ss K+0.2` solo con N > 0; `-copyts`; `delay_moov+frag_discont`; **ningún `first_pts`**; `hvc1` solo con HEVC; AAC-LC copiado; `-rw_timeout 55000000`; solo la URL del relé (ni host ni credenciales del proveedor) |
-| `playback/vod-sessions.test.ts` | El VOD cierra el directo IPTV y espera al relé; el directo, AceStream u otro VOD cierran el VOD; mismo id en otro aparato → traspaso también con la política `share`; otro audio → sesión nueva; gracia de 3 s solo con el mismo audio; sin `nowPlaying`, veredictos, historial ni `sessions.json`; `emitActivity` no marca el motor; `release` suelta la plaza; los `vod_*` llegan en `stream.closed` |
+| `playback/vod-sessions.test.ts` | El VOD cierra el directo IPTV y espera al relé; el directo IPTV u otro VOD cierran el VOD; **un VOD y una sesión AceStream conviven** (ninguno cierra al otro, D-VOD11); mismo id en otro aparato → traspaso también con la política `share`; otro audio → sesión nueva; gracia de 3 s solo con el mismo audio; sin `nowPlaying`, veredictos, historial ni `sessions.json`; `emitActivity` no marca el motor; `release` suelta la plaza; los `vod_*` llegan en `stream.closed` |
 | `vod/timings.test.ts` | El presupuesto de §9.12, leyendo el `proxy_read_timeout` de `location /api/` de `nginx.conf` |
 
 **Contratos** (`packages/shared/test/contracts.test.ts`, `test/security.test.ts`): ejemplos `web/v1` y variantes;
-claves de fuga en los `Vod*`; los 8 `vod_*` con su HTTP; el pin de los 16 `iptv_*` sin cambios; `bootstrap.json` de
+claves de fuga en los `Vod*`; los 9 `vod_*` con su HTTP; el pin de los 16 `iptv_*` sin cambios; `bootstrap.json` de
 `v1` sin `vod`; la lista `web` fijada y `PARAM_VALUES.art`; `vodArt` binario en openapi; `vodBrowse` en
 `QUIET_QUERY_ROUTES`; **`StreamSourceSchema` y `VideoParamsSchema` sin cambios**. Y `corepack pnpm@10.18.2 -r
 typecheck` pasa sin tocar `football/resolution.ts` (T3).
@@ -1690,7 +1878,9 @@ typecheck` pasa sin tocar `football/resolution.ts` (T3).
 - **retenido < 45 MB** tras GC (medido: 31 MiB con 170 000);
 - p95 de búsqueda < 25 ms (medido: 2-10 ms);
 - sincronización < 30 s;
-- carga en frío de `vod.enc` con un pico < 40 MB.
+- carga en frío de `vod.enc` con un pico < 48 MB (lo retenido incluido), **medida en un proceso aparte**: dentro del
+  de Vitest salía «+0,0 MB» o 60 MB según cuándo pasara el GC. Medido en la 0.9.0 (PC de Isma, Node 24): 37-40 MB
+  de pico, 22 MB retenidos, ~270 ms.
 
 ### 15.3 Integración con el proveedor falso
 
@@ -1715,8 +1905,8 @@ MKV HEVC + E-AC-3.
 5. `noRange` → `vod_unsupported` (`sin_saltos`);
 6. `dropAtBytes` → se retoma sin que ffmpeg lo note;
 7. pausa con `idleCloseMs` → al seguir, el relé reabre de forma perezosa;
-8. un VOD mientras suena un canal IPTV en otro visor → el canal se corta y el relé suelta antes de abrir; lo mismo con
-   AceStream;
+8. un VOD mientras suena un canal IPTV en otro visor → el canal se corta y el relé suelta antes de abrir; con un canal
+   AceStream sonando, **los dos siguen** (D-VOD11);
 9. `busyAfterCloseMs` de 10 s → sale tras los reintentos; de 30 s → `vod_busy` con `retryAfterS`, y todo antes de
    45 s;
 10. reiniciar el servidor y pedir «Seguir viendo»: el episodio se resuelve por su id sellado, sin caché;
@@ -1900,11 +2090,11 @@ quita de `WEB_FIXTURE_ROUTE_IDS` y actualiza `security.test.ts`. El mismo día, 
 | D-VOD4 | **Todo en `iptv/vod` y `remux/vod`**, relé en `relay-vod.ts`; sin módulo nuevo, sin tocar `StreamSourceSchema`, `STATE_SCOPES`, `VideoParamsSchema` ni nginx en la 0.9.0 | Módulo `vod` nuevo: saca JSON crudo del proveedor fuera de `iptv` (§2.4) y toca 4 registros alineados. `VodSession` dentro de `relay.ts`: es la zona del diagnóstico |
 | D-VOD5 | **Búsqueda por tipo** con `indexOf` sobre la tabla plegada, niveles 0-4, `otherKindTotal` y tope de 2 000 | Índice de palabras: más memoria y sin medir. Resultados mezclados de películas y series: orden confuso |
 | D-VOD6 | **Distintivos de lengua y calidad** (Castellano, Latino, VOSE, Multi, 4K) del título y la categoría, con chips | Tirarlos al limpiar: es lo primero que se mira en un catálogo español |
-| D-VOD7 | **Adultos:** visibles en su categoría y en la búsqueda (D25), fuera de la portada y de «Todas» sin texto | Esconderlos también en la búsqueda: va contra D25, que decidió Isma. Enseñarlos en la portada: la ve toda la casa |
+| D-VOD7 | **Adultos (cambiada por Isma el 3-oct-2026):** salen en la portada, en «Todas», en su categoría y en la búsqueda como los demás (D25), con la cápsula «+18»; sus categorías, en el orden del panel. Un solo sitio para cambiarlo: `vod/adultos.ts` (§4.9) | Esconderlos también en la búsqueda: va contra D25. La regla de antes (fuera de la portada y de «Todas», categorías al final) la descartó Isma |
 | D-VOD8 | **Carteles por proxy** con id y versión, caché de 256 MiB, solo raster, sin LAN salvo el host del proveedor, TMDB reducido | Enlace directo: lo impide la CSP y filtraría la URL. Redimensionar con ffmpeg: más procesos contra `pids_limit`. Precargar cientos: tráfico sin pedirlo |
 | D-VOD9 | **Estrategia C para todos**; sin A, B ni D en la v1 | A: solo web, solo MP4 H.264/AAC y AC-3 sin sonido en Chrome. B: cae hasta un GOP antes y no sirve a AVPlayer. D: cae antes, lista que crece y llena el disco |
 | D-VOD10 | **Relé VOD en serie** con caché de cabecera e índice, salto corto ≤ 32 MiB sin reabrir, EOF = fin, reapertura perezosa; redirección reutilizada solo si el Paso 0 lo valida | Pasar ffmpeg directo al proveedor: 2 conexiones por salto (medido). La `TsSession` del directo: 409 y vuelve al byte 0 |
-| D-VOD11 | **El VOD pasa por el cerrojo de la casa (D5):** una cosa a la vez | Que una película no choque con AceStream (no comparten conexión): cambia una regla de la casa; queda como **pregunta para Isma** (§19.3) |
+| D-VOD11 | **Cambiada por Isma el 30-sep (§19.4):** una película por IPTV y un partido por AceStream **conviven**, porque no comparten conexión. Dos cosas por IPTV a la vez siguen la regla de la casa (D5): la nueva corta la anterior, sin confirmación y con el `playback.handoff` de siempre en el otro aparato (D-VOD12). El contrato ya lo permite: `vodStream` no cambia de forma y el cerrojo se decide en el servidor (VOD-5) | La propuesta original, una cosa a la vez también con AceStream: cortaba el fútbol de otra persona sin necesidad |
 | D-VOD12 | **Sin confirmación** antes de cortar lo de otro aparato | Preguntar: los canales no preguntan, sería incoherente |
 | D-VOD13 | **Mismo título en otro aparato = traspaso**; la posición viaja por el progreso | Compartir: un ffmpeg no sirve dos posiciones |
 | D-VOD14 | **Un audio por sesión**, castellano por defecto y recordado por serie; cambiarlo reabre en la posición (2-4 s) | Pistas HLS ya: lista maestra y más argumentos; después (0,09 núcleos con 2, medido) |
@@ -1914,7 +2104,7 @@ quita de `WEB_FIXTURE_ROUTE_IDS` y actualiza `security.test.ts`. El mismo día, 
 | D-VOD18 | **Visto** con quedan ≤ max(180 s, 5 %) en películas y ≤ max(60 s, 4 %) en episodios; reanudar desde 30 s; siguiente episodio a −max(20 s, 2 %) con 10 s de cuenta atrás; «¿Sigues viendo?» tras 3 | Un solo umbral: marca vistas películas con créditos largos o episodios a medias. Esperar a `ended`: obliga a ver los créditos. Sin la pregunta: la plaza del proveedor ocupada toda la noche |
 | D-VOD19 | **Rutas nacen `web`**, con formas pensadas para iOS | `any` ya: rompe `FixturesTests` antes de tener tipos Swift (como D27 y D29) |
 | D-VOD20 | **Errores `vod_*`** | `iptv_*`: están fijados y significan «pasa a AceStream» |
-| D-VOD21 | **Quinto destino «Pelis y series»** (h1 «Películas y series»; «Cine» de respaldo), solo con VOD y, hasta la 0.9.0, con `?flag=cine` | «Películas y series» en la barra: 77,2 px no caben en 64,8. «Cine»: no es lo que pidió Isma. Una pestaña dentro de Canales: esconde «una opción» que pidió aparte |
+| D-VOD21 | **Quinto destino «Pelis y series»**, elegido por Isma el 30-sep (§19.4); `aria-label`, `title` y h1 «Películas y series». «Cine» solo si `revision` mostrara un corte. Aparece solo con VOD y, hasta la 0.9.0, con `?flag=cine` | «Películas y series» en la barra: 77,2 px no caben en 64,8. «Cine»: no es lo que pidió Isma. Una pestaña dentro de Canales: esconde «una opción» que pidió aparte |
 | D-VOD22 | **Vistas `cine`** (portada, rejilla, ficha) **y `sala`** (escenario) | Escenario dentro de la ficha: mezcla el desplazamiento de la ficha con el vídeo. Una sola vista con subestados: sin enlaces directos a una ficha |
 | D-VOD23 | **Un reproductor:** `VodDriver` en ficheros nuevos y enganches de una línea en `runtime.ts` | Un segundo `<video>`: rompe el dock único y el cerrojo. Una bandera repartida por `runtime.ts`: 12+ cambios que chocan con el diagnóstico |
 | D-VOD24 | **Pausa larga: se suelta el proveedor a los 5 min** (lo ajusta el Paso 0); la sesión sigue por latidos | A los 45 s: las pausas cortas chocarían con la penalización de «ocupado» del panel. No soltarla nunca: bloquea el PC de Isma |
@@ -1956,7 +2146,7 @@ quita de `WEB_FIXTURE_ROUTE_IDS` y actualiza `security.test.ts`. El mismo día, 
 2. ¿«Pelis y series» o «Cine» en la barra? (D-VOD21)
 3. Si alguien ve fútbol por AceStream en casa y otra persona pone una película, ¿la película debe cortar el fútbol,
    como pasa hoy con los canales, o deberían poder convivir? (D-VOD11)
-4. ¿Los títulos para adultos también en la portada? (D-VOD7)
+4. ¿Los títulos para adultos también en la portada? (D-VOD7) → **sí**, contestada el 3-oct (§19.4)
 5. ¿Cuánto le importan los subtítulos (VOSE)? Decide si entran en la 0.9.0. (D-VOD15)
 6. ¿Puede lanzar el Paso 0 en su Umbrel con la app de IPTV del PC cerrada?
 
@@ -1968,6 +2158,7 @@ quita de `WEB_FIXTURE_ROUTE_IDS` y actualiza `security.test.ts`. El mismo día, 
    vez, porque no comparten conexión. Dos cosas por IPTV a la vez siguen sin poder ser con `max_connections = 1`:
    ahí manda la regla de la casa (la nueva corta la anterior, con aviso).
 4. Subtítulos: **pueden esperar** (D-VOD15: fuera de la primera versión).
+5. (3-oct) Adultos: **salen en la portada como los demás** (cambia D-VOD7, §4.9).
 
 ---
 

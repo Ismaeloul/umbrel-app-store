@@ -185,6 +185,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Lo que casa con lo escrito (0.9.0, docs/buscador.md; lib/name-highlight.ts): un rotulador del acento detrás
+   de las letras y subrayado, sin cambiar la letra ni su color (contraste intacto en los dos temas). */
+::highlight(canal-coincide) {
+  background-color: var(--accent-wash);
+  text-decoration: underline 2px var(--accent-edge);
+}
 /* De dónde se puede ver (docs/iptv.md §19): «IPTV» y «AceStream», en la meta, enteras y sin encoger. */
 .ch__tags .ch__src {
   --cap-ink: var(--text);
@@ -247,6 +253,13 @@
   font-size: var(--fs-caption);
   color: var(--text-3);
   white-space: nowrap;
+}
+/* Con un partido en directo, el minuto y «En directo» ocupan el sitio del subtítulo: en el móvil las etiquetas
+   (IPTV y calidades) bajan a su línea en vez de cortarse contra el borde de la tarjeta (0.9.0, docs/buscador.md).
+   Las filas sin partido no cambian: ahí se recorta el subtítulo. */
+.ch__meta--wrap {
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
 .ch__sub {
   min-width: 0;
@@ -768,14 +781,14 @@
 }
 .lib-now__teams {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 .lib-now__team {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-weight: var(--wght-medium);
 }
 .lib-now__name {

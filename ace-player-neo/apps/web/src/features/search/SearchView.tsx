@@ -46,6 +46,7 @@ import { useNavigate, useSearchParam } from '../../app/router.tsx';
 import { searchFor } from '../../app/routes.ts';
 import { useShortcut } from '../../app/shortcuts.ts';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
+import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
 import {
@@ -418,6 +419,7 @@ export default function SearchView({ active }: ViewProps) {
                     onAir={onAir(item)}
                     iptv={iptv !== null}
                     ace={aceCount}
+                    highlight={query}
                     subtitle={idState ? IPTV_ID_SUBTITLE[idState] : undefined}
                     tags={iptvChannel ? iptvTags(iptvChannel) : undefined}
                     onPlay={() => actions.play(channel, 'buscar')}
@@ -477,6 +479,7 @@ export default function SearchView({ active }: ViewProps) {
                       onAir={onAir(row)}
                       iptv
                       ace={ace}
+                      highlight={query}
                       subtitle={iptvSubtitle(channel)}
                       tags={iptvTags(channel)}
                       /* IPTV primero y, de respaldo, sus AceStream de tu biblioteca (§19). */
@@ -508,8 +511,19 @@ export default function SearchView({ active }: ViewProps) {
 
       {!detected && !engineAllShown ? (
         <section className="search-sec" aria-labelledby="buscar-motor-titulo">
-          <h2 id="buscar-motor-titulo" className="search-sec__title">
-            En el motor AceStream
+          {/* Sin nada escrito y con IPTV, la pista habla de las dos fuentes: el
+              titular «En el motor AceStream» encima no cuadraba (queda para
+              el lector de pantalla, como «Cómo buscar»). */}
+          <h2
+            id="buscar-motor-titulo"
+            className={cx(
+              'search-sec__title',
+              withIptv && (phase.kind === 'idle' || phase.kind === 'short') && 'sr-only',
+            )}
+          >
+            {withIptv && (phase.kind === 'idle' || phase.kind === 'short')
+              ? 'Cómo buscar'
+              : 'En el motor AceStream'}
             {phase.kind === 'results' ? (
               <span className="search-sec__count">{phase.count}</span>
             ) : null}
@@ -600,6 +614,7 @@ export default function SearchView({ active }: ViewProps) {
                     onAir={onAir(result)}
                     iptv={iptv !== null}
                     ace={iptv ? ace : 0}
+                    highlight={query}
                     onPlay={() => actions.play(channel, 'buscar')}
                     onToggleFavorite={() => actions.toggleFavorite(result)}
                     menuItems={actions.menuFor(result, 'search')}
