@@ -86,11 +86,13 @@ import {
   cleanCineQuery,
   filtersLangs,
   langQuery,
+  MY_LIST_CAT,
   showsGrid,
   type CineOrder,
   type CineUrlState,
   categoryLabel,
 } from './model.ts';
+import { MyListRow, MyListScreen } from './MyList.tsx';
 import { CardRow, CategoryRail } from './Rows.tsx';
 import { TagChips } from './TagChips.tsx';
 import {
@@ -317,7 +319,9 @@ export function Home({ active }: HomeProps) {
   /* La primera vez (aún sin elegir idiomas), el selector antes que nada. */
   const welcome = ready && lang.prefs !== null && !lang.prefs.chosen;
   const scope = browseQuery(state, q, langQuery(lang.prefs, state.lang));
-  const pages = useVodPages(scope, active && ready && grid && lang.ready && !welcome);
+  /* «Ver todo» de «Mi lista» (0.9.1): su propia rejilla, sin `vodBrowse`. */
+  const myList = state.cat === MY_LIST_CAT && q === '';
+  const pages = useVodPages(scope, active && ready && grid && lang.ready && !welcome && !myList);
   /* Lo que se está viendo: el idioma de «Ver» o los elegidos (para la cápsula de las tarjetas). */
   const seen: readonly VodLang[] = state.lang
     ? [state.lang]
@@ -394,7 +398,11 @@ export function Home({ active }: HomeProps) {
     if (kind === state.kind) return;
     haptic('selection');
     // Las categorías son de cada tipo: en una rejilla, «Todas» del otro tipo y sin distintivo.
-    setCineState({ kind, cat: state.cat === null ? null : 'all', tag: null });
+    setCineState({
+      kind,
+      cat: state.cat === null ? null : state.cat === MY_LIST_CAT ? MY_LIST_CAT : 'all',
+      tag: null,
+    });
   };
 
   const categories = home.data?.categories[state.kind] ?? [];
@@ -493,7 +501,8 @@ export function Home({ active }: HomeProps) {
             onChangeLangs={() => setLangsOpen(true)}
           />
         </div>
-        {grid ? (
+        {grid && myList ? <MyListScreen kind={state.kind} active={active} /> : null}
+        {grid && !myList ? (
           <GridScreen
             state={state}
             q={q}
@@ -568,6 +577,7 @@ function Portada({ data, kind, active, prefs, onChangeLangs }: PortadaProps) {
     return (
       <>
         <ContinueRail entries={continueOf(data.continue, kind)} />
+        <MyListRow kind={kind} active={active} />
         <EmptyState
           title={noneInLangs(kind, prefs?.langs ?? [])}
           actions={
@@ -583,6 +593,7 @@ function Portada({ data, kind, active, prefs, onChangeLangs }: PortadaProps) {
   return (
     <>
       <ContinueRail entries={continueOf(data.continue, kind)} />
+      <MyListRow kind={kind} active={active} />
       {kind === 'movie' ? (
         <CardRow
           id="cine-nuevas"

@@ -25,6 +25,8 @@ import {
   type VodLangQuery,
   type VodLanguages,
   type VodLanguagesBody,
+  type VodList,
+  type VodListItem,
   type VodProgressBody,
   type VodTitle,
 } from '@ace/shared';
@@ -40,6 +42,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   api,
   ApiError,
+  describeFailure,
   isDemo,
   routeKey,
   routePrefix,
@@ -51,6 +54,7 @@ import { errorFromResponse } from '../../api/errors.ts';
 import { useRoute } from '../../app/router.tsx';
 import { saveScroll } from '../../app/scroll-memory.ts';
 import { createStore, useStore } from '../../lib/store.ts';
+import { notify } from '../../notices/index.ts';
 import { demoArtSrc } from './demo-art.ts';
 import type { browseQuery } from './model.ts';
 import {
@@ -61,6 +65,7 @@ import {
   writeCineState,
   type CineUrlState,
 } from './model.ts';
+import { listFailedText } from './texts.ts';
 
 // ---- Estado de la URL ------------------------------------------------------------------
 
@@ -525,6 +530,80 @@ export function useProgressMark() {
         return null;
       } catch (error) {
         return error instanceof Error ? error : new Error(String(error));
+      }
+    },
+    [client],
+  );
+}
+
+// ---- «Mi lista» (0.9.1) ----------------------------------------------------------------
+
+/**
+ * «Mi lista»: por casa, en el servidor (vale en el PC y en el iPhone). Sin
+ * filtro de idiomas (enseña lo que se añadió). Otra pestaña que la cambie
+ * avisa con `state.changed` (`vod`) y esta la vuelve a pedir (api/sse.ts).
+ */
+export function useVodList(enabled: boolean) {
+  return useApiQuery('vodListGet', undefined, { enabled, staleTime: STALE_MS, retry: 1 });
+}
+
+/** Lo que hace falta de un título para añadirlo o quitarlo (la tarjeta o la ficha). */
+export type ListTarget = Pick<VodCard, 'id' | 'kind' | 'title' | 'year'> &
+  Partial<Pick<VodCard, 'rating' | 'poster' | 'tags' | 'adult' | 'langs'>>;
+
+/** La lista con el cambio ya hecho, antes de que conteste el servidor. */
+export function optimisticList(
+  list: VodList | undefined,
+  target: ListTarget,
+  add: boolean,
+  now: number,
+): VodList | undefined {
+  if (!list) return list;
+  const rest = list.items.filter((item) => item.id !== target.id);
+  if (!add) return { ...list, items: rest };
+  if (rest.length !== list.items.length) return list;
+  const item: VodListItem = {
+    id: target.id,
+    kind: target.kind,
+    title: target.title,
+    year: target.year,
+    rating: target.rating ?? null,
+    poster: target.poster ?? null,
+    tags: target.tags ?? [],
+    adult: target.adult ?? false,
+    progress: null,
+    ...(target.langs ? { langs: target.langs } : {}),
+    addedAt: new Date(now).toISOString(),
+    available: true,
+    upTo: null,
+  };
+  return { ...list, items: [item, ...rest] };
+}
+
+/**
+ * Añadir o quitar de «Mi lista» al momento (optimista): la ficha y la fila
+ * cambian ya; si el servidor falla, se deshace y se avisa. Devuelve si salió.
+ */
+export function useListToggle() {
+  const client = useQueryClient();
+  return useCallback(
+    async (target: ListTarget, add: boolean): Promise<boolean> => {
+      const key = routeKey('vodListGet');
+      await client.cancelQueries({ queryKey: key });
+      const before = client.getQueryData<VodList>(key);
+      client.setQueryData<VodList | undefined>(key, (old) =>
+        optimisticList(old, target, add, Date.now()),
+      );
+      try {
+        const saved = await api(add ? 'vodListAdd' : 'vodListRemove', {
+          params: { id: target.id },
+        });
+        client.setQueryData(key, saved);
+        return true;
+      } catch (error) {
+        client.setQueryData(key, before);
+        notify(`${listFailedText(target.title, add)} ${describeFailure(error)}`, { tone: 'err' });
+        return false;
       }
     },
     [client],

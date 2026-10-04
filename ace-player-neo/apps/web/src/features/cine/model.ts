@@ -30,7 +30,8 @@ export type CineOrder = 'novedades' | 'az';
 export interface CineUrlState {
   kind: VodKind;
   /**
-   * La rejilla abierta: id de categoría (12 hex o `none`) o `all` (todas). Sin
+   * La rejilla abierta: id de categoría (12 hex o `none`), `all` (todas) o
+   * `milista` («Mi lista», `MY_LIST_CAT`). Sin
    * `cinecat` (null) se ve la portada en filas por categoría.
    */
   cat: string | null;
@@ -53,7 +54,10 @@ export const CINE_PARAMS = [
   'cineorden',
   'cineidioma',
 ] as const;
-const CAT_RE = /^(?:[a-f0-9]{12}|none|all)$/;
+/** «Ver todo» de «Mi lista» (0.9.1): la rejilla de la lista, no de una categoría. */
+export const MY_LIST_CAT = 'milista';
+
+const CAT_RE = /^(?:[a-f0-9]{12}|none|all|milista)$/;
 
 export function readCineState(search: string): CineUrlState {
   let params: URLSearchParams;
@@ -136,7 +140,9 @@ export function browseQuery(
   const text = canSearchCine(q) ? cleanCineQuery(q) : '';
   return {
     kind: state.kind,
-    cat: (state.cat ?? 'all') as VodBrowseQuery['cat'],
+    cat: (state.cat === null || state.cat === MY_LIST_CAT
+      ? 'all'
+      : state.cat) as VodBrowseQuery['cat'],
     ...(state.tag ? { tag: state.tag } : {}),
     ...(text ? { q: text } : {}),
     sort: state.order === 'az' ? 'name' : 'added',

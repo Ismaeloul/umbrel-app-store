@@ -68,6 +68,7 @@ import {
   type PlayBlock,
 } from './model.ts';
 import { canPlayHevc, playVod } from './play.ts';
+import { ListButton, RemoveGoneButton } from './MyList.tsx';
 import { Seasons } from './Seasons.tsx';
 import { Synopsis } from './Synopsis.tsx';
 import {
@@ -236,16 +237,19 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
   return (
     <div className="cine-actions">
       <div className="cine-actions__main">
-        <Button
-          variant="primary"
-          icon="play"
-          className="cine-play"
-          disabled={block !== null}
-          aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
-          onClick={() => play()}
-        >
-          {resuming ? resumeFromText(clockText(progress.posS)) : CINE_TEXT.play}
-        </Button>
+        <div className="cine-actions__buttons">
+          <Button
+            variant="primary"
+            icon="play"
+            className="cine-play"
+            disabled={block !== null}
+            aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
+            onClick={() => play()}
+          >
+            {resuming ? resumeFromText(clockText(progress.posS)) : CINE_TEXT.play}
+          </Button>
+          <ListButton target={movie} className="cine-list" />
+        </div>
         {ratio !== null || line ? (
           <div className="cine-actions__progress">
             {ratio !== null ? (
@@ -311,30 +315,33 @@ function SeriesActions({ series }: { series: VodSeries }) {
     <div className="cine-actions">
       {main ? (
         <div className="cine-actions__main">
-          <Button
-            variant="primary"
-            icon="play"
-            className="cine-play"
-            disabled={block !== null}
-            aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
-            onClick={() =>
-              playVod(
-                {
-                  id: main.episodeId,
-                  kind: 'episode',
-                  title: series.title,
-                  subtitle: entry
-                    ? `${episodeTag(entry.season, entry.item.n)} · ${entry.item.title}`
-                    : null,
-                  seriesId: series.id,
-                  startS: main.posS,
-                },
-                navigate,
-              )
-            }
-          >
-            {entry ? seriesPlayLabel(main.action, entry.season, entry.item.n) : main.label}
-          </Button>
+          <div className="cine-actions__buttons">
+            <Button
+              variant="primary"
+              icon="play"
+              className="cine-play"
+              disabled={block !== null}
+              aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
+              onClick={() =>
+                playVod(
+                  {
+                    id: main.episodeId,
+                    kind: 'episode',
+                    title: series.title,
+                    subtitle: entry
+                      ? `${episodeTag(entry.season, entry.item.n)} · ${entry.item.title}`
+                      : null,
+                    seriesId: series.id,
+                    startS: main.posS,
+                  },
+                  navigate,
+                )
+              }
+            >
+              {entry ? seriesPlayLabel(main.action, entry.season, entry.item.n) : main.label}
+            </Button>
+            <ListButton target={series} className="cine-list" />
+          </div>
           {ratio !== null || line ? (
             <div className="cine-actions__progress">
               {ratio !== null ? (
@@ -354,6 +361,11 @@ function SeriesActions({ series }: { series: VodSeries }) {
           ) : null}
         </div>
       ) : null}
+      {main ? null : (
+        <div className="cine-actions__buttons">
+          <ListButton target={series} className="cine-list" />
+        </div>
+      )}
       {series.trailer ? (
         <div className="cine-actions__more">
           <TrailerButton id={series.trailer} title={series.title} />
@@ -596,9 +608,13 @@ export function Ficha({ id, active }: { id: string; active: boolean }) {
             title={gone ? CINE_TEXT.notFound : describeFailure(query.error)}
             actions={
               gone ? (
-                <Button variant="primary" icon="chev-l" onClick={goBack}>
-                  {kindHint === 'series' ? CINE_TEXT.backToSeries : CINE_TEXT.backToMovies}
-                </Button>
+                <>
+                  <Button variant="primary" icon="chev-l" onClick={goBack}>
+                    {kindHint === 'series' ? CINE_TEXT.backToSeries : CINE_TEXT.backToMovies}
+                  </Button>
+                  {/* Si estaba en «Mi lista», desde aquí se quita (0.9.1). */}
+                  <RemoveGoneButton id={id} />
+                </>
               ) : (
                 <>
                   <Button variant="primary" icon="refresh" onClick={() => void query.refetch()}>

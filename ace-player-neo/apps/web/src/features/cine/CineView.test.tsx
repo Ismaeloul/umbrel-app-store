@@ -48,6 +48,73 @@ function emptyHome(patch: Partial<VodHome>): VodHome {
   return { ...(homeNone as VodHome), ...patch };
 }
 
+describe('«Mi lista» en la portada (0.9.1)', () => {
+  const headings = () =>
+    [...document.querySelectorAll('.cine-portada .cine-row__name, .cine-portada h2')].map(
+      (node) => node.textContent,
+    );
+
+  it('tras «Seguir viendo», con los del tipo, por dónde va la serie y SIN filtrar por idioma', async () => {
+    net = mockFetch({
+      ...demoRoutes(),
+      /* Solo castellano: «Coco» (latino) no sale en la portada, pero en Mi lista sí. */
+      'GET /api/v1/vod/languages': () =>
+        json({ chosen: true, langs: ['castellano'], unknown: false, updatedAt: null }),
+    });
+    renderCine({ search: '?vista=cine&cine=series' });
+    const list = await screen.findByRole('list', { name: 'Mi lista' });
+    const order = headings().filter((text) => text === 'Seguir viendo' || text === 'Mi lista');
+    expect(order).toEqual(['Seguir viendo', 'Mi lista']);
+    const cards = within(list).getAllByRole('link');
+    expect(cards.map((card) => card.querySelector('.cine-card__title')?.textContent)).toEqual([
+      'The Office',
+      'La casa de papel',
+    ]);
+    expect(cards[0]?.querySelector('.cine-card__note')?.textContent).toMatch(/^Siguiente: T2 · E6/);
+    expect(cards[1]?.querySelector('.cine-card__note')?.textContent).toMatch(/^Vas por T1 · E3/);
+    // Películas: la de otro idioma, con su distintivo.
+    fireEvent.click(screen.getByRole('radio', { name: 'Películas' }));
+    const movies = await screen.findByRole('list', { name: 'Mi lista' });
+    await waitFor(() =>
+      expect(
+        within(movies)
+          .getAllByRole('link')
+          .map((card) => card.textContent),
+      ).toEqual([expect.stringContaining('El 47'), expect.stringContaining('Coco')]),
+    );
+    expect(within(movies).getByText('Latino')).toBeInTheDocument();
+  });
+
+  it('vacía (o de otro tipo): la fila no sale', async () => {
+    net = mockFetch({
+      ...demoRoutes(),
+      'GET /api/v1/vod/list': () => json({ items: [], max: 500 }),
+    });
+    renderCine();
+    await screen.findByRole('heading', { name: 'Seguir viendo' });
+    await waitFor(() =>
+      expect(net.calls.some((call) => call.url === '/api/v1/vod/list')).toBe(true),
+    );
+    expect(screen.queryByRole('list', { name: 'Mi lista' })).toBeNull();
+  });
+
+  it('«Ver todo» abre su rejilla (sin pedir vodBrowse) y «‹» vuelve a la portada', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine({ search: '?vista=cine&cine=series' });
+    await screen.findByRole('list', { name: 'Mi lista' });
+    const before = gridCalls().length;
+    fireEvent.click(screen.getByRole('button', { name: /Mi lista/ }));
+    expect(await screen.findByRole('heading', { level: 2, name: 'Mi lista' })).toBeInTheDocument();
+    expect(new URLSearchParams(location.search).get('cinecat')).toBe('milista');
+    expect(document.querySelector('.cine-browse--mylist .cine-browse__count')?.textContent).toBe(
+      '2 series',
+    );
+    expect(gridCalls()).toHaveLength(before);
+    fireEvent.click(screen.getByRole('button', { name: 'Volver a Películas y series' }));
+    await waitFor(() => expect(new URLSearchParams(location.search).get('cinecat')).toBeNull());
+  });
+});
+
 describe('portada en filas, como la agenda', () => {
   it('título, selector, buscador, «Seguir viendo», novedades y una fila por categoría (sin rejilla)', async () => {
     net = mockFetch(demoRoutes());

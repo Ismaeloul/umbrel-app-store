@@ -42,6 +42,10 @@ export interface PosterGridProps {
   total: number;
   label: string;
   onEndReached?(): void;
+  /** La línea de más de cada tarjeta («Mi lista»: por dónde va, «Ya no está en tu IPTV»). */
+  noteOf?(card: VodCard): string | null;
+  /** ¿Ya no está en el catálogo? (el cartel, apagado). */
+  goneOf?(card: VodCard): boolean;
 }
 
 interface Row {
@@ -50,7 +54,7 @@ interface Row {
   cards: VodCard[];
 }
 
-export function PosterGrid({ cards, total, label, onEndReached }: PosterGridProps) {
+export function PosterGrid({ cards, total, label, onEndReached, noteOf, goneOf }: PosterGridProps) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const columns = columnsFor(width);
   const rows: Row[] = chunk(cards, columns).map((row, index) => ({
@@ -61,7 +65,7 @@ export function PosterGrid({ cards, total, label, onEndReached }: PosterGridProp
   // Cartel 2:3 + título en 2 líneas (15 px) + «2023 · ★ 7,4» + el aire de la fila.
   const gap = width >= 768 ? 20 : 14;
   const cardWidth = Math.max(80, (width - (columns - 1) * gap) / columns);
-  const rowHeight = Math.round(cardWidth * 1.5 + 92);
+  const rowHeight = Math.round(cardWidth * 1.5 + 92 + (noteOf ? 22 : 0));
   return (
     <div
       ref={ref}
@@ -90,7 +94,11 @@ export function PosterGrid({ cards, total, label, onEndReached }: PosterGridProp
                 aria-setsize={total}
                 aria-posinset={row.start + index + 1}
               >
-                <PosterCard card={card} />
+                <PosterCard
+                  card={card}
+                  note={noteOf?.(card) ?? null}
+                  gone={goneOf?.(card) ?? false}
+                />
               </div>
             ))}
           </div>

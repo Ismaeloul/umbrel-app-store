@@ -434,6 +434,21 @@
   font-size: var(--fs-13);
   font-weight: var(--wght-medium);
 }
+/* «Mi lista» (0.9.1): por dónde va la serie o «Ya no está en tu IPTV». */
+.cine-card__note {
+  display: block;
+  overflow: hidden;
+  padding-inline: var(--cine-text-inset);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cine-card--gone .cine-card__poster {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
 .cine-rating {
   display: inline-flex;
   align-items: center;
@@ -1136,6 +1151,30 @@
     justify-self: start;
     width: auto;
     min-width: 300px;
+  }
+}
+
+/* «Mi lista» (0.9.1): el play y «Añadir a mi lista» uno al lado del otro; en
+   el móvil, uno debajo del otro y a todo el ancho (los dos bien visibles). */
+.cine-actions__buttons {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.cine-list.btn {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 22px;
+}
+@media (min-width: 768px) {
+  .cine-actions__buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .cine-list.btn {
+    width: auto;
+    min-height: 54px;
   }
 }
 

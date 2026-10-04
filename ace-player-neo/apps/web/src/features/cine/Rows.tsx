@@ -53,7 +53,7 @@ export function useNearScreen<T extends Element>(
   return [ref, near];
 }
 
-interface RowHeadProps {
+export interface RowHeadProps {
   id: string;
   title: string;
   /** Número de títulos (null = no se sabe). */
@@ -63,7 +63,7 @@ interface RowHeadProps {
 }
 
 /** «VOD | 4K 9 ……… Ver todo ›». */
-function RowHead({ id, title, count, kind, onSeeAll }: RowHeadProps) {
+export function RowHead({ id, title, count, kind, onSeeAll }: RowHeadProps) {
   return (
     <div className="cine-row__head">
       <h2 id={id} className="cine-row__title">
