@@ -37,6 +37,7 @@ import type {
   VodCard,
   VodGrant,
   VodHome,
+  VodList,
   VodMovie,
   VodSeries,
   Device,
@@ -102,6 +103,10 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'iptvGuideNow',
   'vodLanguagesGet',
   'vodLanguagesUpdate',
+  /* «Mi lista» (0.9.1): solo web, como el resto de Películas y series. */
+  'vodListGet',
+  'vodListAdd',
+  'vodListRemove',
   /* «Descargar logs» de Ajustes → Registro (0.9.0): solo web (el zip es binario y no lleva ejemplo). */
   'diagnosticsLogInfo',
   'diagnosticsWebLog',
@@ -797,6 +802,27 @@ const vodDark = vodCard(VOD_ID_DARK, 'series', 'Dark', 2017, {
   langs: ['castellano'],
 });
 
+/* «Mi lista» (0.9.1): una serie empezada (por dónde va), una película y una
+   que ya no está en la IPTV (lo guardado al añadirla, sin cartel). */
+const vodListFull: VodList = {
+  items: [
+    {
+      ...vodOffice,
+      addedAt: '2026-10-04T18:30:00.000Z',
+      available: true,
+      upTo: { label: 'T2 · E5 · La fiesta', next: false },
+    },
+    { ...vodDune, addedAt: '2026-10-03T21:10:00.000Z', available: true, upTo: null },
+    {
+      ...vodCard(VOD_ID_AMELIE, 'movie', 'Amélie', 2001, { rating: null, poster: null, langs: [] }),
+      addedAt: '2026-09-28T20:00:00.000Z',
+      available: false,
+      upTo: null,
+    },
+  ],
+  max: 500,
+};
+
 const vodCategories: VodHome['categories'] = {
   movie: [
     { id: VOD_CAT_ESTRENOS, kind: 'movie', name: 'ES | ESTRENOS', count: 1_240, adult: false },
@@ -1098,6 +1124,22 @@ const backupFile: BackupFile = {
   },
   browser: { theme: 'oscuro', transparency: 'normal', playbackMode: 'balanced' },
   vod: { langs: ['castellano', 'frances'], unknown: true },
+  vodList: [
+    {
+      id: VOD_ID_OFFICE,
+      kind: 'series',
+      title: 'The Office',
+      year: 2005,
+      addedAt: Date.parse('2026-10-04T18:30:00.000Z'),
+    },
+    {
+      id: VOD_ID_DUNE,
+      kind: 'movie',
+      title: 'Dune',
+      year: 2021,
+      addedAt: Date.parse('2026-10-03T21:10:00.000Z'),
+    },
+  ],
 };
 
 const backupCounts = (favorites: number, history: number): BackupCounts => ({
@@ -1174,6 +1216,7 @@ export const WEB_V1_FIXTURES = {
     preferences: true,
     settings: false,
     vodLanguages: true,
+    vodList: { incoming: 2, result: 2, changed: true },
     iptv: {
       action: 'needs_secret',
       protected: false,
@@ -1216,6 +1259,10 @@ export const WEB_V1_FIXTURES = {
     unknown: true,
     updatedAt: '2026-10-03T17:20:00.000Z',
   },
+  vodListGet: vodListFull,
+  vodListAdd: vodListFull,
+  /* Tras quitar «Amélie». */
+  vodListRemove: { items: vodListFull.items.slice(0, 2), max: 500 },
   iptvBrowse: iptvBrowseRoot,
   iptvChannels: {
     query: 'la',
@@ -1488,6 +1535,8 @@ export const VARIANT_FIXTURES = {
     unknown: false,
     updatedAt: null,
   },
+  /* «Mi lista» sin nada: la portada no enseña la fila. */
+  'vodListGet.vacia': { items: [], max: 500 },
   'vodBrowse.vacio': {
     active: true,
     state: 'ready',
@@ -1799,6 +1848,7 @@ export const VARIANT_FIXTURES = {
   'vodHome.unsupported': V1ResponseInput<'vodHome'>;
   'vodBrowse.search': V1ResponseInput<'vodBrowse'>;
   'vodLanguagesGet.sin-elegir': V1ResponseInput<'vodLanguagesGet'>;
+  'vodListGet.vacia': V1ResponseInput<'vodListGet'>;
   'vodBrowse.vacio': V1ResponseInput<'vodBrowse'>;
   'vodTitle.series': V1ResponseInput<'vodTitle'>;
   'vodTitle.episodio-avi': V1ResponseInput<'vodTitle'>;

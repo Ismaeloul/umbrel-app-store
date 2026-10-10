@@ -55,6 +55,16 @@ export const CINE_TEXT = {
   searchAllMovies: 'Buscar en todas las películas',
   searchAllSeries: 'Buscar en todas las series',
   rowFailed: 'No se ha podido cargar esta fila.',
+  // «Mi lista» (0.9.1)
+  myList: 'Mi lista',
+  addToList: 'Añadir a mi lista',
+  inList: 'En mi lista',
+  removeFromList: 'Quitar de mi lista',
+  addedToList: 'Añadida a Mi lista',
+  removedFromList: 'Quitada de Mi lista',
+  listGone: 'Ya no está en tu IPTV',
+  listEmptyMovies: 'No tienes películas en Mi lista. Añádelas desde su ficha.',
+  listEmptySeries: 'No tienes series en Mi lista. Añádelas desde su ficha.',
   // Menú de «Seguir viendo» (§12.4)
   hideContinue: 'Quitar de Seguir viendo',
   markWatched: 'Marcar como visto',
@@ -378,4 +388,16 @@ export function continueLabel(remaining: string): string {
 /** Nombre accesible de una tarjeta: «Dune, 2021, nota 8,0, Castellano, 4K». */
 export function cardLabel(parts: ReadonlyArray<string | null | undefined>): string {
   return parts.filter(Boolean).join(', ');
+}
+
+/** Por dónde va una serie de «Mi lista»: «Vas por T2 · E5 · La fiesta» o «Siguiente: T2 · E6 · …». */
+export function upToText(upTo: { label: string; next: boolean }): string {
+  return upTo.next ? `Siguiente: ${upTo.label}` : `Vas por ${upTo.label}`;
+}
+
+/** El aviso si añadir o quitar de «Mi lista» falla. */
+export function listFailedText(title: string, adding: boolean): string {
+  return adding
+    ? `No se ha podido añadir «${title}» a Mi lista.`
+    : `No se ha podido quitar «${title}» de Mi lista.`;
 }

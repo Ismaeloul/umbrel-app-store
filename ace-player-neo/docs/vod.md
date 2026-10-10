@@ -1194,6 +1194,31 @@ LRU.
 `iptv.remove()` y el cambio de proveedor vacían `v2/vod.json`, `v2/iptv/vod.enc` y `v2/iptv/arte/`: todos los ids
 cambian con el `provider.id`. Pausar la IPTV no borra nada.
 
+### 10.6 «Mi lista» (0.9.1)
+
+Lo pidió Isma: «Cuando me meta en una serie… quiero que salga un botón que diga "Añadir a mi lista" y así tengo como
+una lista de series a las que puedo ir a ver».
+
+- **Dónde:** `v2/vod-mi-lista.json` (`VodListFileSchema`, `z.object` no estricto; entradas estrictas: id sellado, tipo,
+  título, año y `addedAt`), por casa, aparte de `vod.json` como los idiomas: sobrevive a eliminar la IPTV o cambiar de
+  proveedor. 500 como mucho (`VOD_LIST.itemsMax`); llena, añadir da `vod_list_full` (409) y no se tira nada.
+- **Rutas** (`web`; las de escritura con anti-CSRF): `GET /api/v1/vod/list` (`vodListGet`), `PUT` y `DELETE
+  /api/v1/vod/list/:id` (`vodListAdd`, `vodListRemove`), las tres devuelven la lista entera (`VodList`). Solo
+  películas y series (un episodio da `vod_not_found`); añadir lo que ya está y quitar lo que no está no cambia nada.
+  Al cambiar, `state.changed` con el ámbito `vod`: las demás pestañas vuelven a pedir `vodListGet`.
+- **Qué devuelve:** la tarjeta de siempre (`VodCard`) más `addedAt`, `available` y `upTo` (en las series empezadas,
+  «T2 · E5 · …» o el siguiente con `next: true`), de la más nueva a la más vieja y SIN filtrar por los idiomas
+  elegidos (la tarjeta lleva su distintivo). Lo que ya no está en el catálogo sale con `available: false` y lo
+  guardado (título y año): la web lo apaga con «Ya no está en tu IPTV» y se quita desde su ficha.
+- **Otro proveedor o una copia de otro Umbrel:** los ids no se reconocen; una vez por catálogo se buscan por tipo +
+  título (sin mayúsculas ni acentos) + año (o el título solo, si es único) y se cambian en el fichero.
+- **Copia de seguridad:** `vodList` (solo si tiene algo); Reemplazar pone la de la copia, Combinar añade lo que falte
+  (ni el mismo id ni el mismo título); `vodList` en la vista previa (`incoming`, `result`, `changed`).
+- **Web** (`features/cine/MyList.tsx`): en la ficha, «Añadir a mi lista» / «En mi lista ✓» junto al play (al lado en
+  el PC, debajo y a todo el ancho en el móvil), optimista y con aviso si falla; en la portada, la fila «Mi lista»
+  tras «Seguir viendo» con los del tipo (Películas o Series), con «Ver todo» a su rejilla (`cinecat=milista`); vacía,
+  no sale. La demo trae dos series empezadas y dos películas (una en latino).
+
 ---
 
 ## 11. Contrato (`packages/shared`)

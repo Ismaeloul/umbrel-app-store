@@ -11,7 +11,7 @@ import {
   ShortCodeSchema,
 } from '../primitives.js';
 import { IPTV_NAME_MAX } from '../constants/iptv.js';
-import { VOD_PROGRESS } from '../constants/vod.js';
+import { VOD_LIST, VOD_PROGRESS } from '../constants/vod.js';
 import { StateV1Schema } from './v1.js';
 
 /** Versión de esquema que escribe la 0.7.0. Ausente = 1 (arquitectura §5.4). */
@@ -56,6 +56,12 @@ export const V2_FILES = {
    * la IPTV, y los idiomas son de Isma, no del proveedor.
    */
   vodLanguages: 'v2/vod-idiomas.json',
+  /**
+   * «Mi lista» de Películas y series (0.9.1). Aparte de `vod.json` por lo
+   * mismo que los idiomas: es de Isma y sobrevive a quitar la IPTV o cambiar
+   * de proveedor (lo que ya no esté se marca «ya no está en tu IPTV»).
+   */
+  vodList: 'v2/vod-mi-lista.json',
 } as const;
 
 /** state.json tal y como lo escribe la 0.7.0: las 12 claves v1 más la versión. */
@@ -369,3 +375,53 @@ export const VodLanguagesFileSchema = z.object({
   updatedAt: IsoDateTimeSchema.nullable(),
 });
 export type VodLanguagesFile = z.infer<typeof VodLanguagesFileSchema>;
+
+// --- v2/vod-mi-lista.json («Mi lista», 0.9.1) ---
+
+/**
+ * Un título de «Mi lista». Lleva su título y su año para poder enseñarlo
+ * aunque ya no esté en el catálogo («ya no está en tu IPTV») y para volver
+ * a encontrarlo por su nombre si el id deja de valer (otro proveedor, una
+ * copia de seguridad de otro Umbrel). Nada del proveedor: el id sellado.
+ */
+export const VodListEntrySchema = z.strictObject({
+  id: HashSchema,
+  kind: z.enum(['movie', 'series']),
+  title: z.string().min(1).max(200),
+  year: z.number().int().min(1880).max(2100).nullable(),
+  /** Cuándo se añadió (ms). La lista va de la más nueva a la más vieja. */
+  addedAt: z.number().int().nonnegative(),
+});
+export type VodListEntry = z.infer<typeof VodListEntrySchema>;
+
+/**
+ * `z.object` (no estricto), como `vod-idiomas.json`: un campo de una versión
+ * futura no aparta el fichero. Las entradas sí son estrictas.
+ */
+export const VodListFileSchema = z.object({
+  version: z.literal(1),
+  items: z.array(VodListEntrySchema).max(VOD_LIST.itemsMax),
+});
+export type VodListFile = z.infer<typeof VodListFileSchema>;
+
+// --- v2/vod-visto-anterior.json (0.9.1) ---
+
+/**
+ * Lo visto con un proveedor anterior (0.9.1, Isma: «si cambio de proveedor,
+ * ¿se guarda lo que he visto?»). `v2/vod.json` se vacía al cambiar de
+ * proveedor; antes, su progreso pasa aquí con el año del título (si el
+ * catálogo viejo estaba cargado) y se vuelve a enganchar en el catálogo
+ * nuevo por tipo + título + año (y temporada y capítulo). Lo que el nuevo no
+ * tenga se queda por si aparece. `z.object` (no estricto), como la lista.
+ */
+export const VodCarriedEntrySchema = VodProgressEntrySchema.extend({
+  /** El año de la película o de la serie, o null si no se supo. */
+  year: z.number().int().min(1800).max(2200).nullable(),
+});
+export type VodCarriedEntry = z.infer<typeof VodCarriedEntrySchema>;
+
+export const VodCarriedFileSchema = z.object({
+  version: z.literal(1),
+  items: z.array(VodCarriedEntrySchema).max(VOD_PROGRESS.itemsMax),
+});
+export type VodCarriedFile = z.infer<typeof VodCarriedFileSchema>;

@@ -29,6 +29,7 @@ import {
   detectVodLangs,
   parseVodLangsParam,
   VOD_LANGS,
+  VOD_LIST,
   VOD_PROGRESS,
   VOD_SEARCH,
   VOD_TAGS,
@@ -48,6 +49,8 @@ import {
   type VodLangQuery,
   type VodLanguages,
   type VodLanguagesBody,
+  type VodList,
+  type VodListItem,
   type VodPlayable,
   type VodProgressBody,
   type VodTag,
@@ -1145,6 +1148,7 @@ seedProgress();
 /** Solo para los tests: vuelve al progreso de ejemplo y a «sin idiomas elegidos». */
 export function resetDemoVod(): void {
   seedProgress();
+  seedList();
   failedOnce.clear();
   demoLangs = { ...NO_CHOICE };
   try {
@@ -1191,6 +1195,67 @@ export function demoSaveLanguages(body: VodLanguagesBody): VodLanguages {
     localStorage.setItem(DEMO_LANGS_KEY, JSON.stringify(demoLangs));
   } catch {}
   return demoLanguages();
+}
+
+// ---- «Mi lista» (0.9.1) ----------------------------------------------------------------------
+
+/** Ids de «Mi lista» con su fecha, de la más nueva a la más vieja (en memoria). */
+let demoList: Array<{ id: string; addedAt: number }> = [];
+
+/** Un par de títulos para verla: dos series empezadas y dos películas (una en latino). */
+function seedList(): void {
+  const at = (hoursAgo: number) => NOW - hoursAgo * 3_600_000;
+  const coco = MOVIES.find((movie) => movie.card.title === 'Coco');
+  demoList = [
+    SERIES[1] ? { id: SERIES[1].card.id, addedAt: at(1) } : null,
+    SERIES[0] ? { id: SERIES[0].card.id, addedAt: at(26) } : null,
+    MOVIES[4] ? { id: MOVIES[4].card.id, addedAt: at(50) } : null,
+    /* En latino: con «Castellano» elegido no sale en la portada, pero en Mi lista sí (con su distintivo). */
+    coco ? { id: coco.card.id, addedAt: at(70) } : null,
+  ].filter((item): item is { id: string; addedAt: number } => item !== null);
+}
+seedList();
+
+function episodeLabel(episode: DemoEpisode): string {
+  return `T${episode.season} · E${episode.n} · ${episode.title}`.slice(0, 120);
+}
+
+/** Por dónde va una serie (como el servidor): el último tocado, o el siguiente si se acabó. */
+function demoUpTo(series: DemoSeries): VodListItem['upTo'] {
+  const last = lastEpisodeOf(series);
+  const entry = last ? progress.get(last.id) : undefined;
+  if (!last || !entry) return null;
+  if (!entry.watched) return { label: episodeLabel(last), next: false };
+  const next = series.episodes[series.episodes.indexOf(last) + 1];
+  return next ? { label: episodeLabel(next), next: true } : null;
+}
+
+export function demoVodList(): VodList {
+  const items: VodListItem[] = [];
+  for (const { id, addedAt } of demoList) {
+    const item = MOVIE_BY_ID.get(id) ?? SERIES_BY_ID.get(id);
+    if (!item) continue;
+    items.push({
+      ...cardOf(item),
+      addedAt: iso(addedAt),
+      available: true,
+      upTo: item.card.kind === 'series' ? demoUpTo(item as DemoSeries) : null,
+    });
+  }
+  return { items, max: VOD_LIST.itemsMax };
+}
+
+/** Añadir (null si no es una película ni una serie de la demo). */
+export function demoListAdd(id: string): VodList | null {
+  if (!MOVIE_BY_ID.has(id) && !SERIES_BY_ID.has(id)) return null;
+  if (!demoList.some((item) => item.id === id))
+    demoList = [{ id, addedAt: Date.now() }, ...demoList];
+  return demoVodList();
+}
+
+export function demoListRemove(id: string): VodList {
+  demoList = demoList.filter((item) => item.id !== id);
+  return demoVodList();
 }
 
 type LangFilter = { mask: number; unknown: boolean } | null;
@@ -1372,10 +1437,11 @@ function continueEntries(): VodContinue[] {
       posS: shownProgress?.posS ?? 0,
       durS: shownProgress?.durS ?? shown.durationS ?? 0,
       isNext,
-      art: shown.still
-        ? { id: shown.id, art: 'still', v: shown.still }
-        : series.backdrop
-          ? { id: series.card.id, art: 'backdrop', v: series.backdrop }
+      /* El fondo de la serie, como el servidor (0.9.1); el fotograma, si no hay. */
+      art: series.backdrop
+        ? { id: series.card.id, art: 'backdrop', v: series.backdrop }
+        : shown.still
+          ? { id: shown.id, art: 'still', v: shown.still }
           : series.card.poster
             ? { id: series.card.id, art: 'poster', v: series.card.poster }
             : null,

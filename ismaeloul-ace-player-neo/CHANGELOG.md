@@ -2,6 +2,21 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.1 (2026-10-10)
+
+Mi lista: en la ficha de cada peli o serie hay un boton "Añadir a mi
+lista", y en Peliculas y en Series sale la fila "Mi lista" con lo que
+hayas guardado (en las series, por que capitulo vas). Si un titulo deja
+de estar en tu IPTV, se queda avisando hasta que lo quites.
+
+Seguir viendo mas bonito: la imagen horizontal de la serie o la pelicula
+con su nombre en pequeño abajo a la izquierda y la barra de lo visto,
+sin el cartel estirado. Al pasar el raton ya no sale el fondo gris.
+
+Si cambias de proveedor de IPTV, lo que has visto en Pelis y series ya
+no se pierde: se vuelve a encontrar en el proveedor nuevo por su titulo,
+año, temporada y capitulo.
+
 ## 0.9.0 (2026-10-04)
 
 Pelis y series: pestaña nueva con las peliculas y series de tu IPTV,

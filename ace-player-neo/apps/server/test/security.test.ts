@@ -214,6 +214,10 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'vodProgress',
       'vodLanguagesGet',
       'vodLanguagesUpdate',
+      /* «Mi lista» (0.9.1). */
+      'vodListGet',
+      'vodListAdd',
+      'vodListRemove',
       /* «Descargar fallos» (0.9.0): lleva el registro del servidor, aunque redactado. */
       'diagnosticsExport',
       /* «Descargar logs» (0.9.0): el registro en disco, su zip y los errores de la web. */

@@ -401,6 +401,44 @@ describe('restaurar', () => {
     expect(c.service.vod.languagesOf().langs).toEqual(['latino']);
   });
 
+  it('«Mi lista» (0.9.1): va en la copia si tiene algo; en otro Umbrel se vuelve a encontrar por el título; Combinar añade lo que falta', async () => {
+    const a = await umbrel(SEED_A);
+    await withXtream(a);
+    await a.service.vod.home();
+    await a.service.vod.idle();
+    expect((await a.backup.exportFile()).vodList).toBeUndefined();
+    const home = await a.service.vod.home();
+    const series = home.updatedSeries[0]?.id as string;
+    await a.service.vod.listAdd(series);
+    const file = await a.backup.exportFile();
+    expect(file.vodList).toEqual([
+      expect.objectContaining({ id: series, kind: 'series', title: 'The Office (US)' }),
+    ]);
+    expect(BackupFileSchema.safeParse(file).success).toBe(true);
+
+    /* Otro Umbrel (otra semilla): los ids no valen, pero el título sí. */
+    const b = await umbrel(SEED_B);
+    await withXtream(b);
+    await b.service.vod.home();
+    await b.service.vod.idle();
+    const preview = await b.backup.importFile(body(file, { dryRun: true }));
+    expect(preview.vodList).toEqual({ incoming: 1, result: 1, changed: true });
+    expect(b.service.vod.listEntries()).toEqual([]);
+    await b.backup.importFile(body(file));
+    const list = await b.service.vod.listOf();
+    expect(list.items.map((item) => [item.title, item.available])).toEqual([
+      ['The Office (US)', true],
+    ]);
+    expect(list.items[0]?.id).toBe((await b.service.vod.home()).updatedSeries[0]?.id);
+    /* Otra vez lo mismo (ya con el id de aquí): Combinar no lo repite. */
+    const again = await b.backup.importFile(body(file, { mode: 'merge', dryRun: true }));
+    expect(again.vodList).toEqual({ incoming: 1, result: 1, changed: false });
+    /* Una copia de antes (sin `vodList`) no toca la lista. */
+    const { vodList: _list, ...old } = file;
+    expect((await b.backup.importFile(body(old as BackupFile))).vodList).toBeUndefined();
+    expect(b.service.vod.listEntries()).toHaveLength(1);
+  });
+
   it('dispositivos emparejados, sesiones y «quién tiene el mando» no se tocan', async () => {
     const a = await umbrel(SEED_A);
     await populate(a);

@@ -55,4 +55,22 @@ registerDemoHandlers({
     await wait(120);
     return demoSaveLanguages(body);
   },
+  /* «Mi lista» (0.9.1): empieza con un par de títulos; los cambios, en memoria. */
+  vodListGet: async () => {
+    const { demoVodList } = await load();
+    await wait(60);
+    return demoVodList();
+  },
+  vodListAdd: async ({ params }) => {
+    const { demoListAdd } = await load();
+    await wait(150);
+    const list = demoListAdd(params.id);
+    if (!list) throw new ApiError({ code: 'vod_not_found', status: 404, route: 'vodListAdd' });
+    return list;
+  },
+  vodListRemove: async ({ params }) => {
+    const { demoListRemove } = await load();
+    await wait(150);
+    return demoListRemove(params.id);
+  },
 });

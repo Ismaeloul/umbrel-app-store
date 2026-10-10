@@ -5,6 +5,7 @@
 import {
   VodBrowseResponseSchema,
   VodHomeSchema,
+  VodListSchema,
   VodTitleSchema,
   type VodMovie,
   type VodSeries,
@@ -15,9 +16,12 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEMO_VOD_IDS,
+  demoListAdd,
+  demoListRemove,
   demoProgress,
   demoVodBrowse,
   demoVodHome,
+  demoVodList,
   demoVodTitle,
   resetDemoVod,
 } from './demo-data.ts';
@@ -162,6 +166,24 @@ describe('demo de Películas y series', () => {
     expect(demoVodHome().continue.some((item) => item.seriesId === DEMO_VOD_IDS.seriesStart)).toBe(
       false,
     );
+  });
+
+  it('«Mi lista» (0.9.1): un par de títulos de cada tipo; añadir y quitar cumplen el contrato', () => {
+    const list = VodListSchema.parse(demoVodList());
+    expect(list.items.map((item) => [item.kind, item.title])).toEqual([
+      ['series', 'The Office'],
+      ['series', 'La casa de papel'],
+      ['movie', 'El 47'],
+      ['movie', 'Coco'],
+    ]);
+    expect(list.items[0]?.upTo).toMatchObject({ next: true });
+    expect(list.items[1]?.upTo).toMatchObject({ next: false });
+    expect(list.items.find((item) => item.title === 'Coco')?.langs).toEqual(['latino']);
+    const added = VodListSchema.parse(demoListAdd(DEMO_VOD_IDS.movie));
+    expect(added.items[0]?.id).toBe(DEMO_VOD_IDS.movie);
+    expect(demoListAdd(DEMO_VOD_IDS.movie)?.items).toHaveLength(5);
+    expect(demoListAdd('f'.repeat(40))).toBeNull();
+    expect(demoListRemove(DEMO_VOD_IDS.movie).items).toHaveLength(4);
   });
 
   it('carteles SVG `data:` sin nada ejecutable', () => {

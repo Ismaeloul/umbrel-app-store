@@ -380,6 +380,7 @@ export class IptvServiceImpl implements IptvService {
       runHeavy: (task) => this.runHeavy('vod', task),
       busy: () => this.openInputs > 0 || this.relay.connections() > 0,
       emitStatus: () => this.emitStatus(),
+      emitList: () => this.emitVodList(),
       knownDurationS: (id) => this.vodDurations.get(id) ?? null,
       readVodTracks: (target, signal) => this.readVodTracks(target, signal),
       vodReadFree: () => this.vodReadFree(),
@@ -786,6 +787,18 @@ export class IptvServiceImpl implements IptvService {
       hasPassword: record.kind === 'xtream' && (secrets?.kind === 'xtream' || this.unreadable),
       ...this.status(),
     };
+  }
+
+  /** «Mi lista» cambió (0.9.1): las demás pestañas (y el iPhone, cuando la copie) la vuelven a pedir. */
+  private emitVodList(): void {
+    try {
+      this.deps.bus.emit('state.changed', {
+        scopes: ['vod'],
+        at: this.deps.clock.date().toISOString(),
+      });
+    } catch (error) {
+      this.logger.warn({ err: error }, 'state.changed (Mi lista) no se pudo emitir');
+    }
   }
 
   private emitStatus(): void {

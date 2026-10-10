@@ -13,6 +13,7 @@
      correcciones de canal (lo aprendido);
    - ajustes v2 (política de mismo canal);
    - los idiomas de Películas y series (`vod`, 0.9.0, si ya se eligieron);
+   - «Mi lista» de Películas y series (`vodList`, 0.9.1, si tiene algo);
    - la IPTV: tipo, nombre, si está en pausa, host y, en Xtream, servidor.
      El usuario y la contraseña (Xtream) o la URL entera (M3U, que los lleva
      dentro) SOLO si Isma lo pide, cifrados con una clave que escribe él
@@ -36,6 +37,7 @@ import {
 } from '../../constants/limits.js';
 import { IPTV_NAME_MAX } from '../../constants/iptv.js';
 import { PLAYBACK_MODES } from '../../constants/playback.js';
+import { VOD_LIST } from '../../constants/vod.js';
 import { IsoDateTimeSchema } from '../../primitives.js';
 import {
   ChannelBindingSchema,
@@ -48,7 +50,7 @@ import {
   PreferencesSchema,
   WebSourceSchema,
 } from '../../state/v1.js';
-import { IptvKindSchema, SameChannelPolicySchema } from '../../state/v2.js';
+import { IptvKindSchema, SameChannelPolicySchema, VodListEntrySchema } from '../../state/v2.js';
 import { VOD_LANGS, VodLangSchema } from './vod.js';
 
 /** Favorito o reciente de la copia: el de state.json y, si era de la IPTV, `iptv: true`. */
@@ -142,6 +144,12 @@ export const BackupFileSchema = z.strictObject({
       unknown: z.boolean(),
     })
     .optional(),
+  /**
+   * «Mi lista» de Películas y series (0.9.1), de la más nueva a la más
+   * vieja. Solo si tiene algo: las copias de antes no lo traen. Los ids son
+   * de este Umbrel; en otro, el servidor los vuelve a encontrar por título.
+   */
+  vodList: z.array(VodListEntrySchema).max(VOD_LIST.itemsMax).optional(),
 });
 export type BackupFile = z.infer<typeof BackupFileSchema>;
 
@@ -228,6 +236,17 @@ export const BackupImportResponseSchema = z.strictObject({
   settings: z.boolean(),
   /** Cambian los idiomas de Películas y series (docs/vod.md §4.10). Opcional: un servidor anterior no lo manda. */
   vodLanguages: z.boolean().optional(),
+  /**
+   * Títulos de «Mi lista» que trae la copia y cuántos quedan después (0.9.1).
+   * Opcional: un servidor anterior no lo manda.
+   */
+  vodList: z
+    .strictObject({
+      incoming: z.number().int().nonnegative(),
+      result: z.number().int().nonnegative(),
+      changed: z.boolean(),
+    })
+    .optional(),
   iptv: BackupIptvOutcomeSchema,
   /** Lo del navegador que trae la copia, para que la web lo aplique (null si no trae). */
   browser: BackupBrowserSchema.nullable(),

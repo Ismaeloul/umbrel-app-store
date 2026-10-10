@@ -5,10 +5,11 @@
    purga al eliminar y la prueba de fugas de credenciales. */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   VodBrowseResponseSchema,
   VodHomeSchema,
+  VodListSchema,
   VodTitleSchema,
   type VodSeries,
 } from '@ace/shared';
@@ -368,6 +369,94 @@ describe('VodService contra el proveedor falso', () => {
     expect(vod.languagesOf()).toMatchObject({ chosen: true, langs: ['castellano', 'frances'] });
   });
 
+  it('Mi lista (0.9.1): añadir y quitar, por dónde va la serie, avisos, «ya no está» y otro proveedor', async () => {
+    const rig = await ready();
+    const { vod } = await synced(rig);
+    const scopes: string[][] = [];
+    const off = rig.core.bus.on('state.changed', (event) => scopes.push([...event.scopes]));
+    const home = await vod.home();
+    const movie = home.newMovies[0]?.id as string;
+    const seriesId = home.updatedSeries[0]?.id as string;
+    expect(await vod.listOf()).toEqual({ items: [], max: 500 });
+
+    await vod.listAdd(movie);
+    await rig.core.clock.advanceAsync(1_000);
+    const added = VodListSchema.parse(await vod.listAdd(seriesId));
+    /* La más nueva arriba; tarjetas de verdad (cartel, idiomas) y sin filtrar por idioma. */
+    expect(added.items.map((item) => [item.title, item.kind, item.available, item.upTo])).toEqual([
+      ['The Office (US)', 'series', true, null],
+      ['Oppenheimer', 'movie', true, null],
+    ]);
+    expect(added.items[1]?.poster).toMatch(/^[a-f0-9]{8}$/);
+    /* Dos veces da lo mismo (y no avisa otra vez). */
+    expect((await vod.listAdd(seriesId)).items).toHaveLength(2);
+    expect(scopes).toEqual([['vod'], ['vod']]);
+    const file = rig.core.config.paths.vodFile.replace(/vod\.json$/, 'vod-mi-lista.json');
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toMatchObject({
+      version: 1,
+      items: [
+        { id: seriesId, kind: 'series', title: 'The Office (US)' },
+        { id: movie, kind: 'movie', title: 'Oppenheimer' },
+      ],
+    });
+
+    /* Un episodio no se añade; un id que no es de este proveedor, tampoco. */
+    const series = (await settle(rig, vod.title(seriesId))) as VodSeries;
+    const [e1] = series.seasons[0]?.episodes ?? [];
+    await expect(vod.listAdd(e1?.id as string)).rejects.toMatchObject({ code: 'vod_not_found' });
+    await expect(vod.listAdd('f'.repeat(40))).rejects.toMatchObject({ code: 'vod_not_found' });
+
+    /* Por dónde va: acabado el T1:E1, el siguiente. */
+    await settle(rig, vod.progress(e1?.id as string, { event: 'ended', posS: 1_320, durS: 1_320 }));
+    expect((await vod.listOf()).items[0]?.upTo).toEqual({
+      label: 'T1 · E2 · Día de la diversidad',
+      next: true,
+    });
+
+    /* Uno que ya no está en el catálogo (de una copia): se queda, marcado. */
+    await vod.restoreList(
+      [{ id: 'a'.repeat(40), kind: 'movie', title: 'Película perdida', year: 1999, addedAt: 1 }],
+      'merge',
+    );
+    const lost = (await vod.listOf()).items.at(-1);
+    expect(lost).toMatchObject({
+      title: 'Película perdida',
+      year: 1999,
+      available: false,
+      poster: null,
+      upTo: null,
+    });
+
+    /* Quitar (también el que ya no está). */
+    expect((await vod.listRemove('a'.repeat(40))).items).toHaveLength(2);
+    expect((await vod.listRemove(movie)).items.map((item) => item.id)).toEqual([seriesId]);
+    expect((await vod.listRemove(movie)).items).toHaveLength(1);
+
+    /* Eliminar la IPTV no la borra; con otro `provider.id` los ids cambian y
+       se vuelven a encontrar por el título. */
+    await rig.service.remove();
+    expect(existsSync(file)).toBe(true);
+    await rig.service.save(
+      {
+        kind: 'xtream',
+        server: rig.fake.server,
+        username: FAKE_IPTV_USER,
+        password: FAKE_IPTV_PASSWORD,
+      },
+      new AbortController().signal,
+    );
+    await rig.service.idle();
+    await vod.home();
+    await vod.idle();
+    const again = await vod.listOf();
+    expect(again.items.map((item) => [item.title, item.available])).toEqual([
+      ['The Office (US)', true],
+    ]);
+    expect(again.items[0]?.id).not.toBe(seriesId);
+    expect(again.items[0]?.id).toBe((await vod.home()).updatedSeries[0]?.id);
+    off();
+  });
+
   it('fichas: película con datos técnicos; serie con temporadas, «Especiales» y botón principal; coalescencia', async () => {
     const rig = await ready();
     const { vod } = await synced(rig);
@@ -581,7 +670,11 @@ describe('VodService contra el proveedor falso', () => {
       ['Amélie', false, null],
     ]);
     expect(after.continue[0]?.id).toBe(e2?.id);
-    expect(after.continue[0]?.art).toMatchObject({ id: home.updatedSeries[0]?.id, art: 'poster' });
+    /* Con la ficha de la serie ya pedida, su fondo 16:9 (0.9.1), no el cartel. */
+    expect(after.continue[0]?.art).toMatchObject({
+      id: home.updatedSeries[0]?.id,
+      art: 'backdrop',
+    });
     expect(after.newMovies[2]?.progress).toBeCloseTo(600 / 7200);
     const again = (await vod.title(home.updatedSeries[0]?.id as string)) as VodSeries;
     expect(again.main).toMatchObject({ action: 'next', label: 'Siguiente: T1:E2' });
@@ -1117,7 +1210,7 @@ describe('VodService contra el proveedor falso', () => {
     expect((await vod.home()).counts).toEqual({ movies: 9, series: 3 });
   });
 
-  it('otro proveedor por «Guardar» vacía vod.json, vod.enc y arte/ (§10.5)', async () => {
+  it('otro proveedor por «Guardar» vacía vod.json, vod.enc y arte/ (§10.5), pero lo visto vuelve por su título (0.9.1)', async () => {
     const rig = await ready();
     const { vod } = await synced(rig);
     const home = await vod.home();
@@ -1147,7 +1240,14 @@ describe('VodService contra el proveedor falso', () => {
     await synced(rig);
     const again = await vod.home();
     expect(again.state).toBe('ready');
-    expect(again.continue).toEqual([]);
     expect(again.newMovies[0]?.id).not.toBe(home.newMovies[0]?.id);
+    /* Lo visto se guardó aparte y vuelve con el id del proveedor nuevo. */
+    await vi.waitFor(async () => {
+      const now = await vod.home();
+      expect(now.continue.map((item) => [item.id, item.title, item.posS])).toEqual([
+        [again.newMovies[0]?.id, home.newMovies[0]?.title, 100],
+      ]);
+    });
+    await vi.waitFor(() => expect(vod.carried.read()).toEqual([]));
   });
 });

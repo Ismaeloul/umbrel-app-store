@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 import { HashSchema, IsoDateTimeSchema } from '../../primitives.js';
-import { VOD_SEARCH } from '../../constants/vod.js';
+import { VOD_LIST, VOD_SEARCH } from '../../constants/vod.js';
 import { VodCatalogStateSchema } from '../../state/v2.js';
 import { CursorSchema, IptvCategoryIdSchema } from './iptv.js';
 import { ChannelStreamQuerySchema, StreamGrantSchema } from './playback.js';
@@ -549,3 +549,45 @@ export const VodProgressBodySchema = z.strictObject({
   subtitle: z.string().max(12).nullable().optional(),
 });
 export type VodProgressBody = z.infer<typeof VodProgressBodySchema>;
+
+/* --- «Mi lista» (0.9.1) ---
+   Películas y series que Isma guarda para ver luego, por casa
+   (`v2/vod-mi-lista.json`): vale en el PC y en el iPhone y entra en la copia
+   de seguridad. NO se filtra por los idiomas elegidos: enseña lo que se
+   añadió, sea del idioma que sea (con su distintivo). */
+
+/** Por dónde va una serie de «Mi lista» (si se ha empezado). */
+export const VodListUpToSchema = z.strictObject({
+  /** «T2 · E5 · El regreso» (el que se está viendo) o el siguiente propuesto. */
+  label: z.string().max(120),
+  /** true = el anterior se acabó y este es el siguiente (empieza de cero). */
+  next: z.boolean(),
+});
+export type VodListUpTo = z.infer<typeof VodListUpToSchema>;
+
+/**
+ * Un título de «Mi lista»: la tarjeta de siempre (`VodCard`) más cuándo se
+ * añadió, si sigue en el catálogo y, en una serie, por dónde va. Si ya no
+ * está (`available: false`), la tarjeta lleva lo guardado al añadirlo
+ * (título y año), sin cartel ni distintivos.
+ */
+export const VodListItemSchema = VodCardSchema.extend({
+  addedAt: IsoDateTimeSchema,
+  /** false = «Ya no está en tu IPTV» (se queda en la lista hasta que se quite). */
+  available: z.boolean(),
+  /** Solo series empezadas; null en películas y en series sin empezar o ya vistas. */
+  upTo: VodListUpToSchema.nullable(),
+});
+export type VodListItem = z.infer<typeof VodListItemSchema>;
+
+/** GET/PUT/DELETE /api/v1/vod/list…: la lista entera, de la más nueva a la más vieja. */
+export const VodListSchema = z.strictObject({
+  items: z.array(VodListItemSchema).max(VOD_LIST.itemsMax),
+  /** Cuántos caben (500). */
+  max: z.number().int().positive(),
+});
+export type VodList = z.infer<typeof VodListSchema>;
+
+/** Una película o una serie de «Mi lista» (40 hex sellados). */
+export const VodListParamsSchema = VodTitleParamsSchema;
+export type VodListParams = z.infer<typeof VodListParamsSchema>;

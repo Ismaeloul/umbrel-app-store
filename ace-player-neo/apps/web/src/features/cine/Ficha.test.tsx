@@ -1,11 +1,12 @@
 /* Ficha de una película o una serie (docs/vod.md §12.6, §10.3 y §13). */
 
-import type { VodMovie, VodSeries } from '@ace/shared';
+import type { VodList, VodMovie, VodSeries } from '@ace/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import seriesAviFixture from '@fixtures/variantes/vodTitle.episodio-avi.json';
 import seriesFixture from '@fixtures/variantes/vodTitle.series.json';
 import movieFixture from '@fixtures/web/v1/vodTitle.json';
+import listFixture from '@fixtures/web/v1/vodListGet.json';
 import checkingFixture from '@fixtures/variantes/vodTitle.audio-comprobando.json';
 import heardFixture from '@fixtures/variantes/vodTitle.audio-del-fichero.json';
 import { resetMode, setMode } from '../../api/mode.ts';
@@ -45,7 +46,7 @@ const progressCalls = () => net.calls.filter((call) => call.url.endsWith('/progr
 
 function serveTitle(
   title: VodMovie | VodSeries,
-  extra: Record<string, (call: MockCall) => Response> = {},
+  extra: Record<string, (call: MockCall) => Response | Promise<Response>> = {},
 ) {
   net = mockFetch({
     [`GET /api/v1/vod/titles/${title.id}`]: () => json(title),
@@ -422,6 +423,76 @@ describe('serie', () => {
       await screen.findByRole('button', { name: 'Siguiente capítulo: T1 · E4' }),
     ).toBeInTheDocument();
     expect(screen.getAllByText('Visto')).toHaveLength(3);
+  });
+});
+
+describe('«Mi lista» (0.9.1)', () => {
+  const LIST = listFixture as VodList;
+  const without = (id: string): VodList => ({
+    ...LIST,
+    items: LIST.items.filter((item) => item.id !== id),
+  });
+
+  it('una serie que está: «En mi lista» pulsado; al pulsar se quita al momento (DELETE)', async () => {
+    let answer: (response: Response) => void = () => {};
+    serveTitle(SERIES, {
+      'GET /api/v1/vod/list': () => json(LIST),
+      [`DELETE /api/v1/vod/list/${SERIES.id}`]: () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    const button = await screen.findByRole('button', { name: 'En mi lista' });
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(button);
+    // Optimista: cambia antes de que conteste el servidor.
+    const add = await screen.findByRole('button', { name: 'Añadir a mi lista' });
+    expect(add).toHaveAttribute('aria-pressed', 'false');
+    expect(net.calls.some((call) => call.method === 'DELETE')).toBe(true);
+    answer(json(without(SERIES.id)));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Añadir a mi lista' })).toBeInTheDocument(),
+    );
+  });
+
+  it('una película que no está: «Añadir a mi lista» (PUT); si falla, vuelve y lo dice', async () => {
+    serveTitle(MOVIE, {
+      'GET /api/v1/vod/list': () => json(without(MOVIE.id)),
+      [`PUT /api/v1/vod/list/${MOVIE.id}`]: () =>
+        json(
+          {
+            error: {
+              code: 'vod_list_full',
+              message: 'Mi lista está llena (500 títulos). Quita alguno para añadir más.',
+              requestId: 't',
+            },
+          },
+          409,
+        ),
+    });
+    const button = await screen.findByRole('button', { name: 'Añadir a mi lista' });
+    fireEvent.click(button);
+    expect(
+      await screen.findByText(/No se ha podido añadir «Dune» a Mi lista\. Mi lista está llena/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Añadir a mi lista' })).toBeInTheDocument();
+    expect(net.calls.filter((call) => call.method === 'PUT')).toHaveLength(1);
+  });
+
+  it('una ficha que ya no está: «Quitar de mi lista» si estaba', async () => {
+    const gone = LIST.items.find((item) => !item.available);
+    if (!gone) throw new Error('el ejemplo trae uno que ya no está');
+    net = mockFetch({
+      ...demoRoutes([gone.id]),
+      'GET /api/v1/vod/list': () => json(LIST),
+      [`DELETE /api/v1/vod/list/${gone.id}`]: () => json(without(gone.id)),
+    });
+    renderCine({ search: `?vista=cine/${gone.id}` });
+    fireEvent.click(await screen.findByRole('button', { name: 'Quitar de mi lista' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Quitar de mi lista' })).toBeNull(),
+    );
+    expect(net.calls.some((call) => call.method === 'DELETE')).toBe(true);
   });
 });
 

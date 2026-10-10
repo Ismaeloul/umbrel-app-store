@@ -1,5 +1,7 @@
 /* «Seguir viendo» (docs/vod.md §12.4 y §10.3): tarjetas 16:9 en un carrusel,
-   con lo visto en una barra («Visto: 40 %») y «T2 · E3 · Quedan 12 min». La
+   con el fondo de la película o de la serie, su nombre en pequeño abajo a la
+   izquierda (0.9.1), lo visto en una barra («Visto: 40 %») y debajo
+   «T2 · E3 · Quedan 12 min». La
    tarjeta reproduce (desde donde se dejó, o el siguiente episodio desde el
    principio); su menú («Más opciones», clic derecho o pulsación larga) tiene
    «Quitar de Seguir viendo», «Marcar como visto» y «Ver ficha». */
@@ -77,25 +79,17 @@ function ContinueCard({ entry }: { entry: VodContinue }) {
       >
         <span className="cine-continue__art" data-art={art?.art ?? 'none'}>
           {art?.art === 'poster' ? (
-            /* Solo hay cartel: el cartel 2:3 entero a la izquierda sobre su
-               propio color desenfocado (recortarlo a 16:9 se veía mal). */
-            <>
-              <Art
-                id={art.id}
-                art="poster"
-                v={art.v}
-                title={entry.title}
-                bare
-                className="cine-continue__blur"
-              />
-              <Art
-                id={art.id}
-                art="poster"
-                v={art.v}
-                title={entry.title}
-                className="cine-continue__poster"
-              />
-            </>
+            /* Solo hay cartel (su ficha aún no ha llegado): de fondo, desenfocado
+               a todo lo ancho. Nada de cartel 2:3 encima: con el fondo se veía
+               «como estirado» (Isma, 0.9.1). */
+            <Art
+              id={art.id}
+              art="poster"
+              v={art.v}
+              title={entry.title}
+              bare
+              className="cine-continue__blur"
+            />
           ) : (
             <Art
               id={art?.id ?? entry.id}
@@ -104,6 +98,12 @@ function ContinueCard({ entry }: { entry: VodContinue }) {
               title={entry.title}
             />
           )}
+          {/* El nombre en pequeño abajo a la izquierda, como un logo (el
+              proveedor no da logos): «la preview de la serie con el logo en
+              chiquitito abajo a la izquierda». */}
+          <span className="cine-continue__logo" aria-hidden="true">
+            {entry.title}
+          </span>
           {ratio !== null ? (
             <ProgressBar
               className="cine-continue__progress"
@@ -113,7 +113,6 @@ function ContinueCard({ entry }: { entry: VodContinue }) {
             />
           ) : null}
         </span>
-        <span className="cine-continue__title">{entry.title}</span>
         {line ? <span className="cine-continue__line">{line}</span> : null}
       </button>
       <MenuButton
