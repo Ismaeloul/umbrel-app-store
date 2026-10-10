@@ -5,7 +5,7 @@
    purga al eliminar y la prueba de fugas de credenciales. */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   VodBrowseResponseSchema,
   VodHomeSchema,
@@ -670,7 +670,11 @@ describe('VodService contra el proveedor falso', () => {
       ['Amélie', false, null],
     ]);
     expect(after.continue[0]?.id).toBe(e2?.id);
-    expect(after.continue[0]?.art).toMatchObject({ id: home.updatedSeries[0]?.id, art: 'poster' });
+    /* Con la ficha de la serie ya pedida, su fondo 16:9 (0.9.1), no el cartel. */
+    expect(after.continue[0]?.art).toMatchObject({
+      id: home.updatedSeries[0]?.id,
+      art: 'backdrop',
+    });
     expect(after.newMovies[2]?.progress).toBeCloseTo(600 / 7200);
     const again = (await vod.title(home.updatedSeries[0]?.id as string)) as VodSeries;
     expect(again.main).toMatchObject({ action: 'next', label: 'Siguiente: T1:E2' });
@@ -1206,7 +1210,7 @@ describe('VodService contra el proveedor falso', () => {
     expect((await vod.home()).counts).toEqual({ movies: 9, series: 3 });
   });
 
-  it('otro proveedor por «Guardar» vacía vod.json, vod.enc y arte/ (§10.5)', async () => {
+  it('otro proveedor por «Guardar» vacía vod.json, vod.enc y arte/ (§10.5), pero lo visto vuelve por su título (0.9.1)', async () => {
     const rig = await ready();
     const { vod } = await synced(rig);
     const home = await vod.home();
@@ -1236,7 +1240,14 @@ describe('VodService contra el proveedor falso', () => {
     await synced(rig);
     const again = await vod.home();
     expect(again.state).toBe('ready');
-    expect(again.continue).toEqual([]);
     expect(again.newMovies[0]?.id).not.toBe(home.newMovies[0]?.id);
+    /* Lo visto se guardó aparte y vuelve con el id del proveedor nuevo. */
+    await vi.waitFor(async () => {
+      const now = await vod.home();
+      expect(now.continue.map((item) => [item.id, item.title, item.posS])).toEqual([
+        [again.newMovies[0]?.id, home.newMovies[0]?.title, 100],
+      ]);
+    });
+    await vi.waitFor(() => expect(vod.carried.read()).toEqual([]));
   });
 });

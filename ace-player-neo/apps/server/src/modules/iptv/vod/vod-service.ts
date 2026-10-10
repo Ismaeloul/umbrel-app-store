@@ -34,6 +34,7 @@ import {
   vodLangsOf,
   type IptvVodStatus,
   type VodArtKind,
+  type VodCarriedEntry,
   type VodBrowseQuery,
   type VodBrowseResponse,
   type VodCard,
@@ -120,6 +121,7 @@ import {
 } from './progress.js';
 import { VodLanguageStore } from './languages.js';
 import { mergeLists, sameTitleKey, titleOnlyKey, VodListStore } from './my-list.js';
+import { VodCarriedStore } from './carried.js';
 import {
   forgetSearches,
   langFilterKey,
@@ -159,6 +161,8 @@ export interface VodHost {
     readonly vodLanguagesFile?: string;
     /** «Mi lista» (0.9.1). Sin él, `vod-mi-lista.json` junto a `vodFile`. */
     readonly vodListFile?: string;
+    /** Lo visto con un proveedor anterior (0.9.1). Sin él, `vod-visto-anterior.json` junto a `vodFile`. */
+    readonly vodCarriedFile?: string;
   };
   keys(): IptvKeys;
   /** El proveedor, o null (sin IPTV o con secretos ilegibles). */
@@ -390,6 +394,10 @@ export class VodService {
   readonly languages: VodLanguageStore;
   /** «Mi lista» (0.9.1). */
   readonly list: VodListStore;
+  /** Lo visto con un proveedor anterior (0.9.1), para volver a engancharlo (`relinkProgress`). */
+  readonly carried: VodCarriedStore;
+  /** Catálogos en los que ya se buscó lo visto con el proveedor anterior. */
+  private readonly carriedTried = new WeakSet<VodCatalog>();
   /** Ids de «Mi lista» ya buscados por su título en cada catálogo (`relinkList`). */
   private readonly listTried = new WeakMap<VodCatalog, Set<string>>();
   readonly details: VodDetailsQueue;
@@ -414,6 +422,13 @@ export class VodService {
     this.list = new VodListStore({
       file:
         host.paths.vodListFile ?? path.join(path.dirname(host.paths.vodFile), 'vod-mi-lista.json'),
+      clock: host.clock,
+      logger: host.logger,
+    });
+    this.carried = new VodCarriedStore({
+      file:
+        host.paths.vodCarriedFile ??
+        path.join(path.dirname(host.paths.vodFile), 'vod-visto-anterior.json'),
       clock: host.clock,
       logger: host.logger,
     });
@@ -460,6 +475,7 @@ export class VodService {
     await this.doc.flush();
     await this.languages.flush();
     await this.list.flush();
+    await this.carried.flush();
     await this.audio.stop();
   }
 
@@ -502,9 +518,11 @@ export class VodService {
     const doc = this.doc.read();
     if (doc.providerFp !== null && doc.providerFp !== fp) {
       /* Otro proveedor: todos los ids cambian (§10.5). */
+      const carried = this.carryOut();
       this.catalog = null;
       this.homeCache = null;
       this.details.clear();
+      void this.carried.add(carried).catch(() => undefined);
       void this.doc.reset(fp);
     } else if (doc.providerFp === null) {
       this.doc.adopt(fp);
@@ -593,6 +611,8 @@ export class VodService {
    * (`vod.enc` y `arte/`) los borra `IptvFiles.removeAll`.
    */
   async purge(): Promise<void> {
+    /* Lo visto se guarda aparte antes de vaciar `v2/vod.json` (0.9.1). */
+    const carried = this.carryOut();
     this.clearTimers();
     this.catalog = null;
     this.loading = null;
@@ -607,6 +627,7 @@ export class VodService {
     this.art.reset();
     this.audio.reset();
     this.docFp = null;
+    await this.carried.add(carried).catch(() => undefined);
     await this.doc.reset(null);
   }
 
@@ -1187,17 +1208,23 @@ export class VodService {
       const { entry } = item;
       const ref = vodRef(keys, providerId, entry.id);
       if (!ref) continue;
-      /* El cartel: el de la película o el de su serie. */
       let art: VodContinue['art'] = null;
-      const posterOf = (kind: VodKind, source: number, id: string): VodContinue['art'] => {
+      /* La imagen (0.9.1): el fondo 16:9 de la película o de su serie si su
+         ficha está en la caché (Isma: el cartel vertical sobre su propio
+         desenfoque «se ve como estirado»); si no, el cartel, y la ficha se
+         pide sin prisa (`pre`) para la próxima vez. */
+      const artOf = (kind: VodKind, source: number, id: string): VodContinue['art'] => {
+        const info = this.details.peek(kind, source);
+        if (info?.backdrop) return { id, art: 'backdrop', v: this.art.stamp(info.backdrop) };
+        if (!info) void this.details.get(kind, source, { pre: true }).catch(() => undefined);
         const table = catalog.tables[kind];
         const row = table.rowOf(source);
         const stamp = row >= 0 ? this.posterStamp(table, row) : null;
         return stamp ? { id, art: 'poster', v: stamp } : null;
       };
-      if (ref.kind === 'movie') art = posterOf('movie', ref.source, entry.id);
+      if (ref.kind === 'movie') art = artOf('movie', ref.source, entry.id);
       else if (ref.kind === 'episode' && entry.seriesId)
-        art = posterOf('series', ref.parent, entry.seriesId);
+        art = artOf('series', ref.parent, entry.seriesId);
       const next = item.isNext ? entry.next : null;
       out.push({
         id: next ? next.id : entry.id,
@@ -1251,6 +1278,15 @@ export class VodService {
     const catalog = await this.ensureCatalog();
     const state = this.state();
     if (!catalog || state !== 'ready') return this.emptyHome(state, this.active());
+    /* Lo visto con el proveedor anterior (0.9.1): en segundo plano, una vez por catálogo. */
+    if (this.carried.read().length && !this.carriedTried.has(catalog)) {
+      void this.relinkProgress(catalog).catch((error: unknown) => {
+        this.host.logger.warn(
+          { err: error },
+          'Películas y series: lo visto antes no se pudo enganchar',
+        );
+      });
+    }
     const { parts, cache } = this.homeParts(catalog, langFilterOf(query));
     const progress = this.progressMap();
     const cards = (kind: VodKind): VodCard[] =>
@@ -1359,6 +1395,124 @@ export class VodService {
     const table = catalog.tables[kind];
     const row = table.rowOf(ref.source);
     return row < 0 ? null : { kind, table, row };
+  }
+
+  /**
+   * El progreso de `v2/vod.json` listo para `v2/vod-visto-anterior.json`
+   * (0.9.1), con el año de cada título si el catálogo de ese proveedor está
+   * cargado (sin él, se engancha por el título solo si es único).
+   */
+  private carryOut(): VodCarriedEntry[] {
+    const progress = this.doc.read().progress;
+    if (!progress.length) return [];
+    const catalog = this.catalog;
+    const keys = this.host.keys();
+    const yearOf = (id: string | null): number | null => {
+      if (!catalog || !id) return null;
+      const ref = vodRef(keys, catalog.providerId, id);
+      if (!ref || ref.kind === 'episode') return null;
+      const table = catalog.tables[ref.kind];
+      const row = table.rowOf(ref.source);
+      return row >= 0 ? table.yearOf(row) : null;
+    };
+    return progress.map((entry) => ({
+      ...entry,
+      year: yearOf(entry.kind === 'movie' ? entry.id : entry.seriesId),
+    }));
+  }
+
+  /**
+   * Lo visto con un proveedor anterior se busca una vez por catálogo
+   * (0.9.1): películas por tipo + título + año (sin año, un único título
+   * igual); episodios por su serie igual y la misma temporada y capítulo,
+   * con la ficha de la serie (por la cola de fichas). Lo encontrado pasa a
+   * `v2/vod.json` (si ya hay progreso de ese título con este proveedor, gana
+   * el de aquí) y sale de lo guardado; lo demás se queda.
+   */
+  private async relinkProgress(catalog: VodCatalog): Promise<void> {
+    if (this.carriedTried.has(catalog)) return;
+    this.carriedTried.add(catalog);
+    const carried = this.carried.read();
+    if (!carried.length || catalog.providerId !== this.xtream()?.id) return;
+    const wanted = new Map<string, VodCarriedEntry[]>();
+    for (const item of carried) {
+      const probe = {
+        kind: item.kind === 'movie' ? 'movie' : 'series',
+        title: item.title,
+        year: item.year,
+      } as const;
+      const key = item.year === null ? titleOnlyKey(probe) : sameTitleKey(probe);
+      wanted.set(key, [...(wanted.get(key) ?? []), item]);
+    }
+    /* Clave → fila del catálogo nuevo; null si hay dos títulos iguales. */
+    const rows = new Map<string, { kind: VodKind; source: number } | null>();
+    for (const kind of VOD_KINDS) {
+      const table = catalog.tables[kind];
+      for (let row = 0; row < table.n; row += 1) {
+        const probe = {
+          kind,
+          title: this.text(table.title(row), 200) || 'Sin título',
+          year: table.yearOf(row),
+        };
+        for (const key of new Set([sameTitleKey(probe), titleOnlyKey(probe)])) {
+          if (!wanted.has(key)) continue;
+          const source = table.source[row] as number;
+          const before = rows.get(key);
+          rows.set(
+            key,
+            before === undefined || (before && before.source === source) ? { kind, source } : null,
+          );
+        }
+      }
+    }
+    const found: VodProgressEntry[] = [];
+    const matched = new Set<VodCarriedEntry>();
+    const episodesBySeries = new Map<number, EpisodeRef[]>();
+    for (const [key, items] of wanted) {
+      const at = rows.get(key);
+      if (!at) continue;
+      for (const item of items) {
+        const { year: _year, ...entry } = item;
+        if (at.kind === 'movie') {
+          found.push({ ...entry, id: this.idOf('movie', at.source), seriesId: null, next: null });
+          matched.add(item);
+          continue;
+        }
+        if (item.season === null || item.episode === null) continue;
+        let episodes = episodesBySeries.get(at.source);
+        if (!episodes) {
+          const info = await this.infoOf('series', at.source).catch(() => null);
+          episodes = info?.kind === 'series' ? this.episodesOf(at.source, info) : [];
+          episodesBySeries.set(at.source, episodes);
+        }
+        const episode = episodes.find(
+          (one) => one.season === item.season && one.number === item.episode,
+        );
+        if (!episode) continue;
+        const next = item.next ? nextEpisode(episodes, episode.id) : null;
+        found.push({
+          ...entry,
+          id: episode.id,
+          seriesId: this.idOf('series', at.source),
+          next: next ? { id: next.id, label: episodeSubtitle(next).slice(0, 80) } : null,
+        });
+        matched.add(item);
+      }
+    }
+    if (!found.length || this.catalog !== catalog) return;
+    const present = new Set(this.doc.read().progress.map((entry) => entry.id));
+    const fresh = found.filter((entry) => !present.has(entry.id));
+    await this.doc.write((doc) => ({
+      ...doc,
+      progress: [...doc.progress, ...fresh]
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, VOD_PROGRESS.itemsMax),
+    }));
+    await this.carried.replace(this.carried.read().filter((item) => !matched.has(item)));
+    this.host.logger.info(
+      { relinked: fresh.length, left: this.carried.read().length },
+      'Películas y series: lo visto con el proveedor anterior, vuelto a encontrar',
+    );
   }
 
   /**

@@ -1437,10 +1437,11 @@ function continueEntries(): VodContinue[] {
       posS: shownProgress?.posS ?? 0,
       durS: shownProgress?.durS ?? shown.durationS ?? 0,
       isNext,
-      art: shown.still
-        ? { id: shown.id, art: 'still', v: shown.still }
-        : series.backdrop
-          ? { id: series.card.id, art: 'backdrop', v: series.backdrop }
+      /* El fondo de la serie, como el servidor (0.9.1); el fotograma, si no hay. */
+      art: series.backdrop
+        ? { id: series.card.id, art: 'backdrop', v: series.backdrop }
+        : shown.still
+          ? { id: shown.id, art: 'still', v: shown.still }
           : series.card.poster
             ? { id: series.card.id, art: 'poster', v: series.card.poster }
             : null,

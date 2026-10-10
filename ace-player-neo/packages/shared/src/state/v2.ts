@@ -403,3 +403,25 @@ export const VodListFileSchema = z.object({
   items: z.array(VodListEntrySchema).max(VOD_LIST.itemsMax),
 });
 export type VodListFile = z.infer<typeof VodListFileSchema>;
+
+// --- v2/vod-visto-anterior.json (0.9.1) ---
+
+/**
+ * Lo visto con un proveedor anterior (0.9.1, Isma: «si cambio de proveedor,
+ * ¿se guarda lo que he visto?»). `v2/vod.json` se vacía al cambiar de
+ * proveedor; antes, su progreso pasa aquí con el año del título (si el
+ * catálogo viejo estaba cargado) y se vuelve a enganchar en el catálogo
+ * nuevo por tipo + título + año (y temporada y capítulo). Lo que el nuevo no
+ * tenga se queda por si aparece. `z.object` (no estricto), como la lista.
+ */
+export const VodCarriedEntrySchema = VodProgressEntrySchema.extend({
+  /** El año de la película o de la serie, o null si no se supo. */
+  year: z.number().int().min(1800).max(2200).nullable(),
+});
+export type VodCarriedEntry = z.infer<typeof VodCarriedEntrySchema>;
+
+export const VodCarriedFileSchema = z.object({
+  version: z.literal(1),
+  items: z.array(VodCarriedEntrySchema).max(VOD_PROGRESS.itemsMax),
+});
+export type VodCarriedFile = z.infer<typeof VodCarriedFileSchema>;
