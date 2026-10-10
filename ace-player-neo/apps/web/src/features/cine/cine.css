@@ -356,27 +356,20 @@
 .cine-continue__card.press::after {
   content: none;
 }
-/* «Seguir viendo» sin halo (0.9.1): el fondo gris alrededor de la imagen, el
-   texto y «Más opciones» quedaba raro (Isma). Se resalta solo la imagen: un
-   borde fino y un poco más de luz. */
+/* Sin halo (0.9.1), en los carteles y en «Seguir viendo»: el fondo gris
+   alrededor de la imagen y el texto quedaba raro y parpadeaba (Isma). Al pasar el ratón, solo un
+   borde fino en la imagen, al momento: sin animar ni cambiar el brillo (el
+   `filter` animado sobre la imagen parpadeaba). */
+.cine-card::before,
 .cine-continue__item::before {
   content: none;
 }
-.cine-continue__art {
-  transition:
-    box-shadow var(--dur-rapido) var(--ease-rapido),
-    filter var(--dur-rapido) var(--ease-rapido);
-}
 @media (hover: hover) and (pointer: fine) {
+  .cine-card:hover .cine-card__poster,
   .cine-continue__card:hover .cine-continue__art {
-    box-shadow:
-      0 0 0 2px rgb(255 255 255 / 0.55),
-      var(--shadow-poster);
-    filter: brightness(1.08);
+    outline: 2px solid rgb(255 255 255 / 0.6);
+    outline-offset: 2px;
   }
-}
-.cine-continue__card:active .cine-continue__art {
-  filter: brightness(0.92);
 }
 
 /* ---- Tarjeta (PosterCard.tsx) -------------------------------------------------- */
