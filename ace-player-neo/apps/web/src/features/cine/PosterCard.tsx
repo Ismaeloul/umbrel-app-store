@@ -98,9 +98,13 @@ export function cardBadges(
 export interface PosterCardProps {
   card: VodCard;
   className?: string;
+  /** Una línea más bajo el título («Vas por T2 · E5», «Ya no está en tu IPTV»: «Mi lista»). */
+  note?: string | null;
+  /** Ya no está en el catálogo: el cartel, apagado. */
+  gone?: boolean;
 }
 
-export function PosterCard({ card, className }: PosterCardProps) {
+export function PosterCard({ card, className, note, gone = false }: PosterCardProps) {
   const link = useTitleLink(card.id);
   const selected = use(CineLangs);
   const tags = orderedTags(card.tags);
@@ -121,9 +125,14 @@ export function PosterCard({ card, className }: PosterCardProps) {
     ...spoken,
     card.adult ? CINE_TEXT.adult : null,
     card.progress !== null ? `visto: ${Math.round(card.progress * 100)} %` : null,
+    note,
   ]);
   return (
-    <a className={cx('cine-card', 'press', className)} {...link} aria-label={label}>
+    <a
+      className={cx('cine-card', 'press', gone && 'cine-card--gone', className)}
+      {...link}
+      aria-label={label}
+    >
       <span className="cine-card__poster">
         <Art id={card.id} art="poster" v={card.poster} title={card.title} />
         {badges.length > 0 ? (
@@ -163,6 +172,7 @@ export function PosterCard({ card, className }: PosterCardProps) {
           ) : null}
         </span>
       ) : null}
+      {note ? <span className="cine-card__note">{note}</span> : null}
     </a>
   );
 }

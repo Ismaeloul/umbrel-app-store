@@ -63,6 +63,8 @@ export const SCOPE_ROUTES: Record<StateScope, readonly JsonRouteId[]> = {
   stats: ['health'],
   nowPlaying: ['playbackStatus'],
   settings: ['settingsGet', 'bootstrap'],
+  /* «Mi lista» de Películas y series (0.9.1): la ficha y la fila de la portada. */
+  vod: ['vodListGet'],
 };
 
 export const SSE_FALLBACK_AFTER_MS = 10_000;

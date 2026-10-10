@@ -28,6 +28,7 @@ import {
   VOD_KINDS,
   VOD_LANG_ALL,
   VOD_LANGS,
+  VOD_LIST,
   VOD_PROGRESS,
   vodLangBits,
   vodLangsOf,
@@ -48,6 +49,9 @@ import {
   type VodLangQuery,
   type VodLanguages,
   type VodLanguagesBody,
+  type VodList,
+  type VodListEntry,
+  type VodListItem,
   type VodMovie,
   type VodProgressBody,
   type VodProgressEntry,
@@ -115,6 +119,7 @@ import {
   type ProgressTarget,
 } from './progress.js';
 import { VodLanguageStore } from './languages.js';
+import { mergeLists, sameTitleKey, titleOnlyKey, VodListStore } from './my-list.js';
 import {
   forgetSearches,
   langFilterKey,
@@ -152,6 +157,8 @@ export interface VodHost {
     readonly vodArtDir: string;
     /** Los idiomas elegidos (§4.10). Sin él, `vod-idiomas.json` junto a `vodFile`. */
     readonly vodLanguagesFile?: string;
+    /** «Mi lista» (0.9.1). Sin él, `vod-mi-lista.json` junto a `vodFile`. */
+    readonly vodListFile?: string;
   };
   keys(): IptvKeys;
   /** El proveedor, o null (sin IPTV o con secretos ilegibles). */
@@ -168,6 +175,8 @@ export interface VodHost {
   busy(): boolean;
   /** Avisa de un cambio de estado (`iptv.status`). */
   emitStatus(): void;
+  /** Avisa de que «Mi lista» ha cambiado (`state.changed` con `vod`: las demás pestañas la vuelven a pedir). */
+  emitList?(): void;
   /** Duración que conoce el servidor para un id (la sesión VOD de VOD-5), o null. */
   knownDurationS?(id: string): number | null;
   /**
@@ -379,6 +388,10 @@ export class VodService {
   readonly doc: VodDocStore;
   /** Los idiomas elegidos (§4.10). */
   readonly languages: VodLanguageStore;
+  /** «Mi lista» (0.9.1). */
+  readonly list: VodListStore;
+  /** Ids de «Mi lista» ya buscados por su título en cada catálogo (`relinkList`). */
+  private readonly listTried = new WeakMap<VodCatalog, Set<string>>();
   readonly details: VodDetailsQueue;
   readonly art: VodArtCache;
 
@@ -395,6 +408,12 @@ export class VodService {
       file:
         host.paths.vodLanguagesFile ??
         path.join(path.dirname(host.paths.vodFile), 'vod-idiomas.json'),
+      clock: host.clock,
+      logger: host.logger,
+    });
+    this.list = new VodListStore({
+      file:
+        host.paths.vodListFile ?? path.join(path.dirname(host.paths.vodFile), 'vod-mi-lista.json'),
       clock: host.clock,
       logger: host.logger,
     });
@@ -440,6 +459,7 @@ export class VodService {
     this.art.stop();
     await this.doc.flush();
     await this.languages.flush();
+    await this.list.flush();
     await this.audio.stop();
   }
 
@@ -1313,6 +1333,176 @@ export class VodService {
   /** PUT /api/v1/vod/languages (§4.10). También lo usa la copia de seguridad al restaurar. */
   saveLanguages(body: VodLanguagesBody): Promise<VodLanguages> {
     return this.languages.save(body);
+  }
+
+  // --- «Mi lista» (0.9.1) ---
+
+  /** El catálogo para «Mi lista», sin lanzar nada: null sin IPTV Xtream o sin catálogo listo. */
+  private async listCatalog(): Promise<VodCatalog | null> {
+    if (!this.xtream() || this.state() !== 'ready') return null;
+    try {
+      return await this.ensureCatalog();
+    } catch (error) {
+      this.host.logger.warn({ err: error }, 'Mi lista: el catálogo no se pudo abrir');
+      return null;
+    }
+  }
+
+  /** La fila de un título de la lista en el catálogo, o null si ya no está. */
+  private listRow(
+    catalog: VodCatalog,
+    id: string,
+  ): { kind: VodKind; table: VodTable; row: number } | null {
+    const ref = vodRef(this.host.keys(), catalog.providerId, id);
+    if (!ref || ref.kind === 'episode') return null;
+    const kind: VodKind = ref.kind;
+    const table = catalog.tables[kind];
+    const row = table.rowOf(ref.source);
+    return row < 0 ? null : { kind, table, row };
+  }
+
+  /**
+   * Los que ya no están por su id (otro proveedor, una copia de otro Umbrel)
+   * se buscan por su título una vez por catálogo: tipo + título (sin
+   * mayúsculas ni acentos) + año; si el guardado no tiene año, basta con un
+   * único título igual. Se cambian sus ids en el fichero.
+   */
+  private async relinkList(catalog: VodCatalog): Promise<void> {
+    const tried = this.listTried.get(catalog) ?? new Set<string>();
+    this.listTried.set(catalog, tried);
+    const lost = this.list
+      .read()
+      .filter((item) => !tried.has(item.id) && !this.listRow(catalog, item.id));
+    if (!lost.length) return;
+    for (const item of lost) tried.add(item.id);
+    const wanted = new Map<string, VodListEntry[]>();
+    for (const item of lost) {
+      const key = item.year === null ? titleOnlyKey(item) : sameTitleKey(item);
+      wanted.set(key, [...(wanted.get(key) ?? []), item]);
+    }
+    const found = new Map<string, string>();
+    const ambiguous = new Set<string>();
+    for (const kind of VOD_KINDS) {
+      const table = catalog.tables[kind];
+      for (let row = 0; row < table.n; row += 1) {
+        const probe = {
+          kind,
+          title: this.text(table.title(row), 200) || 'Sin título',
+          year: table.yearOf(row),
+        };
+        for (const key of [sameTitleKey(probe), titleOnlyKey(probe)]) {
+          const items = wanted.get(key);
+          if (!items) continue;
+          const id = this.idOf(kind, table.source[row] as number);
+          for (const item of items) {
+            const before = found.get(item.id);
+            if (before && before !== id) ambiguous.add(item.id);
+            else found.set(item.id, id);
+          }
+        }
+      }
+    }
+    for (const id of ambiguous) found.delete(id);
+    if (!found.size) return;
+    const present = new Set(this.list.read().map((item) => item.id));
+    const next = this.list.read().map((item) => {
+      const id = found.get(item.id);
+      return id && !present.has(id) ? { ...item, id } : item;
+    });
+    await this.list.replace(next);
+    this.host.logger.info({ relinked: found.size }, 'Mi lista: títulos vueltos a encontrar');
+  }
+
+  /** Por dónde va una serie (el más reciente con progreso; §10.3), o null. */
+  private upToOf(seriesId: string, progress: readonly VodProgressEntry[]): VodListItem['upTo'] {
+    let latest: VodProgressEntry | null = null;
+    for (const entry of progress)
+      if (entry.seriesId === seriesId && (!latest || entry.updatedAt > latest.updatedAt))
+        latest = entry;
+    if (!latest) return null;
+    if (latest.watched)
+      return latest.next ? { label: this.text(latest.next.label, 120), next: true } : null;
+    const label =
+      latest.subtitle ??
+      (latest.season !== null && latest.episode !== null
+        ? `T${latest.season} · E${latest.episode}`
+        : null);
+    return label ? { label: this.text(label, 120), next: false } : null;
+  }
+
+  /** GET /api/v1/vod/list: la lista entera, sin filtrar por idiomas. */
+  async listOf(): Promise<VodList> {
+    const catalog = await this.listCatalog();
+    if (catalog) await this.relinkList(catalog);
+    const progressList = this.doc.read().progress;
+    const progress = this.progressMap();
+    const items: VodListItem[] = this.list.read().map((item) => {
+      const at = catalog ? this.listRow(catalog, item.id) : null;
+      if (at) {
+        const card = this.card(at.kind, at.table, at.row, progress);
+        return {
+          ...card,
+          addedAt: iso(item.addedAt),
+          available: true,
+          upTo: at.kind === 'series' ? this.upToOf(card.id, progressList) : null,
+        };
+      }
+      return {
+        id: item.id,
+        kind: item.kind,
+        title: this.text(item.title, 200) || 'Sin título',
+        year: item.year,
+        rating: null,
+        poster: null,
+        tags: [],
+        adult: false,
+        progress: null,
+        langs: [],
+        addedAt: iso(item.addedAt),
+        available: false,
+        upTo: null,
+      };
+    });
+    return { items, max: VOD_LIST.itemsMax };
+  }
+
+  /** PUT /api/v1/vod/list/:id: solo películas y series del catálogo de ahora. */
+  async listAdd(id: string): Promise<VodList> {
+    if (!this.list.has(id)) {
+      const { ref, table, row } = await this.locate(id, ['movie', 'series']);
+      const changed = await this.list.add({
+        id,
+        kind: ref.kind === 'series' ? 'series' : 'movie',
+        title: this.text(table.title(row), 200) || 'Sin título',
+        year: table.yearOf(row),
+      });
+      if (changed) this.host.emitList?.();
+    }
+    return this.listOf();
+  }
+
+  /** DELETE /api/v1/vod/list/:id: también los que ya no están en el catálogo. */
+  async listRemove(id: string): Promise<VodList> {
+    if (await this.list.remove(id)) this.host.emitList?.();
+    return this.listOf();
+  }
+
+  /** La lista tal cual se guarda (para la copia de seguridad). */
+  listEntries(): readonly VodListEntry[] {
+    return this.list.read();
+  }
+
+  /** Restaurar una copia (Reemplazar o Combinar). Devuelve si cambió algo. */
+  async restoreList(
+    incoming: readonly VodListEntry[],
+    mode: 'replace' | 'merge',
+  ): Promise<boolean> {
+    const current = this.list.read();
+    const next = mergeLists(current, incoming, mode);
+    if (JSON.stringify(next) === JSON.stringify(current)) return false;
+    await this.list.replace(next);
+    this.host.emitList?.();
+    return true;
   }
 
   /** Película o serie de un id (con su fila), o `vod_not_found`. */

@@ -14,7 +14,7 @@ import { Toaster } from '../../notices/index.ts';
 import { json, type MockCall } from '../../test/fetch.ts';
 import CineView from './CineView.tsx';
 import { resetCineState } from './data.ts';
-import { demoVodBrowse, demoVodHome, demoVodTitle } from './demo-data.ts';
+import { demoVodBrowse, demoVodHome, demoVodList, demoVodTitle } from './demo-data.ts';
 
 const DEFAULT_LAYOUT: LayoutValue = {
   kind: 'mobile',
@@ -71,6 +71,8 @@ export function demoRoutes(ids: readonly string[] = []) {
     /* Idiomas ya elegidos: todos (los tests de idiomas ponen los suyos). */
     'GET /api/v1/vod/languages': () =>
       json({ chosen: true, langs: [], unknown: true, updatedAt: null }),
+    /* «Mi lista» (0.9.1): la de la demo (dos series y dos películas). */
+    'GET /api/v1/vod/list': () => json(demoVodList()),
   };
   for (const id of ids)
     routes[`GET /api/v1/vod/titles/${id}`] = () => {

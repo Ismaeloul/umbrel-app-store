@@ -6,9 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ApiError } from '../../api/errors.ts';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { json, mockFetch } from '../../test/fetch.ts';
+import listFixture from '@fixtures/web/v1/vodListGet.json';
+import type { VodList } from '@ace/shared';
 import {
   artSrc,
   invalidateAfterProgress,
+  optimisticList,
   postVodProgress,
   resetCineState,
   setCineState,
@@ -113,5 +116,35 @@ describe('la ficha nace de la tarjeta', () => {
       progress: null,
     });
     expect(title).toMatchObject({ kind: 'series', info: 'pending', seasons: [], main: null });
+  });
+});
+
+describe('«Mi lista» optimista (0.9.1)', () => {
+  const LIST = listFixture as VodList;
+  const NOW = Date.parse('2026-10-04T20:00:00.000Z');
+
+  it('añadir: arriba del todo con lo que se sabe; si ya estaba, igual', () => {
+    const target = { id: 'c'.repeat(40), kind: 'movie' as const, title: 'Nueva', year: 2024 };
+    const next = optimisticList(LIST, target, true, NOW);
+    expect(next?.items[0]).toMatchObject({
+      ...target,
+      available: true,
+      upTo: null,
+      poster: null,
+      addedAt: '2026-10-04T20:00:00.000Z',
+    });
+    expect(next?.items).toHaveLength(LIST.items.length + 1);
+    const first = LIST.items[0];
+    if (!first) throw new Error('el ejemplo trae títulos');
+    expect(optimisticList(LIST, first, true, NOW)).toBe(LIST);
+  });
+
+  it('quitar: fuera; sin lista todavía, nada', () => {
+    const first = LIST.items[0];
+    if (!first) throw new Error('el ejemplo trae títulos');
+    expect(optimisticList(LIST, first, false, NOW)?.items.map((item) => item.id)).not.toContain(
+      first.id,
+    );
+    expect(optimisticList(undefined, first, false, NOW)).toBeUndefined();
   });
 });

@@ -228,6 +228,17 @@ export const VOD_PROGRESS = {
   durationMaxS: 12 * 3_600,
 } as const;
 
+/**
+ * «Mi lista» (0.9.1): películas y series que Isma guarda para ver luego. Por
+ * casa (`v2/vod-mi-lista.json`), como los idiomas. 500 como mucho: con eso
+ * no se llena nunca y la respuesta entera cabe en una sola petición.
+ */
+export const VOD_LIST = {
+  itemsMax: 500,
+  /** Títulos de la fila «Mi lista» de la portada (el resto, en «Ver todo»). */
+  rowMax: 20,
+} as const;
+
 /** El reproductor en modo VOD (§12.7-§12.9). */
 export const VOD_PLAYER = {
   seekStepS: 10,

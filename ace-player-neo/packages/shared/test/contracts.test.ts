@@ -473,12 +473,12 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.2)', () => {
       module: 'iptv',
       errors: ['empty_query'],
     });
-    /* Las 7 de la IPTV y las 6 JSON de Películas y series (docs/vod.md §11.6 y §4.10); las 4 JSON de la
+    /* Las 7 de la IPTV y las 9 JSON de Películas y series (docs/vod.md §11.6, §4.10 y §10.6); las 4 JSON de la
        Guía TV las fija test/guide.test.ts. */
     expect(
       WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('iptv') && !id.startsWith('iptvGuide')),
     ).toHaveLength(7);
-    expect(WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('vod'))).toHaveLength(6);
+    expect(WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('vod'))).toHaveLength(9);
     expect(WEB_FIXTURE_ROUTE_IDS).toContain('iptvChannels');
     const example = WEB_V1_FIXTURES.iptvChannels;
     expect(IptvChannelsResponseSchema.safeParse(example).success).toBe(true);

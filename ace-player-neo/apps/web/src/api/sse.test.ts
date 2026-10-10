@@ -102,6 +102,15 @@ describe('SSE', () => {
     expect(client.getQueryState(routeKey('settingsGet'))?.isInvalidated).toBe(false);
   });
 
+  it('state.changed con `vod`: otra pestaña cambió «Mi lista» y se vuelve a pedir (0.9.1)', () => {
+    const listClient = new QueryClient();
+    listClient.setQueryData(routeKey('vodListGet'), { items: [], max: 500 });
+    listClient.setQueryData(routeKey('vodHome'), { marca: 1 });
+    applyToCache(listClient, 'state.changed', { scopes: ['vod'], at: '2026-10-04T18:30:00.000Z' });
+    expect(listClient.getQueryState(routeKey('vodListGet'))?.isInvalidated).toBe(true);
+    expect(listClient.getQueryState(routeKey('vodHome'))?.isInvalidated).toBe(false);
+  });
+
   it('iptv.status vuelve a pedir Películas y series solo si cambia el catálogo VOD (docs/vod.md §11.1)', () => {
     const vodClient = new QueryClient();
     const seed = () => {

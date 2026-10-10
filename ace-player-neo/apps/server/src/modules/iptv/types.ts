@@ -391,4 +391,9 @@ export type VodApi = Pick<
   | 'status'
   | 'languagesOf'
   | 'saveLanguages'
+  | 'listOf'
+  | 'listAdd'
+  | 'listRemove'
+  | 'listEntries'
+  | 'restoreList'
 >;
