@@ -53,6 +53,7 @@ import {
   FIXTURES_DIR,
   NON_JSON_ROUTE_IDS,
   VARIANT_FIXTURES,
+  APP_FROM_WEB_FIXTURE_ROUTE_IDS,
   WEB_FIXTURE_ROUTE_IDS,
   WEB_V1_FIXTURES,
   fixtureFiles,
@@ -347,7 +348,7 @@ describe('contrato de la IPTV (docs/iptv.md §5)', () => {
     expect([...WEB_ONLY_EVENT_TYPES]).toEqual(['iptv.status']);
   });
 
-  it('7 rutas solo web del módulo iptv (las 5 de Ajustes, el buscador y la pestaña), sin iptvTest; video pasa a any con t opcional', () => {
+  it('7 rutas del módulo iptv: las 4 que la configuran, solo web; leerla (iptvGet, el buscador y la pestaña) también la app; sin iptvTest; video pasa a any con t opcional', () => {
     /* Las de Películas y series (`vod*`, también del módulo iptv) las fija test/vod.test.ts, y las
        de la Guía TV (`iptvGuide*`, docs/iptv.md §20.6), test/guide.test.ts. */
     const iptv = listV1Routes().filter(
@@ -363,8 +364,10 @@ describe('contrato de la IPTV (docs/iptv.md §5)', () => {
       'iptvChannels GET /api/v1/iptv/channels',
       'iptvBrowse GET /api/v1/iptv/browse',
     ]);
+    /* Configurar la IPTV sigue siendo solo web; LEERLA es de la web y la app nativa (oct 2026). */
+    const lectura = new Set(['iptvGet', 'iptvChannels', 'iptvBrowse']);
     for (const route of iptv) {
-      expect(route.access, route.id).toBe('web');
+      expect(route.access, route.id).toBe(lectura.has(route.id) ? 'any' : 'web');
       expect(route.credential, route.id).toBe('bearer');
     }
     expect(V1_ROUTE_IDS).not.toContain('iptvTest');
@@ -465,21 +468,21 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.2)', () => {
     return found;
   };
 
-  it('iptvChannels: ruta web del módulo iptv con empty_query; la respuesta de ejemplo valida', () => {
+  it('iptvChannels: ruta de la web y la app del módulo iptv con empty_query; la respuesta de ejemplo valida', () => {
     expect(V1_ROUTES.iptvChannels).toMatchObject({
       method: 'GET',
       path: '/api/v1/iptv/channels',
-      access: 'web',
+      access: 'any',
       module: 'iptv',
       errors: ['empty_query'],
     });
-    /* Las 7 de la IPTV y las 9 JSON de Películas y series (docs/vod.md §11.6, §4.10 y §10.6); las 4 JSON de la
-       Guía TV las fija test/guide.test.ts. */
+    /* En web/v1 quedan solo las 4 que configuran la IPTV; el buscador, la
+       pestaña, la Guía TV y Películas y series los lee también la app (v1/). */
     expect(
       WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('iptv') && !id.startsWith('iptvGuide')),
-    ).toHaveLength(7);
-    expect(WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('vod'))).toHaveLength(9);
-    expect(WEB_FIXTURE_ROUTE_IDS).toContain('iptvChannels');
+    ).toHaveLength(4);
+    expect(WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('vod'))).toHaveLength(0);
+    expect(APP_FROM_WEB_FIXTURE_ROUTE_IDS).toContain('iptvChannels');
     const example = WEB_V1_FIXTURES.iptvChannels;
     expect(IptvChannelsResponseSchema.safeParse(example).success).toBe(true);
     expect(example.channels.length).toBeLessThanOrEqual(IPTV_SEARCH.limit);
@@ -515,16 +518,16 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.2)', () => {
     ).toBe(false);
   });
 
-  it('iptvBrowse: ruta web del módulo iptv; el ejemplo de la raíz y las 3 variantes validan', () => {
+  it('iptvBrowse: ruta de la web y la app del módulo iptv; el ejemplo de la raíz y las 3 variantes validan', () => {
     expect(V1_ROUTES.iptvBrowse).toMatchObject({
       method: 'GET',
       path: '/api/v1/iptv/browse',
-      access: 'web',
+      access: 'any',
       credential: 'bearer',
       module: 'iptv',
       sideEffects: false,
     });
-    expect(WEB_FIXTURE_ROUTE_IDS).toContain('iptvBrowse');
+    expect(APP_FROM_WEB_FIXTURE_ROUTE_IDS).toContain('iptvBrowse');
     const root = WEB_V1_FIXTURES.iptvBrowse;
     expect(IptvBrowseResponseSchema.safeParse(root).success).toBe(true);
     expect(root.channels).toEqual([]);

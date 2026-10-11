@@ -4175,7 +4175,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/iptv
       x-side-effects: false
       x-legacy-twin: null
@@ -5462,7 +5463,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/iptv/channels
       x-side-effects: false
       x-legacy-twin: null
@@ -5812,7 +5814,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/iptv/browse
       x-side-effects: false
       x-legacy-twin: null
@@ -6033,7 +6036,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/iptv/guide
       x-side-effects: false
       x-legacy-twin: null
@@ -6180,7 +6184,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/iptv/guide/programmes
       x-side-effects: false
       x-legacy-twin: null
@@ -6363,7 +6368,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/iptv/guide/programmes/{id}
       x-side-effects: false
       x-legacy-twin: null
@@ -6528,7 +6534,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/iptv/guide/now
       x-side-effects: false
       x-legacy-twin: null
@@ -6607,7 +6614,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/iptv/guide/art/{ref}
       x-side-effects: false
       x-legacy-twin: null
@@ -7183,7 +7191,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/vod
       x-side-effects: false
       x-legacy-twin: null
@@ -7460,7 +7469,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/vod/browse
       x-side-effects: false
       x-legacy-twin: null
@@ -8103,7 +8113,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/vod/titles/{id}
       x-side-effects: false
       x-legacy-twin: null
@@ -8197,7 +8208,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/vod/titles/{id}/art/{art}
       x-side-effects: false
       x-legacy-twin: null
@@ -8580,7 +8592,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/vod/titles/{id}/stream
       x-side-effects: true
       x-legacy-twin: null
@@ -8713,7 +8726,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/vod/titles/{id}/progress
       x-side-effects: true
       x-legacy-twin: null
@@ -8807,7 +8821,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/vod/languages
       x-side-effects: false
       x-legacy-twin: null
@@ -8926,7 +8941,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/vod/languages
       x-side-effects: true
       x-legacy-twin: null
@@ -9097,7 +9113,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/vod/list
       x-side-effects: false
       x-legacy-twin: null
@@ -9274,7 +9291,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/vod/list/{id}
       x-side-effects: true
       x-legacy-twin: null
@@ -9459,7 +9477,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/vod/list/{id}
       x-side-effects: true
       x-legacy-twin: null

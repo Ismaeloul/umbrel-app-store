@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ApiError } from '../../api/errors.ts';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { json, mockFetch } from '../../test/fetch.ts';
-import listFixture from '@fixtures/web/v1/vodListGet.json';
+import listFixture from '@fixtures/v1/vodListGet.json';
 import type { VodList } from '@ace/shared';
 import {
   artSrc,

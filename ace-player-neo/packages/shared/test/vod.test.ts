@@ -52,7 +52,7 @@ import {
   NON_JSON_ROUTE_IDS,
   VARIANT_FIXTURES,
   WEB_EVENT_FIXTURES,
-  WEB_FIXTURE_ROUTE_IDS,
+  APP_FROM_WEB_FIXTURE_ROUTE_IDS,
   WEB_V1_FIXTURES,
 } from '../scripts/fixtures.js';
 
@@ -74,7 +74,7 @@ function keysOf(node: unknown, found = new Set<string>()): Set<string> {
 }
 
 describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
-  it('las 11, en su orden, solo web con bearer; ninguna módulo nuevo', () => {
+  it('las 11, en su orden, de la web y la app nativa con bearer; ninguna módulo nuevo', () => {
     const vod = listV1Routes().filter((route) => route.id.startsWith('vod'));
     expect(vod.map((route) => `${route.id} ${route.method} ${route.path} ${route.module}`)).toEqual(
       [
@@ -94,7 +94,8 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
       ],
     );
     for (const route of vod) {
-      expect(route.access, route.id).toBe('web');
+      /* Desde la app nativa nueva (oct 2026) Películas y series es `any` (D-VOD19). */
+      expect(route.access, route.id).toBe('any');
       expect(route.credential, route.id).toBe('bearer');
       expect(route.legacyTwin, route.id).toBeNull();
     }
@@ -118,12 +119,12 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
     }
   });
 
-  it('vodArt es binario y vodProgress un 204 sin cuerpo; las otras 4 tienen ejemplo en web/v1/', () => {
+  it('vodArt es binario y vodProgress un 204 sin cuerpo; las otras 4 tienen ejemplo en v1/ (las lee la app)', () => {
     expect(V1_ROUTES.vodArt).toMatchObject({ content: 'binary', response: null, status: 200 });
     expect(V1_ROUTES.vodProgress).toMatchObject({ content: 'empty', response: null, status: 204 });
     expect(NON_JSON_ROUTE_IDS).toEqual(expect.arrayContaining(['vodArt', 'vodProgress']));
     for (const id of ['vodHome', 'vodBrowse', 'vodTitle', 'vodStream'] as const) {
-      expect(WEB_FIXTURE_ROUTE_IDS, id).toContain(id);
+      expect(APP_FROM_WEB_FIXTURE_ROUTE_IDS, id).toContain(id);
     }
     /* Ninguna otra ruta usa 204. */
     const empty = V1_ROUTE_IDS.filter((id) => V1_ROUTES[id].content === 'empty');

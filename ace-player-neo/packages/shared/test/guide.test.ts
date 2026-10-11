@@ -35,14 +35,18 @@ import {
   hasGuideFlag,
   type IptvGuideProgramme,
 } from '../src/index.js';
-import { VARIANT_FIXTURES, WEB_FIXTURE_ROUTE_IDS, WEB_V1_FIXTURES } from '../scripts/fixtures.js';
+import {
+  APP_FROM_WEB_FIXTURE_ROUTE_IDS,
+  VARIANT_FIXTURES,
+  WEB_V1_FIXTURES,
+} from '../scripts/fixtures.js';
 
 const HOUR = 3_600_000;
 /** Un sábado de octubre a las 18:30 UTC (20:30 en Madrid). */
 const NOW = Date.UTC(2026, 9, 3, 18, 30);
 
 describe('rutas y errores de la Guía TV', () => {
-  it('5 rutas GET, solo web, del módulo iptv', () => {
+  it('5 rutas GET de la web y la app nativa, del módulo iptv', () => {
     const guide = V1_ROUTE_IDS.filter((id) => id.startsWith('iptvGuide'));
     expect(guide.map((id) => `${id} ${V1_ROUTES[id].method} ${V1_ROUTES[id].path}`)).toEqual([
       'iptvGuide GET /api/v1/iptv/guide',
@@ -53,15 +57,16 @@ describe('rutas y errores de la Guía TV', () => {
     ]);
     for (const id of guide) {
       const route = V1_ROUTES[id];
-      expect(route.access, id).toBe('web');
+      /* Desde la app nativa nueva (oct 2026) la Guía TV se puede leer desde el iPhone. */
+      expect(route.access, id).toBe('any');
       expect(route.credential, id).toBe('bearer');
       expect(route.module, id).toBe('iptv');
       expect(route.sideEffects, id).toBe(false);
     }
     expect(V1_ROUTES.iptvGuideArt.content).toBe('binary');
     expect(V1_ROUTES.iptvGuideProgrammes.errors).toEqual(['guide_unavailable', 'guide_stale']);
-    /* Las 4 JSON tienen ejemplo en web/v1 (la app no las usa todavía). */
-    expect(WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('iptvGuide'))).toEqual([
+    /* Las 4 JSON tienen ejemplo en v1/ (las lee la app). */
+    expect(APP_FROM_WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('iptvGuide'))).toEqual([
       'iptvGuide',
       'iptvGuideProgrammes',
       'iptvGuideProgramme',

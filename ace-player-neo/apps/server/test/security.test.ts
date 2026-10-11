@@ -184,7 +184,7 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     expect(failures).toEqual([]);
   });
 
-  it('con token válido, las rutas solo web (healthLive, copia de seguridad, Ajustes → IPTV, el buscador IPTV, la pestaña IPTV, la Guía TV, Películas y series, «Descargar fallos» y «Descargar logs») dan 403 origin_forbidden', async () => {
+  it('con token válido, las rutas solo web (healthLive, copia de seguridad, configurar la IPTV, «Descargar fallos» y «Descargar logs») dan 403 origin_forbidden', async () => {
     const s = await setup();
     const failures: string[] = [];
     const webOnly = V1.filter(([, route]) => route.access === 'web');
@@ -194,30 +194,14 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'backupExport',
       'backupExportSecret',
       'backupImport',
-      'iptvGet',
+      /* Configurar la IPTV (proveedor, cuenta, sincronizar, borrar): solo web.
+         LEER la IPTV (iptvGet, el buscador, la pestaña IPTV y la Guía TV) y
+         Películas y series los usa también la app nativa desde oct 2026: ya
+         no están en esta lista a propósito. */
       'iptvSave',
       'iptvUpdate',
       'iptvSync',
       'iptvDelete',
-      'iptvChannels',
-      'iptvBrowse',
-      'iptvGuide',
-      'iptvGuideProgrammes',
-      'iptvGuideProgramme',
-      'iptvGuideNow',
-      'iptvGuideArt',
-      'vodHome',
-      'vodBrowse',
-      'vodTitle',
-      'vodArt',
-      'vodStream',
-      'vodProgress',
-      'vodLanguagesGet',
-      'vodLanguagesUpdate',
-      /* «Mi lista» (0.9.1). */
-      'vodListGet',
-      'vodListAdd',
-      'vodListRemove',
       /* «Descargar fallos» (0.9.0): lleva el registro del servidor, aunque redactado. */
       'diagnosticsExport',
       /* «Descargar logs» (0.9.0): el registro en disco, su zip y los errores de la web. */

@@ -17,19 +17,19 @@
      `credential` sea `none`.
      Desde la 0.8.1 el iPhone emparejado administra como la web (Salud,
      Dispositivos, emparejar otro y ajustes v2): solo `healthLive` (es el
-     healthcheck de Docker; la app usa `ping`), las 5 rutas de Ajustes →
-     IPTV (`iptv*`, docs/iptv.md §5.3: la IPTV solo se configura en la web)
-     y `iptvChannels` (el buscador IPTV, §14.2; pasa a `any` cuando la app
-     calque el buscador, D27) e `iptvBrowse` (la pestaña IPTV de Canales,
-     §16.2; D29) son `web`. Las 5 de la Guía TV (`iptvGuide*`, §20.6)
-     también nacen `web`. También las 3 de la copia de seguridad
+     healthcheck de Docker; la app usa `ping`) y las 4 rutas que CONFIGURAN la
+     IPTV (`iptvSave`, `iptvUpdate`, `iptvSync` e `iptvDelete`, docs/iptv.md
+     §5.3: la IPTV solo se configura en la web) son `web`. LEERLA sí puede la
+     app nativa (oct 2026): `iptvGet`, el buscador (`iptvChannels`, D27), la
+     pestaña IPTV de Canales (`iptvBrowse`, D29) y las 5 de la Guía TV
+     (`iptvGuide*`, §20.6) son `any`. También son `web` las 3 de la copia de seguridad
      (`backup*`, decisiones.md D25: la copia lleva datos personales y la
      IPTV solo se configura en la web) y `diagnosticsExport` («Descargar
      fallos» de Salud, 0.9.0: lleva el registro del servidor, aunque
      redactado), igual que las 3 de «Descargar logs» (`diagnosticsLogInfo`,
      `diagnosticsLogDownload` y `diagnosticsWebLog`, Ajustes → Registro).
-     Las 8 de Películas y series (`vod*`, docs/vod.md §11.1) nacen `web`
-     (D-VOD19) y pasan a `any` cuando la app copie la pantalla.
+     Las de Películas y series (`vod*`, docs/vod.md §11.1) nacieron `web`
+     (D-VOD19) y son `any` desde que la app nativa copia la pantalla (oct 2026).
      `video` es `any` desde la IPTV (docs/iptv.md §5.4): la web entra sin
      token (el login de Umbrel basta) y el iPhone con `video-token`.
 
@@ -637,7 +637,7 @@ export const V1_ROUTES = {
   iptvGet: defineRoute({
     method: 'GET',
     path: '/api/v1/iptv',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary:
@@ -719,7 +719,7 @@ export const V1_ROUTES = {
   iptvChannels: defineRoute({
     method: 'GET',
     path: '/api/v1/iptv/channels',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: 'Buscar canales en tu IPTV (2 a 80 letras; hasta 50, España o sin país, sin adultos)',
@@ -737,7 +737,7 @@ export const V1_ROUTES = {
   iptvBrowse: defineRoute({
     method: 'GET',
     path: '/api/v1/iptv/browse',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary:
@@ -761,7 +761,7 @@ export const V1_ROUTES = {
   iptvGuide: defineRoute({
     method: 'GET',
     path: '/api/v1/iptv/guide',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary:
@@ -782,7 +782,7 @@ export const V1_ROUTES = {
   iptvGuideProgrammes: defineRoute({
     method: 'GET',
     path: '/api/v1/iptv/guide/programmes',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: 'Guía TV: los programas de un trozo de la parrilla (hasta 60 canales × 12 h)',
@@ -800,7 +800,7 @@ export const V1_ROUTES = {
   iptvGuideProgramme: defineRoute({
     method: 'GET',
     path: '/api/v1/iptv/guide/programmes/:id',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: 'Guía TV: la ficha de un programa (sinopsis, episodio, edad, nota, reparto…)',
@@ -818,7 +818,7 @@ export const V1_ROUTES = {
   iptvGuideNow: defineRoute({
     method: 'GET',
     path: '/api/v1/iptv/guide/now',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: 'Guía TV: «ahora / después» de unos canales IPTV (para Canales)',
@@ -836,7 +836,7 @@ export const V1_ROUTES = {
   iptvGuideArt: defineRoute({
     method: 'GET',
     path: '/api/v1/iptv/guide/art/:ref',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary:
@@ -858,7 +858,7 @@ export const V1_ROUTES = {
   vodHome: defineRoute({
     method: 'GET',
     path: '/api/v1/vod',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary:
@@ -878,7 +878,7 @@ export const V1_ROUTES = {
   vodBrowse: defineRoute({
     method: 'GET',
     path: '/api/v1/vod/browse',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary:
@@ -898,7 +898,7 @@ export const V1_ROUTES = {
   vodTitle: defineRoute({
     method: 'GET',
     path: '/api/v1/vod/titles/:id',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: 'Ficha de una película o una serie (con temporadas y episodios)',
@@ -917,7 +917,7 @@ export const V1_ROUTES = {
   vodArt: defineRoute({
     method: 'GET',
     path: '/api/v1/vod/titles/:id/art/:art',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: 'Cartel, fondo o fotograma de un título (JPEG, PNG o WebP) por el proxy propio',
@@ -936,7 +936,7 @@ export const V1_ROUTES = {
   vodStream: defineRoute({
     method: 'GET',
     path: '/api/v1/vod/titles/:id/stream',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'playback',
     summary: 'Abrir una película o un episodio y recibir su lista HLS VOD completa',
@@ -955,7 +955,7 @@ export const V1_ROUTES = {
   vodProgress: defineRoute({
     method: 'POST',
     path: '/api/v1/vod/titles/:id/progress',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: 'Guardar el progreso de una película o un episodio, o marcarlo (204 sin cuerpo)',
@@ -974,7 +974,7 @@ export const V1_ROUTES = {
   vodLanguagesGet: defineRoute({
     method: 'GET',
     path: '/api/v1/vod/languages',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: 'Los idiomas elegidos para Películas y series (castellano y latino, aparte)',
@@ -991,7 +991,7 @@ export const V1_ROUTES = {
   vodLanguagesUpdate: defineRoute({
     method: 'PUT',
     path: '/api/v1/vod/languages',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: 'Elegir los idiomas de Películas y series (sustituye la elección)',
@@ -1008,7 +1008,7 @@ export const V1_ROUTES = {
   vodListGet: defineRoute({
     method: 'GET',
     path: '/api/v1/vod/list',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: '«Mi lista»: las películas y series guardadas para ver luego',
@@ -1026,7 +1026,7 @@ export const V1_ROUTES = {
   vodListAdd: defineRoute({
     method: 'PUT',
     path: '/api/v1/vod/list/:id',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: 'Añadir una película o una serie a «Mi lista» (si ya está, no cambia nada)',
@@ -1044,7 +1044,7 @@ export const V1_ROUTES = {
   vodListRemove: defineRoute({
     method: 'DELETE',
     path: '/api/v1/vod/list/:id',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'iptv',
     summary: 'Quitar un título de «Mi lista»',

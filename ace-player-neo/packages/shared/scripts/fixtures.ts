@@ -70,50 +70,60 @@ export type JsonRouteId = {
 }[V1RouteId];
 
 /**
- * Rutas solo web cuyo ejemplo va en `web/v1/` (docs/iptv.md §5.7): las 5 de
- * la IPTV, el buscador IPTV (`iptvChannels`, §14.2; pasa a `v1/` cuando la
- * app calque el buscador, §14.10) y la pestaña IPTV de Canales
- * (`iptvBrowse`, §16.2; ídem, §16.11) y las 4 rutas JSON de Películas y
- * series (docs/vod.md §11.6; pasan a `v1/` cuando la app copie la pantalla,
- * §17). `healthLive` y las demás rutas `web` de antes se quedan en `v1/`,
- * donde la app ya las conoce.
+ * Rutas solo web cuyo ejemplo va en `web/v1/` (docs/iptv.md §5.7): las 4 que
+ * configuran la IPTV, la copia de seguridad y los diagnósticos. El buscador
+ * IPTV, la pestaña IPTV, la Guía TV y Películas y series pasaron a `v1/` al
+ * leerlos la app nativa (oct 2026; ver `APP_FROM_WEB_FIXTURE_ROUTE_IDS`).
+ * `healthLive` y las demás rutas `web` de antes se quedan en `v1/`, donde la
+ * app ya las conoce.
  */
 export const WEB_FIXTURE_ROUTE_IDS = [
-  'iptvGet',
+  /* Configurar la IPTV sigue siendo solo web. La LECTURA (iptvGet, el
+     buscador, la pestaña IPTV y la Guía TV) y Películas y series son de la
+     app nativa desde oct 2026: su ejemplo está en v1/. */
   'iptvSave',
   'iptvUpdate',
   'iptvSync',
   'iptvDelete',
-  'iptvChannels',
-  'iptvBrowse',
   /* La copia de seguridad (decisiones.md D25): solo web, la app no la usa. */
   'backupExport',
   'backupExportSecret',
   'backupImport',
-  'vodHome',
-  'vodBrowse',
-  'vodTitle',
-  'vodStream',
   /* «Descargar fallos» de Salud (0.9.0): solo web, lleva el registro del servidor. */
   'diagnosticsExport',
-  /* Guía TV (docs/iptv.md §20.6): solo web hasta que la app copie la pantalla. */
-  'iptvGuide',
-  'iptvGuideProgrammes',
-  'iptvGuideProgramme',
-  'iptvGuideNow',
-  'vodLanguagesGet',
-  'vodLanguagesUpdate',
-  /* «Mi lista» (0.9.1): solo web, como el resto de Películas y series. */
-  'vodListGet',
-  'vodListAdd',
-  'vodListRemove',
   /* «Descargar logs» de Ajustes → Registro (0.9.0): solo web (el zip es binario y no lleva ejemplo). */
   'diagnosticsLogInfo',
   'diagnosticsWebLog',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
-/** Rutas con ejemplo en `v1/`. */
-export type AppFixtureRouteId = Exclude<JsonRouteId, WebFixtureRouteId>;
+
+/**
+ * Rutas que nacieron solo web y ahora lee también la app nativa (oct 2026):
+ * su ejemplo sigue definido en `WEB_V1_FIXTURES` (junto a los demás de IPTV y
+ * Películas y series) pero se escribe en `v1/`.
+ */
+export const APP_FROM_WEB_FIXTURE_ROUTE_IDS = [
+  'iptvGet',
+  'iptvChannels',
+  'iptvBrowse',
+  'iptvGuide',
+  'iptvGuideProgrammes',
+  'iptvGuideProgramme',
+  'iptvGuideNow',
+  'vodHome',
+  'vodBrowse',
+  'vodTitle',
+  'vodStream',
+  'vodLanguagesGet',
+  'vodLanguagesUpdate',
+  'vodListGet',
+  'vodListAdd',
+  'vodListRemove',
+] as const satisfies readonly JsonRouteId[];
+export type AppFromWebFixtureRouteId = (typeof APP_FROM_WEB_FIXTURE_ROUTE_IDS)[number];
+
+/** Rutas con ejemplo en `v1/` definido en `V1_FIXTURES`. */
+export type AppFixtureRouteId = Exclude<JsonRouteId, WebFixtureRouteId | AppFromWebFixtureRouteId>;
 
 /** Subcarpetas de fixtures/ que escribe este script (se regeneran enteras). */
 export const FIXTURE_DIRS = ['v1', 'events', 'errors', 'web', 'variantes'] as const;
@@ -1419,7 +1429,7 @@ export const WEB_V1_FIXTURES = {
   },
   /* Una tanda de 3 errores de la web: 2 guardados y el fallo del reproductor que ya llegó con su canal. */
   diagnosticsWebLog: { accepted: 2, dropped: 1 },
-} satisfies { [K in WebFixtureRouteId]: V1ResponseInput<K> };
+} satisfies { [K in WebFixtureRouteId | AppFromWebFixtureRouteId]: V1ResponseInput<K> };
 
 // --- Variantes (variantes/<ruta>.<caso>.json) ---
 
@@ -1968,7 +1978,9 @@ export function fixtureFiles(): Map<string, unknown> {
   for (const [type, data] of Object.entries(EVENT_FIXTURES))
     files.set(`events/${type}.json`, { type, data });
   files.set('errors/api-error.json', ERROR_FIXTURE);
-  for (const [id, value] of Object.entries(WEB_V1_FIXTURES)) files.set(`web/v1/${id}.json`, value);
+  const toApp: readonly string[] = APP_FROM_WEB_FIXTURE_ROUTE_IDS;
+  for (const [id, value] of Object.entries(WEB_V1_FIXTURES))
+    files.set(toApp.includes(id) ? `v1/${id}.json` : `web/v1/${id}.json`, value);
   for (const [type, data] of Object.entries(WEB_EVENT_FIXTURES))
     files.set(`web/events/${type}.json`, { type, data });
   for (const [name, value] of Object.entries(VARIANT_FIXTURES))

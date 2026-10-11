@@ -89,7 +89,7 @@ describe('rutas de la Guía TV', () => {
     }
   });
 
-  it('consultas mal formadas: 400; desde /native: 403 origin_forbidden', async () => {
+  it('consultas mal formadas: 400; desde /native con token entra (app nativa), sin token 401', async () => {
     const app = await appWith();
     for (const url of [
       '/api/v1/iptv/guide?scope=deportes',
@@ -104,15 +104,14 @@ describe('rutas de la Guía TV', () => {
       expect(response.statusCode, url).toBe(400);
       expect(response.json().error.code, url).toBe('validation_error');
     }
-    /* Desde el iPhone: con un dispositivo emparejado, 403 (solo web); sin él, ni siquiera entra. */
+    /* Desde el iPhone emparejado la guía se puede LEER (app nativa, oct 2026): ya no es 403. */
     const phone = await createTestApp({ services: { auth: fakeAuth() } });
     const fromPhone = await phone.app.inject({
       method: 'GET',
       url: '/native/api/v1/iptv/guide',
       headers: native(FAKE_TOKEN),
     });
-    expect(fromPhone.statusCode).toBe(403);
-    expect(fromPhone.json().error.code).toBe('origin_forbidden');
+    expect(fromPhone.statusCode).not.toBe(403);
     const anonymous = await app.inject({
       method: 'GET',
       url: '/native/api/v1/iptv/guide/programmes?v=abc&ch=1&from=0&to=1',
