@@ -8,6 +8,11 @@
      que va en el QR (así, si abres la web por Tailscale, el iPhone también
      llega por Tailscale). Un código nuevo anula el anterior (lo hace el
      backend): «Crear otro» es otra vez `create()`.
+    - Además, `alternateBaseUrls` con los nombres de siempre del Umbrel
+     (`umbrel.local` en casa, `umbrel` por Tailscale) en el mismo puerto: si
+     abres la web por Tailscale y el iPhone está en casa sin Tailscale (o al
+     revés), el QR sigue valiendo. La app prueba todas y se queda con la que
+     contesta.
    - La cuenta atrás usa el `ttlMs` de la respuesta contado desde que llega, no
      `expiresAt`: si el reloj del PC y el del Umbrel no coinciden, la cuenta
      atrás sigue siendo la buena.
@@ -18,6 +23,7 @@
    - Oculta la vista (Activity), no hay temporizadores vivos; al volver se
      recalcula con la hora de ahora. */
 
+import { alternateOrigins } from './model.ts';
 import type { PairingCreateResponse } from '@ace/shared';
 import { useEffect, useRef, useState } from 'react';
 import { api, describeFailure, isAbortError, useSseEvent } from '../../api/index.ts';
@@ -109,7 +115,10 @@ export function usePairing({
     request.current = controller;
     setState({ phase: 'creating' });
     try {
-      const body = origin && /^https?:\/\/[^/?#]+$/i.test(origin) ? { baseUrl: origin } : {};
+      const body =
+        origin && /^https?:\/\/[^/?#]+$/i.test(origin)
+          ? { baseUrl: origin, alternateBaseUrls: alternateOrigins(origin) }
+          : {};
       const response: PairingCreateResponse = await api('pairingCreate', {
         body,
         signal: controller.signal,

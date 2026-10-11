@@ -1,3 +1,4 @@
+import { alternateOrigins } from './model.ts';
 import type { Device, DevicesListResponse } from '@ace/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -77,8 +78,11 @@ describe('Dispositivos', () => {
     await screen.findByRole('list', { name: 'Dispositivos emparejados' });
     fireEvent.click(screen.getByRole('button', { name: 'Emparejar un dispositivo' }));
     expect(await screen.findByText('Código para emparejar')).toBeInTheDocument();
-    // Manda la dirección de esta página para el QR.
-    expect(posts()[0]?.body).toEqual({ baseUrl: location.origin });
+    // Manda la dirección de esta página para el QR, y las de siempre del Umbrel de reserva.
+    expect(posts()[0]?.body).toEqual({
+      baseUrl: location.origin,
+      alternateBaseUrls: alternateOrigins(location.origin),
+    });
     expect(screen.getByText('Código 4 8 2 9 1 3')).toBeInTheDocument();
     const qr = screen.getByRole('img', { name: /Código QR para emparejar/ });
     expect(qr.getAttribute('src')).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);

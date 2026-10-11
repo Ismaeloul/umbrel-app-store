@@ -134,3 +134,17 @@ export function originKind(hostname: string): OriginKind {
 export function qrImageSrc(svg: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
+
+/** Las otras direcciones de siempre del Umbrel, en el puerto de esta página. */
+export function alternateOrigins(origin: string): string[] {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return [];
+  }
+  const port = url.port ? `:${url.port}` : '';
+  return ['umbrel.local', 'umbrel']
+    .filter((host) => host !== url.hostname.toLowerCase())
+    .map((host) => `${url.protocol}//${host}${port}`);
+}

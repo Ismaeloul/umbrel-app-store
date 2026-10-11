@@ -1,6 +1,7 @@
 import type { Device } from '@ace/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  alternateOrigins,
   countdown,
   groupCode,
   isOnlineNow,
@@ -88,5 +89,21 @@ describe('dispositivos', () => {
     );
     expect(src.startsWith('data:image/svg+xml;charset=utf-8,')).toBe(true);
     expect(src).not.toContain('<');
+  });
+});
+
+describe('alternateOrigins', () => {
+  it('añade los nombres de siempre del Umbrel en el mismo puerto, sin repetir el actual', () => {
+    expect(alternateOrigins('http://100.64.0.7:7792')).toEqual([
+      'http://umbrel.local:7792',
+      'http://umbrel:7792',
+    ]);
+    expect(alternateOrigins('http://umbrel.local:7792')).toEqual(['http://umbrel:7792']);
+    expect(alternateOrigins('http://umbrel:7792')).toEqual(['http://umbrel.local:7792']);
+    expect(alternateOrigins('https://umbrel.tail1234.ts.net')).toEqual([
+      'https://umbrel.local',
+      'https://umbrel',
+    ]);
+    expect(alternateOrigins('nada')).toEqual([]);
   });
 });
