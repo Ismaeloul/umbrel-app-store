@@ -27,6 +27,7 @@ import type { EngineService } from '../engine/types.js';
 import type { IptvService } from '../iptv/types.js';
 import { SerialLock } from '../remux/lock.js';
 import { createRemuxRuntime, type RemuxRuntime } from '../remux/service.js';
+import type { RemuxDeps } from '../remux/types.js';
 import {
   createFakeLauncher,
   type FakeLauncher,
@@ -209,6 +210,8 @@ export interface PlaybackSetupOptions {
   readonly noStart?: boolean;
   /** La IPTV (un doble del servicio: `partial()` con lo que use el test). */
   readonly iptv?: IptvService;
+  /** Sonda de entrelazado del remux (por defecto «no se sabe»: nunca un ffprobe de verdad). */
+  readonly probeInterlaced?: RemuxDeps['probeInterlaced'];
 }
 
 export async function setupPlayback(options: PlaybackSetupOptions = {}): Promise<PlaybackSetup> {
@@ -233,6 +236,7 @@ export async function setupPlayback(options: PlaybackSetupOptions = {}): Promise
     launcher: ffmpeg.launcher,
     procRoot: null,
     watchFiles: false,
+    probeInterlaced: options.probeInterlaced ?? (async () => null),
   });
   const events = recordEvents(core);
   const runtime = createPlaybackRuntime({

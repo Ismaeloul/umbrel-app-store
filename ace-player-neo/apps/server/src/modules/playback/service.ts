@@ -409,6 +409,11 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       ...(input.isHls ? { isHls: true } : {}),
       /* El vigilante de salida y el plazo del reinicio siguen a la cadencia del proveedor. */
       inputCadenceMs: () => input.stats().cadenceMs ?? null,
+      /* AVPlayer no desentrelaza: con un iPhone mirando, una IPTV entrelazada sale desentrelazada (0.9.2). */
+      wantsDeinterlace: () =>
+        [...session.viewers.values()].some(
+          (viewer) => viewer.client === 'ios' && viewer.consumes === 'remux',
+        ),
     };
   }
 
@@ -1223,6 +1228,18 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     );
   }
 
+  /**
+   * IPTV entrelazada con un iPhone mirando (0.9.2): se reinicia como en un cambio del relé y la generación
+   * nueva del remux sale desentrelazada. No se mete en medio de una recuperación por atasco ni de otro
+   * reinicio (el ffmpeg que lancen ya decide desentrelazar).
+   */
+  function onRemuxDeinterlace(sessionId: string): void {
+    const session = sessions.get(sessionId);
+    if (!session || session.closed || session.source !== 'iptv' || session.vod) return;
+    if (stallRecoveries.has(session.id) || remux.restarting(session.id)) return;
+    track(restartIptv(session));
+  }
+
   /** Pausa, eliminar o cuenta caducada: fuera todas las sesiones IPTV (§7.4). */
   function onIptvRevoked(code: string): void {
     for (const session of [...sessions.values()]) {
@@ -1926,6 +1943,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
           onAccess: onRemuxAccess,
           onDetached: onRemuxDetached,
           onStalled: onRemuxStalled,
+          onDeinterlace: onRemuxDeinterlace,
         }),
         ...(deps.iptv ? [deps.iptv.subscribe({ onRevoked: onIptvRevoked })] : []),
       ];

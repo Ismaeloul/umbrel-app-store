@@ -39,7 +39,14 @@
      generación nueva cuenta la conexión, la cadencia y el probe de ffmpeg.
    - Windows (solo desarrollo): ffmpeg renombra index.m3u8.tmp encima de la
      lista y el renombrado falla si el backend la tiene abierta: como mucho
-     una lectura cada 250 ms por carpeta. */
+     una lectura cada 250 ms por carpeta.
+   - Entrelazado (0.9.2): AVPlayer no desentrelaza. Con un iPhone mirando una
+     IPTV que aún se copia, en cuanto está lista se pasa ffprobe por el init
+     y el primer segmento de disco (interlace.ts); si es entrelazada, se
+     recuerda por canal y se avisa `onDeinterlace`: playback la reinicia (B2)
+     y la generación nueva sale con `bwdif` + x264 (1080p50). Como mucho
+     `MAX_DEINTERLACE` a la vez (unos 2 núcleos del N300 cada una); lo
+     progresivo y la web sola siguen copiando. */
 
 /* Películas y series (docs/vod.md §9.7-§9.8, VOD-5): `openVod` lee el índice
    por el relé VOD (caché de 8 por título), elige el audio y abre un
@@ -67,6 +74,7 @@ import type { TimerHandle } from '../../core/clock.js';
 import { AppError } from '../../core/errors.js';
 import { redactText } from '../../core/logger.js';
 import { buildRemuxArgs } from './args.js';
+import { probeInterlaced } from './interlace.js';
 import { elegirSesionRemuxADesalojar, type EvictionCandidate } from './eviction.js';
 import {
   NOT_YET_HEADERS,
@@ -129,6 +137,10 @@ export const WIN32_PLAYLIST_READ_GAP_MS = 250;
 export const IPTV_ENSURE_RELAUNCH_MS = 40_000;
 /** Lo que se espera a que el ffmpeg matado termine antes de lanzar el siguiente (el relé da 409 mientras). */
 export const REPLACE_EXIT_WAIT_MS = 1_000;
+/** Remux desentrelazando a la vez como mucho (x264 1080p50: unos 2 núcleos del N300 cada uno). */
+export const MAX_DEINTERLACE = 2;
+/** Canales cuyo veredicto (entrelazado o no) se recuerda. */
+const INTERLACE_MEMORY = 256;
 /** Gracia antes de borrar lo de la generación anterior: su TD, entre estos límites. */
 const STALE_GRACE_MIN_MS = 2_000;
 const STALE_GRACE_MAX_MS = 10_000;
@@ -150,6 +162,8 @@ interface Entry {
   readonly source: RemuxSource;
   readonly origin: 'engine' | 'iptv';
   readonly dir: string;
+  /** Esta generación desentrelaza (x264) en vez de copiar el vídeo (0.9.2). */
+  readonly deinterlace: boolean;
   readonly startedAt: number;
   lastAccess: number;
   /** Última vez que se vio cambiar la lista (para `remuxStalled`). */
@@ -221,6 +235,7 @@ export interface RemuxEntryInfo {
   readonly pid: number | undefined;
   readonly exited: boolean;
   readonly ready: boolean;
+  readonly deinterlace: boolean;
   readonly viewers: readonly string[];
   readonly log: string;
 }
@@ -235,6 +250,8 @@ export interface RemuxRuntime {
   watchStalls(): Promise<void>;
   /** Espera a que la cola del registro quede vacía. */
   idle(): Promise<void>;
+  /** Espera a que terminen las sondas de entrelazado en curso (tests). */
+  interlaceChecks(): Promise<void>;
 }
 
 function hostForUrl(host: string): string {
@@ -281,6 +298,12 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const engineBase = `http://${hostForUrl(config.engine.host)}:${config.engine.port}`;
 
   const redact = deps.redact ?? redactText;
+  const probe = deps.probeInterlaced ?? probeInterlaced;
+  /** Veredicto por canal (hash): entrelazado o no. Un `null` de la sonda no se recuerda. */
+  const interlaced = new Map<string, boolean>();
+  /** Sondas en curso, por canal, con su cancelación (al parar). */
+  const probing = new Map<string, AbortController>();
+  const checks = new Set<Promise<void>>();
   const inputKeyOf = (source: RemuxSource): string => source.inputUrl ?? source.playbackUrl;
   const byHash = new Map<string, Entry>();
   const listeners = new Set<RemuxListener>();
@@ -387,6 +410,97 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       return entry.source.inputCadenceMs?.() ?? 0;
     } catch {
       return 0;
+    }
+  }
+
+  // --- Entrelazado (0.9.2) ---
+
+  /** Hay un iPhone mirando la fuente (lo pregunta playback en cada momento). */
+  function wantsDeinterlace(source: RemuxSource): boolean {
+    try {
+      return source.wantsDeinterlace?.() ?? false;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Remux vivos que desentrelazan ahora (la entrada que se está sustituyendo ya está cerrada). */
+  function deinterlacing(): number {
+    let count = 0;
+    for (const entry of byHash.values()) if (entry.deinterlace && !entry.closed) count += 1;
+    return count;
+  }
+
+  function rememberInterlaced(hash: string, verdict: boolean): void {
+    interlaced.delete(hash);
+    interlaced.set(hash, verdict);
+    if (interlaced.size > INTERLACE_MEMORY) {
+      const oldest = interlaced.keys().next().value;
+      if (oldest !== undefined) interlaced.delete(oldest);
+    }
+  }
+
+  /** Lanza `checkInterlace` sin esperarlo (los tests lo esperan con `interlaceChecks()`). */
+  function scheduleInterlaceCheck(entry: Entry): void {
+    if (entry.origin !== 'iptv' || entry.deinterlace || stopped) return;
+    const check: Promise<void> = checkInterlace(entry)
+      .catch((error: unknown) => logger.error({ err: error }, 'sonda de entrelazado del remux'))
+      .finally(() => checks.delete(check));
+    checks.add(check);
+  }
+
+  /**
+   * IPTV lista que copia el vídeo con un iPhone mirando: si el canal es entrelazado (lo dice ffprobe sobre
+   * el init y el primer segmento de esta generación, o ya se sabía), avisa `onDeinterlace` para que playback
+   * la reinicie; `startLocked` decide entonces desentrelazar. Sin hueco (`MAX_DEINTERLACE`), sigue copiando.
+   */
+  async function checkInterlace(entry: Entry): Promise<void> {
+    if (!entry.ready || entry.closed || !wantsDeinterlace(entry.source)) return;
+    let verdict = interlaced.get(entry.hash);
+    if (verdict === undefined) {
+      if (probing.has(entry.hash)) return;
+      const controller = new AbortController();
+      probing.set(entry.hash, controller);
+      let result: boolean | null;
+      try {
+        result = await probe(
+          [
+            path.join(entry.dir, entry.initName),
+            path.join(entry.dir, `index${entry.startNumber}.m4s`),
+          ],
+          controller.signal,
+        );
+      } finally {
+        probing.delete(entry.hash);
+      }
+      if (result === null) return;
+      verdict = result;
+      rememberInterlaced(entry.hash, verdict);
+      logger.info(
+        { sessionId: entry.sessionId, interlaced: verdict },
+        'remux IPTV: sonda de entrelazado',
+      );
+    }
+    if (!verdict) return;
+    if (entry.closed || byHash.get(entry.hash) !== entry || replacing.has(entry.sessionId)) return;
+    if (!wantsDeinterlace(entry.source)) return;
+    if (deinterlacing() >= MAX_DEINTERLACE) {
+      logger.warn(
+        { sessionId: entry.sessionId, max: MAX_DEINTERLACE },
+        'remux IPTV entrelazada: sin hueco para desentrelazar, sigue copiando',
+      );
+      return;
+    }
+    logger.info(
+      { sessionId: entry.sessionId },
+      'remux IPTV entrelazada con un iPhone: se desentrelaza',
+    );
+    for (const listener of [...listeners]) {
+      try {
+        listener.onDeinterlace?.(entry.sessionId);
+      } catch (error) {
+        logger.error({ err: error }, 'un suscriptor del remux ha fallado');
+      }
     }
   }
 
@@ -569,6 +683,11 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     const generation = next?.generation ?? 1;
     const now = clock.now();
     const origin = source.origin ?? 'engine';
+    const deinterlace =
+      origin === 'iptv' &&
+      interlaced.get(hash) === true &&
+      wantsDeinterlace(source) &&
+      deinterlacing() < MAX_DEINTERLACE;
     const entry: Entry = {
       hash,
       sessionId: source.sessionId,
@@ -577,6 +696,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       source,
       origin,
       dir,
+      deinterlace,
       startedAt: now,
       lastAccess: now,
       lastChangeAt: now,
@@ -614,6 +734,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       origin,
       ...(source.isHls ? { isHls: true } : {}),
       ...(next ? { generation, startNumber: next.startNumber } : {}),
+      ...(deinterlace ? { deinterlace: true } : {}),
     });
     let proc: RemuxProcess;
     try {
@@ -642,6 +763,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         mode: source.mode,
         origin,
         ...(next ? { generation, startNumber: next.startNumber } : {}),
+        ...(deinterlace ? { deinterlace: true } : {}),
       },
       'remux lanzado',
     );
@@ -1025,6 +1147,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         return { entry: current, token: attached };
       });
       await waitReady(entry, signal);
+      scheduleInterlaceCheck(entry);
       return handleOf(entry, token);
     },
 
@@ -1066,6 +1189,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         });
         if (!entry) return null;
         await waitReady(entry, signal, progressMs);
+        scheduleInterlaceCheck(entry);
         const handle = handleOf(entry, '');
         return entry.generation > 1 ? { ...handle, seamless: true } : handle;
       });
@@ -1326,6 +1450,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     },
 
     async stopAll() {
+      for (const controller of probing.values()) controller.abort();
       await registry.run(async () => {
         for (const entry of [...byHash.values()]) await closeLocked(entry, 'shutdown', true);
         for (const [sessionId, entry] of [...vods]) {
@@ -1368,11 +1493,15 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         pid: entry.proc?.pid,
         exited: entry.exited,
         ready: entry.ready,
+        deinterlace: entry.deinterlace,
         viewers: allViewers(entry),
         log: entry.log.text(),
       })),
     reap,
     watchStalls,
     idle: () => registry.idle(),
+    interlaceChecks: async () => {
+      while (checks.size) await Promise.all([...checks]);
+    },
   };
 }

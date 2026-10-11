@@ -53,6 +53,15 @@ export interface RemuxDeps extends CoreDeps {
    */
   readonly redact?: (text: string) => string;
   /**
+   * Si el vídeo de una IPTV viene entrelazado, mirando el init y el primer segmento que ya escribió el
+   * remux (sin otra conexión con el proveedor). `null` si no se sabe. Por defecto, ffprobe por la tubería
+   * (`probeInterlaced` de interlace.ts); en los tests, uno de pega.
+   */
+  readonly probeInterlaced?: (
+    files: readonly string[],
+    signal: AbortSignal,
+  ) => Promise<boolean | null>;
+  /**
    * Cuánto se espera a una lista que aún no está antes del 503 «aún no está» (docs/iptv.md §19). Por
    * defecto `NOT_YET_WAIT_MS` (2,5 s); los tests que miran el 503, menos.
    */
@@ -98,6 +107,11 @@ export interface RemuxListener {
    * tampoco avanza, cierra con `iptv_dropped`. AceStream no lo usa: su vigilante es el del motor.
    */
   onStalled?(sessionId: string): void;
+  /**
+   * IPTV entrelazada, con un iPhone mirando y aún copiando el vídeo (0.9.2): playback la reinicia como en
+   * un cambio del relé (`restartIptv`, que avisa a los clientes) y la generación nueva sale desentrelazada.
+   */
+  onDeinterlace?(sessionId: string): void;
 }
 
 export interface RemuxEnsureOptions {
@@ -131,6 +145,11 @@ export interface RemuxSource {
    * y el plazo de la generación nueva tras un reinicio la tienen en cuenta (auditoría 0.9.0).
    */
   readonly inputCadenceMs?: () => number | null;
+  /**
+   * Hay un iPhone (AVPlayer, que no desentrelaza) mirando esta IPTV: si es entrelazada, el remux la
+   * desentrelaza (0.9.2). Se pregunta en cada lanzamiento, no se fija al crear la sesión.
+   */
+  readonly wantsDeinterlace?: () => boolean;
 }
 
 export interface RemuxRestartOptions {

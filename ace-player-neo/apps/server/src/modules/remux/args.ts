@@ -34,6 +34,51 @@ export interface RemuxArgsInput {
   readonly generation?: number;
   /** Número del primer segmento de esta generación (con `generation` > 1). */
   readonly startNumber?: number;
+  /**
+   * IPTV entrelazada con un iPhone mirando: el vídeo se desentrelaza y se codifica en vez de copiarse
+   * (AVPlayer no desentrelaza; ver `deinterlaceVideoArgs`).
+   */
+  readonly deinterlace?: boolean;
+}
+
+/** Hilos de x264 al desentrelazar: ~2 núcleos del N300 por canal 1080i (medido en la 0.9.2). */
+export const DEINTERLACE_THREADS = 4;
+
+/**
+ * Vídeo de una IPTV entrelazada (1080i25, dos campos por imagen) para el iPhone: AVPlayer no desentrelaza y
+ * se veía a tirones y con «peinado». `bwdif` en `send_field` saca una imagen por campo (1080p50, sin bajar
+ * de resolución) y x264 la codifica en H.264 High 8 bits, que AVPlayer reproduce siempre. Una clave cada
+ * 2 s exactos (`-force_key_frames`, sin cortes de escena): cada segmento HLS de 2 s empieza en una y es
+ * independiente, también con 29,97i (59,94p), donde un GOP fijo en imágenes no cuadraría. `-threads:v` va
+ * DETRÁS del `-threads 2` general (el del audio): el más concreto manda.
+ */
+export function deinterlaceVideoArgs(): string[] {
+  return [
+    '-vf',
+    'bwdif=mode=send_field',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-tune',
+    'zerolatency',
+    '-profile:v',
+    'high',
+    '-pix_fmt',
+    'yuv420p',
+    '-crf',
+    '21',
+    '-maxrate',
+    '12M',
+    '-bufsize',
+    '12M',
+    '-g',
+    '250',
+    '-sc_threshold',
+    '0',
+    '-force_key_frames',
+    'expr:gte(t,n_forced*2)',
+  ];
 }
 
 /** Marca que lleva cada ffmpeg del remux en su línea de órdenes. */
@@ -139,10 +184,8 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
        `first_pts=0` de la 0.6.59: rellenaba de silencio desde 0 hasta «ahora» cada vez que el grafo de
        audio se rehacía (p. ej. al pasar de 2.0 a 5.1), miles de tramas AAC en un solo segmento y un
        pico de CPU (diagnostico-iptv-0.8.2 P8, B1). Tampoco `-reinit_filter 0`: con un cambio de
-       disposición de canales es fatal. */
-    '-c:v',
-    'copy',
-    '-copyinkf',
+       disposición de canales es fatal. La IPTV entrelazada para el iPhone, desentrelazada (0.9.2). */
+    ...(input.deinterlace ? deinterlaceVideoArgs() : ['-c:v', 'copy', '-copyinkf']),
     '-c:a',
     'aac',
     '-b:a',
@@ -154,6 +197,7 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     // Nuevo en la v2 (arquitectura §5.7)
     '-threads',
     '2',
+    ...(input.deinterlace ? ['-threads:v', String(DEINTERLACE_THREADS)] : []),
     '-metadata',
     `${ACE_SESSION_MARK}${input.sessionId}`,
     // server.js:313-317: HLS fMP4 de 2 s en ventana de 15 (B-225)

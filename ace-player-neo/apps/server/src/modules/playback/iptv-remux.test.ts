@@ -317,3 +317,51 @@ describe('IPTV: vigilante de salida con un proveedor que entrega a golpes (audit
     await until('reinicio por atasco', () => ffmpeg.spawned.length === 2);
   });
 });
+
+describe('IPTV entrelazada con un iPhone (0.9.2)', () => {
+  const ios = (): ViewerIdentity => ({ viewerId: 'visor-ios', deviceId: 'iphone', device: null });
+  const iosQuery = (): ChannelStreamQuery => ({ ...query(), client: 'ios', viewer: 'visor-ios' });
+
+  it('el iPhone la ve: sonda, reinicio continuo con stream.reopened y el ffmpeg nuevo desentrelaza', async () => {
+    const iptv = fakeIptv();
+    const probes: number[] = [];
+    const { runtime, ffmpeg, events, remux } = await setupPlayback({
+      iptv: iptv.service,
+      probeInterlaced: async () => {
+        probes.push(1);
+        return true;
+      },
+    });
+    const grant = await runtime.service.acquire(CANAL, iosQuery(), ios(), live());
+    await remux.interlaceChecks();
+    await until('reinicio para desentrelazar', () => events.of('stream.reopened').length > 0);
+    expect(probes).toHaveLength(1);
+    expect(ffmpeg.spawned).toHaveLength(2);
+    expect(ffmpeg.spawned[0]?.args).toContain('copy');
+    expect(ffmpeg.last().args).toContain('bwdif=mode=send_field');
+    expect(events.of('stream.reopened')[0]).toMatchObject({
+      sessionId: grant.session.id,
+      reason: 'remux_restart',
+      seamless: true,
+    });
+    expect(events.of('stream.closed')).toEqual([]);
+  });
+
+  it('solo la web: ni sonda ni reinicio', async () => {
+    const iptv = fakeIptv();
+    const probes: number[] = [];
+    const { runtime, ffmpeg, events, remux } = await setupPlayback({
+      iptv: iptv.service,
+      probeInterlaced: async () => {
+        probes.push(1);
+        return true;
+      },
+    });
+    await runtime.service.acquire(CANAL, query(), web(), live());
+    await remux.interlaceChecks();
+    await ioTurns(30);
+    expect(probes).toEqual([]);
+    expect(ffmpeg.spawned).toHaveLength(1);
+    expect(events.of('stream.reopened')).toEqual([]);
+  });
+});
