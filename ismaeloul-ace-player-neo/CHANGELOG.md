@@ -2,6 +2,21 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.2 (2026-10-11)
+
+La app de iPhone ya puede ver tu IPTV, la Guia TV y Peliculas y
+series.
+
+Los escudos de todos los equipos se descargan solos y aparecen al
+momento, sin confundir equipos que se llaman igual en ligas distintas.
+
+Los canales de IPTV entrelazados (1080i) se ven fluidos en el iPhone:
+el Umbrel los pasa a 1080p a 50 imagenes por segundo, sin bajar la
+calidad. Solo cuando los ve un iPhone; en el navegador no cambia nada.
+
+El QR para emparejar el iPhone funciona aunque abras la web por
+Tailscale y el iPhone este en casa (o al reves).
+
 ## 0.9.1 (2026-10-10)
 
 Mi lista: en la ficha de cada peli o serie hay un boton "Añadir a mi

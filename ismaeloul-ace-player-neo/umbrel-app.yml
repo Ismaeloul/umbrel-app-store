@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.9.1"
+version: "0.9.2"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,18 +13,18 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Mi lista: en la ficha de cada peli o serie hay un boton "Añadir a mi
-  lista", y en Peliculas y en Series sale la fila "Mi lista" con lo que
-  hayas guardado (en las series, por que capitulo vas). Si un titulo deja
-  de estar en tu IPTV, se queda avisando hasta que lo quites.
+  La app de iPhone ya puede ver tu IPTV, la Guia TV y Peliculas y
+  series.
 
-  Seguir viendo mas bonito: la imagen horizontal de la serie o la pelicula
-  con su nombre en pequeño abajo a la izquierda y la barra de lo visto,
-  sin el cartel estirado. Al pasar el raton ya no sale el fondo gris.
+  Los escudos de todos los equipos se descargan solos y aparecen al
+  momento, sin confundir equipos que se llaman igual en ligas distintas.
 
-  Si cambias de proveedor de IPTV, lo que has visto en Pelis y series ya
-  no se pierde: se vuelve a encontrar en el proveedor nuevo por su titulo,
-  año, temporada y capitulo.
+  Los canales de IPTV entrelazados (1080i) se ven fluidos en el iPhone:
+  el Umbrel los pasa a 1080p a 50 imagenes por segundo, sin bajar la
+  calidad. Solo cuando los ve un iPhone; en el navegador no cambia nada.
+
+  El QR para emparejar el iPhone funciona aunque abras la web por
+  Tailscale y el iPhone este en casa (o al reves).
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []
