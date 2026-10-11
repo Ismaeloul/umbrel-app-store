@@ -27,6 +27,7 @@ import {
   TEAMS_SEARCH_MAX_BYTES,
 } from './constants.js';
 import { countryMatches, isReserveName, type TeamOverride } from './normalize.js';
+import { playsInProfile, type CompetitionProfile } from './profiles.js';
 import { PngError, checkPngHeader, readPngHeader } from './png.js';
 
 type Loose = Record<string, unknown>;
@@ -39,6 +40,8 @@ export interface ApiTeam {
   /** Otros nombres separados por comas ("Club Atlético de Madrid, Atlético de Madrid, Atléti"). */
   readonly strAlternate: string | null;
   readonly strLeague: string | null;
+  /** Segunda competición que juega (TheSportsDB a veces deja ahí la liga tras un ascenso). */
+  readonly strLeague2?: string | null;
   readonly idLeague: string | null;
   readonly strCountry: string | null;
   readonly strSport: string | null;
@@ -94,6 +97,7 @@ export function readApiTeams(body: unknown): ApiTeam[] {
         strTeamShort: text(row.strTeamShort),
         strAlternate: text(row.strAlternate),
         strLeague: text(row.strLeague),
+        strLeague2: text(row.strLeague2),
         idLeague: text(row.idLeague),
         strCountry: text(row.strCountry),
         strSport: text(row.strSport),
@@ -223,6 +227,8 @@ export interface TeamContext {
   /** País del partido según la agenda ("España" en futbolenlatv, siempre). */
   readonly country: string | null;
   readonly competition: string | null;
+  /** País y liga de TheSportsDB de esa competición (profiles.ts), si es una liga conocida. */
+  readonly profile?: CompetitionProfile | null | undefined;
   readonly override?: TeamOverride | undefined;
 }
 
@@ -252,8 +258,8 @@ export function leagueMatches(apiLeague: unknown, competition: unknown): boolean
 /**
  * Puntuación de un candidato: el mejor parecido entre el nombre de la agenda
  * (o el término buscado) y `strTeam`/`strAlternate`, más 0,15 si el país
- * cuadra (con override de país, -0,3 si no cuadra) y 0,1 si la liga es la
- * competición. Un filial y un primer equipo nunca casan. Puede pasar de 1:
+ * cuadra (con override de país o perfil de la liga, -0,3 si no cuadra), 0,1
+ * si la liga es la competición y 0,2 si juega en la liga del perfil. Un filial y un primer equipo nunca casan. Puede pasar de 1:
  * los bonus deciden entre dos nombres iguales.
  */
 export function scoreTeam(team: ApiTeam, ctx: TeamContext): number {
@@ -271,7 +277,7 @@ export function scoreTeam(team: ApiTeam, ctx: TeamContext): number {
     );
   }
   if (score === 0) return 0;
-  const wantedCountry = ctx.override?.country ?? null;
+  const wantedCountry = ctx.override?.country ?? ctx.profile?.country ?? null;
   if (wantedCountry) {
     score += countryMatches(team.strCountry, wantedCountry)
       ? TEAMS_COUNTRY_BONUS
@@ -282,6 +288,7 @@ export function scoreTeam(team: ApiTeam, ctx: TeamContext): number {
   if (ctx.competition && team.strLeague && leagueMatches(team.strLeague, ctx.competition)) {
     score += TEAMS_LEAGUE_BONUS;
   }
+  if (playsInProfile(team, ctx.profile ?? null)) score += 2 * TEAMS_LEAGUE_BONUS;
   return Math.max(0, score);
 }
 

@@ -175,6 +175,72 @@ describe('decorateSchedule', () => {
   });
 });
 
+describe('varios términos y aviso de escudos nuevos', () => {
+  it('si el nombre no da nada prueba sin siglas («Mainz 05» → «Mainz»), usa el país de la liga y avisa con state.changed', async () => {
+    const badge = solidPng(4, 4, RED);
+    const harness = createTeams({
+      overrides: { teams: {}, competitions: { bundesliga: { skip: true as const } } },
+      schedule: schedule([match('Mainz 05', 'Freiburg', { competition: 'Bundesliga' })]),
+      routes: {
+        [searchTeamsUrl('Mainz 05')]: json({ teams: null }),
+        [searchTeamsUrl('Mainz')]: json({
+          teams: [
+            apiTeam({
+              idTeam: '133650',
+              strTeam: 'Mainz',
+              strAlternate: '1. FSV Mainz 05',
+              strTeamShort: 'M05',
+              strLeague: 'German Bundesliga',
+              strCountry: 'Germany',
+            }),
+          ],
+        }),
+        [searchTeamsUrl('Freiburg')]: json({ teams: null }),
+        [`${BADGE_URL}/small`]: png(badge),
+      },
+    });
+    const changes: string[][] = [];
+    harness.core.bus.on('state.changed', (event) => changes.push([...event.scopes]));
+    await runRound(harness);
+    const decorated = harness.teams.decorateSchedule(
+      schedule([match('Mainz 05', 'Freiburg', { competition: 'Bundesliga' })]),
+    );
+    expect(decorated.days[0]?.matches[0]?.homeTeam?.id).toBe('133650');
+    expect(
+      harness.transport.requests
+        .map((request) => request.url.href)
+        .filter((url) => url.includes('searchteams')),
+    ).toEqual([searchTeamsUrl('Mainz 05'), searchTeamsUrl('Mainz'), searchTeamsUrl('Freiburg')]);
+    expect(changes).toEqual([['crests']]);
+    /* Sin escudos nuevos, no se avisa. */
+    harness.core.clock.advance(TEAMS_REVALIDATE_MS);
+    await runRound(harness);
+    expect(changes).toEqual([['crests']]);
+  });
+
+  it('las ligas grandes van antes en la cola que las copas y lo desconocido', async () => {
+    const harness = createTeams({
+      overrides: {
+        teams: {},
+        competitions: {
+          futbol: { skip: true as const },
+          'premier league': { skip: true as const },
+        },
+      },
+      schedule: schedule([
+        match('Equipo Raro', 'Otro Raro'),
+        match('Liverpool', 'Everton', { competition: 'Premier League' }),
+      ]),
+      routes: {},
+    });
+    await runRound(harness);
+    const searched = harness.transport.requests
+      .map((request) => request.url.href)
+      .filter((url) => url.includes('searchteams'));
+    expect(searched.slice(0, 2)).toEqual([searchTeamsUrl('Liverpool'), searchTeamsUrl('Everton')]);
+  });
+});
+
 describe('runOnce', () => {
   it('usa lookupteam.php con override de id y saca los colores del fixture real', async () => {
     const harness = createTeams({

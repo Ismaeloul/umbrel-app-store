@@ -65,6 +65,8 @@ export const SCOPE_ROUTES: Record<StateScope, readonly JsonRouteId[]> = {
   settings: ['settingsGet', 'bootstrap'],
   /* «Mi lista» de Películas y series (0.9.1): la ficha y la fila de la portada. */
   vod: ['vodListGet'],
+  /* Escudos que el Umbrel acaba de descargar (0.9.2): la agenda los trae. */
+  crests: ['footballSchedule'],
 };
 
 export const SSE_FALLBACK_AFTER_MS = 10_000;

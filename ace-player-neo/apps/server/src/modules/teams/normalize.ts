@@ -123,6 +123,68 @@ export function teamQuery(name: unknown, key: string, override?: TeamOverride): 
   return nationalityQuery(key) ?? stripAbbreviation(name);
 }
 
+/* Siglas y coletillas que estorban al buscador gratuito («Mainz 05», «VfB Stuttgart», «AD Ceuta»). */
+const QUERY_NOISE = new Set([
+  'fc',
+  'cf',
+  'cd',
+  'ud',
+  'ad',
+  'sd',
+  'rcd',
+  'rc',
+  'ca',
+  'sc',
+  'afc',
+  'ac',
+  'as',
+  'sv',
+  'vfb',
+  'vfl',
+  'tsg',
+  'fsv',
+  'spvgg',
+  '1',
+  '04',
+  '05',
+  '07',
+  '09',
+  '1899',
+  '1846',
+]);
+
+/* Abreviaturas de futbolenlatv que TheSportsDB escribe enteras. */
+const QUERY_EXPANSIONS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^At\.\s*/i, 'Atletico '],
+  [/^Ath\.\s*/i, 'Athletic '],
+  [/^Dep\.\s*/i, 'Deportivo '],
+];
+
+/**
+ * Términos a probar, en orden, hasta que uno dé un candidato bueno: el de
+ * `teamQuery`, el nombre sin siglas ni números y con las abreviaturas
+ * desplegadas. Sin repetidos. Con override (`query` o `idTeam`) solo el primero.
+ */
+export function teamQueries(name: unknown, key: string, override?: TeamOverride): string[] {
+  const first = teamQuery(name, key, override);
+  if (override?.query || override?.idTeam || nationalityQuery(key)) return [first];
+  const clean = stripAbbreviation(name);
+  const words = cleanTitle(name, '')
+    .split(/\s+/)
+    .filter((word) => !QUERY_NOISE.has(word.toLowerCase().replace(/[.,]/g, '')));
+  let expanded = cleanTitle(name, '');
+  for (const [pattern, replacement] of QUERY_EXPANSIONS)
+    expanded = expanded.replace(pattern, replacement);
+  const out: string[] = [first];
+  for (const query of [clean, words.join(' '), expanded]) {
+    const value = query.trim();
+    if (value.length >= 2 && !out.some((item) => item.toLowerCase() === value.toLowerCase())) {
+      out.push(value);
+    }
+  }
+  return out;
+}
+
 /** Id de un equipo sin `idTeam` (solo colores por override): `k-<clave con guiones>` (SafeId). */
 export function keyId(key: string): string {
   const slug = key

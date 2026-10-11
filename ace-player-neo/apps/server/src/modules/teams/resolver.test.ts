@@ -19,6 +19,7 @@ import {
   searchTeams,
   type ApiTeam,
 } from './resolver.js';
+import { competitionProfile } from './profiles.js';
 import {
   BADGE_URL,
   apiLeague,
@@ -153,6 +154,54 @@ describe('elección del candidato', () => {
       kind: 'chosen',
       team: { idTeam: '138159' },
     });
+  });
+
+  it('Barcelona SC en la Liga Pro: el perfil de la liga (Ecuador) basta para elegir bien, sin override', () => {
+    const ctx = {
+      name: 'Barcelona SC',
+      query: 'Barcelona SC',
+      country: 'Ecuador',
+      competition: 'Liga Pro Ecuador',
+      profile: competitionProfile('Liga Pro Ecuador'),
+    };
+    expect(chooseTeam([BARCA, BARCA_SC], ctx)).toMatchObject({
+      kind: 'chosen',
+      team: { idTeam: '138159' },
+    });
+  });
+
+  it('con perfil, un homónimo de otro país o de otra liga puntúa menos', () => {
+    const profile = competitionProfile('Bundesliga');
+    const ctx = {
+      name: 'FC Bayern',
+      query: 'Bayern',
+      country: 'Germany',
+      competition: 'Bundesliga',
+      profile,
+    };
+    const munich = team({
+      idTeam: '133664',
+      strTeam: 'Bayern Munich',
+      strAlternate: 'FC Bayern',
+      strLeague: 'German Bundesliga',
+      strCountry: 'Germany',
+    });
+    const hof = team({
+      idTeam: '1',
+      strTeam: 'Bayern Hof',
+      strAlternate: null,
+      strLeague: 'German Regionalliga Bayern',
+      strCountry: 'Germany',
+    });
+    const foreign = team({
+      idTeam: '2',
+      strTeam: 'FC Bayern',
+      strAlternate: null,
+      strLeague: 'Brazilian Serie D',
+      strCountry: 'Brazil',
+    });
+    expect(scoreTeam(munich, ctx)).toBeGreaterThan(scoreTeam(hof, ctx));
+    expect(scoreTeam(munich, ctx)).toBeGreaterThan(scoreTeam(foreign, ctx));
   });
 
   it('sin parecido suficiente, none; otro deporte y filiales, fuera', () => {

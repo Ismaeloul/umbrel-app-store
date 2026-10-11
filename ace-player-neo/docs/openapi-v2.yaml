@@ -16342,6 +16342,7 @@ components:
                       - nowPlaying
                       - settings
                       - vod
+                      - crests
                 at:
                   type: string
                   format: date-time

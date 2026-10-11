@@ -6,7 +6,7 @@
    Reglas:
    - La agenda nunca espera ni falla por esto: `decorateSchedule` es síncrona,
      pura y lee de un índice en memoria; lo desconocido se encola y una vuelta
-     de fondo (cada 5 min, 20 resoluciones, cola única con pausa entre
+     de fondo (cada 3 min, 60 búsquedas, cola única con pausa entre
      peticiones) lo resuelve.
    - Los clientes nunca enlazan imágenes de terceros: el PNG sale de
      `GET /api/v1/football/teams/:teamId/crest` (mismo origen; la CSP de nginx

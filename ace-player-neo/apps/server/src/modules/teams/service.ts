@@ -5,10 +5,13 @@
    Ciclo:
    - `start()`: en demo o con ACE_TEAM_CRESTS=false no hace nada. Si no,
      carga el índice (y `<teamsDir>/overrides.json` si existe) y programa la
-     primera vuelta a los 30 s y luego cada 5 min (`unref`).
+     primera vuelta a los 30 s y luego cada 3 min (`unref`).
    - Vuelta (`runOnce`): agenda cacheada → equipos y competiciones vistos
-     (`lastSeenAt`) → los pendientes o con reintento vencido, por fecha del
-     partido, hasta 20 por vuelta con 1,5 s entre uno y otro → poda. Un 429
+     (`lastSeenAt`) → los pendientes o con reintento vencido, primero los de
+     las ligas grandes (profiles.ts) y por fecha del partido, hasta 60
+     búsquedas por vuelta con 2,5 s entre una y otra (un equipo prueba varios
+     términos si el primero no da nada) → poda → `state.changed` (`crests`)
+     si entró algún escudo, para que la web y la app lo pinten ya. Un 429
      para la vuelta y pausa una hora; un fallo de red espera 10 min → 1 h →
      6 h → 24 h; `not_found`/`bad_image` reintentan a la semana; lo resuelto
      se revalida a los 90 días. Un aviso de diagnóstico por vuelta fallida
@@ -56,9 +59,10 @@ import {
   keyId,
   mergeOverrides,
   teamKey,
-  teamQuery,
+  teamQueries,
   type Overrides,
 } from './normalize.js';
+import { competitionProfile, type CompetitionProfile } from './profiles.js';
 import { PngError, decodePng, type PngImage } from './png.js';
 import {
   BadgeImageError,
@@ -87,8 +91,23 @@ import type { ServeBadgeOptions, TeamsDeps, TeamsHealth, TeamsService } from './
 interface WantedTeam {
   readonly key: string;
   readonly name: string;
+  /** País del club (del perfil de su liga); null en copas o ligas desconocidas. */
   readonly country: string | null;
   readonly competition: string | null;
+  readonly profile: CompetitionProfile | null;
+}
+
+/* El país de la agenda es siempre «España» (el de futbolenlatv): el del
+   equipo sale del perfil de la competición. */
+function wantedTeam(key: string, name: string, match: FootballMatch): WantedTeam {
+  const profile = competitionProfile(match.competition);
+  return {
+    key,
+    name: cleanTitle(name, ''),
+    country: profile?.country ?? null,
+    competition: match.competition || null,
+    profile,
+  };
 }
 
 interface WantedCompetition {
@@ -298,12 +317,7 @@ export class TeamsServiceImpl implements TeamsService {
     if (!key) return undefined;
     const entry = index.teams[key];
     if (!entry && !this.pendingTeams.has(key)) {
-      this.pendingTeams.set(key, {
-        key,
-        name: cleanTitle(name, ''),
-        country: match.country || null,
-        competition: match.competition || null,
-      });
+      this.pendingTeams.set(key, wantedTeam(key, name, match));
     }
     if (entry?.idTeam && (entry.crest || entry.colors)) {
       return {
@@ -461,13 +475,11 @@ export class TeamsServiceImpl implements TeamsService {
       for (const match of day.matches) {
         for (const name of [match.home, match.away]) {
           const key = teamKey(name);
-          if (key && !teams.has(key)) {
-            teams.set(key, {
-              key,
-              name: cleanTitle(name, ''),
-              country: match.country || null,
-              competition: match.competition || null,
-            });
+          if (!key) continue;
+          /* Un equipo que sale en copa y en liga se busca con su liga (país y nombre de la API). */
+          const seen = teams.get(key);
+          if (!seen || (!seen.profile && competitionProfile(match.competition))) {
+            teams.set(key, wantedTeam(key, name, match));
           }
         }
         const key = competitionKey(match.competition);
@@ -481,6 +493,13 @@ export class TeamsServiceImpl implements TeamsService {
       }
     }
     for (const [key, wanted] of this.pendingTeams) if (!teams.has(key)) teams.set(key, wanted);
+    /* Cola: primero las ligas grandes, luego las demás ligas y al final copas y
+       desconocidas; dentro de cada grupo, por fecha del partido (orden de la agenda). */
+    const ordered = [...teams.values()].sort(
+      (a, b) => (a.profile?.rank ?? 3) - (b.profile?.rank ?? 3),
+    );
+    teams.clear();
+    for (const wanted of ordered) teams.set(wanted.key, wanted);
     for (const [key, wanted] of this.pendingCompetitions) {
       if (!competitions.has(key)) competitions.set(key, wanted);
     }
@@ -555,6 +574,7 @@ export class TeamsServiceImpl implements TeamsService {
     const failures: string[] = [];
     let rateLimited = false;
     let used = 0;
+    let newCrests = 0;
     /* Cola única: una resolución cada vez, con pausa entre dos. */
     const pace = async (): Promise<boolean> => {
       if (used >= budget || signal.aborted) return false;
@@ -582,7 +602,9 @@ export class TeamsServiceImpl implements TeamsService {
         continue;
       }
       if (!(await pace())) break;
-      const outcome = await this.resolveTeam(wanted, signal);
+      const before = this.store.index().teams[wanted.key]?.crest?.etag ?? null;
+      const outcome = await this.resolveTeam(wanted, signal, pace);
+      if ((this.store.index().teams[wanted.key]?.crest?.etag ?? null) !== before) newCrests += 1;
       if (outcome.kind === 'aborted') return;
       if (outcome.kind === 'rate_limited') {
         rateLimited = true;
@@ -612,6 +634,10 @@ export class TeamsServiceImpl implements TeamsService {
     await this.prune();
     this.lastRefreshAt = clock.now();
     this.reportRound(failures, rateLimited);
+    /* Escudos nuevos: la web y la app vuelven a pedir la agenda y los pintan ya. */
+    if (newCrests > 0) {
+      this.deps.bus.emit('state.changed', { scopes: ['crests'], at: clock.date().toISOString() });
+    }
   }
 
   private resolver(signal: AbortSignal): ResolverDeps {
@@ -636,28 +662,42 @@ export class TeamsServiceImpl implements TeamsService {
     });
   }
 
-  private async resolveTeam(wanted: WantedTeam, signal: AbortSignal): Promise<Outcome> {
+  /**
+   * Busca con cada término de `teamQueries` hasta que uno dé un candidato
+   * bueno (la clave gratuita devuelve un solo resultado por búsqueda). Cada
+   * término de más gasta un turno de `pace`; si se acaba el presupuesto, la
+   * entrada sigue pendiente para la vuelta siguiente (no cuenta como «no está»).
+   */
+  private async resolveTeam(
+    wanted: WantedTeam,
+    signal: AbortSignal,
+    pace: () => Promise<boolean> = async () => true,
+  ): Promise<Outcome> {
     const { clock, logger } = this.deps;
     const override = this.overrides.teams[wanted.key];
-    const query = teamQuery(wanted.name, wanted.key, override);
+    const queries = teamQueries(wanted.name, wanted.key, override);
+    let query = queries[0] as string;
     const resolver = this.resolver(signal);
     try {
-      const candidates = override?.idTeam
-        ? await lookupTeam(resolver, override.idTeam)
-        : await searchTeams(resolver, query);
-      const first = candidates[0];
-      const choice =
-        override?.idTeam !== undefined
-          ? first
-            ? ({ kind: 'chosen', team: first, score: 1 } as const)
-            : ({ kind: 'none' } as const)
-          : chooseTeam(candidates, {
-              name: wanted.name,
-              query,
-              country: wanted.country,
-              competition: wanted.competition,
-              override,
-            });
+      let choice: ReturnType<typeof chooseTeam> = { kind: 'none' };
+      if (override?.idTeam !== undefined) {
+        const first = (await lookupTeam(resolver, override.idTeam))[0];
+        choice = first ? { kind: 'chosen', team: first, score: 1 } : { kind: 'none' };
+      } else {
+        for (const [i, term] of queries.entries()) {
+          if (i > 0 && !(await pace())) return { kind: 'ok' };
+          query = term;
+          choice = chooseTeam(await searchTeams(resolver, term), {
+            name: wanted.name,
+            query: term,
+            country: wanted.country,
+            competition: wanted.competition,
+            profile: wanted.profile,
+            override,
+          });
+          if (choice.kind !== 'none') break;
+        }
+      }
       if (choice.kind !== 'chosen') {
         if (choice.kind === 'ambiguous') {
           logger.info(

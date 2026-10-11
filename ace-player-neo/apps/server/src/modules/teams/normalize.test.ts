@@ -14,6 +14,7 @@ import {
   parseOverrides,
   stripAbbreviation,
   teamKey,
+  teamQueries,
   teamQuery,
 } from './normalize.js';
 
@@ -64,6 +65,16 @@ describe('término de búsqueda', () => {
     expect(teamQuery('O. Lyonnais', 'o lyonnais')).toBe('Lyonnais');
     expect(teamQuery('Inter', 'inter', { query: 'Inter Milan' })).toBe('Inter Milan');
     expect(teamQuery('Getafe CF', 'getafe')).toBe('Getafe CF');
+  });
+
+  it('varios términos: sin siglas ni números y con la abreviatura desplegada; con override, solo uno', () => {
+    expect(teamQueries('Mainz 05', 'mainz 05')).toEqual(['Mainz 05', 'Mainz']);
+    expect(teamQueries('VfB Stuttgart', 'vfb stuttgart')).toEqual(['VfB Stuttgart', 'Stuttgart']);
+    expect(teamQueries('At. Madrid', 'atletico madrid')).toEqual(['At. Madrid', 'Atletico Madrid']);
+    expect(teamQueries('Getafe', 'getafe')).toEqual(['Getafe']);
+    expect(teamQueries('España', 'espana')).toEqual(['Spain']);
+    expect(teamQueries('Inter', 'inter', { query: 'Inter Milan' })).toEqual(['Inter Milan']);
+    expect(teamQueries('A', 'a')).toEqual(['A']);
   });
 
   it('el país de la agenda se traduce para TheSportsDB', () => {

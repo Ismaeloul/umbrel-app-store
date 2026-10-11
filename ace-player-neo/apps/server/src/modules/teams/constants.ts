@@ -10,11 +10,13 @@ const DAY = 24 * HOUR;
 
 /** Primera vuelta de resolución tras arrancar y cadencia después. */
 export const TEAMS_FIRST_RUN_MS = 30 * SECOND;
-export const TEAMS_ROUND_INTERVAL_MS = 5 * MINUTE;
-/** Resoluciones (búsqueda + escudo) por vuelta. */
-export const TEAMS_ROUND_BUDGET = 20;
-/** Pausa entre dos resoluciones (cola única: nunca dos peticiones a la vez). */
-export const TEAMS_REQUEST_GAP_MS = 1500;
+export const TEAMS_ROUND_INTERVAL_MS = 3 * MINUTE;
+/** Búsquedas por vuelta (cada término de más de un equipo cuenta): ~20 por minuto,
+    por debajo de las 30 que aguanta la clave gratuita. La agenda (~900 equipos)
+    queda con escudo en unas horas y luego solo entran los nuevos. */
+export const TEAMS_ROUND_BUDGET = 60;
+/** Pausa entre dos peticiones (cola única: nunca dos a la vez). */
+export const TEAMS_REQUEST_GAP_MS = 2500;
 /** Plazo y topes de cada descarga. */
 export const TEAMS_FETCH_TIMEOUT_MS = 15 * SECOND;
 export const TEAMS_SEARCH_MAX_BYTES = 256 * 1024;
@@ -33,10 +35,11 @@ export const TEAMS_NOT_FOUND_RETRY_MS = 7 * DAY;
 export const TEAMS_AMBIGUOUS_RETRY_MS = 30 * DAY;
 /** Lo resuelto se revalida cada 90 días (los escudos cambian). */
 export const TEAMS_REVALIDATE_MS = 90 * DAY;
-/** Topes del índice y de los PNG en disco (~40 KB de media → ~16 MB). */
-export const TEAMS_MAX_ENTRIES = 600;
-export const TEAMS_MAX_CRESTS = 400;
-export const TEAMS_MAX_COMPETITIONS = 60;
+/** Topes del índice y de los PNG en disco (~37 KB de media → ~45 MB): caben los
+    ~900 equipos de 14 días de agenda y los que van y vienen. */
+export const TEAMS_MAX_ENTRIES = 1600;
+export const TEAMS_MAX_CRESTS = 1200;
+export const TEAMS_MAX_COMPETITIONS = 120;
 /** Búferes de PNG en memoria (LRU). */
 export const TEAMS_BUFFER_CACHE = 64;
 /** Umbrales del parecido de nombres (el mínimo es `SCORE_MIN_ANCHOR` de los marcadores). */

@@ -219,6 +219,8 @@ export const STATE_SCOPES = [
   'settings',
   /* «Mi lista» de Películas y series (0.9.1): la web vuelve a pedir `vodListGet`. */
   'vod',
+  /* Escudos nuevos en el Umbrel (0.9.2): se vuelve a pedir la agenda para pintarlos. */
+  'crests',
 ] as const;
 export const StateScopeSchema = z.enum(STATE_SCOPES);
 export type StateScope = z.infer<typeof StateScopeSchema>;
