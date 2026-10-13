@@ -62,7 +62,8 @@ empieza en ficheros nuevos; los enganches de una línea en esos ficheros se unen
    salto (medido) y un panel con `max_connections = 1` falla.
 7. **Una cosa por IPTV a la vez en casa (D5, D-VOD11 cambiada el 30-sep).** Una película corta el directo IPTV o la
    película de otro aparato, sin preguntar, como un canal. **Con AceStream convive:** un partido por AceStream y una
-   película por IPTV pueden sonar a la vez, porque no comparten conexión.
+   película por IPTV pueden sonar a la vez, porque no comparten conexión. Desde la 0.9.3 vale para todo el carril de la
+   IPTV, también el directo (decisiones.md D35).
 8. **Progreso en el servidor** (`v2/vod.json`), compartido entre la web y el iPhone: reanudar, «Seguir viendo»,
    «Marcar hasta aquí como visto», siguiente episodio con cuenta atrás y «¿Sigues viendo?» tras 3 episodios seguidos.
 9. **Un audio por sesión** (castellano por defecto, recordado por serie). Cambiarlo reabre en el mismo punto (2-4 s).

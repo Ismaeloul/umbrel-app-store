@@ -30,6 +30,7 @@ import {
   type ScanCandidate,
   type ScanCandidateState,
   type ScanJob,
+  type SessionSummary,
   type CandidateIptvInfo,
   type SourceReportReason,
   type VerdictState,
@@ -830,6 +831,56 @@ export interface ScanView {
   retryAt: string | null;
 }
 
+// ---- Carriles de la casa (D35) ------------------------------------------------------
+
+/**
+ * En casa suenan a la vez como mucho dos cosas: algo de tu IPTV (la plaza del
+ * proveedor es una) y algo de AceStream (el motor). Otro canal del MISMO
+ * carril le quita el suyo a quien lo esté viendo.
+ */
+export type HouseLane = 'iptv' | 'engine';
+
+/** Lo que ve OTRO dispositivo en un carril: el canal y el nombre del aparato. */
+export interface LaneUse {
+  readonly hash: string;
+  readonly deviceName: string;
+}
+
+export type HouseLanes = Readonly<Record<HouseLane, LaneUse | null>>;
+
+export const FREE_LANES: HouseLanes = { iptv: null, engine: null };
+
+/**
+ * Los carriles que ocupan OTROS dispositivos, de «Dónde se está reproduciendo»
+ * (`playbackStatus.sessions`). Lo de este navegador (aunque sea otra pestaña)
+ * no cuenta: es tuyo.
+ */
+export function houseLanes(
+  sessions: readonly Pick<SessionSummary, 'hash' | 'source' | 'viewers'>[] | undefined,
+  ownDevice: string,
+): HouseLanes {
+  const lanes: Record<HouseLane, LaneUse | null> = { iptv: null, engine: null };
+  for (const session of sessions ?? []) {
+    const lane: HouseLane = session.source === 'iptv' ? 'iptv' : 'engine';
+    if (lanes[lane]) continue;
+    const other = session.viewers.find((viewer) => viewer.deviceId !== ownDevice);
+    if (other) lanes[lane] = { hash: session.hash, deviceName: other.deviceName };
+  }
+  return lanes;
+}
+
+/**
+ * ¿Arrancar esta fuente le quitaría el canal a otro dispositivo? Devuelve
+ * quién lo está viendo, o null. El MISMO canal no quita nada: se comparte.
+ */
+export function takesFromOther(
+  entry: Pick<SourceEntry, 'id' | 'origin'>,
+  lanes: HouseLanes,
+): LaneUse | null {
+  const use = lanes[isIptv(entry) ? 'iptv' : 'engine'];
+  return use && use.hash !== entry.id ? use : null;
+}
+
 /** ¿Ha terminado el comprobador (o no hay)? Entonces una floja también vale para arrancar. */
 export function scanFinished(scan: ScanView | null): boolean {
   return !scan || scan.status === 'complete' || scan.status === 'waiting';
@@ -844,18 +895,22 @@ export function scanFinished(scan: ScanView | null): boolean {
  * NO sea «Sin señal» arranca sin esperar a «Verificada» («Floja», por ejemplo
  * `iptv_busy`, no la frena: abrir es la prueba de verdad). Con `iptv: false`
  * solo se miran las demás (el puente decide aparte si toca la IPTV).
+ *
+ * Con `lanes` (D35), lo automático no le quita el canal a otro dispositivo:
+ * si alguien ve tu IPTV, se arranca por AceStream, y al revés.
  */
 export function pickAutoSource(
   entries: readonly SourceEntry[],
   effectiveById: ReadonlyMap<string, Effective>,
   finished: boolean,
-  { iptv = true }: { iptv?: boolean } = {},
+  { iptv = true, lanes = FREE_LANES }: { iptv?: boolean; lanes?: HouseLanes } = {},
 ): SourceEntry | null {
   /* El gemelo de otro país («DE: DAZN 1» junto a «DAZN 1») no arranca solo (§17). */
   const pool = entries.filter(
     (entry) =>
       !entry.autoTried &&
       !effectiveById.get(entry.id)?.reported &&
+      !takesFromOther(entry, lanes) &&
       (iptv ? !isForeignTwin(entry, entries) : !isIptv(entry)),
   );
   const firstIptv = pool.find(
@@ -919,7 +974,8 @@ export function bridgeAllowed(jumps: readonly number[], now: number): boolean {
  * - cae una AceStream → la primera IPTV no reportada, no «Sin señal» y no
  *   caída en los últimos 60 s (aunque ya la probara el arranque, y aunque
  *   sonara hace nada: dejarla a mano por una AceStream no cuenta como fallo).
- * null si no hay a quién saltar (la sesión decide qué decir).
+ * null si no hay a quién saltar (la sesión decide qué decir). Con `lanes`
+ * (D35), nunca salta a una fuente que le quite el canal a otro dispositivo.
  */
 export function pickBridgeTarget(
   entries: readonly SourceEntry[],
@@ -927,11 +983,14 @@ export function pickBridgeTarget(
   from: 'iptv' | 'acestream',
   finished: boolean,
   now: number,
+  lanes: HouseLanes = FREE_LANES,
 ): SourceEntry | null {
-  if (from === 'iptv') return pickAutoSource(entries, effectiveById, finished, { iptv: false });
+  if (from === 'iptv')
+    return pickAutoSource(entries, effectiveById, finished, { iptv: false, lanes });
   return (
     entries.find((entry) => {
       if (!isIptv(entry) || isForeignTwin(entry, entries)) return false;
+      if (takesFromOther(entry, lanes)) return false;
       const effective = effectiveById.get(entry.id);
       if (!effective || effective.reported || effective.state === 'failed') return false;
       return !entry.failedAt || now - entry.failedAt >= BRIDGE_RECENT_TRY_MS;

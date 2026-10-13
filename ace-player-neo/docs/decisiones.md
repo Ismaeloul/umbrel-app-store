@@ -838,3 +838,31 @@ Detalle en docs/vod.md §4.10.
 - **Rutas**: `diagnosticsLogInfo`, `diagnosticsLogDownload` (binaria) y `diagnosticsWebLog`, las tres
   `access: 'web'`.
 - **Vuelta atrás**: solo añade `v2/registro/`; volver a la 0.8.4 es seguro.
+
+## D35. Dos carriles en casa: la IPTV y AceStream a la vez (0.9.3)
+
+- **Para qué**: Isma quiere que, si alguien está viendo la IPTV, otro pueda ver AceStream, y al revés. Hasta la 0.9.2
+  valía «un canal a la vez en toda la casa» (D5, docs/iptv.md §6.5): poner un canal AceStream echaba a quien veía la
+  IPTV. Solo una película o serie (VOD) convivía con AceStream (D-VOD11).
+- **Regla nueva**: dos carriles con su propio «un canal a la vez»:
+  - **IPTV** (directo, películas y series): la plaza del proveedor es una (`max_connections = 1`). Otro canal IPTV, u
+    otra película, echa al que estaba, como siempre.
+  - **AceStream** (el motor principal): sigue con D5.4, porque no está demostrado que el motor aguante dos canales.
+  - Entre carriles no hay traspaso: cada uno tiene su sesión. El mismo canal se sigue compartiendo (y con «Un solo
+    dispositivo a la vez», el último manda dentro de ese canal).
+- **Servidor** (`playback/service.ts`, `placeWaitingLocked`): solo se cierran las sesiones de otro canal **del mismo
+  origen** (`source`). Sustituye a la excepción del VOD, que queda dentro. El mando de las apps 0.6.x (solo AceStream)
+  echa a los de AceStream pero no toca la IPTV.
+- **Lo automático no le quita el canal a otro dispositivo** (web, `features/sources`): el arranque al entrar en un
+  partido o en un canal y el puente IPTV ↔ AceStream miran «Dónde se está reproduciendo» (`playbackStatus.sessions`)
+  y se saltan una fuente que cerraría lo que ve OTRO dispositivo (otro canal del mismo carril; lo de este navegador no
+  cuenta). Si la IPTV está ocupada, arranca por AceStream con el aviso «iPhone de Ana está viendo tu IPTV: arrancamos
+  por AceStream (fuente 3)», y al revés. Si no queda ninguna libre, no arranca nada: lo dice («… Toca una fuente si
+  quieres verla aquí (se la quitarás) o espera: arranca sola cuando quede libre») y arranca solo cuando cambia
+  `playback.sessions`. **Tocar una fuente a mano se la quita al otro**, como siempre (`playback.handoff`).
+- **La app de iPhone** se beneficia del servidor (puede ver AceStream mientras otro ve la IPTV), pero su arranque
+  automático aún elige la IPTV primero aunque la esté viendo otro: queda para cuando haya un Mac (docs/pendiente.md).
+- **Lo que no cambia**: `nowPlaying` (el mando) sigue siendo uno, el último que dio al play; «Arranque instantáneo»
+  sigue preparando solo con la casa vacía; el vigilante del motor y el buscador ya miraban solo el carril AceStream
+  (`engineWatching`).
+- **Vuelta atrás**: sin datos nuevos; volver a la 0.9.2 es seguro.

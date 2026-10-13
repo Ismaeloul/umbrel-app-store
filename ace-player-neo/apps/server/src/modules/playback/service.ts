@@ -1389,23 +1389,23 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       title: request.title,
     };
     let handoff = false;
-    /* Canales distintos: siempre traspaso (una sola sesión en el motor principal).
-       Películas y series (D-VOD11, cambiada el 30-sep): un VOD corta el directo
-       IPTV y otro VOD (la plaza del proveedor es una) pero CONVIVE con AceStream,
-       y abrir un canal AceStream no cierra el VOD. */
-    const coexists = (other: SessionRec): boolean =>
-      (request.vod !== undefined && other.source === 'engine') ||
-      (request.vod === undefined && request.source === 'engine' && other.vod !== null);
+    /* Dos carriles (D35): la plaza del proveedor IPTV (directo, películas y
+       series) y el motor AceStream. Canales distintos del MISMO carril: siempre
+       traspaso (una conexión con el proveedor, una sesión en el motor
+       principal). De carriles distintos conviven: alguien ve la IPTV y otro,
+       AceStream (y al revés). Ya pasaba con un VOD y AceStream (D-VOD11). */
     for (const other of [...sessions.values()]) {
       if (other.hash === request.hash) continue;
-      if (coexists(other)) continue;
+      if (other.source !== request.source) continue;
       const affected = [...other.viewers.values()].filter((v) => v.viewerId !== request.viewerId);
       emitHandoff(other, affected, by, 'other_channel');
       handoff ||= affected.length > 0;
       await closeSessionLocked(other);
     }
-    /* Los 0.6.x con mando se enteran por nowPlaying: dejan de contar como visores. */
+    /* Los 0.6.x con mando se enteran por nowPlaying: dejan de contar como visores.
+       Solo ven AceStream: una IPTV no se lo quita (D35). */
     for (const viewer of [...viewers.values()]) {
+      if (request.source !== 'engine') break;
       if (viewer.sessionId === null && viewer.viewerId !== request.viewerId) {
         viewers.delete(viewer.viewerId);
       }
@@ -1847,7 +1847,11 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     return `lc_${createHash('sha256').update(dev).digest('hex').slice(0, 16)}`;
   }
 
-  /** Un `claim` 0.6.x: los demás dispositivos pierden el canal (traspaso de la 0.6.5). */
+  /**
+   * Un `claim` 0.6.x: los demás dispositivos pierden el canal (traspaso de la
+   * 0.6.5). Las 0.6.x solo ven AceStream: el carril de la IPTV (directo y VOD)
+   * sigue con lo suyo (D35).
+   */
   async function applyLegacyClaim(nowPlaying: NowPlaying): Promise<void> {
     await engineLock.run(async () => {
       if (stopped) return;
@@ -1859,6 +1863,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       };
       yieldWarmTo(null);
       for (const session of [...sessions.values()]) {
+        if (session.source !== 'engine') continue;
         /* Una preparación (D24) cede ante el mando 0.6.x. */
         if (session.warm) {
           await closeSessionLocked(session);

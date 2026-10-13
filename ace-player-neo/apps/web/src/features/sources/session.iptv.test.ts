@@ -4,9 +4,17 @@
    con `scope=channel` y el partido sin canales. Sin red: fetch simulado con
    los mismos esquemas del contrato (el cliente valida en los tests). */
 
-import type { BootstrapResponse, Resolution, ResolutionCandidate } from '@ace/shared';
+import type {
+  BootstrapResponse,
+  PlaybackStatus,
+  Resolution,
+  ResolutionCandidate,
+  SessionSummary,
+} from '@ace/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
+import { getDeviceId } from '../../api/identity.ts';
+import { dispatchSse } from '../../api/sse.ts';
 import { queryClient, routeKey } from '../../api/query.ts';
 import { realtimeStore } from '../../api/realtime-store.ts';
 import { immersiveActionStore } from '../../notices/immersiveAction.ts';
@@ -923,5 +931,142 @@ describe('«Rebuscar» encuentra tu IPTV mientras suena AceStream (M4)', () => {
     enterMatch(testMatch({ id: 'm9' }));
     await flush();
     expect(getSession().resolution?.checked[0]).toBe('iptv');
+  });
+});
+
+describe('dos carriles en casa: lo automático no le quita el canal a otro dispositivo (D35)', () => {
+  /** Lo que ve OTRO dispositivo («Dónde se está reproduciendo»). */
+  function otherDevice(
+    channel: string,
+    source?: 'iptv',
+    deviceName = 'iPhone de Ana',
+  ): SessionSummary {
+    return {
+      id: `s_${channel.slice(0, 16)}`,
+      hash: channel,
+      mode: 'hls',
+      openedAt: new Date(0).toISOString(),
+      viewers: [
+        {
+          client: 'ios',
+          deviceId: 'dev_iphone_ana',
+          lastBeatAt: new Date(0).toISOString(),
+          viewerId: 'v_ana',
+          deviceName,
+          platform: 'ios',
+          playing: true,
+        },
+      ],
+      title: 'Otro canal',
+      protocol: 'hls-fmp4',
+      ...(source ? { source } : {}),
+    };
+  }
+  function house(sessions: SessionSummary[]): void {
+    queryClient.setQueryData<PlaybackStatus>(routeKey('playbackStatus'), {
+      nowPlaying: null,
+      learningCount: 0,
+      serverTime: 0,
+      sessions,
+    });
+  }
+
+  afterEach(() => {
+    queryClient.removeQueries({ queryKey: routeKey('playbackStatus') });
+  });
+
+  it('otro dispositivo ve tu IPTV: espera a una AceStream verificada, arranca por ella y lo dice', async () => {
+    house([otherDevice(hash(900), 'iptv')]);
+    enterMatch(testMatch());
+    await flush();
+    expect(getPlayer().channel).toBeNull();
+    expect(playerStore.get().waiting).toBe(
+      'iPhone de Ana está viendo tu IPTV: compruebo las fuentes de AceStream y arranco la primera que funcione…',
+    );
+    scan = scanJob(['checking', 'working', 'checking']);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(getPlayer().channel?.hash).toBe(hash(2));
+    expect(toasts()).toContain(
+      'iPhone de Ana está viendo tu IPTV: arrancamos por AceStream (fuente 3)',
+    );
+    expect(toasts()).not.toContain('Arrancando tu IPTV');
+  });
+
+  it('el MISMO canal IPTV que ve otro se comparte: arranca la IPTV como siempre', async () => {
+    house([otherDevice(IPTV, 'iptv')]);
+    enterMatch(testMatch());
+    await flush();
+    expect(getPlayer().channel?.hash).toBe(IPTV);
+    expect(toasts()).toContain('Arrancando tu IPTV');
+  });
+
+  it('otro dispositivo ve AceStream y tu IPTV está libre: arranca la IPTV', async () => {
+    house([otherDevice(hash(900))]);
+    enterMatch(testMatch());
+    await flush();
+    expect(getPlayer().channel?.hash).toBe(IPTV);
+  });
+
+  it('lo que ve ESTE navegador (otra pestaña) no cuenta: arranca la IPTV', async () => {
+    const mine = otherDevice(hash(900), 'iptv');
+    house([{ ...mine, viewers: mine.viewers.map((v) => ({ ...v, deviceId: getDeviceId() })) }]);
+    enterMatch(testMatch());
+    await flush();
+    expect(getPlayer().channel?.hash).toBe(IPTV);
+  });
+
+  it('los dos carriles ocupados: no arranca nada, lo dice y arranca solo cuando queda uno libre', async () => {
+    house([otherDevice(hash(900), 'iptv'), otherDevice(hash(901), undefined, 'Tele del salón')]);
+    enterMatch(testMatch());
+    await flush();
+    scan = scanJob(['working', 'working', 'working']);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(getPlayer().channel).toBeNull();
+    expect(playerStore.get().waiting).toBe(
+      'iPhone de Ana está viendo tu IPTV. Toca una fuente si quieres verla aquí (se la quitarás) o espera: arranca sola cuando quede libre.',
+    );
+    // La tele deja AceStream: «Dónde se está reproduciendo» cambia y arranca la primera verificada.
+    house([otherDevice(hash(900), 'iptv')]);
+    dispatchSse(
+      'playback.sessions',
+      { sessions: [otherDevice(hash(900), 'iptv')] },
+      { id: null, synthetic: false },
+    );
+    await flush();
+    expect(getPlayer().channel?.hash).toBe(hash(1));
+  });
+
+  it('el puente salta a la AceStream que ya ve otro dispositivo: el mismo canal se comparte', async () => {
+    await iptvPlaying(['working', 'working', 'failed']);
+    house([otherDevice(hash(2))]);
+    const reply = failNow({ code: 'iptv_dropped' });
+    expect(reply.next).toBe(true);
+    expect(getPlayer().channel?.hash).toBe(hash(2));
+  });
+
+  it('el puente no salta a AceStream si otro dispositivo ve OTRO canal de AceStream: lo dice y espera', async () => {
+    await iptvPlaying(['working', 'working', 'failed']);
+    house([otherDevice(hash(900), undefined, 'Tele del salón')]);
+    const reply = failNow({ code: 'iptv_dropped' });
+    expect(reply.next).toBe(false);
+    expect(reply.message).toBe(
+      'Esta fuente no responde y Tele del salón está viendo AceStream. Toca una fuente si quieres verla aquí (se la quitarás) o espera: arranca sola cuando quede libre.',
+    );
+    expect(getSession().autoVerified).toBe(true);
+    playerStore.set((state) => ({ ...state, phase: 'error' }));
+    // La tele lo deja: arranca sola la primera verificada.
+    house([]);
+    dispatchSse('playback.sessions', { sessions: [] }, { id: null, synthetic: false });
+    await flush();
+    expect(getPlayer().channel?.hash).toBe(hash(1));
+  });
+
+  it('tocar a mano una fuente ocupada se la quita (como siempre)', async () => {
+    house([otherDevice(hash(900), 'iptv')]);
+    enterMatch(testMatch());
+    await flush();
+    selectSource(IPTV);
+    await flush();
+    expect(getPlayer().channel?.hash).toBe(IPTV);
   });
 });

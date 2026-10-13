@@ -30,6 +30,7 @@ import {
   expect,
   listaDeFuentes,
   motor,
+  otroDispositivo,
   test,
 } from './support/pruebas.ts';
 
@@ -236,6 +237,39 @@ test(
     // Una sola conexión con el proveedor y ninguna sesión del motor AceStream.
     expect(await proveedor.conexiones()).toBe(1);
     expect(await motor.sesiones('active')).toHaveLength(0);
+  },
+);
+
+test(
+  'dos carriles (D35): la IPTV en un dispositivo y AceStream en otro a la vez, sin traspaso',
+  { tag: '@video' },
+  async ({ page, browser }, testInfo) => {
+    test.setTimeout(240_000);
+    await conectarXtream(page);
+    await abrirPartido(page, partido);
+    await expect(cartelIptv(page)).toHaveAttribute('aria-label', /reproduciendo ahora/, {
+      timeout: 45_000,
+    });
+    await esperarQueAvance(page);
+    const otro = await otroDispositivo(browser, testInfo);
+    try {
+      /* Otro partido que también está en la IPTV: la plaza la tiene el primero, así que el
+         segundo arranca solo por AceStream y lo dice, en vez de quitársela. */
+      await abrirPartido(otro.page, `${PARTIDOS.la1.local} vs ${PARTIDOS.la1.visitante}`);
+      await expect(
+        otro.page.getByText(/está viendo tu IPTV: arrancamos por AceStream/).first(),
+      ).toBeVisible({ timeout: 60_000 });
+      await esperarQueAvance(otro.page, 60_000);
+      expect(await suenaIptv(otro.page)).toBe(false);
+      // El primero sigue con su IPTV, sin aviso de traspaso.
+      await esperarQueAvance(page);
+      expect(await suenaIptv(page)).toBe(true);
+      await expect(page.getByText('La reproducción ha pasado a otro dispositivo')).toHaveCount(0);
+      expect(await proveedor.conexiones()).toBe(1);
+      expect(await motor.sesiones('active')).toHaveLength(1);
+    } finally {
+      await otro.context.close();
+    }
   },
 );
 
