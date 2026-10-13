@@ -744,7 +744,7 @@ describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
     expect(boot.json().features.iptv).toBe(true);
   });
 
-  it('2 y 3 · web por hls.js en /api/v1/video sin token; dos visores, una conexión; cambiar a AceStream la suelta antes', async () => {
+  it('2 y 3 · web por hls.js en /api/v1/video sin token; dos visores, una conexión; uno pasa a AceStream y el otro sigue en la IPTV (D35); el último en irse la suelta antes', async () => {
     const r = await setup();
     await saveXtream(r);
     const id = await iptvIdFor(r.h, 'Antena 3');
@@ -764,28 +764,84 @@ describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
     expect(r.h.iptv.connections()).toBe(1);
     const status = await inject(r.h, 'GET', '/api/v1/playback');
     expect(status.json().sessions[0].source).toBe('iptv');
-    /* Otro canal (AceStream) en el mismo visor: se suelta la IPTV antes de abrir el motor. */
+    /* Un visor pasa a AceStream: deja la IPTV, pero el otro la sigue viendo
+       (D35: la IPTV y AceStream conviven). Nadie recibe traspaso. */
     const ace = await open(r.h, ACE_OTRO, 'visor_web_1');
     expect(ace.source).toBeUndefined();
+    await r.h.settle();
+    expect(r.h.bus.of('playback.handoff')).toEqual([]);
+    expect(
+      r.h.playback
+        .inspect()
+        .sessions.map((session) => session.hash)
+        .sort(),
+    ).toEqual([ACE_OTRO, id].sort());
+    expect(r.provider.conexiones()).toBe(1);
+    /* El último de la IPTV cambia también a AceStream: la suelta antes de abrir. */
+    await open(r.h, ACE_OTRO, 'visor_web_2');
     await until('plaza suelta', () => r.provider.conexiones() === 0);
     expect(r.h.iptv.connections()).toBe(0);
-    expect(r.h.bus.of('playback.handoff').length).toBeGreaterThanOrEqual(1);
+    expect(r.h.playback.inspect().sessions.map((session) => session.hash)).toEqual([ACE_OTRO]);
+    expect(r.h.bus.of('playback.handoff')).toEqual([]);
   });
 
-  it('4 · dos aperturas a la vez (IPTV y AceStream en dos dispositivos): una sola sesión viva y como mucho una conexión', async () => {
+  it('4 · IPTV y AceStream a la vez en dos dispositivos (D35): conviven, una conexión y sin traspasos; otro canal del mismo carril sí es traspaso', async () => {
     const r = await setup();
     await saveXtream(r);
-    const id = await iptvIdFor(r.h, 'La 1');
-    const results = await Promise.allSettled([
-      open(r.h, id, 'visor_web_a'),
+    const la1 = await iptvIdFor(r.h, 'La 1');
+    const antena = await iptvIdFor(r.h, 'Antena 3');
+    const [iptv, ace] = await Promise.all([
+      open(r.h, la1, 'visor_web_a'),
       open(r.h, ACE_OTRO, 'visor_web_b'),
     ]);
-    /* Una gana; la otra, o recibe el traspaso, o se queda sin sesión si la sustituyen al abrir. */
-    expect(results.filter((item) => item.status === 'fulfilled').length).toBeGreaterThanOrEqual(1);
+    expect(iptv.source).toBe('iptv');
+    expect(ace.source).toBeUndefined();
     await r.h.settle();
-    expect(r.h.playback.inspect().sessions).toHaveLength(1);
+    expect(r.h.playback.inspect().sessions).toHaveLength(2);
+    expect(r.provider.conexiones()).toBe(1);
+    expect(r.h.bus.of('playback.handoff')).toEqual([]);
+    const status = await inject(r.h, 'GET', '/api/v1/playback');
+    expect(
+      status
+        .json()
+        .sessions.map((session: { source?: string }) => session.source ?? 'engine')
+        .sort(),
+    ).toEqual(['engine', 'iptv']);
+    /* Un tercero pone OTRO canal IPTV: traspaso para el de la IPTV (la plaza
+       del proveedor es una); el de AceStream sigue. */
+    await openDriven(r.h, antena, 'visor_web_c');
+    await r.h.settle();
+    const handoffs = r.h.bus.of('playback.handoff');
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0]).toMatchObject({ viewerIds: ['visor_web_a'], reason: 'other_channel' });
+    expect(
+      r.h.playback
+        .inspect()
+        .sessions.map((session) => session.hash)
+        .sort(),
+    ).toEqual([ACE_OTRO, antena].sort());
     expect(r.provider.conexiones()).toBeLessThanOrEqual(1);
-    expect(r.h.bus.of('playback.handoff').length).toBeLessThanOrEqual(1);
+  });
+
+  it('D35 · el mando de una app 0.6.x (solo AceStream) echa a los de AceStream pero no toca la IPTV', async () => {
+    const r = await setup();
+    await saveXtream(r);
+    const la1 = await iptvIdFor(r.h, 'La 1');
+    await open(r.h, la1, 'visor_iptv');
+    await open(r.h, ACE_OTRO, 'visor_ace');
+    await r.h.settle();
+    const claim = await inject(r.h, 'POST', '/api/playback/claim', {
+      id: e2eId(42),
+      title: 'Otro canal',
+      dev: 'tele-antigua',
+    });
+    expect(claim.statusCode, claim.body).toBe(200);
+    await r.h.settle();
+    const handoffs = r.h.bus.of('playback.handoff');
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0]).toMatchObject({ viewerIds: ['visor_ace'], byClient: 'legacy' });
+    expect(r.h.playback.inspect().sessions.map((session) => session.hash)).toEqual([la1]);
+    expect(r.provider.conexiones()).toBe(1);
   });
 
   it('16 · variantes de resolución (§17): una fila con sus calidades; 4 carteles 1080p, 4K, 720p y SD; la 1080p caída no gasta las demás; cambiar de variante cierra la anterior', async () => {

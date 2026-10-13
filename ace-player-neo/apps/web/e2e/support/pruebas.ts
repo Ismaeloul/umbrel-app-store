@@ -249,6 +249,7 @@ export const test = base.extend<{ erroresDePagina: string[] }>({
       await use(errores);
       await cerrarOtrosDispositivos();
       for (const page of context.pages()) await detenerReproductor(page);
+      await soltarSesiones();
       expect(errores, 'excepciones sin capturar en la página').toEqual([]);
     },
     { auto: true },
@@ -417,6 +418,37 @@ export async function otroDispositivo(
 const otrosContextos: BrowserContext[] = [];
 
 /** Cierra los dispositivos extra de un recorrido (lo llama el fixture). */
+/**
+ * Al acabar un recorrido no queda ninguna sesión con visores en el servidor.
+ * Cada recorrido es un navegador nuevo, es decir, OTRO dispositivo: parar el
+ * reproductor manda el «soltar» sin esperarlo y, al cerrarse el contexto, se
+ * puede perder. Esa sesión seguiría viva hasta 45 s (sin latido) y el
+ * recorrido siguiente creería que otro dispositivo está viendo ese carril
+ * (decisiones.md D35): lo automático esperaría en vez de arrancar. Primero se
+ * da 1 s a los «soltar» del reproductor; luego se sueltan a mano.
+ */
+async function soltarSesiones(): Promise<void> {
+  for (let intento = 0; intento < 20; intento++) {
+    const estado = await json<{
+      sessions: { id: string; viewers: { viewerId: string }[] }[];
+    }>(`${BACKEND_URL}/api/v1/playback`);
+    const vivas = estado.sessions.filter((session) => session.viewers.length > 0);
+    if (!vivas.length) return;
+    if (intento >= 4) {
+      for (const session of vivas) {
+        for (const viewer of session.viewers) {
+          await pedir(`${BACKEND_URL}/api/v1/sessions/${session.id}/release`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ viewer: viewer.viewerId }),
+          }).catch(() => undefined);
+        }
+      }
+    }
+    await sleep(250);
+  }
+}
+
 async function cerrarOtrosDispositivos(): Promise<void> {
   for (const context of otrosContextos.splice(0)) {
     for (const page of context.pages()) await detenerReproductor(page);

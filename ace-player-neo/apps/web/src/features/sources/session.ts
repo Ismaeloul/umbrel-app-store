@@ -65,6 +65,7 @@ import type {
   IptvView,
   Item,
   LibraryView,
+  PlaybackStatus,
   PreheatPublic,
   Resolution,
   ResolutionCandidate,
@@ -80,7 +81,14 @@ import {
   normalizeHash,
   type VerdictState,
 } from '@ace/shared';
-import { api, getViewerId, isAbortError, isApiError, onSseEvent } from '../../api/index.ts';
+import {
+  api,
+  getDeviceId,
+  getViewerId,
+  isAbortError,
+  isApiError,
+  onSseEvent,
+} from '../../api/index.ts';
 import { iptvActive } from '../../api/boot.ts';
 import { queryClient, routeKey } from '../../api/query.ts';
 import { realtimeStore } from '../../api/realtime-store.ts';
@@ -126,6 +134,7 @@ import {
   entryFromCandidate,
   entryFromItem,
   failureVerdict,
+  houseLanes,
   INVALID_HASH_TEXT,
   iptvQualityText,
   iptvReasonText,
@@ -146,7 +155,10 @@ import {
   reportFollowUp,
   scanFinished,
   startScan,
+  takesFromOther,
   type Effective,
+  type HouseLanes,
+  type LaneUse,
   type OnScreen,
   type ScanView,
   type SourceEntry,
@@ -367,6 +379,32 @@ function libraryNow(): Partial<LibraryView> | undefined {
   return queryClient.getQueryData<LibraryView>(routeKey('libraryGet'));
 }
 
+/** Lo que ven OTROS dispositivos en cada carril (D35), de «Dónde se está reproduciendo». */
+function lanesNow(): HouseLanes {
+  const status = queryClient.getQueryData<PlaybackStatus>(routeKey('playbackStatus'));
+  return houseLanes(status?.sessions, getDeviceId());
+}
+
+/** «iPhone de Isma está viendo tu IPTV» (D35). */
+function laneBusyText(entry: Pick<SourceEntry, 'origin'>, use: LaneUse): string {
+  return `${use.deviceName} está viendo ${isIptv(entry) ? 'tu IPTV' : 'AceStream'}`;
+}
+
+/**
+ * Lo automático no arranca nada que le quite el canal a otro dispositivo
+ * (D35): se dice quién lo está viendo y se espera. Cuando quede libre (o
+ * verifique otra fuente), arranca solo; tocar una fuente a mano se la quita.
+ */
+function waitForFreeLane(blocked: SourceEntry, use: LaneUse, finished: boolean): void {
+  laneWait = true;
+  const who = laneBusyText(blocked, use);
+  setWaitingMessage(
+    finished || !isIptv(blocked)
+      ? `${who}. Toca una fuente si quieres verla aquí (se la quitarás) o espera: arranca sola cuando quede libre.`
+      : `${who}: compruebo las fuentes de AceStream y arranco la primera que funcione…`,
+  );
+}
+
 /** Frase de la fuente para la línea de estado: «Fuente 1 verificada.» */
 function leadFor(
   number: number,
@@ -391,6 +429,15 @@ const reportWatches = new Map<string, () => void>();
 let researchWatch: { before: Set<string>; ai: string } | null = null;
 let offFailed: (() => void) | null = null;
 let offPlayer: (() => void) | null = null;
+/** «Dónde se está reproduciendo» cambia: lo que esperaba a un carril libre (D35) puede arrancar. */
+let offHouse: (() => void) | null = null;
+/**
+ * Lo automático está esperando a que otro dispositivo suelte un carril (D35).
+ * Solo entonces un cambio en «Dónde se está reproduciendo» vuelve a intentar
+ * el arranque: si no, parar o cambiar de fuente a mano (que también cambia
+ * esa lista) arrancaría algo que nadie ha pedido.
+ */
+let laneWait = false;
 let lastPlayer: PlayerState = getPlayer();
 /** El toast «Volver a la IPTV» (atado a esta sesión: se quita al acabarla). */
 let backToastId: number | null = null;
@@ -406,6 +453,10 @@ function dismissBackToast(): void {
 
 function attach(): void {
   if (!offFailed) offFailed = onSourceFailed(handleSourceFailed);
+  if (!offHouse)
+    offHouse = onSseEvent('playback.sessions', () => {
+      if (laneWait) void tryAutoStart();
+    });
   if (!offPlayer) {
     lastPlayer = getPlayer();
     offPlayer = playerStore.subscribe(onPlayerChange);
@@ -415,6 +466,9 @@ function attach(): void {
 function detach(): void {
   offFailed?.();
   offFailed = null;
+  offHouse?.();
+  offHouse = null;
+  laneWait = false;
   offPlayer?.();
   offPlayer = null;
 }
@@ -1093,8 +1147,16 @@ function applyChannelResolution(data: Resolution, tapped: TappedChannel): void {
   });
   if (data.scan) configureScan(data.scan);
   if (tryAutoStart() || data.scan) return;
-  // Sin comprobador y sin IPTV que arrancar (un id IPTV que ya no está): la mejor colocada.
-  const best = entries.find((entry) => !isReported(entry, now));
+  // Sin comprobador y sin IPTV que arrancar (un id IPTV que ya no está): la mejor colocada
+  // que no le quite el canal a otro dispositivo (D35).
+  const lanes = lanesNow();
+  const free = entries.filter((entry) => !isReported(entry, now));
+  const best = free.find((entry) => !takesFromOther(entry, lanes));
+  const taken = free[0] && !best ? takesFromOther(free[0], lanes) : null;
+  if (taken && free[0]) {
+    waitForFreeLane(free[0], taken, true);
+    return;
+  }
   if (best) {
     setWaitingMessage(null);
     playEntry(best, 'user');
@@ -1342,12 +1404,22 @@ function tryAutoStart(): boolean {
   const now = clock();
   const effective = effectiveMap(state.entries, screen, now);
   const finished = scanFinished(state.scan);
-  const chosen = pickAutoSource(state.entries, effective, finished);
+  const lanes = lanesNow();
+  laneWait = false;
+  const chosen = pickAutoSource(state.entries, effective, finished, { lanes });
+  /* La que se habría elegido sin mirar a los demás (D35): si es otra, se dice por qué. */
+  const preferred = pickAutoSource(state.entries, effective, finished);
+  const busy = preferred && preferred.id !== chosen?.id ? takesFromOther(preferred, lanes) : null;
   const total = state.entries.length;
   if (chosen) {
     const number = numberOf(state, chosen.id);
     const verified = effective.get(chosen.id)?.state === 'working';
-    if (isIptv(chosen))
+    if (busy && preferred)
+      notify(
+        `${laneBusyText(preferred, busy)}: arrancamos por ${isIptv(chosen) ? 'tu IPTV' : `AceStream (fuente ${number})`}`,
+        { kind: 'signal', icon: 'tv', signal: 'checking' },
+      );
+    else if (isIptv(chosen))
       notify('Arrancando tu IPTV', { kind: 'signal', icon: 'tv', signal: 'checking' });
     else
       notify(
@@ -1360,6 +1432,10 @@ function tryAutoStart(): boolean {
     markAutoTried(chosen.id);
     playEntry(chosen, 'auto');
     return true;
+  }
+  if (busy && preferred) {
+    waitForFreeLane(preferred, busy, finished);
+    return false;
   }
   if (finished) {
     if (state.scan?.status === 'waiting' && total) {
@@ -1627,13 +1703,23 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
 
   if (state.autoVerified && !state.stopped && drives(state)) {
     // Entre AceStream (P16.2): el puente, o su tope, ya decidió sobre la IPTV.
-    const next = pickAutoSource(entries, effective, finished, { iptv: !hasIptv });
+    const lanes = lanesNow();
+    const next = pickAutoSource(entries, effective, finished, { iptv: !hasIptv, lanes });
     if (next) {
       // Cambio automático de fuente: un aviso háptico (HAPTIC_MAP), nunca la única señal.
       haptic('warning');
       markAutoTried(next.id);
       playEntry(next, 'auto');
       return { next: true };
+    }
+    // Las que quedan las está viendo otro dispositivo (D35): se dice y se espera a que quede libre.
+    const blocked = pickAutoSource(entries, effective, finished, { iptv: !hasIptv });
+    const busy = blocked ? takesFromOther(blocked, lanes) : null;
+    if (blocked && busy) {
+      laneWait = true;
+      return {
+        message: `Esta fuente no responde y ${laneBusyText(blocked, busy)}. Toca una fuente si quieres verla aquí (se la quitarás) o espera: arranca sola cuando quede libre.`,
+      };
     }
     if (!finished)
       return {
@@ -1795,7 +1881,8 @@ function bridge(
     // «Volver a la IPTV» vuelve al primer cartel IPTV (la mejor variante, §17), no al último que cayó.
     const back = entries.find(isIptv)?.id ?? failed.id;
     const paused = failure.code === 'iptv_disabled' || failure.code === 'iptv_removed';
-    let target = pickBridgeTarget(entries, effective, 'iptv', finished, now);
+    const lanes = lanesNow();
+    let target = pickBridgeTarget(entries, effective, 'iptv', finished, now, lanes);
     let numbered = true;
     // Canal suelto sin ninguna verificada: el hash que se tocó (§7.2) o, si se tocó la fila de canal del
     // buscador, su AceStream de tu biblioteca (§19): sin esperar al comprobador.
@@ -1808,6 +1895,7 @@ function bridge(
             entry !== undefined &&
             !entry.autoTried &&
             !effective.get(entry.id)?.reported &&
+            !takesFromOther(entry, lanes) &&
             effective.get(entry.id)?.state !== 'failed',
         );
       if (tapped) {
@@ -1865,7 +1953,7 @@ function bridge(
     }
     return null;
   }
-  const target = pickBridgeTarget(entries, effective, 'acestream', finished, now);
+  const target = pickBridgeTarget(entries, effective, 'acestream', finished, now, lanesNow());
   if (!target) return null;
   patch({
     bridgeJumps: recentJumps(state, now),

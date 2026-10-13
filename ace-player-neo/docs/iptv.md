@@ -90,7 +90,8 @@ los compara en `TextosTests`.
    HLS fMP4 (vídeo copiado y audio a AAC). La web lo reproduce con **hls.js** (protocolo `hls`) y el iPhone con AVPlayer,
    como hoy.
 5. Hay **una sola conexión al proveedor en toda la casa**. La sesión IPTV se coloca con el mismo cerrojo que las de
-   AceStream, así que sigue valiendo «un canal a la vez». Se cierra al momento al pasar a otro canal y a los 3 s de
+   AceStream, y vale «un canal a la vez» **dentro de la IPTV**. Desde la 0.9.3 (decisiones.md D35) la IPTV y AceStream
+   son dos carriles: alguien puede ver la IPTV mientras otro ve AceStream. Se cierra al momento al pasar a otro canal y a los 3 s de
    dejar de mirar. Mientras se mira no se hace ninguna sonda a ese proveedor, y el arranque de una IPTV **no se
    sondea**: reproducirla ya es la prueba.
 6. **Ninguna URL del proveedor se registra nunca**, ni de lista ni de stream: solo el host y el id del canal (§2.4).
@@ -1383,9 +1384,10 @@ HLS H.264 con AAC. No entra ahora.
   `isIptvId(id)`) **antes** de mirar el estado del motor. Con el motor caído, una IPTV se abre igual.
 - **La colocación es la de siempre.** La sesión IPTV se coloca **con el mismo `engineLock`**, que aquí hace de
   **cerrojo de la casa**, y por el mismo `placeLocked` / `placeWaitingLocked` (`playback/service.ts`, ~l.740-790). Ahí
-  viven «un canal a la vez en casa», el traspaso `playback.handoff other_channel` / `same_channel` y el «cerrar antes
-  de abrir». Así, la web abriendo la IPTV A y el iPhone abriendo la AceStream B (u otra IPTV) a la vez **nunca** acaban
-  con dos sesiones vivas: una gana y la otra recibe el traspaso.
+  viven «un canal a la vez» por carril, el traspaso `playback.handoff other_channel` / `same_channel` y el «cerrar
+  antes de abrir». Desde la 0.9.3 (decisiones.md D35) hay **dos carriles**: la IPTV (directo, películas y series) y
+  AceStream. La web abriendo la IPTV A y el iPhone abriendo la AceStream B **conviven**; dos IPTV distintas (o dos
+  AceStream distintas) a la vez **nunca** acaban con dos sesiones vivas: una gana y la otra recibe el traspaso.
 - **Con `iptv` solo cambia la apertura** dentro de esa colocación:
   - `iptv.openInput` en lugar de `openEngine`;
   - **sin** `engine.reportOpenSuccess/Failure()`, sin `pollStats` / `stat_url` y sin `sessions.json` (su esquema exige
@@ -1420,8 +1422,9 @@ HLS H.264 con AAC. No entra ahora.
 
 - **Una sesión por id IPTV,** y todos sus visores comparten el mismo ffmpeg y, por tanto, **una sola conexión al
   proveedor**. Da igual que sea la web y el iPhone a la vez.
-- **Se mantiene la regla de hoy: un canal a la vez en casa.**
-  - Canales distintos (ids distintos, IPTV o AceStream) → traspaso (`playback.handoff other_channel`).
+- **Un canal a la vez por carril** (decisiones.md D35; hasta la 0.9.2 era en toda la casa).
+  - Canales distintos del mismo carril (dos IPTV, o dos AceStream) → traspaso (`playback.handoff other_channel`).
+  - Una IPTV y una AceStream conviven: cada una con su sesión y sin traspasos.
   - Con «Un solo dispositivo a la vez», el último manda también en el mismo canal (`same_channel`).
   - En la práctica, Ace Player tiene como mucho **1** conexión abierta con el proveedor, y `max_connections = 1` se
     respeta sin más.

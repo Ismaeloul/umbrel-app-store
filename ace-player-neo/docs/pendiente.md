@@ -14,6 +14,10 @@ La 0.9.0 cierra todo lo pedido para ella (abajo, «Hecho en la 0.9.0»). Queda:
 4. **Pruebas en su NAS** (`docs/vod-estado.md` §5.4): MKV con AC-3, MP4, HEVC y una serie larga; saltos con la app del
    PC abierta; la medida de memoria del contenedor; y el iPhone con Safari.
 5. **Adultos en la portada** (`docs/vod-estado.md` §5.2): sigue la opción por defecto (D-VOD7) hasta que Isma diga.
+6. **App de iPhone: que su arranque automático respete al otro** (decisiones.md D35, 0.9.3). El servidor ya deja
+   sonar la IPTV y AceStream a la vez, pero la app sigue arrancando la IPTV primero aunque la esté viendo otro
+   dispositivo (y se la quita). Hacer lo mismo que la web (`features/sources`: `houseLanes`, `takesFromOther`):
+   mirar `playbackStatus.sessions` y saltarse la fuente que cerraría lo de otro dispositivo.
 
 Decisión de Isma (4-oct): **el marcador del reproductor sigue tapado** con «Ver marcador».
 

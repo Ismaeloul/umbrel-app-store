@@ -17,8 +17,10 @@ import {
   isIptvAccountFailure,
   isShownWhileScanning,
   NOTHING_ON_SCREEN,
+  houseLanes,
   pickAutoSource,
   pickBridgeTarget,
+  takesFromOther,
   pickNextIptvVariant,
   presentationOf,
   qualityLabel,
@@ -323,5 +325,63 @@ describe('IPTV primero y el puente', () => {
     expect(isIptvAccountFailure('iptv_account_expired')).toBe(true);
     expect(isIptvAccountFailure('iptv_dropped')).toBe(false);
     expect(isIptvAccountFailure(undefined)).toBe(false);
+  });
+});
+
+describe('dos carriles en casa (D35)', () => {
+  const ace = (n: number) => ({
+    ...entryFromCandidate(candidate(n), NOW),
+    probe: probeOf('working'),
+  });
+  const viewer = (deviceId: string, deviceName: string) => ({
+    client: 'ios' as const,
+    deviceId,
+    lastBeatAt: new Date(NOW).toISOString(),
+    viewerId: `v_${deviceId}`,
+    deviceName,
+    platform: 'ios' as const,
+    playing: true,
+  });
+
+  it('houseLanes: el carril de cada sesión de OTRO dispositivo (sin `source` es AceStream)', () => {
+    const lanes = houseLanes(
+      [
+        { hash: hash(7), source: 'iptv', viewers: [viewer('dev_ana', 'iPhone de Ana')] },
+        { hash: hash(8), viewers: [viewer('web_yo', 'Chrome · Windows')] },
+      ],
+      'web_yo',
+    );
+    expect(lanes).toEqual({ iptv: { hash: hash(7), deviceName: 'iPhone de Ana' }, engine: null });
+    expect(houseLanes(undefined, 'web_yo')).toEqual({ iptv: null, engine: null });
+  });
+
+  it('takesFromOther: otro canal del mismo carril sí; el mismo canal o el otro carril, no', () => {
+    const iptv = entryFromCandidate(iptvCandidate(1), NOW);
+    const lanes = {
+      iptv: { hash: hash(7), deviceName: 'iPhone de Ana' },
+      engine: { hash: hash(2), deviceName: 'Tele' },
+    };
+    expect(takesFromOther(iptv, lanes)).toEqual(lanes.iptv);
+    expect(takesFromOther(ace(2), lanes)).toBeNull();
+    expect(takesFromOther(ace(3), lanes)).toEqual(lanes.engine);
+    expect(takesFromOther(ace(3), { iptv: lanes.iptv, engine: null })).toBeNull();
+  });
+
+  it('pickAutoSource y pickBridgeTarget se saltan lo que le quitaría el canal a otro', () => {
+    const iptv = entryFromCandidate(iptvCandidate(1), NOW);
+    const entries = [iptv, ace(2), ace(3)];
+    const iptvBusy = { iptv: { hash: hash(7), deviceName: 'Ana' }, engine: null };
+    expect(pickAutoSource(entries, effects(entries), false, { lanes: iptvBusy })?.id).toBe(hash(2));
+    const both = { ...iptvBusy, engine: { hash: hash(9), deviceName: 'Tele' } };
+    expect(pickAutoSource(entries, effects(entries), true, { lanes: both })).toBeNull();
+    const fallen = [{ ...iptv, autoTried: true }, ace(2), ace(3)];
+    expect(pickBridgeTarget(fallen, effects(fallen), 'iptv', true, NOW, both)).toBeNull();
+    const ace2Busy = { iptv: null, engine: { hash: hash(9), deviceName: 'Tele' } };
+    expect(pickBridgeTarget(entries, effects(entries), 'acestream', true, NOW, ace2Busy)?.id).toBe(
+      hash(1),
+    );
+    expect(
+      pickBridgeTarget(entries, effects(entries), 'acestream', true, NOW, iptvBusy),
+    ).toBeNull();
   });
 });
