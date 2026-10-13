@@ -2,6 +2,19 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.3 (2026-10-13)
+
+Ahora se pueden ver a la vez la IPTV y AceStream: si alguien esta
+viendo tu IPTV, otra persona puede ver un canal de AceStream en otro
+dispositivo (y al reves), sin que se corten. Dos canales distintos de
+la IPTV siguen sin poder verse a la vez (tu cuenta admite una
+conexion), y lo mismo con AceStream.
+
+Al entrar en un partido o en un canal, la app ya no le quita la IPTV
+a quien la esta viendo: arranca sola por AceStream y te dice quien la
+tiene. Si tocas tu la fuente a mano, se la quitas como siempre. En la
+app de iPhone esto ultimo llegara mas adelante.
+
 ## 0.9.2 (2026-10-11)
 
 La app de iPhone ya puede ver tu IPTV, la Guia TV y Peliculas y
