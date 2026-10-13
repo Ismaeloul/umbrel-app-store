@@ -1061,6 +1061,22 @@ describe('dos carriles en casa: lo automático no le quita el canal a otro dispo
     expect(getPlayer().channel?.hash).toBe(hash(1));
   });
 
+  it('sin esperar a un carril, un cambio en «Dónde se está reproduciendo» no arranca nada (parar sigue parado)', async () => {
+    enterMatch(testMatch());
+    await flush();
+    expect(getPlayer().channel?.hash).toBe(IPTV);
+    scan = scanJob(['working', 'working', 'working']);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(getPlayer().channel?.hash).toBe(IPTV);
+    /* La persona para. El servidor suelta la sesión y avisa por `playback.sessions` ANTES de que el
+       reproductor llegue a «detenido» (la carrera que vio el E2E del mini-reproductor). */
+    playerStore.set((state) => ({ ...state, phase: 'idle', channel: null, idleReason: null }));
+    house([]);
+    dispatchSse('playback.sessions', { sessions: [] }, { id: null, synthetic: false });
+    await flush();
+    expect(getPlayer().channel).toBeNull();
+  });
+
   it('tocar a mano una fuente ocupada se la quita (como siempre)', async () => {
     house([otherDevice(hash(900), 'iptv')]);
     enterMatch(testMatch());

@@ -396,6 +396,7 @@ function laneBusyText(entry: Pick<SourceEntry, 'origin'>, use: LaneUse): string 
  * verifique otra fuente), arranca solo; tocar una fuente a mano se la quita.
  */
 function waitForFreeLane(blocked: SourceEntry, use: LaneUse, finished: boolean): void {
+  laneWait = true;
   const who = laneBusyText(blocked, use);
   setWaitingMessage(
     finished || !isIptv(blocked)
@@ -430,6 +431,13 @@ let offFailed: (() => void) | null = null;
 let offPlayer: (() => void) | null = null;
 /** «Dónde se está reproduciendo» cambia: lo que esperaba a un carril libre (D35) puede arrancar. */
 let offHouse: (() => void) | null = null;
+/**
+ * Lo automático está esperando a que otro dispositivo suelte un carril (D35).
+ * Solo entonces un cambio en «Dónde se está reproduciendo» vuelve a intentar
+ * el arranque: si no, parar o cambiar de fuente a mano (que también cambia
+ * esa lista) arrancaría algo que nadie ha pedido.
+ */
+let laneWait = false;
 let lastPlayer: PlayerState = getPlayer();
 /** El toast «Volver a la IPTV» (atado a esta sesión: se quita al acabarla). */
 let backToastId: number | null = null;
@@ -445,7 +453,10 @@ function dismissBackToast(): void {
 
 function attach(): void {
   if (!offFailed) offFailed = onSourceFailed(handleSourceFailed);
-  if (!offHouse) offHouse = onSseEvent('playback.sessions', () => void tryAutoStart());
+  if (!offHouse)
+    offHouse = onSseEvent('playback.sessions', () => {
+      if (laneWait) void tryAutoStart();
+    });
   if (!offPlayer) {
     lastPlayer = getPlayer();
     offPlayer = playerStore.subscribe(onPlayerChange);
@@ -457,6 +468,7 @@ function detach(): void {
   offFailed = null;
   offHouse?.();
   offHouse = null;
+  laneWait = false;
   offPlayer?.();
   offPlayer = null;
 }
@@ -1393,6 +1405,7 @@ function tryAutoStart(): boolean {
   const effective = effectiveMap(state.entries, screen, now);
   const finished = scanFinished(state.scan);
   const lanes = lanesNow();
+  laneWait = false;
   const chosen = pickAutoSource(state.entries, effective, finished, { lanes });
   /* La que se habría elegido sin mirar a los demás (D35): si es otra, se dice por qué. */
   const preferred = pickAutoSource(state.entries, effective, finished);
@@ -1703,6 +1716,7 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
     const blocked = pickAutoSource(entries, effective, finished, { iptv: !hasIptv });
     const busy = blocked ? takesFromOther(blocked, lanes) : null;
     if (blocked && busy) {
+      laneWait = true;
       return {
         message: `Esta fuente no responde y ${laneBusyText(blocked, busy)}. Toca una fuente si quieres verla aquí (se la quitarás) o espera: arranca sola cuando quede libre.`,
       };
