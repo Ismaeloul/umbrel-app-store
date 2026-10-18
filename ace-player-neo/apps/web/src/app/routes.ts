@@ -13,6 +13,7 @@
    | partido/<id>               | { vista: 'partido', id, canal: null }       |
    | partido/canal/<hash>       | { vista: 'partido', id: null, canal: hash } |
    | sala/<40 hex>              | { vista: 'sala', id } (película o episodio) |
+   | juntos/<código>            | { vista: 'juntos', code } (Ver juntos)      |
    | sistema                    | { vista: 'sistema' } (solo con el flag)     |
 
    Lo que no se entiende acaba en la agenda.
@@ -29,7 +30,16 @@
 import { isSystemPageEnabled } from '../lib/flags.ts';
 
 export type Vista =
-  'agenda' | 'biblioteca' | 'guia' | 'cine' | 'buscar' | 'ajustes' | 'partido' | 'sala' | 'sistema';
+  | 'agenda'
+  | 'biblioteca'
+  | 'guia'
+  | 'cine'
+  | 'buscar'
+  | 'ajustes'
+  | 'partido'
+  | 'sala'
+  | 'juntos'
+  | 'sistema';
 
 export type Route =
   | { vista: 'agenda' }
@@ -46,6 +56,8 @@ export type Route =
   /* El escenario de una película o un episodio (docs/vod.md §12.2 y §12.8):
      el reproductor en grande, como en un partido. */
   | { vista: 'sala'; id: string }
+  /* «Ver juntos» (docs/ver-juntos.md §7): una sala por su código de 16 caracteres. */
+  | { vista: 'juntos'; code: string }
   | { vista: 'sistema' };
 
 /**
@@ -84,6 +96,7 @@ export const VISTA_TITLE: Record<Vista, string> = {
   ajustes: 'Ajustes',
   partido: 'Partido',
   sala: 'Reproduciendo',
+  juntos: 'Ver juntos',
   sistema: 'Sistema de diseño',
 };
 
@@ -105,6 +118,8 @@ export const DEFAULT_ROUTE: Route = { vista: 'agenda' };
 
 const SEGMENT_RE = /^[A-Za-z0-9._~:-]{1,120}$/;
 const HASH_RE = /^[a-fA-F0-9]{40}$/;
+/** Código de una sala de «Ver juntos» (`PARTY.codeLength`, base64url). */
+const PARTY_CODE_RE = /^[A-Za-z0-9_-]{16}$/;
 
 export function parseVista(
   value: string | null | undefined,
@@ -148,6 +163,11 @@ export function parseVista(
         ? { vista: 'sala', id: id.toLowerCase() }
         : { vista: 'cine', id: null };
     }
+    case 'juntos': {
+      // `juntos/<código>`: el código distingue mayúsculas; sin uno válido, la portada de cine.
+      const code = rest[0] ?? '';
+      return PARTY_CODE_RE.test(code) ? { vista: 'juntos', code } : { vista: 'cine', id: null };
+    }
     case 'sistema':
       return allowSystem ? { vista: 'sistema' } : DEFAULT_ROUTE;
     default:
@@ -173,6 +193,8 @@ export function formatVista(route: Route): string {
       return route.id ? `cine/${route.id}` : 'cine';
     case 'sala':
       return `sala/${route.id}`;
+    case 'juntos':
+      return `juntos/${route.code}`;
     default:
       return route.vista;
   }
@@ -197,6 +219,7 @@ export const VISTA_PARAMS: Record<Vista, readonly string[]> = {
   ajustes: [],
   partido: [],
   sala: [],
+  juntos: [],
   sistema: [],
 };
 
@@ -252,6 +275,8 @@ export function routeDepth(route: Route): number {
   if (route.vista === 'sistema') return 11;
   // El escenario de una película va por delante de su ficha (§12.2).
   if (route.vista === 'sala') return 12;
+  // Una sala de «Ver juntos» va por delante de la ficha desde la que se crea.
+  if (route.vista === 'juntos') return 12;
   // La ficha de una película o una serie es un paso adelante de la portada (§12.2).
   if (route.vista === 'cine' && route.id) return 9;
   // La Guía TV es un paso adelante de Canales, su madre en la barra.
@@ -267,7 +292,7 @@ export function routeDepth(route: Route): number {
 export function navParent(vista: Vista): NavVista | null {
   if (vista === 'guia') return 'biblioteca';
   // La sala de una película o un episodio es de Películas y series.
-  if (vista === 'sala') return 'cine';
+  if (vista === 'sala' || vista === 'juntos') return 'cine';
   return isNavVista(vista) ? vista : null;
 }
 

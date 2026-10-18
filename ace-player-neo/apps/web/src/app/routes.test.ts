@@ -215,3 +215,15 @@ describe('sala (docs/vod.md §12.2 y §12.8)', () => {
     expect(navParent('sala')).toBe('cine');
   });
 });
+
+describe('juntos («Ver juntos», docs/ver-juntos.md §7)', () => {
+  const CODE = 'k3J9xQ2mZpL8wR4t';
+  it('`juntos/<código>` respeta mayúsculas; un código que no vale lleva a la portada de cine', () => {
+    expect(parseVista(`juntos/${CODE}`)).toEqual({ vista: 'juntos', code: CODE });
+    expect(parseVista('juntos/corto')).toEqual({ vista: 'cine', id: null });
+    expect(parseVista(`juntos/${CODE}x`)).toEqual({ vista: 'cine', id: null });
+    expect(formatVista({ vista: 'juntos', code: CODE })).toBe(`juntos/${CODE}`);
+    expect(routeDepth({ vista: 'juntos', code: CODE })).toBe(12);
+    expect(navParent('juntos')).toBe('cine');
+  });
+});

@@ -1,0 +1,313 @@
+/* «Ver juntos» (docs/ver-juntos.md §7): la sala y la entrada con el enlace. */
+
+.juntos {
+  display: grid;
+  gap: var(--s-4, 16px);
+  padding: 16px var(--gutter, 16px) 24px;
+  max-width: 1400px;
+}
+.juntos__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.juntos__heading {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.juntos__title {
+  margin: 0;
+  font-size: var(--fs-22, 22px);
+  font-weight: var(--wght-head, 760);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.juntos__sub {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-15, 15px);
+}
+.juntos__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.juntos__body {
+  display: grid;
+  gap: var(--s-4, 16px);
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1024px) {
+  .juntos__body {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    align-items: start;
+  }
+}
+
+/* El escenario: el vídeo con los controles debajo y los avisos encima. */
+.juntos__stage {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  border-radius: var(--r-l, 16px);
+  background: #000;
+  color: var(--on-video, #fff);
+}
+.juntos__stage:fullscreen {
+  border-radius: 0;
+  align-content: center;
+}
+.juntos__video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.juntos__stage:fullscreen .juntos-overlay {
+  aspect-ratio: auto;
+  bottom: 64px;
+}
+.juntos__stage:fullscreen .juntos__video {
+  aspect-ratio: auto;
+  height: calc(100vh - 64px);
+}
+.juntos-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 12px 10px;
+  background: var(--glass-video-solid, rgba(0, 0, 0, 0.72));
+}
+.juntos-controls__time {
+  font-family: var(--mono);
+  font-size: var(--fs-13, 13px);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.juntos-controls__bar {
+  flex: 1 1 160px;
+  min-width: 120px;
+  accent-color: var(--accent);
+}
+.juntos-controls__lang select {
+  max-width: 180px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong, rgba(255, 255, 255, 0.3));
+  border-radius: var(--r-s, 8px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-13, 13px);
+}
+.juntos-controls__lang option {
+  color: #000;
+}
+.juntos__status {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--glass-video-solid, rgba(0, 0, 0, 0.72));
+  font-size: var(--fs-13, 13px);
+}
+/* Encima del vídeo y solo del vídeo (los controles pueden ocupar dos filas en el móvil). */
+.juntos-overlay {
+  position: absolute;
+  inset: 0 0 auto;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 24px;
+  border: 0;
+  background: var(--scrim, rgba(0, 0, 0, 0.55));
+  color: inherit;
+  font: inherit;
+  text-align: center;
+}
+.juntos-overlay--tap {
+  cursor: pointer;
+}
+.juntos-overlay__big {
+  font-size: var(--fs-22, 22px);
+  font-weight: var(--wght-strong, 700);
+}
+.juntos-overlay__hint {
+  color: var(--on-video-2, rgba(255, 255, 255, 0.75));
+  font-size: var(--fs-15, 15px);
+}
+
+/* Al lado (o debajo en el móvil): quién está y el chat. */
+.juntos__side {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.juntos-people__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.juntos-people__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--surface-2);
+  font-size: var(--fs-13, 13px);
+}
+.juntos-people__item--self {
+  font-weight: var(--wght-strong, 700);
+}
+.juntos-people__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.juntos-people__item--off {
+  color: var(--text-3);
+}
+.juntos-people__item--off .juntos-people__dot {
+  background: var(--idle);
+}
+.juntos-people__tag {
+  color: var(--text-2);
+  font-size: var(--fs-11, 11px);
+}
+.juntos-chat {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: min(60vh, 520px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-l, 16px);
+  background: var(--surface);
+}
+.juntos-chat__list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  overflow-y: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+}
+.juntos-chat__empty {
+  color: var(--text-3);
+  font-size: var(--fs-13, 13px);
+}
+.juntos-chat__msg {
+  display: grid;
+  gap: 2px;
+  font-size: var(--fs-15, 15px);
+  overflow-wrap: anywhere;
+}
+.juntos-chat__msg--system {
+  color: var(--text-3);
+  font-size: var(--fs-13, 13px);
+}
+.juntos-chat__who {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  color: var(--accent-ink);
+  font-size: var(--fs-13, 13px);
+  font-weight: var(--wght-strong, 700);
+}
+.juntos-chat__msg--self .juntos-chat__who {
+  color: var(--text-2);
+}
+.juntos-chat__time {
+  color: var(--text-3);
+  font-weight: var(--wght-text, 450);
+  font-size: var(--fs-11, 11px);
+}
+.juntos-chat__form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+.juntos-chat__input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill, 999px);
+  background: var(--bg-sunk);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* 16 px: el iPhone no hace zoom al escribir. */
+}
+.juntos-chat__input:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent));
+  outline-offset: 1px;
+}
+
+/* Entrar con el enlace. */
+.juntos-join {
+  display: grid;
+  gap: 20px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px var(--gutter, 16px);
+}
+@media (min-width: 640px) {
+  .juntos-join {
+    grid-template-columns: 200px minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.juntos-join__poster {
+  display: block;
+  width: 100%;
+  max-width: 200px;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: var(--r-m, 12px);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-poster);
+}
+.juntos-join__body {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.juntos-join__body .field {
+  width: 100%;
+  max-width: 360px;
+}
+.juntos-join__kicker {
+  margin: 0;
+  color: var(--accent-ink);
+  font-size: var(--fs-13, 13px);
+  font-weight: var(--wght-strong, 700);
+}
+.juntos-join__title {
+  margin: 0;
+  font-size: var(--fs-30, 30px);
+  font-weight: var(--wght-head, 760);
+  letter-spacing: -0.01em;
+}
+.juntos-join__sub {
+  margin: 0;
+  color: var(--text-2);
+}
+.juntos-join__error {
+  margin: 0;
+  color: var(--fail-ink);
+}

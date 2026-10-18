@@ -146,6 +146,30 @@ describe('película', () => {
     resetPlayerApi();
   });
 
+  it('«Ver juntos» pide el nombre, crea la sala con la película y abre juntos/<código>', async () => {
+    const created = (await import('@fixtures/web/v1/partyCreate.json')).default;
+    serveTitle({ ...MOVIE, progress: null }, { 'POST /api/v1/party': () => json(created, 201) });
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver juntos' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Ver juntos' });
+    fireEvent.change(within(dialog).getByLabelText('Tu nombre'), { target: { value: ' Isma ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Crear sala' }));
+    await waitFor(() => expect(location.search).toContain(`vista=juntos/${created.room.code}`));
+    const call = net.calls.find((c) => c.url.endsWith('/api/v1/party'));
+    expect(call?.body).toEqual({
+      titleId: MOVIE.id,
+      kind: 'movie',
+      artId: MOVIE.id,
+      poster: MOVIE.poster,
+      title: MOVIE.title,
+      subtitle: null,
+      name: 'Isma',
+      audio: null,
+    });
+    expect(localStorage.getItem(`aceneo-juntos-${created.room.code}`)).toContain(
+      created.member.token,
+    );
+  });
+
   it('«Seguir viendo desde…» pide la posición guardada (sin `startS`: la decide el servidor)', async () => {
     resetPlayerApi();
     serveTitle(MOVIE);

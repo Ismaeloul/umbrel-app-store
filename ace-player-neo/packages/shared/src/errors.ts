@@ -660,6 +660,39 @@ export const ERROR_CATALOG = {
     message: 'Mi lista está llena (500 títulos). Quita alguno para añadir más.',
   },
 
+  // --- «Ver juntos» (docs/ver-juntos.md, D36) ---
+  party_not_found: {
+    status: 404,
+    legacyStatus: null,
+    public: true,
+    message: 'Esta sala ya no existe. Pide un enlace nuevo.',
+  },
+  party_full: {
+    status: 409,
+    legacyStatus: null,
+    public: true,
+    message: 'La sala está llena.',
+  },
+  /** Credencial de la sala que no vale (o de otra sala): hay que volver a entrar. */
+  party_forbidden: {
+    status: 403,
+    legacyStatus: null,
+    public: true,
+    message: 'Ya no estás en esta sala. Vuelve a entrar con el enlace.',
+  },
+  party_host_only: {
+    status: 403,
+    legacyStatus: null,
+    public: true,
+    message: 'Solo quien ha creado la sala puede cerrarla.',
+  },
+  party_limit: {
+    status: 503,
+    legacyStatus: null,
+    public: true,
+    message: 'Ya hay demasiadas salas abiertas. Cierra alguna y vuelve a intentarlo.',
+  },
+
   // --- Internos: no deberían salir nunca en una respuesta ---
   state_unreadable: {
     status: 500,

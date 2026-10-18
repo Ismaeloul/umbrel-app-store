@@ -173,6 +173,8 @@ interface VodRec {
   readonly hevc: boolean;
   /** Tasa del título con la que va el ritmo del relé ahora (bytes/s), o null sin ritmo. */
   paceBytesPerS: number | null;
+  /** Sala de «Ver juntos» dueña de la sesión (docs/ver-juntos.md §5), o null. */
+  readonly partyKey: string | null;
 }
 
 /** El ritmo del relé VOD se cambia si la tasa cerca del cabezal se aparta más de esto de la de ahora. */
@@ -191,6 +193,11 @@ interface VodAcquire {
   readonly startS: number | undefined;
   readonly audio: number | undefined;
   readonly hevc: boolean;
+  /**
+   * Sala de «Ver juntos» (docs/ver-juntos.md §5): los visores con la misma
+   * sala comparten la sesión sin traspaso (su posición la sincroniza la sala).
+   */
+  readonly partyKey?: string;
 }
 
 /** La preparación en curso de «Arranque instantáneo» (D24). Una como mucho. */
@@ -898,7 +905,14 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       pendingDetach: [],
       lastWorkingAt: 0,
       warm: false,
-      vod: { input, handle, requestedAudio: vod.audio, hevc: vod.hevc, paceBytesPerS: pace },
+      vod: {
+        input,
+        handle,
+        requestedAudio: vod.audio,
+        hevc: vod.hevc,
+        paceBytesPerS: pace,
+        partyKey: vod.partyKey ?? null,
+      },
     };
     sessions.set(session.id, session);
     const opened = session;
@@ -1418,24 +1432,34 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       clock.clearTimeout(session.graceTimer);
       session.graceTimer = null;
     }
-    /* El mismo VOD con otro audio u otro HEVC: un ffmpeg no sirve dos cosas; se reabre en la posición. */
+    /* «Ver juntos» (docs/ver-juntos.md §5): la misma sala comparte la sesión. */
+    const party = session?.vod?.partyKey != null && session.vod.partyKey === request.vod?.partyKey;
+    /* El mismo VOD con otro audio u otro HEVC: un ffmpeg no sirve dos cosas; se reabre en la posición.
+       En una sala el HEVC no cuenta (el vídeo se copia tal cual; cada uno comprueba si lo decodifica),
+       y otra sala, o salir de una, también reabre. */
     if (session?.vod && request.vod) {
-      const same =
-        session.vod.hevc === request.vod.hevc &&
-        (request.vod.audio === undefined ||
-          request.vod.audio === (session.vod.handle.audio?.index ?? request.vod.audio));
+      const sameAudio =
+        request.vod.audio === undefined ||
+        request.vod.audio === (session.vod.handle.audio?.index ?? request.vod.audio);
+      const same = party
+        ? sameAudio
+        : session.vod.partyKey === null &&
+          request.vod.partyKey === undefined &&
+          session.vod.hevc === request.vod.hevc &&
+          sameAudio;
       if (!same) {
         const others = [...session.viewers.values()].filter((v) => v.viewerId !== request.viewerId);
         emitHandoff(session, others, by, 'same_channel');
         handoff ||= others.length > 0;
         await closeSessionLocked(session);
         session = undefined;
-      } else if (request.vod.startS !== undefined) {
+      } else if (request.vod.startS !== undefined && !party) {
         remux.setVodStart(session.id, request.vod.startS);
       }
     }
-    /* El mismo VOD en otro aparato: siempre traspaso (D-VOD13), sea cual sea la política. */
-    if (session && (policy() === 'handoff' || session.vod)) {
+    /* El mismo VOD en otro aparato: siempre traspaso (D-VOD13), sea cual sea la política.
+       Menos en una sala: todos van a la vez, así que un solo productor sirve a todos. */
+    if (session && !party && (policy() === 'handoff' || session.vod)) {
       const others = [...session.viewers.values()].filter((v) => v.viewerId !== request.viewerId);
       if (others.length && session.source === 'iptv') {
         /* IPTV (docs/iptv.md §6.5): la sesión vive en el servidor. Se echa a
@@ -2021,7 +2045,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       return grant;
     },
 
-    async acquireVod(idParam, query, identity, signal) {
+    async acquireVod(idParam, query, identity, signal, options = {}) {
       const id = normalizeHash(idParam);
       if (!id) throw new AppError('validation_error', { detail: 'id' });
       const iptv = deps.iptv;
@@ -2050,6 +2074,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         startS: query.start,
         audio: query.audio,
         hevc: query.hevc === '1',
+        ...(options.partyKey ? { partyKey: options.partyKey } : {}),
       };
       let placed: Placement;
       try {

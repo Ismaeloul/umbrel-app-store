@@ -16,6 +16,7 @@
      playback     → engine, remux, state, scanner, iptv
      football     → state, net, engine, scanner, search, sources, directories, iptv
      instantStart → state, football, playback, scanner («Arranque instantáneo», D24)
+     party        → playback («Ver juntos», D36)
      teams        → net, football
      auth         → state
      events       (solo el bus)
@@ -35,6 +36,7 @@ import { createDiagnosticsService, type DiagnosticsService } from './modules/dia
 import { createDirectoriesService, type DirectoriesService } from './modules/directories/index.js';
 import { createEngineService, type EngineService } from './modules/engine/index.js';
 import { createEventsHub, type EventsHub } from './modules/events/index.js';
+import { createPartyService, type PartyService } from './modules/party/index.js';
 import {
   createFootballService,
   scoreResolutionCandidate,
@@ -72,6 +74,7 @@ export interface Services {
   readonly playback: PlaybackService;
   readonly football: FootballService;
   readonly instantStart: InstantStartService;
+  readonly party: PartyService;
   readonly teams: TeamsService;
   readonly auth: AuthService;
   readonly events: EventsHub;
@@ -95,6 +98,7 @@ export const SERVICE_ORDER: readonly ServiceName[] = [
   'playback',
   'football',
   'instantStart',
+  'party',
   'teams',
   'auth',
   'events',
@@ -149,6 +153,7 @@ export function createServices(
   const instantStart =
     overrides.instantStart ??
     createInstantStartService({ ...core, state, football, playback, scanner });
+  const party = overrides.party ?? createPartyService({ ...core, playback });
   const teams = overrides.teams ?? createTeamsService({ ...core, net, football });
   const auth = overrides.auth ?? createAuthService({ ...core, state });
   const events = overrides.events ?? createEventsHub(core);
@@ -185,6 +190,7 @@ export function createServices(
     playback,
     football,
     instantStart,
+    party,
     teams,
     auth,
     events,

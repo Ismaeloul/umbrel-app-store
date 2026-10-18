@@ -47,6 +47,8 @@ const PARAM_VALUES: Record<string, string> = {
   art: 'poster',
   /* Logo de un canal de la Guía TV (docs/iptv.md §20.6). */
   ref: 'c1',
+  /* Sala de «Ver juntos» (docs/ver-juntos.md). */
+  code: 'k3J9xQ2mZpL8wR4t',
 };
 
 function concretePath(route: V1RouteDefinition): string {
@@ -208,6 +210,17 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'diagnosticsLogInfo',
       'diagnosticsLogDownload',
       'diagnosticsWebLog',
+      /* «Ver juntos» (docs/ver-juntos.md): solo web en la fase 1. */
+      'partyCreate',
+      'partyPreview',
+      'partyJoin',
+      'partyEvents',
+      'partyStream',
+      'partyControl',
+      'partyStatus',
+      'partyChat',
+      'partyLeave',
+      'partyClose',
     ]);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {

@@ -1,0 +1,43 @@
+{
+  "session": { "id": "s_Q2FuYWxEZVBydWViYQ", "heartbeatMs": 15000, "expiresAfterMs": 45000 },
+  "url": "/api/v1/video/s_Q2FuYWxEZVBydWViYQ/index.m3u8",
+  "protocol": "hls",
+  "remux": true,
+  "codec": { "video": "h264", "audio": "aac", "source": "ffprobe" },
+  "latency": { "mode": "balanced", "initialBufferS": 6, "rebuildS": 8, "liveSync": null },
+  "stats": { "via": "sse" },
+  "handoff": false,
+  "source": "iptv",
+  "vod": {
+    "id": "4b5c6d7e8f9012345678abcdef0123457a8b9c0d",
+    "kind": "movie",
+    "seriesId": null,
+    "title": "Dune",
+    "subtitle": null,
+    "durationS": 9360,
+    "startS": 2587,
+    "resumed": true,
+    "audio": [
+      {
+        "index": 0,
+        "label": "Castellano 5.1",
+        "lang": "spa",
+        "codec": "ac3",
+        "channels": 6,
+        "converted": true
+      },
+      {
+        "index": 1,
+        "label": "Inglés 5.1",
+        "lang": "eng",
+        "codec": "eac3",
+        "channels": 6,
+        "converted": true
+      }
+    ],
+    "audioIndex": 0,
+    "video": { "codec": "h264", "codecs": "avc1.640033", "width": 3840, "height": 1600 },
+    "next": null,
+    "poster": "3fa9c210"
+  }
+}

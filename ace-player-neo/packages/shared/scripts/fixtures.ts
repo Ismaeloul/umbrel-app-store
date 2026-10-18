@@ -47,6 +47,9 @@ import type {
   IptvView,
   Item,
   LibraryView,
+  PartyJoinResponse,
+  PartyMember,
+  PartyTitle,
   Preferences,
   ResolutionCandidate,
   ScanJob,
@@ -94,6 +97,16 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   /* «Descargar logs» de Ajustes → Registro (0.9.0): solo web (el zip es binario y no lleva ejemplo). */
   'diagnosticsLogInfo',
   'diagnosticsWebLog',
+  /* «Ver juntos» (docs/ver-juntos.md, D36): solo web en la fase 1. */
+  'partyCreate',
+  'partyPreview',
+  'partyJoin',
+  'partyStream',
+  'partyControl',
+  'partyStatus',
+  'partyChat',
+  'partyLeave',
+  'partyClose',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 
@@ -1193,6 +1206,51 @@ const guideNow = demoGuideNow(
   AT_MS,
 );
 
+// --- «Ver juntos» (docs/ver-juntos.md, D36) ---
+
+const PARTY_CODE = 'k3J9xQ2mZpL8wR4t';
+
+const partyTitle: PartyTitle = {
+  id: VOD_ID_DUNE,
+  kind: 'movie',
+  artId: VOD_ID_DUNE,
+  poster: '1a2b3c4d',
+  title: 'Dune: Parte Dos',
+  subtitle: null,
+  durationS: 9_960,
+};
+
+function partyMember(id: string, name: string, host: boolean): PartyMember {
+  return { id, name, host, online: true, buffering: false };
+}
+
+function partyJoined(self: string, others: readonly PartyMember[]): PartyJoinResponse {
+  return {
+    room: {
+      code: PARTY_CODE,
+      title: partyTitle,
+      audio: { index: null, tracks: [] },
+      interrupted: null,
+      hostId: 'm_IsmaAnfitrion',
+      createdAt: AT_MS,
+      members: [partyMember('m_IsmaAnfitrion', 'Isma', true), ...others],
+      playback: { playing: false, positionS: 0, at: AT_MS, rev: 1, waitingFor: [] },
+    },
+    member: { id: self, token: `${self}.c2VjcmV0b0RlRWplbXBsbzAx` },
+    chat: [
+      {
+        id: 1,
+        at: AT_MS,
+        kind: 'system',
+        memberId: null,
+        name: 'Sala',
+        text: 'Isma ha creado la sala.',
+      },
+    ],
+    serverNow: AT_MS,
+  };
+}
+
 export const WEB_V1_FIXTURES = {
   iptvGuide: guideFavorites,
   iptvGuideProgrammes: guideSlice,
@@ -1429,6 +1487,21 @@ export const WEB_V1_FIXTURES = {
   },
   /* Una tanda de 3 errores de la web: 2 guardados y el fallo del reproductor que ya llegó con su canal. */
   diagnosticsWebLog: { accepted: 2, dropped: 1 },
+  /* «Ver juntos»: Isma crea la sala de «Dune» y Ana entra después. */
+  partyCreate: partyJoined('m_IsmaAnfitrion', []),
+  partyPreview: {
+    code: PARTY_CODE,
+    title: partyTitle,
+    members: ['Isma'],
+    full: false,
+  },
+  partyJoin: partyJoined('m_AnaInvitada01', [partyMember('m_AnaInvitada01', 'Ana', false)]),
+  partyStream: vodDuneGrant,
+  partyControl: { serverNow: AT_MS + 60_000, rev: 3 },
+  partyStatus: { serverNow: AT_MS + 65_000, rev: 3 },
+  partyChat: { ok: true },
+  partyLeave: { ok: true },
+  partyClose: { ok: true },
 } satisfies { [K in WebFixtureRouteId | AppFromWebFixtureRouteId]: V1ResponseInput<K> };
 
 // --- Variantes (variantes/<ruta>.<caso>.json) ---
@@ -2024,4 +2097,6 @@ export const NON_JSON_ROUTE_IDS: readonly V1RouteId[] = [
   'iptvGuideArt',
   /* El zip de «Descargar logs» (Ajustes → Registro, 0.9.0). */
   'diagnosticsLogDownload',
+  /* El SSE de una sala de «Ver juntos» (docs/ver-juntos.md). */
+  'partyEvents',
 ];
