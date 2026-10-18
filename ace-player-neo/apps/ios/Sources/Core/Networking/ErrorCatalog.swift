@@ -14,7 +14,7 @@ public struct ErrorDefinition: Sendable, Equatable {
     public let message: String
 }
 
-/// Catálogo de códigos de error con sus mensajes en español (120 códigos).
+/// Catálogo de códigos de error con sus mensajes en español (125 códigos).
 public enum ErrorCatalog {
     public static let entries: [String: ErrorDefinition] = [
         "bad_request": ErrorDefinition(status: 400, isPublic: true, message: "La petición no es válida."),
@@ -115,6 +115,11 @@ public enum ErrorCatalog {
         "vod_disk_full": ErrorDefinition(status: 507, isPublic: true, message: "No queda espacio en el Umbrel para preparar el vídeo."),
         "vod_account": ErrorDefinition(status: 403, isPublic: true, message: "Tu cuenta IPTV no está activa. Revísala en Ajustes → IPTV."),
         "vod_list_full": ErrorDefinition(status: 409, isPublic: true, message: "Mi lista está llena (500 títulos). Quita alguno para añadir más."),
+        "party_not_found": ErrorDefinition(status: 404, isPublic: true, message: "Esta sala ya no existe. Pide un enlace nuevo."),
+        "party_full": ErrorDefinition(status: 409, isPublic: true, message: "La sala está llena."),
+        "party_forbidden": ErrorDefinition(status: 403, isPublic: true, message: "Ya no estás en esta sala. Vuelve a entrar con el enlace."),
+        "party_host_only": ErrorDefinition(status: 403, isPublic: true, message: "Solo quien ha creado la sala puede cerrarla."),
+        "party_limit": ErrorDefinition(status: 503, isPublic: true, message: "Ya hay demasiadas salas abiertas. Cierra alguna y vuelve a intentarlo."),
         "state_unreadable": ErrorDefinition(status: 500, isPublic: false, message: "No se pudo leer el estado guardado."),
         "scanner_unavailable": ErrorDefinition(status: 502, isPublic: false, message: "El comprobador no responde."),
         "scanner_timeout": ErrorDefinition(status: 504, isPublic: false, message: "El comprobador tarda demasiado."),
