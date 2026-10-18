@@ -2,9 +2,8 @@
    quién está ya y el nombre. Sin login ni nada más. */
 
 import type { PartyCredential, PartyPreview } from '@ace/shared';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, describeFailure, isApiError } from '../../api/index.ts';
-import { useNavigate } from '../../app/router.tsx';
 import { Button } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
 import { TextField } from '../../ui/Field.tsx';
@@ -21,11 +20,13 @@ type Load =
 export function Join({
   code,
   onJoined,
+  exitAction,
 }: {
   code: string;
   onJoined(credential: PartyCredential): void;
+  /** El botón para irse si la sala no existe (null en la página del invitado). */
+  exitAction: ReactNode;
 }) {
-  const navigate = useNavigate();
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [name, setName] = useState(savedName);
   const [busy, setBusy] = useState(false);
@@ -65,11 +66,7 @@ export function Join({
       <EmptyState
         tone="error"
         title={load.state === 'gone' ? JUNTOS_TEXT.gone : load.message}
-        actions={
-          <Button variant="primary" onClick={() => navigate({ vista: 'cine', id: null })}>
-            {JUNTOS_TEXT.backToCine}
-          </Button>
-        }
+        actions={exitAction}
       >
         {load.state === 'gone' ? JUNTOS_TEXT.goneHint : null}
       </EmptyState>

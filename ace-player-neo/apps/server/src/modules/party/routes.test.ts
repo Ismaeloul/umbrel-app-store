@@ -138,4 +138,57 @@ describe('rutas de «Ver juntos»', () => {
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe('party_forbidden');
   });
+  it('un invitado del proxy (origen guest) entra, chatea y sale, pero no puede crear ni cerrar salas', async () => {
+    const { app } = await createTestApp();
+    const guest = { 'x-ace-origin': 'guest' };
+    const host = PartyJoinResponseSchema.parse(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/party',
+          headers: web(),
+          payload: createBody,
+        })
+      ).json(),
+    );
+    const code = host.room.code;
+    const preview = await app.inject({
+      method: 'GET',
+      url: `/api/v1/party/${code}`,
+      headers: guest,
+    });
+    expect(preview.statusCode).toBe(200);
+    const joined = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/join`,
+      headers: guest,
+      payload: { name: 'Ana' },
+    });
+    expect(joined.statusCode).toBe(200);
+    const ana = PartyJoinResponseSchema.parse(joined.json());
+    const chat = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/chat`,
+      headers: guest,
+      payload: { token: ana.member.token, text: 'hola desde fuera' },
+    });
+    expect(chat.json()).toEqual({ ok: true });
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/v1/party',
+      headers: guest,
+      payload: createBody,
+    });
+    expect(create.statusCode).toBe(401);
+    const close = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/close`,
+      headers: guest,
+      payload: { token: ana.member.token },
+    });
+    expect(close.statusCode).toBe(401);
+    /* Nada más de la casa: ni el estado ni los ajustes. */
+    const settings = await app.inject({ method: 'GET', url: '/api/v1/settings', headers: guest });
+    expect(settings.statusCode).toBe(401);
+  });
 });

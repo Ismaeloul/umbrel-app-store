@@ -7,6 +7,7 @@
 //   ├── server.js           backend de esbuild, CommonJS, dependencias dentro
 //   ├── engine-control.js
 //   ├── nginx.conf          deploy/umbrel/nginx.conf
+//   ├── Caddyfile           deploy/umbrel/Caddyfile (proxy de «Ver juntos», docs/ver-juntos.md §9)
 //   └── web/                lo único que nginx copia a /www (apps/web/dist + sw.js)
 //
 // Se construye en una carpeta temporal junto al destino y solo al final se
@@ -48,6 +49,8 @@ export const MONOREPO_DIR = path.resolve(SCRIPTS_DIR, '..');
 export const REPO_DIR = path.resolve(MONOREPO_DIR, '..');
 export const APP_RELEASES_DIR = path.join(REPO_DIR, 'ismaeloul-ace-player-neo', 'releases');
 export const NGINX_TEMPLATE = path.join(MONOREPO_DIR, 'deploy', 'umbrel', 'nginx.conf');
+/** El proxy de «Ver juntos» desde fuera (docs/ver-juntos.md §9). */
+export const CADDY_TEMPLATE = path.join(MONOREPO_DIR, 'deploy', 'umbrel', 'Caddyfile');
 export const SW_TEMPLATE = path.join(SCRIPTS_DIR, 'templates', 'sw.js');
 export const DEFAULT_WEB_DIST = path.join(MONOREPO_DIR, 'apps', 'web', 'dist');
 
@@ -61,7 +64,9 @@ export const REQUIRED_FILES = [
   'server.js',
   'engine-control.js',
   'nginx.conf',
+  'Caddyfile',
   'web/index.html',
+  'web/invitado.html',
   'web/sw.js',
   'web/manifest.webmanifest',
   'web/icon-180.png',
@@ -310,6 +315,7 @@ export async function createRelease(options = {}) {
     // 3. nginx.conf, siempre con LF: en Windows el checkout puede traer CRLF y
     //    los hashes no cuadrarían con los de CI.
     writeFileSync(path.join(staging, 'nginx.conf'), toLf(readFileSync(NGINX_TEMPLATE, 'utf8')));
+    writeFileSync(path.join(staging, 'Caddyfile'), toLf(readFileSync(CADDY_TEMPLATE, 'utf8')));
 
     // 4. RELEASE.json sin fecha: la misma fuente da los mismos bytes.
     writeFileSync(

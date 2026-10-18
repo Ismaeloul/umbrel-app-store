@@ -61,8 +61,10 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
     expect(serverPkg.version).toBe(VERSION);
   });
 
-  it('los mismos servicios que la 0.6.59, sin build: ni profiles: (U3)', () => {
-    expect(Object.keys(COMPOSE.services).sort()).toEqual(Object.keys(LEGACY.services).sort());
+  it('los mismos servicios que la 0.6.59 más el proxy de «Ver juntos», sin build: ni profiles: (U3)', () => {
+    expect(Object.keys(COMPOSE.services).sort()).toEqual(
+      [...Object.keys(LEGACY.services), 'sala'].sort(),
+    );
     for (const [name, definition] of Object.entries(COMPOSE.services)) {
       expect(definition.build, name).toBeUndefined();
       expect(definition.profiles, name).toBeUndefined();
@@ -110,13 +112,34 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
     expect(RAW).toContain('PROXY_AUTH_WHITELIST: "/native/*"');
   });
 
-  it('storage: el entorno de la 0.6.59 más ACE_SEED de APP_SEED', () => {
+  it('storage: el entorno de la 0.6.59 más ACE_SEED de APP_SEED y el enlace público de «Ver juntos»', () => {
     expect(service('storage').environment).toEqual({
       ...legacy('storage').environment,
       ACE_SEED: '${APP_SEED}',
+      PARTY_PUBLIC_URL: 'https://sala.ismaeloul.es',
     });
     expect(RAW).toContain('ACE_SEED: "${APP_SEED}"');
     expect(service('engine_control').environment).toEqual(legacy('engine_control').environment);
+  });
+
+  it('sala: el proxy de «Ver juntos» (docs/ver-juntos.md §9) solo en el 8443, de solo lectura y con el Caddyfile de la release', () => {
+    const sala = service('sala');
+    expect(sala.image).toMatch(/^caddy:\d+\.\d+\.\d+-alpine@sha256:[0-9a-f]{64}$/);
+    expect(sala.ports).toEqual(['8443:8443']);
+    expect(sala.read_only).toBe(true);
+    expect(sala.security_opt).toEqual(['no-new-privileges:true']);
+    expect(sala.volumes).toEqual([
+      '${APP_DATA_DIR}/releases:/releases:ro',
+      '${APP_DATA_DIR}/caddy:/data',
+    ]);
+    expect(squash(sala.command)).toBe(
+      `caddy run --config /releases/${VERSION}/Caddyfile --adapter caddyfile`,
+    );
+    expect(sala.environment?.ACE_WEB_ROOT).toBe(`/releases/${VERSION}/web`);
+    /* El dominio del proxy y el enlace que da el servidor tienen que ser el mismo. */
+    expect(`https://${String(sala.environment?.PARTY_DOMAIN)}`).toBe(
+      service('storage').environment?.PARTY_PUBLIC_URL,
+    );
   });
 
   it('storage: ffmpeg con plazo y node sobre el server.js CommonJS de la release', () => {

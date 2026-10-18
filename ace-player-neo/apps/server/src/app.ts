@@ -234,6 +234,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         const query = normalizeQuery(request.query);
         if (typeof query.t !== 'string' || !query.t) throw new AppError('video_token_invalid');
       }
+      /* `party` («Ver juntos», docs/ver-juntos.md §9): sin token de dispositivo; la
+         credencial de la sala la comprueba el manejador (módulo party). */
       return;
     }
 

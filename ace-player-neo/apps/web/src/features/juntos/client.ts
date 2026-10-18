@@ -51,9 +51,16 @@ export function saveName(name: string): void {
   writeItem(NAME_KEY, name.trim());
 }
 
-/** El enlace para invitar (en la fase 1, la misma dirección de la web de casa). */
-export function inviteUrl(code: string, location: Location = globalThis.location): string {
-  return `${location.origin}${location.pathname}?vista=juntos/${code}`;
+/**
+ * El enlace para invitar: el del proxy de la sala si el servidor lo conoce
+ * (`room.inviteUrl`, docs/ver-juntos.md §9); si no, la web de casa.
+ */
+export function inviteUrl(
+  code: string,
+  publicUrl: string | null = null,
+  location: Location = globalThis.location,
+): string {
+  return publicUrl ?? `${location.origin}${location.pathname}?vista=juntos/${code}`;
 }
 
 export type Connection = 'connecting' | 'open' | 'reconnecting';
@@ -66,6 +73,8 @@ export interface PartyState {
   readonly closed: PartyCloseReason | 'forbidden' | 'gone' | null;
   /** Hora del servidor ≈ `Date.now() + offsetMs`. */
   readonly offsetMs: number;
+  /** Lo que dijo el último latido de la sesión de vídeo (`partyStatus`). */
+  readonly stream: 'ok' | 'lost' | 'none';
 }
 
 const INITIAL: PartyState = {
@@ -74,6 +83,7 @@ const INITIAL: PartyState = {
   connection: 'connecting',
   closed: null,
   offsetMs: 0,
+  stream: 'none',
 };
 
 /** Lo que el cliente necesita del navegador (los tests lo cambian). */
@@ -250,6 +260,9 @@ export class PartyClient {
         },
       });
       this.noteRoundTrip(sentAt, response.serverNow);
+      if (response.stream && response.stream !== this.state.stream) {
+        this.set({ stream: response.stream });
+      }
     } catch (error) {
       this.handleFailure(error);
       if (rethrow) throw error;

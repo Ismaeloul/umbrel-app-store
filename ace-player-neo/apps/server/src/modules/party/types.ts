@@ -26,7 +26,7 @@ import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { PlaybackService, ViewerIdentity } from '../playback/types.js';
 
 export interface PartyDeps extends CoreDeps {
-  readonly playback: Pick<PlaybackService, 'acquireVod'>;
+  readonly playback: Pick<PlaybackService, 'acquireVod' | 'heartbeat' | 'release'>;
 }
 
 /** Lo mínimo de `http.ServerResponse` que usa el SSE de la sala (los tests pasan uno falso). */
@@ -61,8 +61,10 @@ export interface PartyService extends Lifecycle {
     viewer: ViewerIdentity,
     signal: AbortSignal,
   ): Promise<VodGrant>;
+  /** La sesión de vídeo de la persona con esta clave (`partyVideo`). */
+  videoSession(code: string, key: string): string;
   control(code: string, body: PartyControlBody): PartyStatusResponse;
-  status(code: string, body: PartyStatusBody): PartyStatusResponse;
+  status(code: string, body: PartyStatusBody): Promise<PartyStatusResponse>;
   chat(code: string, body: PartyChatBody): void;
   leave(code: string, token: string): void;
   close(code: string, token: string): void;

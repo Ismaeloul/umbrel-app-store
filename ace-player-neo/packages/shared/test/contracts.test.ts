@@ -176,10 +176,12 @@ describe('ejemplos de fixtures/ (reparto de docs/iptv.md §5.7)', () => {
   it('v1/ = rutas JSON menos las solo web con ejemplo aparte; web/v1/ = esas; ninguno sobra', () => {
     expect(namesIn('v1').sort()).toEqual(jsonRoutes.filter((id) => !webRoutes.includes(id)).sort());
     expect(namesIn('web/v1').sort()).toEqual([...webRoutes].sort());
-    /* Las de web/v1/ son rutas JSON solo web (la app no las llama). */
+    /* Las de web/v1/ son rutas JSON que la app no llama: solo web, o las de
+       «Ver juntos» con credencial de sala (la web y los invitados del proxy). */
     for (const id of webRoutes) {
       expect(jsonRoutes, id).toContain(id);
-      expect(V1_ROUTES[id as JsonRouteId].access, id).toBe('web');
+      const route = V1_ROUTES[id as JsonRouteId];
+      expect(route.access === 'web' || route.credential === 'party', id).toBe(true);
     }
   });
 

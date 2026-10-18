@@ -883,3 +883,7 @@ Detalle en docs/vod.md §4.10.
   NAS en `sala.ismaeloul.es` con el 443 de la Freebox abierto solo hacia él, que solo deja pasar las rutas de la sala;
   Cloudflare Tunnel descartado (condiciones de terceros que pueden cambiar).
 - **Vuelta atrás**: sin datos nuevos; volver a la 0.9.3 es seguro.
+- **Fase 2 (0.9.5)**: Caddy en el NAS (servicio `sala`, puerto 8443) con certificado propio por TLS-ALPN y la Freebox
+  mandando el 443 solo ahí. Lista blanca en Caddy y, en el backend, credencial `party` para las rutas que usan los
+  invitados (origen `guest` = `native`, sin token de dispositivo). El vídeo va por `partyVideo` con una clave por
+  persona y el latido de la sesión por `partyStatus` (docs/ver-juntos.md §9).

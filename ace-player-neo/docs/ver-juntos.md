@@ -7,8 +7,8 @@ mismo a la vez y chatean. Pausar, avanzar o cambiar el idioma pasa para todos.
 
 | Fase | Qué | Estado |
 |---|---|---|
-| 1 | Sala dentro de casa (la web de siempre, con el login de Umbrel): sincronización, chat, idioma | esta |
-| 2 | Invitados desde fuera en `sala.ismaeloul.es`: Caddy en el NAS con certificado propio, puerto 443 de la Freebox (IP fija 82.65.65.99) al proxy, que solo deja pasar las rutas de la sala; enlace con credencial de invitado y página ligera instalable en el iPhone | pendiente |
+| 1 | Sala dentro de casa (la web de siempre, con el login de Umbrel): sincronización, chat, idioma | 0.9.4 |
+| 2 | Invitados desde fuera en `https://sala.ismaeloul.es/s/<código>` (§9) | 0.9.5 |
 | 3 | Extras: reacciones, siguiente episodio para todos, voz | ideas |
 
 Descartado para la fase 2: Cloudflare Tunnel (sus condiciones no quieren mucho vídeo y Isma quiere algo que no dependa
@@ -106,3 +106,40 @@ El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 sale
   «Reanudar». Falta probarlo con el iPhone y con la IPTV de verdad.
 - Ojo en el PC de Isma: el proxy de Vite hacia `127.0.0.1:3000` da `ECONNRESET` a ratos (el filtro de red); con
   `VITE_BACKEND=http://<IP de red del PC>:3000` va bien.
+
+## 9. Desde fuera de casa (fase 2, 0.9.5)
+
+```
+iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:8443 ── Caddy (servicio sala)
+                                                                   ├─ /s/<código>, invitado.html, assets → ficheros de la release
+                                                                   ├─ /api/v1/party/<código>[/join|events|stream|control|status|chat|leave|v/<clave>/<fichero>]
+                                                                   │      → storage:3000 con X-Ace-Origin: guest
+                                                                   └─ todo lo demás → 404 (y rutas raras, 400)
+```
+
+- **Red**: registro A `sala.ismaeloul.es → 82.65.65.99` en DonDominio (IP fija de Free) y en la Freebox la
+  redirección TCP 443 → 192.168.1.188:8443, con la IP del NAS reservada por DHCP. Solo ese puerto.
+- **Caddy** (`deploy/umbrel/Caddyfile`, copiado a cada release como `nginx.conf`; servicio `sala` del compose,
+  `caddy:2.11.7-alpine` por digest, de solo lectura, 256 MB): certificado de Let's Encrypt por **TLS-ALPN en el
+  mismo puerto** (sin puerto 80), renovado solo y guardado en `APP_DATA_DIR/caddy`. Lista blanca de rutas; el
+  registro tapa `?t=` y la clave de vídeo y no guarda IPs. Cabeceras: HSTS, CSP, `noindex`, `nosniff`.
+- **Dos cerraduras**: aunque Caddy dejara pasar algo, al backend le llega con `X-Ace-Origin: guest`, que trata como
+  `native` (el origen más estricto): sin token de dispositivo solo valen las rutas con **credencial `party`**
+  (`partyPreview`, `partyJoin`, `partyEvents`, `partyStream`, `partyVideo`, `partyControl`, `partyStatus`,
+  `partyChat`, `partyLeave`), cuyo manejador comprueba la credencial de la sala. Crear y cerrar salas siguen siendo
+  `web`. Lo fija `test/security.test.ts` y lo probé con un Caddy de verdad (ficheros 200; web de casa, ajustes,
+  bootstrap, crear sala y `/native` 404; `%2f` 400).
+- **Vídeo con clave**: cada persona tiene una clave de vídeo (24 bytes); `partyStream` devuelve
+  `/api/v1/party/<código>/v/<clave>/index.m3u8` y los segmentos, relativos, la heredan. `partyVideo` sirve los mismos
+  ficheros que `video` (Range 206/416) de la sesión de esa persona.
+- **Latido por la sala**: `partyStatus` da el latido de la sesión de playback de la persona y dice `stream: ok | lost |
+  none`; con `lost`, el reproductor vuelve a abrir (si la sala no está interrumpida). Así ni la web de casa ni el
+  invitado llaman a las rutas de playback. Salir o cerrar suelta los visores.
+- **Enlace público**: `PARTY_PUBLIC_URL=https://sala.ismaeloul.es` en storage; `room.inviteUrl` es
+  `https://sala.ismaeloul.es/s/<código>` y «Copiar enlace» lo usa (sin él, el de casa).
+- **Página de invitado** (`apps/web/invitado.html`, `src/guest/`): segunda entrada de Vite, sin armazón, bootstrap,
+  SSE de casa ni service worker; los mismos `Join` y `Room` (ya no dependen del enrutador), tema oscuro, manifiesto
+  propio (`invitado.webmanifest`, ámbito `/s/`) para añadirla a la pantalla de inicio del iPhone.
+- **Órdenes del navegador**: un play, una pausa o un salto del vídeo solo cuentan como orden si la persona acaba de
+  tocar o pulsar algo (1,5 s) o está en la pantalla completa nativa del iPhone; con la página oculta, nunca (§6).
+

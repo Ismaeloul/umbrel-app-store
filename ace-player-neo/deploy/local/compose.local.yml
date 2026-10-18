@@ -97,6 +97,7 @@ services:
       OLLAMA_BASE_URL: "http://host.docker.internal:11434"
       OLLAMA_EMBED_MODEL: "embeddinggemma:300m-qat-q4_0"
       OLLAMA_TIMEOUT_MS: "12000"
+      PARTY_PUBLIC_URL: "https://sala.ismaeloul.es"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/${ACE_VERSION:-0.7.0}/server.js"

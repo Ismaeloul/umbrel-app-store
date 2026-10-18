@@ -2,12 +2,18 @@
    el chat. En escritorio, el chat a la derecha; en el móvil, debajo. */
 
 import type { PartyCloseReason, PartyCredential, PartyRoom } from '@ace/shared';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { describeFailure } from '../../api/index.ts';
-import { useNavigate } from '../../app/router.tsx';
 import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
-import { stop as stopHousePlayer } from '../../player/api.ts';
 import { Button, IconButton } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
 import { Chat } from './Chat.tsx';
@@ -28,12 +34,20 @@ export function Room({
   code,
   credential,
   onForbidden,
+  onLeft,
+  onEnter,
+  exitAction,
 }: {
   code: string;
   credential: PartyCredential;
   onForbidden(): void;
+  /** Tras «Salir» (en casa, a Películas y series; el invitado, a la entrada). */
+  onLeft(): void;
+  /** Al montar el vídeo (en casa, se para el reproductor de la casa: la sala usa la plaza de la IPTV). */
+  onEnter?: () => void;
+  /** El botón para irse cuando la sala ya no existe (null en la página del invitado). */
+  exitAction: ReactNode;
 }) {
-  const navigate = useNavigate();
   const client = useMemo(() => new PartyClient(code, credential), [code, credential]);
   const state = useSyncExternalStore(client.subscribe, client.getState);
   const video = useRef<HTMLVideoElement>(null);
@@ -48,8 +62,7 @@ export function Room({
   useEffect(() => {
     const element = video.current;
     if (!element) return;
-    /* La sala usa la plaza de la IPTV: lo que sonara en el reproductor de casa se para. */
-    stopHousePlayer();
+    onEnter?.();
     const created = new RoomPlayer(element, client);
     created.start();
     setPlayer(created);
@@ -57,23 +70,14 @@ export function Room({
       created.destroy();
       setPlayer(null);
     };
-  }, [client]);
+  }, [client, onEnter]);
 
   useEffect(() => {
     if (state.closed === 'forbidden') onForbidden();
   }, [state.closed, onForbidden]);
 
   if (state.closed && state.closed !== 'forbidden') {
-    return (
-      <EmptyState
-        title={CLOSED_TEXT[state.closed]}
-        actions={
-          <Button variant="primary" onClick={() => navigate({ vista: 'cine', id: null })}>
-            {JUNTOS_TEXT.backToCine}
-          </Button>
-        }
-      />
-    );
+    return <EmptyState title={CLOSED_TEXT[state.closed]} actions={exitAction} />;
   }
 
   const room = state.room;
@@ -81,7 +85,7 @@ export function Room({
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(inviteUrl(code));
+      await navigator.clipboard.writeText(inviteUrl(code, room?.inviteUrl ?? null));
       notify(JUNTOS_TEXT.linkCopied, { tone: 'ok' });
     } catch {
       notify(JUNTOS_TEXT.linkCopyFailed, { tone: 'err' });
@@ -99,7 +103,7 @@ export function Room({
       return;
     }
     await client.leave();
-    navigate({ vista: 'cine', id: null });
+    onLeft();
   };
 
   return (
