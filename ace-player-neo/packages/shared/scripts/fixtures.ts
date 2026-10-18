@@ -1228,6 +1228,7 @@ function partyJoined(self: string, others: readonly PartyMember[]): PartyJoinRes
   return {
     room: {
       code: PARTY_CODE,
+      inviteUrl: `https://sala.ismaeloul.es/s/${PARTY_CODE}`,
       title: partyTitle,
       audio: { index: null, tracks: [] },
       interrupted: null,
@@ -1498,7 +1499,7 @@ export const WEB_V1_FIXTURES = {
   partyJoin: partyJoined('m_AnaInvitada01', [partyMember('m_AnaInvitada01', 'Ana', false)]),
   partyStream: vodDuneGrant,
   partyControl: { serverNow: AT_MS + 60_000, rev: 3 },
-  partyStatus: { serverNow: AT_MS + 65_000, rev: 3 },
+  partyStatus: { serverNow: AT_MS + 65_000, rev: 3, stream: 'ok' },
   partyChat: { ok: true },
   partyLeave: { ok: true },
   partyClose: { ok: true },
@@ -2099,4 +2100,6 @@ export const NON_JSON_ROUTE_IDS: readonly V1RouteId[] = [
   'diagnosticsLogDownload',
   /* El SSE de una sala de «Ver juntos» (docs/ver-juntos.md). */
   'partyEvents',
+  /* El vídeo de una sala (la misma respuesta que `video`). */
+  'partyVideo',
 ];

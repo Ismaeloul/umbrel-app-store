@@ -56,10 +56,13 @@ interface Call {
   readonly options: VodAcquireOptions | undefined;
 }
 
-function setup() {
-  const core = createTestCore();
+function setup(env: Record<string, string> = {}) {
+  const core = createTestCore({ env });
   const clock = core.clock as FakeClock;
   const calls: Call[] = [];
+  const beats: { sid: string; viewer: string; playing: boolean | undefined }[] = [];
+  const released: { sid: string; viewer: string }[] = [];
+  const control = { beatFails: false };
   const party = createPartyService({
     ...core,
     playback: {
@@ -67,9 +70,23 @@ function setup() {
         calls.push({ id, query, viewer, options });
         return GRANT;
       },
+      heartbeat: async (sid, body) => {
+        if (control.beatFails) throw new AppError('session_expired');
+        beats.push({ sid, viewer: body.viewer, playing: body.playing });
+        return {
+          session: GRANT.session,
+          url: GRANT.url,
+          protocol: GRANT.protocol,
+          viewers: 1,
+        };
+      },
+      release: async (sid, body) => {
+        released.push({ sid, viewer: body.viewer });
+        return { released: true, sessionClosed: false };
+      },
     },
   });
-  return { core, clock, calls, party };
+  return { core, clock, calls, beats, released, control, party };
 }
 
 type DataOf<K extends PartyEvent['type']> = Extract<PartyEvent, { type: K }>['data'];
@@ -109,7 +126,7 @@ const viewer = (viewerId: string): ViewerIdentity => ({
 });
 
 describe('«Ver juntos»: salas', () => {
-  it('crear, ver antes de entrar y entrar; nombres repetidos, sala llena y credencial mala', () => {
+  it('crear, ver antes de entrar y entrar; nombres repetidos, sala llena y credencial mala', async () => {
     const { party } = setup();
     const host = party.create(BODY);
     expect(host.room.members).toEqual([
@@ -137,26 +154,14 @@ describe('«Ver juntos»: salas', () => {
 
     expect(code(catchError(() => party.preview('AAAAAAAAAAAAAAAA')))).toBe('party_not_found');
     const forged = `${ana.member.id}.${'x'.repeat(32)}`;
-    expect(
-      code(
-        catchError(() =>
-          party.status(host.room.code, { token: forged, positionS: 0, buffering: false }),
-        ),
-      ),
-    ).toBe('party_forbidden');
+    await expect(
+      party.status(host.room.code, { token: forged, positionS: 0, buffering: false }),
+    ).rejects.toMatchObject({ code: 'party_forbidden' });
     /* La credencial de otra sala tampoco vale. */
     const other = party.create(BODY);
-    expect(
-      code(
-        catchError(() =>
-          party.status(other.room.code, {
-            token: ana.member.token,
-            positionS: 0,
-            buffering: false,
-          }),
-        ),
-      ),
-    ).toBe('party_forbidden');
+    await expect(
+      party.status(other.room.code, { token: ana.member.token, positionS: 0, buffering: false }),
+    ).rejects.toMatchObject({ code: 'party_forbidden' });
   });
 
   it('el reloj de la sala: reproducir avanza, pausar y saltar fijan, y cada orden sube rev', () => {
@@ -376,6 +381,72 @@ describe('«Ver juntos»: salas', () => {
     expect(party.preview(host.room.code).members).toEqual(['Isma']);
     for (let i = 1; i < PARTY.maxRooms; i += 1) party.create(BODY);
     expect(code(catchError(() => party.create(BODY)))).toBe('party_limit');
+  });
+});
+
+describe('«Ver juntos» desde fuera (docs/ver-juntos.md §9)', () => {
+  it('el vídeo va por la ruta de la sala con la clave de cada persona; otra clave no vale', async () => {
+    const { party } = setup();
+    const host = party.create(BODY);
+    const room = host.room.code;
+    const ana = party.join(room, 'Ana');
+    expect(code(catchError(() => party.videoSession(room, 'k'.repeat(32))))).toBe(
+      'party_forbidden',
+    );
+    const grant = await party.stream(
+      room,
+      streamQuery(ana.member.token, 'v-ana'),
+      viewer('v-ana'),
+      live(),
+    );
+    expect(grant.url).toMatch(
+      new RegExp(`^/api/v1/party/${room}/v/[A-Za-z0-9_-]{32}/index\\.m3u8$`),
+    );
+    const key = grant.url.split('/')[6] ?? '';
+    expect(party.videoSession(room, key)).toBe(GRANT.session.id);
+    /* La clave de Ana no es la de Isma, que aún no ha abierto el vídeo. */
+    const isma = await party.stream(
+      room,
+      streamQuery(host.member.token, 'v-isma'),
+      viewer('v-isma'),
+      live(),
+    );
+    expect(isma.url).not.toBe(grant.url);
+  });
+
+  it('el latido de la sesión va con el estado de la sala: ok, lost y none', async () => {
+    const { party, beats, control } = setup();
+    const host = party.create(BODY);
+    const room = host.room.code;
+    const status = () =>
+      party.status(room, { token: host.member.token, positionS: 0, buffering: false });
+    expect((await status()).stream).toBe('none');
+    await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    expect((await status()).stream).toBe('ok');
+    expect(beats.at(-1)).toEqual({ sid: GRANT.session.id, viewer: 'v-isma', playing: false });
+    control.beatFails = true;
+    expect((await status()).stream).toBe('lost');
+    control.beatFails = false;
+    expect((await status()).stream).toBe('none');
+  });
+
+  it('salir o cerrar la sala suelta los visores de cada uno', async () => {
+    const { party, released } = setup();
+    const host = party.create(BODY);
+    const room = host.room.code;
+    const ana = party.join(room, 'Ana');
+    await party.stream(room, streamQuery(ana.member.token, 'v-ana'), viewer('v-ana'), live());
+    await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    party.leave(room, ana.member.token);
+    expect(released).toEqual([{ sid: GRANT.session.id, viewer: 'v-ana' }]);
+    party.close(room, host.member.token);
+    expect(released.at(-1)).toEqual({ sid: GRANT.session.id, viewer: 'v-isma' });
+  });
+
+  it('el enlace de invitación es el del proxy con PARTY_PUBLIC_URL; sin él, null', () => {
+    expect(setup().party.create(BODY).room.inviteUrl).toBeNull();
+    const created = setup({ PARTY_PUBLIC_URL: 'https://sala.ismaeloul.es/' }).party.create(BODY);
+    expect(created.room.inviteUrl).toBe(`https://sala.ismaeloul.es/s/${created.room.code}`);
   });
 });
 

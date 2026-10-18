@@ -78,6 +78,15 @@ const BINARY_RESPONSES: Readonly<Record<string, JsonObject>> = {
       'video/iso.segment': { schema: { type: 'string', format: 'binary' } },
     },
   },
+  partyVideo: {
+    description:
+      'Lo mismo que `video` para la sesión de una sala de «Ver juntos»: lista m3u8 tal cual (segmentos relativos) o segmento fMP4. Admite Range (206/416).',
+    content: {
+      'application/vnd.apple.mpegurl': { schema: { type: 'string' } },
+      'video/mp4': { schema: { type: 'string', format: 'binary' } },
+      'video/iso.segment': { schema: { type: 'string', format: 'binary' } },
+    },
+  },
   footballTeamCrest: {
     description:
       'Escudo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).',
@@ -136,6 +145,9 @@ function successResponse(route: V1RouteEntry): JsonObject {
 
 function security(route: V1RouteEntry): JsonObject[] {
   if (route.credential === 'none') return [];
+  /* «Ver juntos» (docs/ver-juntos.md §9): la credencial es la de la sala (en el
+     cuerpo, en `?t=` o la clave de vídeo en la ruta) y la comprueba el manejador. */
+  if (route.credential === 'party') return [{ umbrelGateway: [] }, { partyMember: [] }];
   /* `video` desde la IPTV (docs/iptv.md §5.4): la web entra con la sesión de
      Umbrel y sin token; /native, con la URL firmada. */
   if (route.credential === 'video-token') {
@@ -230,6 +242,13 @@ export function buildOpenApiDocument(): JsonObject {
           in: 'query',
           name: 't',
           description: 'URL de vídeo firmada: HMAC de { sid, dev, exp } (arquitectura §5.12).',
+        },
+        partyMember: {
+          type: 'apiKey',
+          in: 'query',
+          name: 't',
+          description:
+            'Credencial de una sala de «Ver juntos» (`<memberId>.<secreto>`): en `token` del cuerpo de los POST y en `?t=` de los GET; el vídeo, con la clave de la persona en la ruta (docs/ver-juntos.md §9).',
         },
       },
     },

@@ -201,7 +201,8 @@ export function viewPreload(): Plugin {
     transformIndexHtml: {
       order: 'post',
       handler(_html, ctx) {
-        if (!ctx.bundle) return [];
+        /* Solo la web de casa: la página de invitado no tiene vistas. */
+        if (!ctx.bundle || !ctx.filename.endsWith('index.html')) return [];
         const map = viewPreloadMap(ctx.bundle as unknown as Record<string, ChunkLike>);
         if (Object.keys(map).length === 0) return [];
         const code = `(function(m){try{var v=(new URLSearchParams(location.search).get('vista')||'agenda').split('/')[0].toLowerCase();var f=m[v];if(!f)return;for(var i=0;i<f.length;i++){var l=document.createElement('link');if(/\\.css$/.test(f[i])){l.rel='preload';l.as='style'}else{l.rel='modulepreload'}l.crossOrigin='';l.href=f[i];document.head.appendChild(l)}}catch(e){}})(${JSON.stringify(map)});`;

@@ -38,6 +38,11 @@
    - `video-token`: `?t=` firmado, porque AVPlayer no puede poner cabeceras en
      cada segmento.
    - `none`: sin token. Solo `GET /api/v1/ping` y `POST /api/v1/pairing/claim`.
+   - `party`: sin token de dispositivo; la credencial es la de la sala (su
+     código y `<memberId>.<secreto>`, o la clave de vídeo de la persona), y la
+     comprueba el manejador. Son las rutas de «Ver juntos» que usan los
+     invitados que entran por el proxy de la sala (docs/ver-juntos.md §9): les
+     llega con origen `native` y fuera de /native.
 
    Las rutas antiguas (/api/*) NO están aquí: su contrato exacto está en
    api/legacy.ts (LEGACY_OPERATIONS) y la app iOS no las usa nunca. */
@@ -168,6 +173,7 @@ import {
   PartyStatusResponseSchema,
   PartyStreamQuerySchema,
   PartyTokenBodySchema,
+  PartyVideoParamsSchema,
 } from './api/v1/party.js';
 import { SettingsResponseSchema, SettingsUpdateBodySchema } from './api/v1/settings.js';
 import {
@@ -194,7 +200,7 @@ export const NATIVE_PREFIX = '/native';
 /** `PATCH` llegó con la IPTV (`iptvUpdate`: pausar o renombrar sin tocar los secretos). */
 export type V1Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type RouteAccess = 'web' | 'native' | 'any';
-export type NativeCredential = 'none' | 'bearer' | 'video-token';
+export type NativeCredential = 'none' | 'bearer' | 'video-token' | 'party';
 /**
  * `json` = respuesta JSON validada; `sse` = text/event-stream; `binary` =
  * ficheros del remux, escudos (PNG) y carteles VOD; `empty` = 204 sin cuerpo
@@ -1570,7 +1576,8 @@ export const V1_ROUTES = {
     legacyTwin: 'GET /api/search',
   }),
 
-  // --- Ver juntos (docs/ver-juntos.md, D36): solo web en la fase 1 ---
+  // --- Ver juntos (docs/ver-juntos.md, D36): crear y cerrar, solo web; el resto, también
+  // los invitados que entran por el proxy de la sala (credencial `party`, §9) ---
   partyCreate: defineRoute({
     method: 'POST',
     path: '/api/v1/party',
@@ -1592,8 +1599,8 @@ export const V1_ROUTES = {
   partyPreview: defineRoute({
     method: 'GET',
     path: '/api/v1/party/:code',
-    access: 'web',
-    credential: 'bearer',
+    access: 'any',
+    credential: 'party',
     module: 'party',
     summary: 'Lo que se ve de una sala antes de entrar: el título y quién está',
     params: PartyParamsSchema,
@@ -1607,8 +1614,8 @@ export const V1_ROUTES = {
   partyJoin: defineRoute({
     method: 'POST',
     path: '/api/v1/party/:code/join',
-    access: 'web',
-    credential: 'bearer',
+    access: 'any',
+    credential: 'party',
     module: 'party',
     summary: 'Entrar en una sala con un nombre',
     params: PartyParamsSchema,
@@ -1623,8 +1630,8 @@ export const V1_ROUTES = {
   partyEvents: defineRoute({
     method: 'GET',
     path: '/api/v1/party/:code/events',
-    access: 'web',
-    credential: 'bearer',
+    access: 'any',
+    credential: 'party',
     module: 'party',
     summary: 'Tiempo real de la sala por SSE: estado, personas y chat',
     description:
@@ -1642,13 +1649,14 @@ export const V1_ROUTES = {
   partyStream: defineRoute({
     method: 'GET',
     path: '/api/v1/party/:code/stream',
-    access: 'web',
-    credential: 'bearer',
+    access: 'any',
+    credential: 'party',
     module: 'party',
     summary: 'Abrir el vídeo de la sala: la misma sesión VOD para todos',
     description:
       'Como `vodStream`, pero el título, el audio y la posición los pone la sala, y quien ya está en la sesión no ' +
-      'recibe un traspaso: todos leen la misma lista HLS (una sola plaza del proveedor).',
+      'recibe un traspaso: todos leen la misma lista HLS (una sola plaza del proveedor). La `url` es la de ' +
+      '`partyVideo`, con la clave de vídeo de la persona; el latido de la sesión lo da `partyStatus`.',
     params: PartyParamsSchema,
     query: PartyStreamQuerySchema,
     response: VodGrantSchema,
@@ -1658,11 +1666,29 @@ export const V1_ROUTES = {
     errors: [...PARTY_MEMBER_ERRORS, ...VOD_STREAM_ERRORS],
     legacyTwin: null,
   }),
+  partyVideo: defineRoute({
+    method: 'GET',
+    path: '/api/v1/party/:code/v/:key/:file',
+    access: 'any',
+    credential: 'party',
+    module: 'party',
+    summary: 'El vídeo de la sala (lista, init y segmentos) con la clave de vídeo de la persona',
+    description:
+      'La misma respuesta que `video` (Range 206/416) para la sesión de la sala. La clave va en la ruta: los ' +
+      'segmentos de la lista son relativos, así que la heredan sin reescribir nada.',
+    params: PartyVideoParamsSchema,
+    response: null,
+    status: 200,
+    content: 'binary',
+    sideEffects: false,
+    errors: [...PARTY_MEMBER_ERRORS, 'session_not_found', 'session_expired'],
+    legacyTwin: null,
+  }),
   partyControl: defineRoute({
     method: 'POST',
     path: '/api/v1/party/:code/control',
-    access: 'web',
-    credential: 'bearer',
+    access: 'any',
+    credential: 'party',
     module: 'party',
     summary: 'Reproducir, pausar, saltar o cambiar el idioma para todos',
     params: PartyParamsSchema,
@@ -1677,10 +1703,10 @@ export const V1_ROUTES = {
   partyStatus: defineRoute({
     method: 'POST',
     path: '/api/v1/party/:code/status',
-    access: 'web',
-    credential: 'bearer',
+    access: 'any',
+    credential: 'party',
     module: 'party',
-    summary: 'Latido de cada persona: su posición y si está cargando',
+    summary: 'Latido de cada persona: su posición y si está cargando (y el de su sesión de vídeo)',
     params: PartyParamsSchema,
     body: PartyStatusBodySchema,
     response: PartyStatusResponseSchema,
@@ -1693,8 +1719,8 @@ export const V1_ROUTES = {
   partyChat: defineRoute({
     method: 'POST',
     path: '/api/v1/party/:code/chat',
-    access: 'web',
-    credential: 'bearer',
+    access: 'any',
+    credential: 'party',
     module: 'party',
     summary: 'Mandar un mensaje al chat de la sala',
     params: PartyParamsSchema,
@@ -1709,8 +1735,8 @@ export const V1_ROUTES = {
   partyLeave: defineRoute({
     method: 'POST',
     path: '/api/v1/party/:code/leave',
-    access: 'web',
-    credential: 'bearer',
+    access: 'any',
+    credential: 'party',
     module: 'party',
     summary: 'Salir de la sala (también con sendBeacon al cerrar la página)',
     params: PartyParamsSchema,

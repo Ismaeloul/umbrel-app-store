@@ -131,7 +131,8 @@ test("app_proxy: el nginx de siempre en el 80 y /native/* sin login (D4)", () =>
 });
 
 test("limites intactos respecto a la 0.6.59: memoria, procesos y endurecimiento", () => {
-  assert.deepEqual(Object.keys(COMPOSE_SERVICES).sort(), Object.keys(LEGACY_SERVICES).sort());
+  /* Lo de la 0.6.59 mas el proxy de "Ver juntos" desde fuera (sala). */
+  assert.deepEqual(Object.keys(COMPOSE_SERVICES).sort(), [...Object.keys(LEGACY_SERVICES), "sala"].sort());
   for (const name of Object.keys(LEGACY_SERVICES)) {
     for (const field of ["mem_limit", "pids_limit", "read_only", "init", "restart"]) {
       assert.equal(key(COMPOSE_SERVICES[name], field), key(LEGACY_SERVICES[name], field), `${name}.${field}`);
@@ -142,6 +143,11 @@ test("limites intactos respecto a la 0.6.59: memoria, procesos y endurecimiento"
   assert.equal(key(COMPOSE_SERVICES.acestream, "mem_limit"), "4g");
   assert.equal(key(COMPOSE_SERVICES.storage, "mem_limit"), "768m");
   assert.equal(key(COMPOSE_SERVICES.storage, "pids_limit"), "128");
+  /* El proxy de la sala: acotado, de solo lectura y sin escalar privilegios. */
+  assert.equal(key(COMPOSE_SERVICES.sala, "mem_limit"), "256m");
+  assert.equal(key(COMPOSE_SERVICES.sala, "pids_limit"), "64");
+  assert.equal(key(COMPOSE_SERVICES.sala, "read_only"), "true");
+  assert.ok(COMPOSE_SERVICES.sala.some((line) => line.trim() === "- no-new-privileges:true"), "sala: no-new-privileges");
 });
 
 test("el hook no fija la version a mano, lee Compose y va con LF y shebang (T1, U6)", () => {
@@ -182,11 +188,11 @@ test("SHA256SUMS: formato de sha256sum, ordenado, cubre toda la release y cuadra
   }
 });
 
-test("la release solo lleva lo que toca: backend, config, RELEASE.json y web/ (sin mapas)", () => {
+test("la release solo lleva lo que toca: backend, config (nginx y el proxy de Ver juntos), RELEASE.json y web/ (sin mapas)", () => {
   const files = listFiles(releaseDir);
   assert.deepEqual(
     files.filter((file) => !file.startsWith("web/")),
-    ["RELEASE.json", "SHA256SUMS", "engine-control.js", "nginx.conf", "server.js"]
+    ["Caddyfile", "RELEASE.json", "SHA256SUMS", "engine-control.js", "nginx.conf", "server.js"]
   );
   assert.deepEqual(files.filter((file) => file.endsWith(".map") || file.endsWith(".complete")), []);
   const release = JSON.parse(fs.readFileSync(path.join(releaseDir, "RELEASE.json"), "utf8"));

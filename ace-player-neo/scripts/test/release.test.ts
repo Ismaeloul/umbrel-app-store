@@ -72,6 +72,8 @@ function writeWebDist(dir: string) {
   mkdirSync(path.join(dir, 'assets'), { recursive: true });
   writeFileSync(path.join(dir, 'index.html'), '<!doctype html><title>Ace Player Neo</title>\n');
   writeFileSync(path.join(dir, 'manifest.webmanifest'), '{"id":"/","start_url":"/"}\n');
+  /* La página de invitado de «Ver juntos» (docs/ver-juntos.md §9). */
+  writeFileSync(path.join(dir, 'invitado.html'), '<!doctype html><title>Ver juntos</title>\n');
   for (const icon of ['icon-180.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png']) {
     writeFileSync(path.join(dir, icon), Buffer.from([0x89, 0x50, 0x4e, 0x47, icon.length]));
   }
@@ -216,7 +218,14 @@ describe('scripts/release.mjs', () => {
     const files = listFiles(dir);
     for (const required of REQUIRED_FILES) expect(files).toContain(required);
     expect(files.filter((file) => !file.startsWith('web/')).sort()).toEqual(
-      ['RELEASE.json', 'SHA256SUMS', 'engine-control.js', 'nginx.conf', 'server.js'].sort(),
+      [
+        'Caddyfile',
+        'RELEASE.json',
+        'SHA256SUMS',
+        'engine-control.js',
+        'nginx.conf',
+        'server.js',
+      ].sort(),
     );
     expect(files).toContain('web/assets/index-3f2a1b9c.js.gz');
     // Los mapas "hidden" de Vite no llegan al NAS.

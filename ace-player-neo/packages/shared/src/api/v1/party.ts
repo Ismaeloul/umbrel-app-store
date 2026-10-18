@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import { PARTY } from '../../constants/party.js';
 import { HashSchema } from '../../primitives.js';
-import { ChannelStreamQuerySchema } from './playback.js';
+import { ChannelStreamQuerySchema, VideoParamsSchema } from './playback.js';
 import { VodArtStampSchema } from './vod.js';
 
 export const PartyCodeSchema = z
@@ -90,6 +90,8 @@ export type PartyInterrupted = z.infer<typeof PartyInterruptedSchema>;
 
 export const PartyRoomSchema = z.strictObject({
   code: PartyCodeSchema,
+  /** Enlace para invitar: el del proxy de la sala (`https://…/s/<código>`) o null (el de casa). */
+  inviteUrl: z.string().url().max(200).nullable(),
   title: PartyTitleSchema,
   audio: PartyAudioSchema,
   interrupted: PartyInterruptedSchema,
@@ -189,6 +191,12 @@ export type PartyStatusBody = z.infer<typeof PartyStatusBodySchema>;
 export const PartyStatusResponseSchema = z.strictObject({
   serverNow: z.number().int().nonnegative(),
   rev: z.number().int().nonnegative(),
+  /**
+   * Solo en `partyStatus`: el latido de la sesión de vídeo de la persona. `ok`,
+   * sigue; `lost`, la sesión ya no está (el reproductor vuelve a abrir si la
+   * sala no está interrumpida); `none`, aún no ha abierto el vídeo.
+   */
+  stream: z.enum(['ok', 'lost', 'none']).optional(),
 });
 export type PartyStatusResponse = z.infer<typeof PartyStatusResponseSchema>;
 
@@ -209,6 +217,17 @@ export const PartyTokenBodySchema = z.strictObject({ token: PartyTokenSchema });
 export type PartyTokenBody = z.infer<typeof PartyTokenBodySchema>;
 
 export const PartyOkSchema = z.strictObject({ ok: z.literal(true) });
+
+/** Clave de vídeo de una persona (base64url de 24 bytes). */
+export const PartyVideoKeySchema = z.string().regex(/^[A-Za-z0-9_-]{32}$/, 'clave de vídeo');
+
+/** GET /api/v1/party/:code/v/:key/:file: los mismos ficheros que `video`. */
+export const PartyVideoParamsSchema = z.strictObject({
+  code: PartyCodeSchema,
+  key: PartyVideoKeySchema,
+  file: VideoParamsSchema.shape.file,
+});
+export type PartyVideoParams = z.infer<typeof PartyVideoParamsSchema>;
 
 /** GET /api/v1/party/:code/events (SSE). */
 export const PartyEventsQuerySchema = z.strictObject({ t: PartyTokenSchema });

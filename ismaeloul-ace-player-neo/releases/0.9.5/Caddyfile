@@ -1,0 +1,85 @@
+# Proxy de «Ver juntos» desde fuera de casa (docs/ver-juntos.md §9).
+#
+# La Freebox manda el 443 de fuera al 8443 del NAS y aqui solo se deja pasar:
+# - la pagina de invitado (/s/<codigo> -> invitado.html) y sus ficheros;
+# - la API de una sala SIN crear ni cerrar (join, events, stream, control,
+#   status, chat, leave y el video con la clave de cada persona).
+# Todo lo demas da 404: ni la web de casa, ni sus rutas, ni el panel de Umbrel.
+# Al servidor le llega con X-Ace-Origin: guest, que el backend trata como
+# native (el origen mas estricto): sin token de dispositivo solo valen las
+# rutas con credencial de sala. Son dos cerraduras, no una.
+#
+# Certificado de Let's Encrypt por TLS-ALPN en el mismo puerto (sin puerto 80):
+# Caddy lo saca y lo renueva solo y lo guarda en /data (APP_DATA_DIR/caddy).
+{
+	admin off
+	http_port 8080
+	https_port 8443
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$PARTY_DOMAIN}:8443 {
+	tls {
+		issuer acme {
+			disable_http_challenge
+			alt_tlsalpn_port 8443
+		}
+	}
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Robots-Tag noindex
+		Strict-Transport-Security "max-age=31536000"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+	}
+
+	# Lo mismo que corta nginx: %2f, %2e, %5c, ".." o "\" en la ruta cruda, y "//".
+	@raro expression `{http.request.orig_uri.path}.matches("(?i)%(2f|2e|5c)|\\.\\.|\\x5c|^//")`
+
+	# La API de una sala: el codigo (16), la accion o el video (clave de 32 y fichero).
+	@sala path_regexp ^/api/v1/party/[A-Za-z0-9_-]{16}(/(join|events|stream|control|status|chat|leave)|/v/[A-Za-z0-9_-]{32}/[A-Za-z0-9_.-]{1,40})?$
+
+	# La pagina de invitado y lo que carga.
+	@pagina path_regexp ^/s/[A-Za-z0-9_-]{16}/?$
+	@estaticos path /invitado.html /invitado.webmanifest /icon.svg /icon-180.png /icon-192.png /icon-512.png /icon-maskable-512.png /assets/*
+
+	route {
+		respond @raro 400
+
+		reverse_proxy @sala ismaeloul-ace-player-neo_storage_1:3000 {
+			header_up X-Ace-Origin guest
+			header_up X-Request-Id {http.request.uuid}
+			# SSE y segmentos de video: salen conforme el servidor los escribe.
+			flush_interval -1
+		}
+
+		rewrite @pagina /invitado.html
+		header @pagina Cache-Control no-cache
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		root * {$ACE_WEB_ROOT}
+		file_server @estaticos {
+			precompressed gzip
+		}
+
+		respond 404
+	}
+
+	log {
+		output stdout
+		format filter {
+			# Ni la credencial de la sala (?t=) ni la IP de quien entra.
+			request>uri query {
+				replace t REDACTADO
+			}
+			request>uri regexp /v/[A-Za-z0-9_-]{32}/ /v/REDACTADA/
+			request>remote_ip delete
+			request>client_ip delete
+			request>headers delete
+		}
+	}
+}

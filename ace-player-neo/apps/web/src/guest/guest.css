@@ -1,0 +1,22 @@
+/* Página de invitado de «Ver juntos» (docs/ver-juntos.md §9): una barra fina
+   arriba y la sala debajo, con los márgenes seguros del iPhone. */
+
+body {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+}
+.guest__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(var(--safe-top, 0px) + 10px) calc(var(--safe-right, 0px) + 16px) 10px
+    calc(var(--safe-left, 0px) + 16px);
+  font-size: var(--fs-15, 15px);
+  font-weight: var(--wght-strong, 700);
+}
+.guest__main {
+  padding: 0 var(--safe-right, 0px) calc(var(--safe-bottom, 0px) + 16px) var(--safe-left, 0px);
+  margin: 0 auto;
+  max-width: 1400px;
+}

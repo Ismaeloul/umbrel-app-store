@@ -49,6 +49,8 @@ const PARAM_VALUES: Record<string, string> = {
   ref: 'c1',
   /* Sala de «Ver juntos» (docs/ver-juntos.md). */
   code: 'k3J9xQ2mZpL8wR4t',
+  /* Clave de vídeo de una persona de la sala. */
+  key: 'k'.repeat(32),
 };
 
 function concretePath(route: V1RouteDefinition): string {
@@ -186,6 +188,37 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     expect(failures).toEqual([]);
   });
 
+  it('«Ver juntos»: las rutas con credencial de sala no piden token de dispositivo, pero sin la de la sala no dan nada', async () => {
+    const s = await setup();
+    const party = V1.filter(([, route]) => route.credential === 'party');
+    expect(party.map(([id]) => id)).toEqual([
+      'partyPreview',
+      'partyJoin',
+      'partyEvents',
+      'partyStream',
+      'partyVideo',
+      'partyControl',
+      'partyStatus',
+      'partyChat',
+      'partyLeave',
+    ]);
+    const failures: string[] = [];
+    for (const [id, route] of party) {
+      const url = concretePath(route);
+      /* Como llega del proxy de la sala (cabecera `guest`, que es native) y como /native. */
+      for (const [label, path, headers] of [
+        ['proxy', url, { 'x-ace-origin': 'guest' }],
+        ['/native', `/native${url}`, native()],
+      ] as const) {
+        const { status, code } = await send(s, route.method, path, headers);
+        if (![400, 403, 404].includes(status) || code === 'unauthorized') {
+          failures.push(`${id} ${label}: ${status} ${code}`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
   it('con token válido, las rutas solo web (healthLive, copia de seguridad, configurar la IPTV, «Descargar fallos» y «Descargar logs») dan 403 origin_forbidden', async () => {
     const s = await setup();
     const failures: string[] = [];
@@ -210,16 +243,9 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'diagnosticsLogInfo',
       'diagnosticsLogDownload',
       'diagnosticsWebLog',
-      /* «Ver juntos» (docs/ver-juntos.md): solo web en la fase 1. */
+      /* «Ver juntos» (docs/ver-juntos.md §9): crear y cerrar una sala, solo web. Las
+         demás son de los invitados del proxy (credencial `party`, abajo). */
       'partyCreate',
-      'partyPreview',
-      'partyJoin',
-      'partyEvents',
-      'partyStream',
-      'partyControl',
-      'partyStatus',
-      'partyChat',
-      'partyLeave',
       'partyClose',
     ]);
     for (const [id, route] of webOnly) {

@@ -147,6 +147,14 @@ export interface AppConfig {
      */
     readonly relayLoopback: '127.0.0.1' | '::1';
   };
+  readonly party: {
+    /**
+     * «Ver juntos» desde fuera (docs/ver-juntos.md §9): `PARTY_PUBLIC_URL`, la
+     * dirección pública del proxy de la sala (`https://sala.ismaeloul.es`), o
+     * null: los enlaces de invitación son los de la web de casa.
+     */
+    readonly publicUrl: string | null;
+  };
   readonly security: {
     /** De dónde sale el material de las claves. `ephemeral` = aleatorio de este arranque. */
     readonly seedSource: 'ACE_SEED' | 'ENGINE_CONTROL_TOKEN' | 'ephemeral';
@@ -251,6 +259,23 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
   if (rawLoopback === '::1' || rawLoopback === '127.0.0.1') relayLoopback = rawLoopback;
   else if (rawLoopback) {
     warnings.push(`ACE_LOOPBACK=${JSON.stringify(rawLoopback)} no vale; se usa "127.0.0.1"`);
+  }
+
+  // --- «Ver juntos» desde fuera ---
+  let partyPublicUrl: string | null = null;
+  const rawPartyUrl = String(env.PARTY_PUBLIC_URL || '').trim();
+  if (rawPartyUrl) {
+    try {
+      const url = new URL(rawPartyUrl);
+      if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+        throw new Error('forma');
+      }
+      partyPublicUrl = url.origin;
+    } catch {
+      warnings.push(
+        `PARTY_PUBLIC_URL=${JSON.stringify(rawPartyUrl)} no vale (https://host); los enlaces serán los de casa`,
+      );
+    }
   }
 
   // --- Nivel de log ---
@@ -368,6 +393,7 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
       enabled: ollamaConfigured(ollamaBaseUrl, embedModel),
     },
     playback: { sameChannelPolicy, relayLoopback },
+    party: { publicUrl: partyPublicUrl },
     security: { seedSource, keys },
   };
 

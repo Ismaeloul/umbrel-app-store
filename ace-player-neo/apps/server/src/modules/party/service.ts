@@ -12,7 +12,10 @@
    sala sigue sin esa persona (y no vuelve a esperarla en `HOLD_COOLDOWN_MS`).
 
    Credenciales: `<memberId>.<secreto>`; se guarda el SHA-256 del secreto y
-   se compara en tiempo constante. */
+   se compara en tiempo constante. El vídeo va con otra clave de cada persona
+   en la ruta (`partyVideo`), y el latido de su sesión de playback lo da
+   `status`: así los invitados de fuera (docs/ver-juntos.md §9) no necesitan
+   ninguna ruta de playback ni de vídeo de la casa. */
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
@@ -37,6 +40,7 @@ import type { FastifyReply } from 'fastify';
 import type { TimerHandle } from '../../core/clock.js';
 import { AppError } from '../../core/errors.js';
 import type { Unsubscribe } from '../../core/bus.js';
+import type { ViewerIdentity } from '../playback/types.js';
 import type { PartyDeps, PartyService, PartySink } from './types.js';
 
 /** Tras dejar de esperar a alguien, no se le vuelve a esperar durante esto. */
@@ -65,6 +69,10 @@ interface Member {
   /** No se le espera hasta esta hora (ya se le esperó `holdMaxMs`). */
   holdSkipUntil: number;
   readonly chatTimes: number[];
+  /** Clave de vídeo (`partyVideo`): va en la ruta de la lista y de los segmentos. */
+  readonly videoKey: string;
+  /** Su visor de playback: el latido de la sesión lo da `status` (docs/ver-juntos.md §9). */
+  viewer: { readonly identity: ViewerIdentity; readonly sessionId: string } | null;
 }
 
 interface Connection {
@@ -117,7 +125,8 @@ export function formatPosition(seconds: number): string {
 }
 
 export function createPartyRuntime(deps: PartyDeps): PartyService {
-  const { clock, logger, bus, playback } = deps;
+  const { clock, logger, bus, playback, config } = deps;
+  const publicUrl = config.party.publicUrl;
   const rooms = new Map<string, Room>();
   let sweepTimer: TimerHandle | null = null;
   let heartbeat: TimerHandle | null = null;
@@ -173,6 +182,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   function roomView(room: Room): PartyRoom {
     return {
       code: room.code,
+      inviteUrl: publicUrl ? `${publicUrl}/s/${room.code}` : null,
       title: room.title,
       audio: room.audio,
       interrupted: room.interrupted,
@@ -341,6 +351,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       bufferingSince: null,
       holdSkipUntil: 0,
       chatTimes: [],
+      videoKey: randomId(24),
+      viewer: null,
     };
     room.members.set(id, member);
     return { member, token: `${id}.${secret}` };
@@ -355,11 +367,26 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     };
   }
 
+  /** Suelta el visor de playback de una persona (sale, la echan o se cierra la sala). */
+  function releaseViewer(member: Member): void {
+    const viewer = member.viewer;
+    member.viewer = null;
+    if (!viewer) return;
+    void playback
+      .release(
+        viewer.sessionId,
+        { viewer: viewer.identity.viewerId, reason: 'user' },
+        viewer.identity,
+      )
+      .catch(() => undefined);
+  }
+
   function closeRoom(room: Room, reason: PartyCloseReason): void {
     if (room.closed) return;
     broadcast(room, { type: 'party.closed', data: { reason } });
     room.closed = true;
     rooms.delete(room.code);
+    for (const member of room.members.values()) releaseViewer(member);
     for (const connection of [...room.connections]) closeConnection(room, connection);
     logger.info({ room: room.code, reason }, 'Ver juntos: sala cerrada');
     if (rooms.size === 0) stopSweep();
@@ -377,6 +404,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
 
   function removeMember(room: Room, member: Member, text: string): void {
     room.members.delete(member.id);
+    releaseViewer(member);
     for (const connection of [...room.connections]) {
       if (connection.memberId === member.id) closeConnection(room, connection);
     }
@@ -622,7 +650,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
 
     async stream(code, query, viewer, signal) {
       const room = find(code);
-      authenticate(room, query.t);
+      const member = authenticate(room, query.t);
       const grant = await playback.acquireVod(
         room.title.id,
         {
@@ -637,8 +665,14 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         signal,
         { partyKey: room.code },
       );
-      if (room.closed) return grant;
+      /* La lista y los segmentos, por la ruta de la sala con la clave de la persona. */
+      const url = `/api/v1/party/${room.code}/v/${member.videoKey}/index.m3u8`;
+      if (room.closed || !room.members.has(member.id)) return { ...grant, url };
       room.viewers.add(viewer.viewerId);
+      /* Un visor por persona: el de antes (otra pestaña, otro audio) se suelta. */
+      if (member.viewer && member.viewer.identity.viewerId !== viewer.viewerId)
+        releaseViewer(member);
+      member.viewer = { identity: viewer, sessionId: grant.session.id };
       const vod = grant.vod;
       const tracks = vod.audio.map((track) => ({ index: track.index, label: track.label }));
       const title: PartyTitle = {
@@ -662,7 +696,22 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         say(room, 'El vídeo vuelve a estar listo.', null);
       }
       if (changed) sendRoom(room);
-      return grant;
+      return { ...grant, url };
+    },
+
+    videoSession(code, key) {
+      const room = find(code);
+      for (const member of room.members.values()) {
+        if (
+          member.videoKey.length === key.length &&
+          timingSafeEqual(Buffer.from(member.videoKey), Buffer.from(key))
+        ) {
+          if (!member.viewer) throw new AppError('session_not_found');
+          member.lastSeen = clock.now();
+          return member.viewer.sessionId;
+        }
+      }
+      throw new AppError('party_forbidden');
     },
 
     control(code, body) {
@@ -698,7 +747,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       return { serverNow: now, rev: room.playback.rev };
     },
 
-    status(code, body) {
+    async status(code, body) {
       const room = find(code);
       const member = authenticate(room, body.token);
       const now = clock.now();
@@ -709,7 +758,26 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         else maybeWait(room, member, now);
         sendRoom(room);
       }
-      return { serverNow: now, rev: room.playback.rev };
+      /* El latido de su sesión de vídeo: los invitados no tienen las rutas de playback. */
+      let stream: 'ok' | 'lost' | 'none' = 'none';
+      const viewer = member.viewer;
+      if (viewer) {
+        try {
+          await playback.heartbeat(
+            viewer.sessionId,
+            {
+              viewer: viewer.identity.viewerId,
+              playing: room.playback.playing && room.waiting.size === 0,
+            },
+            viewer.identity,
+          );
+          stream = 'ok';
+        } catch {
+          if (member.viewer === viewer) member.viewer = null;
+          stream = 'lost';
+        }
+      }
+      return { serverNow: clock.now(), rev: room.playback.rev, stream };
     },
 
     chat(code, body) {
@@ -734,6 +802,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
           if (connection.memberId === member.id) closeConnection(room, connection);
         }
         stopWaiting(room, member.id, clock.now());
+        releaseViewer(member);
         sendRoom(room);
         return;
       }

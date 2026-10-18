@@ -99,6 +99,12 @@ export default defineConfig({
     // Solo la fuente principal va precargada; los iconos y el resto, por URL.
     assetsInlineLimit: 0,
     rolldownOptions: {
+      /* Dos páginas: la web de casa y la de invitado de «Ver juntos» (docs/ver-juntos.md §9),
+         que sirve el proxy de la sala. */
+      input: {
+        main: path.resolve(WEB_DIR, 'index.html'),
+        invitado: path.resolve(WEB_DIR, 'invitado.html'),
+      },
       treeshake: {
         // Los ids pueden venir con \ en Windows: se normalizan antes de comparar.
         moduleSideEffects: (id: string) => !id.replaceAll('\\', '/').includes(SHARED_SRC),

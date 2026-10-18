@@ -7,16 +7,19 @@
    a todos a la vez por el SSE.
 
    - Vídeo: `partyStream` da la misma `VodGrant` que `vodStream` (hls.js con
-     MSE; Safari y el iPhone, HLS nativo). Latido de la sesión cada 15 s y
-     soltarla al salir.
+     MSE; Safari y el iPhone, HLS nativo), con la URL de la sala (`partyVideo`).
+     El latido de la sesión lo da el servidor con cada `status`, así que esto
+     no llama a ninguna ruta de playback: sirve igual a los invitados de fuera
+     (docs/ver-juntos.md §9).
    - Sesión perdida: si la sala está «interrumpida» (alguien de casa puso otra
      cosa), se espera a que alguien pulse «Reanudar»; si no, se vuelve a abrir
      sola (3 veces por minuto como mucho).
    - Idioma: si la sala cambia de pista, se vuelve a abrir el vídeo.
-   - Controles nativos (pantalla completa del iPhone, teclas multimedia): un
-     play, una pausa o un salto que no coincide con la sala se manda como
-     orden. Con la página oculta, no: el navegador pausa solo al bloquear el
-     iPhone o al pasar la pestaña a segundo plano.
+   - Controles nativos (pantalla completa del iPhone): un play, una pausa o un
+     salto que no coincide con la sala se manda como orden, pero solo si la
+     persona acaba de tocar o pulsar algo (o está en esa pantalla completa).
+     Lo que hace el navegador por su cuenta (pausar al bloquear el iPhone, un
+     vídeo silenciado que no se ve) no para a los demás.
    - El primer play necesita un toque (los navegadores no dejan sonar un
      vídeo solo): hasta entonces, «Toca para empezar». */
 
@@ -36,6 +39,9 @@ const REOPEN_DELAY_MS = 2_000;
 const REOPENS_PER_MINUTE = 3;
 /** Un salto en los controles nativos tiene que apartarse al menos esto de la sala para ser una orden. */
 const NATIVE_SEEK_S = 1.5;
+/** Un evento del vídeo hasta esto después de un toque o una tecla cuenta como de la persona. */
+const USER_ACTION_MS = 1_500;
+const INTERACTION_EVENTS = ['pointerdown', 'keydown', 'touchstart'] as const;
 
 export type PlayerPhase =
   | 'idle'
@@ -123,7 +129,6 @@ export class RoomPlayer {
   private grant: VodGrant | null = null;
   private hls: HlsInstance | null = null;
   private tickTimer: unknown = null;
-  private beatTimer: unknown = null;
   private reopenTimer: unknown = null;
   private reopens: number[] = [];
   private acquiredAudio: number | null = null;
@@ -131,6 +136,11 @@ export class RoomPlayer {
   private unlocked = false;
   /** El play de «Toca para empezar» está en curso: no es una orden de la sala. */
   private unlocking = false;
+  /** Último toque o tecla de la persona en la página (para distinguir sus órdenes de las del navegador). */
+  private lastInteraction = Number.NEGATIVE_INFINITY;
+  private readonly onInteraction = (): void => {
+    this.lastInteraction = this.env.now();
+  };
   private destroyed = false;
   private readonly viewer = getViewerId();
   private unsubscribe: (() => void) | null = null;
@@ -164,6 +174,12 @@ export class RoomPlayer {
     for (const [type, handler] of Object.entries(this.onVideoEvent)) {
       this.video.addEventListener(type, handler);
     }
+    for (const type of INTERACTION_EVENTS) {
+      globalThis.document?.addEventListener(type, this.onInteraction, {
+        capture: true,
+        passive: true,
+      });
+    }
     this.tickTimer = this.env.setInterval(() => this.tick(), TICK_MS);
     this.unsubscribe = this.client.subscribe(() => this.reconcile());
     this.reconcile();
@@ -175,9 +191,12 @@ export class RoomPlayer {
     for (const [type, handler] of Object.entries(this.onVideoEvent)) {
       this.video.removeEventListener(type, handler);
     }
+    for (const type of INTERACTION_EVENTS) {
+      globalThis.document?.removeEventListener(type, this.onInteraction, { capture: true });
+    }
     this.env.clearInterval(this.tickTimer);
     this.env.clearTimeout(this.reopenTimer);
-    this.teardown(true);
+    this.teardown();
   }
 
   private room(): PartyRoom | null {
@@ -190,15 +209,24 @@ export class RoomPlayer {
     const state = this.client.getState();
     const room = state.room;
     if (state.closed) {
-      this.teardown(true);
+      this.teardown();
       this.set({ phase: 'idle' });
       return;
     }
     if (!room) return;
     const phase = this.view.phase;
+    /* El latido de `status` dice que la sesión ya no está (y la sala no está interrumpida). */
+    if (
+      state.stream === 'lost' &&
+      !room.interrupted &&
+      (phase === 'ready' || phase === 'blocked')
+    ) {
+      this.lost();
+      return;
+    }
     if (room.interrupted) {
       if (phase !== 'interrupted' && phase !== 'error') {
-        this.teardown(true);
+        this.teardown();
         this.set({ phase: 'interrupted' });
       }
       return;
@@ -214,7 +242,7 @@ export class RoomPlayer {
       wanted !== this.acquiredAudio &&
       (phase === 'ready' || phase === 'blocked')
     ) {
-      this.teardown(false);
+      this.teardown();
       void this.acquire();
     }
   }
@@ -229,7 +257,7 @@ export class RoomPlayer {
     const room = this.room();
     if (!room || this.destroyed) return;
     const generation = ++this.generation;
-    this.teardown(false);
+    this.teardown();
     this.set({ phase: 'preparing', error: null });
     const platform = detectPlatform();
     let grant: VodGrant;
@@ -252,14 +280,10 @@ export class RoomPlayer {
       });
       return;
     }
-    if (generation !== this.generation || this.destroyed) {
-      this.release(grant);
-      return;
-    }
+    if (generation !== this.generation || this.destroyed) return;
     const engine = chooseEngine(grant.protocol, platform);
     const codecs = `video/mp4; codecs="${grant.vod.video.codecs},mp4a.40.2"`;
     if (!engine || !this.env.supportsType(codecs, engine === 'native', this.video)) {
-      this.release(grant);
       this.set({ phase: 'error', error: JUNTOS_TEXT.codecUnsupported });
       return;
     }
@@ -296,32 +320,12 @@ export class RoomPlayer {
         this.video.load();
       } catch {}
     }
-    this.beatTimer = this.env.setInterval(() => void this.beat(), grant.session.heartbeatMs);
     this.set({ phase: this.unlocked ? 'ready' : 'blocked', durationS: grant.vod.durationS });
-  }
-
-  private async beat(): Promise<void> {
-    const grant = this.grant;
-    if (!grant) return;
-    try {
-      await api('sessionHeartbeat', {
-        params: { sid: grant.session.id },
-        body: { viewer: this.viewer, playing: !this.video.paused },
-      });
-    } catch (error) {
-      if (
-        this.grant === grant &&
-        isApiError(error) &&
-        (error.code === 'session_expired' || error.code === 'session_not_found')
-      ) {
-        this.lost();
-      }
-    }
   }
 
   /** La sesión ya no está: se espera a ver si es una interrupción de la sala y, si no, se reabre. */
   private lost(): void {
-    this.teardown(false);
+    this.teardown();
     this.set({ phase: 'preparing' });
     this.env.clearTimeout(this.reopenTimer);
     this.reopenTimer = this.env.setTimeout(() => {
@@ -337,11 +341,11 @@ export class RoomPlayer {
     }, REOPEN_DELAY_MS);
   }
 
-  /** Quita el vídeo; con `release`, suelta también la sesión en el servidor. */
-  private teardown(release: boolean): void {
-    this.env.clearInterval(this.beatTimer);
-    this.beatTimer = null;
-    const grant = this.grant;
+  /**
+   * Quita el vídeo. La sesión de playback la suelta el servidor (al salir o
+   * cerrar la sala) o caduca sola cuando deja de llegar el latido de `status`.
+   */
+  private teardown(): void {
     this.grant = null;
     if (this.hls) {
       this.hls.destroy();
@@ -353,15 +357,6 @@ export class RoomPlayer {
         this.video.load();
       } catch {}
     }
-    if (release && grant) this.release(grant);
-  }
-
-  private release(grant: VodGrant): void {
-    void api('sessionRelease', {
-      params: { sid: grant.session.id },
-      body: { viewer: this.viewer, reason: 'user' },
-      keepalive: true,
-    }).catch(() => undefined);
   }
 
   // --- Sincronización ---
@@ -445,6 +440,13 @@ export class RoomPlayer {
     if (this.view.phase !== 'ready' || !room || this.unlocking) return;
     /* Con la página oculta (pestaña de fondo, iPhone bloqueado) el navegador pausa solo: eso no para a los demás. */
     if (globalThis.document?.visibilityState === 'hidden') return;
+    /* Solo es de la persona si acaba de tocar o pulsar algo, o si está en la pantalla completa
+       nativa del iPhone (sus controles no llegan como eventos de la página). El navegador
+       también pausa por su cuenta: un vídeo silenciado que no se ve, el audio que se corta. */
+    const nativeFullscreen =
+      (this.video as HTMLVideoElement & { webkitDisplayingFullscreen?: boolean })
+        .webkitDisplayingFullscreen === true;
+    if (!nativeFullscreen && this.env.now() - this.lastInteraction > USER_ACTION_MS) return;
     const position = this.video.currentTime || 0;
     const playback = room.playback;
     if (type === 'play') {

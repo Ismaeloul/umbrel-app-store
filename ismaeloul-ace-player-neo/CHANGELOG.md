@@ -2,6 +2,19 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.5 (2026-10-18)
+
+Ver juntos ya funciona desde fuera de casa. En la sala, Copiar
+enlace da una direccion https://sala.ismaeloul.es/s/... que tu amigo
+abre en el navegador desde donde este, sin instalar nada (en el iPhone
+la puede anadir a la pantalla de inicio). Pone su nombre y entra.
+
+Desde fuera solo se ve la sala: ni tus canales, ni tus ajustes, ni el
+resto del Umbrel. Hace falta que sala.ismaeloul.es apunte a tu casa y
+que la Freebox mande el puerto 443 al 8443 del Umbrel. La primera vez
+que arranca, el certificado de seguridad tarda un minuto en salir y
+despues se renueva solo.
+
 ## 0.9.4 (2026-10-18)
 
 Nuevo: Ver juntos. En la ficha de una pelicula o de una serie

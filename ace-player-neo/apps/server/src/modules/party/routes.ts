@@ -2,12 +2,16 @@
 
    Antiguas: ninguna.
 
-   v1 (tabla de @ace/shared/routes.ts; todas `web` en la fase 1):
+   v1 (tabla de @ace/shared/routes.ts). Crear y cerrar, solo `web`; el resto,
+   `any` con credencial `party`: también los invitados que llegan por el proxy
+   de la sala (docs/ver-juntos.md §9), con origen `native` y sin token de
+   dispositivo. La credencial de la sala la comprueba el servicio.
    - partyCreate: POST /api/v1/party
    - partyPreview: GET /api/v1/party/:code
    - partyJoin: POST /api/v1/party/:code/join
    - partyEvents: GET /api/v1/party/:code/events (SSE; `?t=` con la credencial)
    - partyStream: GET /api/v1/party/:code/stream (la `VodGrant` de la sala)
+   - partyVideo: GET /api/v1/party/:code/v/:key/:file (la lista y los segmentos)
    - partyControl, partyStatus, partyChat, partyLeave, partyClose: POST con
      la credencial en `token`. */
 
@@ -23,6 +27,7 @@ export const V1_ROUTE_IDS: readonly string[] = [
   'partyJoin',
   'partyEvents',
   'partyStream',
+  'partyVideo',
   'partyControl',
   'partyStatus',
   'partyChat',
@@ -53,6 +58,13 @@ export function registerV1Routes(router: V1Router, services: Services): void {
       ctx.signal,
     ),
   );
+  router.handle('partyVideo', async (input, ctx) => {
+    const sid = party.videoSession(input.params.code, input.params.key);
+    await services.remux.serveFile(ctx.reply, sid, input.params.file, {
+      rangeHeader: ctx.request.headers.range,
+      deviceId: null,
+    });
+  });
   router.handle('partyControl', (input) => party.control(input.params.code, input.body));
   router.handle('partyStatus', (input) => party.status(input.params.code, input.body));
   router.handle('partyChat', (input) => {
