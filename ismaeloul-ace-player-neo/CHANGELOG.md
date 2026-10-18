@@ -2,6 +2,19 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.4 (2026-10-18)
+
+Nuevo: Ver juntos. En la ficha de una pelicula o de una serie
+pulsa Ver juntos, pon tu nombre y comparte el enlace: quien entre
+vera lo mismo que tu y a la vez. Si alguien pausa, avanza o cambia el
+idioma, cambia para todos, y si a alguien se le queda cargando, los
+demas le esperan. Al lado del video hay un chat.
+
+Por ahora funciona dentro de casa (con el mismo acceso de siempre al
+Umbrel). Ver juntos desde fuera de casa llegara en la siguiente
+version. Toda la sala usa una sola conexion de tu IPTV: si alguien
+pone otra cosa en la IPTV, la sala se pausa y avisa.
+
 ## 0.9.3 (2026-10-13)
 
 Ahora se pueden ver a la vez la IPTV y AceStream: si alguien esta
