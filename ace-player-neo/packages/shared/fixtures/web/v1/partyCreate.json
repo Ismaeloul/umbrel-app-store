@@ -1,0 +1,40 @@
+{
+  "room": {
+    "code": "k3J9xQ2mZpL8wR4t",
+    "title": {
+      "id": "4b5c6d7e8f9012345678abcdef0123457a8b9c0d",
+      "kind": "movie",
+      "artId": "4b5c6d7e8f9012345678abcdef0123457a8b9c0d",
+      "poster": "1a2b3c4d",
+      "title": "Dune: Parte Dos",
+      "subtitle": null,
+      "durationS": 9960
+    },
+    "audio": { "index": null, "tracks": [] },
+    "interrupted": null,
+    "hostId": "m_IsmaAnfitrion",
+    "createdAt": 1790188200000,
+    "members": [
+      { "id": "m_IsmaAnfitrion", "name": "Isma", "host": true, "online": true, "buffering": false }
+    ],
+    "playback": {
+      "playing": false,
+      "positionS": 0,
+      "at": 1790188200000,
+      "rev": 1,
+      "waitingFor": []
+    }
+  },
+  "member": { "id": "m_IsmaAnfitrion", "token": "m_IsmaAnfitrion.c2VjcmV0b0RlRWplbXBsbzAx" },
+  "chat": [
+    {
+      "id": 1,
+      "at": 1790188200000,
+      "kind": "system",
+      "memberId": null,
+      "name": "Sala",
+      "text": "Isma ha creado la sala."
+    }
+  ],
+  "serverNow": 1790188200000
+}

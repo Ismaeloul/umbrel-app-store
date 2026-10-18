@@ -80,6 +80,12 @@ export interface ViewerIdentity {
   readonly deviceName?: string | null;
 }
 
+/** Lo que añade «Ver juntos» al abrir un VOD (docs/ver-juntos.md §5). */
+export interface VodAcquireOptions {
+  /** Sala: los visores con la misma comparten la sesión sin traspaso. */
+  readonly partyKey?: string;
+}
+
 /** Lo que pide «Arranque instantáneo» (D24): la fuente que va a pedir el «Ver». */
 export interface PrewarmRequest {
   readonly hash: string;
@@ -151,6 +157,7 @@ export interface PlaybackService extends Lifecycle {
     query: VodStreamQuery,
     viewer: ViewerIdentity,
     signal: AbortSignal,
+    options?: VodAcquireOptions,
   ): Promise<VodGrant>;
   /** Latido de un visor; 410 `session_expired` si la sesión ya no existe. */
   heartbeat(

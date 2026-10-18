@@ -58,6 +58,7 @@ import * as healthRoutes from './modules/health/routes.js';
 import * as instantStartRoutes from './modules/instant-start/routes.js';
 import * as iptvRoutes from './modules/iptv/routes.js';
 import * as netRoutes from './modules/net/routes.js';
+import * as partyRoutes from './modules/party/routes.js';
 import * as playbackRoutes from './modules/playback/routes.js';
 import * as remuxRoutes from './modules/remux/routes.js';
 import * as scannerRoutes from './modules/scanner/routes.js';
@@ -96,6 +97,7 @@ export const MODULE_ROUTES = [
   playbackRoutes,
   footballRoutes,
   instantStartRoutes,
+  partyRoutes,
   teamsRoutes,
   authRoutes,
   eventsRoutes,

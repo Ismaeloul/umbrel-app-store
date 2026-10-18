@@ -323,6 +323,44 @@ describe('vodStream (docs/vod.md §9.8)', () => {
     expect(iptv.vodInputs[0]?.closed).toBe(true);
   });
 
+  it('«Ver juntos»: la misma sala comparte la sesión sin traspaso; fuera de la sala, traspaso y otra sesión', async () => {
+    const iptv = fakeIptv();
+    const setup = await setupPlayback({ iptv: iptv.service });
+    const producer = stubProducer(setup);
+    const sala = { partyKey: 'k3J9xQ2mZpL8wR4t' };
+    const first = await setup.runtime.service.acquireVod(
+      PELI,
+      vodQuery('visor-a', { start: 120 }),
+      web('visor-a'),
+      live(),
+      sala,
+    );
+    /* Otro aparato de la sala, con otro HEVC y su posición: se une sin echar a nadie. */
+    const second = await setup.runtime.service.acquireVod(
+      PELI,
+      vodQuery('visor-b', { start: 125, hevc: '1' }),
+      web('visor-b'),
+      live(),
+      sala,
+    );
+    expect(second.session.id).toBe(first.session.id);
+    expect(second.handoff).toBe(false);
+    expect(producer.requests).toHaveLength(1);
+    expect(setup.events.of('playback.handoff')).toEqual([]);
+    /* Alguien de casa abre la misma película fuera de la sala: la sala pierde la sesión. */
+    const home = await setup.runtime.service.acquireVod(
+      PELI,
+      vodQuery('visor-c'),
+      web('visor-c'),
+      live(),
+    );
+    expect(home.session.id).not.toBe(first.session.id);
+    expect(producer.requests).toHaveLength(2);
+    expect(setup.events.of('playback.handoff')).toEqual([
+      expect.objectContaining({ viewerIds: ['visor-a', 'visor-b'], hash: PELI }),
+    ]);
+  });
+
   it('el productor no puede seguir: stream.closed con vod_dropped y todo cerrado', async () => {
     const iptv = fakeIptv();
     const setup = await setupPlayback({ iptv: iptv.service });

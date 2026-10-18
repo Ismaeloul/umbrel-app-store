@@ -55,6 +55,7 @@ describe('views (registro por carpetas)', () => {
       'ajustes',
       'partido',
       'sala',
+      'juntos',
     ]);
   });
 

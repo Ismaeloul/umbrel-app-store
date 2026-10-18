@@ -40,6 +40,7 @@ import {
   Skeleton,
   SkeletonRows,
 } from '../../ui/index.ts';
+import { JuntosButton } from '../juntos/CreateButton.tsx';
 import { Art, artFill } from './Art.tsx';
 import {
   prepareGridFromFicha,
@@ -283,6 +284,17 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
         >
           {watched ? CINE_TEXT.markMovieUnwatched : CINE_TEXT.markMovieWatched}
         </Button>
+        <JuntosButton
+          disabled={block !== null}
+          target={{
+            titleId: movie.id,
+            kind: 'movie',
+            artId: movie.id,
+            poster: movie.poster,
+            title: movie.title,
+            subtitle: null,
+          }}
+        />
         <TrailerButton id={movie.trailer} title={movie.title} />
       </div>
       {reason ? (
@@ -366,9 +378,24 @@ function SeriesActions({ series }: { series: VodSeries }) {
           <ListButton target={series} className="cine-list" />
         </div>
       )}
-      {series.trailer ? (
+      {series.trailer || main ? (
         <div className="cine-actions__more">
-          <TrailerButton id={series.trailer} title={series.title} />
+          {main ? (
+            <JuntosButton
+              disabled={block !== null}
+              target={{
+                titleId: main.episodeId,
+                kind: 'episode',
+                artId: series.id,
+                poster: series.poster,
+                title: series.title,
+                subtitle: entry
+                  ? `${episodeTag(entry.season, entry.item.n)} · ${entry.item.title}`
+                  : null,
+              }}
+            />
+          ) : null}
+          {series.trailer ? <TrailerButton id={series.trailer} title={series.title} /> : null}
         </div>
       ) : null}
       {reason ? (

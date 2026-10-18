@@ -866,3 +866,20 @@ Detalle en docs/vod.md §4.10.
   sigue preparando solo con la casa vacía; el vigilante del motor y el buscador ya miraban solo el carril AceStream
   (`engineWatching`).
 - **Vuelta atrás**: sin datos nuevos; volver a la 0.9.2 es seguro.
+
+## D36. «Ver juntos»: salas para ver una película o una serie a la vez (fase 1, docs/ver-juntos.md)
+
+- **Para qué**: Isma quiere ver pelis y series con un amigo a distancia, como en Rave: una sala, el mismo punto para
+  todos, chat y que el otro entre con un enlace sin instalar nada.
+- **Una sesión VOD para toda la sala** (`partyKey` en `acquireVod`): los visores de la misma sala comparten la sesión
+  sin traspaso. Excepción a D-VOD13 solo dentro de una sala: van a la par, así que un productor sirve a todos, y la
+  plaza del proveedor sigue siendo una.
+- **El servidor manda en la posición** y los clientes se ajustan (salto, ±5 % de velocidad o pausa). Si alguien carga,
+  la sala le espera hasta 20 s.
+- **La regla de la casa no cambia**: otra cosa por la IPTV corta la sala; la sala se pausa «interrumpida» y no vuelve
+  a abrir sola (evita que la sala y la otra pantalla se quiten la plaza en bucle).
+- **Salas en memoria**: un reinicio las cierra. No hay datos nuevos en disco.
+- **Fase 1, solo web de casa** (las 10 rutas `party*` son `web`). La fase 2 (invitados desde fuera) será un Caddy en el
+  NAS en `sala.ismaeloul.es` con el 443 de la Freebox abierto solo hacia él, que solo deja pasar las rutas de la sala;
+  Cloudflare Tunnel descartado (condiciones de terceros que pueden cambiar).
+- **Vuelta atrás**: sin datos nuevos; volver a la 0.9.3 es seguro.

@@ -79,6 +79,7 @@ const WHAT: Record<Vista, string> = {
   ajustes: 'los ajustes',
   partido: 'el centro de partido',
   sala: 'el reproductor',
+  juntos: 'la sala',
   sistema: 'el sistema de diseño',
 };
 
