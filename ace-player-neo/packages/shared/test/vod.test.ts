@@ -74,7 +74,7 @@ function keysOf(node: unknown, found = new Set<string>()): Set<string> {
 }
 
 describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
-  it('las 11, en su orden, de la web y la app nativa con bearer; ninguna módulo nuevo', () => {
+  it('las 12, en su orden, de la web y la app nativa con bearer; ninguna módulo nuevo', () => {
     const vod = listV1Routes().filter((route) => route.id.startsWith('vod'));
     expect(vod.map((route) => `${route.id} ${route.method} ${route.path} ${route.module}`)).toEqual(
       [
@@ -83,6 +83,8 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
         'vodTitle GET /api/v1/vod/titles/:id iptv',
         'vodArt GET /api/v1/vod/titles/:id/art/:art iptv',
         'vodStream GET /api/v1/vod/titles/:id/stream playback',
+        /* La descarga en segundo plano del iPhone (0.9.8). */
+        'vodDownload GET /api/v1/vod/titles/:id/download playback',
         'vodProgress POST /api/v1/vod/titles/:id/progress iptv',
         /* Los idiomas (§4.10). */
         'vodLanguagesGet GET /api/v1/vod/languages iptv',
@@ -135,6 +137,7 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
     expect([...V1_ROUTES.vodStream.errors].sort()).toEqual(
       [...VOD_ERROR_CODES.filter((code) => code !== 'vod_list_full'), 'remux_busy'].sort(),
     );
+    expect(V1_ROUTES.vodDownload.errors).toEqual(V1_ROUTES.vodStream.errors);
     expect(V1_ROUTES.vodBrowse.errors).toEqual(['empty_query']);
     expect(V1_ROUTES.vodTitle.errors).toEqual(['vod_not_found', 'vod_unavailable']);
     expect(V1_ROUTES.vodArt.errors).toEqual(['vod_not_found']);

@@ -87,6 +87,13 @@ const BINARY_RESPONSES: Readonly<Record<string, JsonObject>> = {
       'video/iso.segment': { schema: { type: 'string', format: 'binary' } },
     },
   },
+  vodDownload: {
+    description:
+      'Un tramo de la película (segmentos `from`..`to`, con `init.mp4` delante si `from` es 0) en MP4 fragmentado, sin `Content-Length`. Cabeceras `X-Ace-Segments` (total de segmentos) y `X-Ace-Last` (último segmento del tramo). Si falta un segmento, la respuesta se corta a medias.',
+    content: {
+      'video/mp4': { schema: { type: 'string', format: 'binary' } },
+    },
+  },
   footballTeamCrest: {
     description:
       'Escudo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).',

@@ -14,6 +14,10 @@
      `channelStream` con un id de película o episodio → `validation_error`
      con `detail: 'vod_id'` (§5.3).
 
+   - vodDownload: GET /api/v1/vod/titles/:id/download (0.9.8): un tramo de
+     la película en un solo MP4 para la descarga en segundo plano del iPhone
+     (download.ts).
+
    La URL de vídeo de la app nativa se firma AQUÍ con `services.auth`
    (arquitectura §7.1: "firmar t con sid, dispositivo y caducidad"): playback
    no depende de auth (auth se crea después). */
@@ -22,6 +26,7 @@ import type { RequestContext } from '../../core/module.js';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
 import { browserDeviceName } from './device-name.js';
+import { sendVodDownload } from './download.js';
 import type { ViewerIdentity } from './types.js';
 
 /** Operaciones antiguas de este módulo (`MÉTODO ruta` como en LEGACY_OPERATIONS). */
@@ -39,6 +44,7 @@ export const V1_ROUTE_IDS: readonly string[] = [
   'sessionRelease',
   'playbackStatus',
   'vodStream',
+  'vodDownload',
 ];
 
 export function registerLegacyRoutes(router: LegacyRouter, services: Services): void {
@@ -110,5 +116,21 @@ export function registerV1Routes(router: V1Router, services: Services): void {
       ctx.signal,
     );
     return { ...grant, url: signed(services, grant.url, grant.session.id, ctx) };
+  });
+  router.handle('vodDownload', async (input, ctx) => {
+    await sendVodDownload(
+      ctx.reply,
+      {
+        id: input.params.id,
+        viewer: input.query.viewer,
+        from: input.query.from,
+        to: input.query.to,
+        audio: input.query.audio,
+        hevc: input.query.hevc,
+      },
+      identity(input.query.viewer, input.query.device, ctx),
+      ctx.signal,
+      { playback: services.playback, remux: services.remux },
+    );
   });
 }

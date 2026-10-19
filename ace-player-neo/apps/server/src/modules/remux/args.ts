@@ -39,6 +39,8 @@ export interface RemuxArgsInput {
    * (AVPlayer no desentrelaza; ver `deinterlaceVideoArgs`).
    */
   readonly deinterlace?: boolean;
+  /** 0.9.8: calidad ligera para un iPhone con poca conexión (ver `liteVideoArgs`). Con `deinterlace`, las dos. */
+  readonly lite?: boolean;
 }
 
 /** Hilos de x264 al desentrelazar: ~2 núcleos del N300 por canal 1080i (medido en la 0.9.2). */
@@ -72,6 +74,49 @@ export function deinterlaceVideoArgs(): string[] {
     '12M',
     '-bufsize',
     '12M',
+    '-g',
+    '250',
+    '-sc_threshold',
+    '0',
+    '-force_key_frames',
+    'expr:gte(t,n_forced*2)',
+  ];
+}
+
+/** Altura y caudal de la calidad ligera (0.9.8). */
+export const LITE_HEIGHT = 720;
+export const LITE_MAXRATE = '2500k';
+
+/**
+ * Calidad ligera (0.9.8): el iPhone fuera de casa con poca conexión. 720p (sin agrandar lo que ya es
+ * menor), H.264 High a unos 2,5 Mb/s como mucho, una clave cada 2 s exactos como el desentrelazado (los
+ * segmentos HLS de 2 s empiezan en una). Si la fuente es entrelazada, `bwdif` en `send_frame` (una imagen
+ * por imagen: 25p, la mitad de trabajo que 50p y de sobra con poca conexión).
+ */
+export function liteVideoArgs(interlaced = false): string[] {
+  const filters = [
+    ...(interlaced ? ['bwdif=mode=send_frame'] : []),
+    `scale=-2:'min(${LITE_HEIGHT},ih)'`,
+  ];
+  return [
+    '-vf',
+    filters.join(','),
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-tune',
+    'zerolatency',
+    '-profile:v',
+    'high',
+    '-pix_fmt',
+    'yuv420p',
+    '-crf',
+    '24',
+    '-maxrate',
+    LITE_MAXRATE,
+    '-bufsize',
+    '5000k',
     '-g',
     '250',
     '-sc_threshold',
@@ -185,7 +230,11 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
        audio se rehacía (p. ej. al pasar de 2.0 a 5.1), miles de tramas AAC en un solo segmento y un
        pico de CPU (diagnostico-iptv-0.8.2 P8, B1). Tampoco `-reinit_filter 0`: con un cambio de
        disposición de canales es fatal. La IPTV entrelazada para el iPhone, desentrelazada (0.9.2). */
-    ...(input.deinterlace ? deinterlaceVideoArgs() : ['-c:v', 'copy', '-copyinkf']),
+    ...(input.lite
+      ? liteVideoArgs(input.deinterlace)
+      : input.deinterlace
+        ? deinterlaceVideoArgs()
+        : ['-c:v', 'copy', '-copyinkf']),
     '-c:a',
     'aac',
     '-b:a',
@@ -197,7 +246,7 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     // Nuevo en la v2 (arquitectura §5.7)
     '-threads',
     '2',
-    ...(input.deinterlace ? ['-threads:v', String(DEINTERLACE_THREADS)] : []),
+    ...(input.deinterlace || input.lite ? ['-threads:v', String(DEINTERLACE_THREADS)] : []),
     '-metadata',
     `${ACE_SESSION_MARK}${input.sessionId}`,
     // server.js:313-317: HLS fMP4 de 2 s en ventana de 15 (B-225)

@@ -131,6 +131,8 @@ interface ViewerRec {
   playing: boolean | null;
   /** Token del `claim` 0.6.x (visores sin sesión). */
   readonly claimToken: string | null;
+  /** 0.9.8: el iPhone pide calidad ligera (fuera de casa con poca conexión). */
+  lite?: boolean;
 }
 
 interface SessionRec {
@@ -236,6 +238,8 @@ interface AcquireRequest {
   /** `dev` de un `/api/remux` 0.6.x (ficha del remux). */
   readonly legacyDevice?: string;
   readonly writeNowPlaying: boolean;
+  /** 0.9.8: calidad ligera para este visor (solo iOS, por el remux). */
+  readonly lite?: boolean;
   /** Decidido ANTES de mirar el motor (docs/iptv.md §4.1 y §6.4). */
   readonly source: 'engine' | 'iptv';
   /** Película o episodio (`vodStream`): relé VOD y productor en vez del remux del directo. */
@@ -406,6 +410,11 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       hash: session.hash,
       playbackUrl: session.meta.playbackUrl,
       mode: session.mode,
+      /* 0.9.8: algún iPhone de esta sesión pide calidad ligera. */
+      wantsLite: () =>
+        [...session.viewers.values()].some(
+          (viewer) => viewer.lite === true && viewer.consumes === 'remux',
+        ),
     };
     if (session.source !== 'iptv' || !session.input) return base;
     const input = session.input;
@@ -1182,6 +1191,28 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     }
   }
 
+  /** 0.9.8: relanza el remux de cualquier sesión (para pasar a calidad ligera) y avisa a sus visores. */
+  async function restartRemux(session: SessionRec): Promise<void> {
+    if (session.closed || session.vod) return;
+    if (session.source === 'iptv') {
+      await restartIptv(session);
+      return;
+    }
+    let handle: RemuxHandle | null = null;
+    try {
+      handle = await remux.restart(session.id);
+    } catch (error) {
+      logger.warn(
+        { sessionId: session.id, errorCode: errorCodeOf(error) },
+        'remux a calidad ligera',
+      );
+    }
+    if (!handle || session.closed) return;
+    for (const group of groupByUrl(session, remuxViewers(session))) {
+      bus.emit('stream.reopened', { sessionId: session.id, ...group, reason: 'remux_restart' });
+    }
+  }
+
   /**
    * La lista de una IPTV no avanza (vigilante del remux, B3; red del P2: el relé colgado en una
    * reconexión). Un reinicio del remux mata ffmpeg, y con él el relé suelta la conexión con el proveedor y
@@ -1508,6 +1539,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     viewer.label = request.label;
     viewer.deviceName = request.deviceName;
     viewer.mode = request.mode;
+    viewer.lite = request.lite === true;
     /* D5.3: el progresivo solo admite un consumidor. */
     if (session.mode === 'progressive' && consumers(session, viewer) > 1) {
       try {
@@ -2021,8 +2053,19 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         mode,
         signal,
         writeNowPlaying: true,
+        lite: client === 'ios' && query.lite === '1',
       });
       const { session, viewer } = placed;
+      /* 0.9.8: el remux ya copiaba (otro visor, o este antes de pedir calidad ligera): se relanza ligero si
+         cabe. Los demás visores reciben `stream.reopened`, como en un reinicio. */
+      if (
+        viewer.lite &&
+        viewer.consumes === 'remux' &&
+        !remux.liteActive(session.id) &&
+        remux.canTranscode()
+      ) {
+        await restartRemux(session);
+      }
       const url = urlFor(session, viewer);
       const protocol = protocolFor(session, viewer);
       bus.emit('stream.ready', {

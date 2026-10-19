@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.9.7"
+version: "0.9.8"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,13 +13,10 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Ahora puedes subir una lista .m3u que te hayas descargado (en la web,
-  en Ajustes > Listas, o en la app del iPhone). Te pregunta de donde la
-  descargaste: con ese enlace, el Umbrel la actualiza sola.
-
-  Arreglado: las listas de IPFS (como NEW ERA) habian dejado de
-  actualizarse porque la pasarela que usaba el Umbrel estaba caida; ahora
-  prueba otras.
+  Las descargas de peliculas y series del iPhone siguen aunque cierres
+  la app (hace falta la app Ace Neo 0.9.8). Y fuera de casa, si el canal
+  se atasca, el Umbrel lo manda en 720p mas ligero para que no se corte
+  (en la app: Ajustes, Calidad fuera de casa).
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []

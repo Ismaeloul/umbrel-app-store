@@ -477,6 +477,22 @@ export const VodStreamQuerySchema = ChannelStreamQuerySchema.pick({
 });
 export type VodStreamQuery = z.infer<typeof VodStreamQuerySchema>;
 
+/**
+ * GET /api/v1/vod/titles/:id/download (0.9.8): un tramo de la película (segmentos `from`..`to` de su lista
+ * HLS, y el `init.mp4` delante si `from` es 0) en una sola respuesta MP4 fragmentado. Lo pide la descarga en
+ * segundo plano del iPhone tramo a tramo: pegados en orden dan el mismo fichero que la descarga normal.
+ */
+export const VodDownloadQuerySchema = VodStreamQuerySchema.pick({
+  viewer: true,
+  device: true,
+  audio: true,
+  hevc: true,
+}).extend({
+  from: z.coerce.number().int().min(0).max(100_000),
+  to: z.coerce.number().int().min(0).max(100_000),
+});
+export type VodDownloadQuery = z.infer<typeof VodDownloadQuerySchema>;
+
 /** Una pista de audio del índice (§9.9): «Castellano 5.1», «Inglés», «Pista 3». */
 export const VodAudioTrackSchema = z.strictObject({
   index: z.number().int(),

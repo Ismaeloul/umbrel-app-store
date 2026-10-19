@@ -2,6 +2,13 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.8 (2026-10-19)
+
+Las descargas de peliculas y series del iPhone siguen aunque cierres
+la app (hace falta la app Ace Neo 0.9.8). Y fuera de casa, si el canal
+se atasca, el Umbrel lo manda en 720p mas ligero para que no se corte
+(en la app: Ajustes, Calidad fuera de casa).
+
 ## 0.9.7 (2026-10-19)
 
 Ahora puedes subir una lista .m3u que te hayas descargado (en la web,
