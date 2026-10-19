@@ -164,6 +164,8 @@ interface Entry {
   readonly dir: string;
   /** Esta generación desentrelaza (x264) en vez de copiar el vídeo (0.9.2). */
   readonly deinterlace: boolean;
+  /** Esta generación sale en calidad ligera (720p, x264) para un iPhone con poca conexión (0.9.8). */
+  readonly lite: boolean;
   readonly startedAt: number;
   lastAccess: number;
   /** Última vez que se vio cambiar la lista (para `remuxStalled`). */
@@ -236,6 +238,7 @@ export interface RemuxEntryInfo {
   readonly exited: boolean;
   readonly ready: boolean;
   readonly deinterlace: boolean;
+  readonly lite: boolean;
   readonly viewers: readonly string[];
   readonly log: string;
 }
@@ -424,11 +427,23 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     }
   }
 
-  /** Remux vivos que desentrelazan ahora (la entrada que se está sustituyendo ya está cerrada). */
+  /**
+   * Remux vivos que recodifican ahora: desentrelazan o salen ligeros (la entrada que se está sustituyendo
+   * ya está cerrada). Comparten el tope `MAX_DEINTERLACE` (cada uno, unos 2 núcleos del N300).
+   */
   function deinterlacing(): number {
     let count = 0;
-    for (const entry of byHash.values()) if (entry.deinterlace && !entry.closed) count += 1;
+    for (const entry of byHash.values())
+      if ((entry.deinterlace || entry.lite) && !entry.closed) count += 1;
     return count;
+  }
+
+  function wantsLite(source: RemuxSource): boolean {
+    try {
+      return source.wantsLite?.() ?? false;
+    } catch {
+      return false;
+    }
   }
 
   function rememberInterlaced(hash: string, verdict: boolean): void {
@@ -442,7 +457,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
 
   /** Lanza `checkInterlace` sin esperarlo (los tests lo esperan con `interlaceChecks()`). */
   function scheduleInterlaceCheck(entry: Entry): void {
-    if (entry.origin !== 'iptv' || entry.deinterlace || stopped) return;
+    if (entry.origin !== 'iptv' || entry.deinterlace || entry.lite || stopped) return;
     const check: Promise<void> = checkInterlace(entry)
       .catch((error: unknown) => logger.error({ err: error }, 'sonda de entrelazado del remux'))
       .finally(() => checks.delete(check));
@@ -683,11 +698,12 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     const generation = next?.generation ?? 1;
     const now = clock.now();
     const origin = source.origin ?? 'engine';
+    const lite = wantsLite(source) && deinterlacing() < MAX_DEINTERLACE;
     const deinterlace =
       origin === 'iptv' &&
       interlaced.get(hash) === true &&
       wantsDeinterlace(source) &&
-      deinterlacing() < MAX_DEINTERLACE;
+      (lite || deinterlacing() < MAX_DEINTERLACE);
     const entry: Entry = {
       hash,
       sessionId: source.sessionId,
@@ -697,6 +713,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       origin,
       dir,
       deinterlace,
+      lite,
       startedAt: now,
       lastAccess: now,
       lastChangeAt: now,
@@ -735,6 +752,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       ...(source.isHls ? { isHls: true } : {}),
       ...(next ? { generation, startNumber: next.startNumber } : {}),
       ...(deinterlace ? { deinterlace: true } : {}),
+      ...(lite ? { lite: true } : {}),
     });
     let proc: RemuxProcess;
     try {
@@ -764,6 +782,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         origin,
         ...(next ? { generation, startNumber: next.startNumber } : {}),
         ...(deinterlace ? { deinterlace: true } : {}),
+        ...(lite ? { lite: true } : {}),
       },
       'remux lanzado',
     );
@@ -1199,6 +1218,37 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       return replacing.has(sessionId);
     },
 
+    liteActive(sessionId) {
+      const entry = findBySession(sessionId);
+      return !!entry && entry.lite && !entry.closed;
+    },
+
+    canTranscode() {
+      return deinterlacing() < MAX_DEINTERLACE;
+    },
+
+    async vodFile(sessionId, file, signal) {
+      const vod = vods.get(sessionId);
+      if (!vod || !VIDEO_FILE_RE.test(file) || file === 'index.m3u8') return { kind: 'missing' };
+      /* Pedir ficheros cuenta como actividad del visor, como por HTTP. */
+      for (const listener of [...listeners]) {
+        try {
+          listener.onAccess?.(sessionId, null);
+        } catch (error) {
+          logger.error({ err: error }, 'un suscriptor del remux ha fallado');
+        }
+      }
+      const result = await vod.producer.file(file, signal);
+      if (result.kind === 'file') return { kind: 'file', path: result.path };
+      return { kind: result.kind === 'not_yet' ? 'not_yet' : 'missing' };
+    },
+
+    vodSegments(sessionId) {
+      const vod = vods.get(sessionId);
+      if (!vod) return 0;
+      return (vod.producer.playlist().match(/^#EXTINF:/gm) ?? []).length;
+    },
+
     async openVod(request) {
       if (stopped) throw new AppError('remux_died', { detail: 'remux parado' });
       if (ffmpegMissing) throw new AppError('ffmpeg_missing');
@@ -1494,6 +1544,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         exited: entry.exited,
         ready: entry.ready,
         deinterlace: entry.deinterlace,
+        lite: entry.lite,
         viewers: allViewers(entry),
         log: entry.log.text(),
       })),

@@ -150,6 +150,11 @@ export interface RemuxSource {
    * desentrelaza (0.9.2). Se pregunta en cada lanzamiento, no se fija al crear la sesión.
    */
   readonly wantsDeinterlace?: () => boolean;
+  /**
+   * 0.9.8: un iPhone pide «calidad ligera» (fuera de casa con poca conexión): el remux recodifica a 720p
+   * (`liteVideoArgs`) en vez de copiar. Se pregunta en cada lanzamiento, como el desentrelazado.
+   */
+  readonly wantsLite?: () => boolean;
 }
 
 export interface RemuxRestartOptions {
@@ -258,6 +263,23 @@ export interface RemuxService extends Lifecycle {
    * mitad (dos avisos a la vez: el relé y el vigilante de salida), el resultado es el del otro.
    */
   restarting(sessionId: string): boolean;
+  /** 0.9.8: el remux de la sesión sale en calidad ligera ahora mismo. */
+  liteActive(sessionId: string): boolean;
+  /** 0.9.8: ¿cabe otra recodificación (ligera o desentrelazado)? */
+  canTranscode(): boolean;
+  /**
+   * 0.9.8, descarga en segundo plano: un fichero del VOD de la sesión (`init.mp4` o `index<N>.m4s`)
+   * cuando el productor lo tiene, sin pasar por HTTP.
+   */
+  vodFile(
+    sessionId: string,
+    file: string,
+    signal?: AbortSignal,
+  ): Promise<
+    { readonly kind: 'file'; readonly path: string } | { readonly kind: 'not_yet' | 'missing' }
+  >;
+  /** 0.9.8: segmentos de la lista del VOD de la sesión (0 si no es un VOD abierto). */
+  vodSegments(sessionId: string): number;
   /**
    * Película o episodio (docs/vod.md §9.7-§9.8): lee el índice por el relé
    * (con caché por título), comprueba que se puede ver (`vod_unsupported`),

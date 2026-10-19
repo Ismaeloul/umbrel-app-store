@@ -52,6 +52,11 @@ export const ChannelStreamQuerySchema = z.strictObject({
   device: DeviceIdSchema.optional(),
   /** Título para el mando y el historial de la sesión. */
   title: z.string().max(200).optional(),
+  /**
+   * 0.9.8, «calidad ligera» (la app fuera de casa con poca conexión): el remux recodifica a 720p y unos
+   * 2,5 Mb/s en vez de copiar. Solo iOS; cuenta en el tope de recodificaciones con el desentrelazado.
+   */
+  lite: z.enum(['0', '1']).optional(),
 });
 export type ChannelStreamQuery = z.infer<typeof ChannelStreamQuerySchema>;
 

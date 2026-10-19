@@ -2113,4 +2113,6 @@ export const NON_JSON_ROUTE_IDS: readonly V1RouteId[] = [
   'partyEvents',
   /* El vídeo de una sala (la misma respuesta que `video`). */
   'partyVideo',
+  /* Un tramo de película para la descarga en segundo plano del iPhone (0.9.8). */
+  'vodDownload',
 ];

@@ -1493,6 +1493,14 @@ paths:
           schema:
             type: string
             maxLength: 200
+        - name: lite
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
       responses:
         "200":
           description: Correcto
@@ -8596,6 +8604,144 @@ paths:
         - deviceBearer: []
       x-access: any
       x-native-path: /native/api/v1/vod/titles/{id}/stream
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: vod_unavailable
+          status: 503
+          message: Tu IPTV no ofrece películas ni series, o no responde ahora mismo.
+        - code: vod_not_found
+          status: 404
+          message: Este título ya no está en tu IPTV.
+        - code: vod_unsupported
+          status: 422
+          message: Este título usa un formato que no se puede reproducir aquí.
+        - code: vod_busy
+          status: 503
+          message: Tu cuenta IPTV está en uso en otro aparato. Ciérralo y vuelve a intentarlo.
+        - code: vod_timeout
+          status: 504
+          message: Tu IPTV tarda demasiado en dar el vídeo. Prueba otra vez.
+        - code: vod_dropped
+          status: 502
+          message: El proveedor ha cortado el vídeo. Vuelve a intentarlo.
+        - code: vod_provider_error
+          status: 502
+          message: Tu proveedor no está dando este título ahora mismo (error de su servidor). Prueba más tarde.
+        - code: vod_disk_full
+          status: 507
+          message: No queda espacio en el Umbrel para preparar el vídeo.
+        - code: vod_account
+          status: 403
+          message: Tu cuenta IPTV no está activa. Revísala en Ajustes → IPTV.
+        - code: remux_busy
+          status: 503
+          message: Hay demasiados vídeos preparándose para iPhone a la vez. Cierra alguno y reintenta.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/vod/titles/{id}/download:
+    get:
+      operationId: vodDownload
+      tags:
+        - playback
+      summary: Descargar un tramo de una película o un episodio (segmentos from..to) en un solo MP4
+      description: "Para la descarga en segundo plano del iPhone (0.9.8). Abre la sesión VOD como `vodStream`, manda `init.mp4` (si `from` es 0) y los segmentos seguidos, y la suelta al acabar. Nunca quita la IPTV: si otro la está usando, `vod_busy` (503) y el iPhone lo reintenta más tarde."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{40}$
+        - name: viewer
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{4,64}$
+        - name: device
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{4,64}$
+        - name: audio
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 15
+        - name: hevc
+          in: query
+          required: false
+          schema:
+            default: "0"
+            type: string
+            enum:
+              - "0"
+              - "1"
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100000
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100000
+      responses:
+        "200":
+          description: Un tramo de la película (segmentos `from`..`to`, con `init.mp4` delante si `from` es 0) en MP4 fragmentado, sin `Content-Length`. Cabeceras `X-Ace-Segments` (total de segmentos) y `X-Ace-Last` (último segmento del tramo). Si falta un segmento, la respuesta se corta a medias.
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+        - deviceBearer: []
+      x-access: any
+      x-native-path: /native/api/v1/vod/titles/{id}/download
       x-side-effects: true
       x-legacy-twin: null
       x-errors:
