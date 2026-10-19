@@ -2,7 +2,8 @@
 
    Antiguas: ninguna.
 
-   v1 (tabla de @ace/shared/routes.ts). Crear y cerrar, solo `web`; el resto,
+   v1 (tabla de @ace/shared/routes.ts). Crear y cerrar, `any` con token de
+   dispositivo (la web y la app, §10); el resto,
    `any` con credencial `party`: también los invitados que llegan por el proxy
    de la sala (docs/ver-juntos.md §9), con origen `native` y sin token de
    dispositivo. La credencial de la sala la comprueba el servicio.

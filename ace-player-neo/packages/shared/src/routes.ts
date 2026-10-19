@@ -1576,7 +1576,7 @@ export const V1_ROUTES = {
     legacyTwin: 'GET /api/search',
   }),
 
-  // --- Ver juntos (docs/ver-juntos.md, D36): crear y cerrar, solo web; el resto, también
+  // --- Ver juntos (docs/ver-juntos.md, D36): crear y cerrar, la web y la app (token de dispositivo); el resto, también
   // los invitados que entran por el proxy de la sala (credencial `party`, §9) ---
   partyCreate: defineRoute({
     method: 'POST',
