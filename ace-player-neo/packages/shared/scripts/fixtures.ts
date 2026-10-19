@@ -97,8 +97,8 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   /* «Descargar logs» de Ajustes → Registro (0.9.0): solo web (el zip es binario y no lleva ejemplo). */
   'diagnosticsLogInfo',
   'diagnosticsWebLog',
-  /* «Ver juntos» (docs/ver-juntos.md, D36): solo web en la fase 1. */
-  'partyCreate',
+  /* «Ver juntos» (docs/ver-juntos.md, D36): las de la credencial de sala.
+     Crear y cerrar las usa también la app de iPhone: su ejemplo va en v1/. */
   'partyPreview',
   'partyJoin',
   'partyStream',
@@ -106,7 +106,6 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'partyStatus',
   'partyChat',
   'partyLeave',
-  'partyClose',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 
@@ -116,6 +115,9 @@ export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
  * Películas y series) pero se escribe en `v1/`.
  */
 export const APP_FROM_WEB_FIXTURE_ROUTE_IDS = [
+  /* «Ver juntos» desde la app de iPhone (crear y cerrar la sala). */
+  'partyCreate',
+  'partyClose',
   'iptvGet',
   'iptvChannels',
   'iptvBrowse',

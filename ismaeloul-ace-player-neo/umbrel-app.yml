@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.9.5"
+version: "0.9.6"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,16 +13,14 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Ver juntos ya funciona desde fuera de casa. En la sala, Copiar
-  enlace da una direccion https://sala.ismaeloul.es/s/... que tu amigo
-  abre en el navegador desde donde este, sin instalar nada (en el iPhone
-  la puede anadir a la pantalla de inicio). Pone su nombre y entra.
+  Ver juntos desde la app del iPhone: en la ficha de una pelicula o
+  serie pulsa Ver juntos para crear la sala, o unete con el enlace o el
+  codigo. La pausa, los saltos y el idioma van a la vez para todos, y hay
+  chat.
 
-  Desde fuera solo se ve la sala: ni tus canales, ni tus ajustes, ni el
-  resto del Umbrel. Hace falta que sala.ismaeloul.es apunte a tu casa y
-  que la Freebox mande el puerto 443 al 8443 del Umbrel. La primera vez
-  que arranca, el certificado de seguridad tarda un minuto en salir y
-  despues se renueva solo.
+  Arreglado: algunos canales de futbol de la IPTV (DAZN y M+ LaLiga, por
+  ejemplo) se veian con rayas en el iPhone porque llegaban entrelazados
+  sin decirlo. Ahora el Umbrel mira la imagen y los desentrelaza.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []

@@ -2,7 +2,7 @@
 openapi: 3.1.0
 info:
   title: Ace Player Neo · API v1
-  version: 0.9.5
+  version: 0.9.6
   description: "Generado desde packages/shared/src/routes.ts con scripts/openapi.ts: no editar a mano. Cada ruta existe también bajo /native (la entrada de la app iOS, D4), con origen native. Las rutas antiguas /api/* están en docs/openapi.yaml."
 servers:
   - url: /
@@ -15937,7 +15937,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/party
       x-side-effects: true
       x-legacy-twin: null
@@ -17480,7 +17481,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/party/{code}/close
       x-side-effects: true
       x-legacy-twin: null

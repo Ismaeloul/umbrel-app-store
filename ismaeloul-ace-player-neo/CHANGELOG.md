@@ -2,6 +2,17 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.6 (2026-10-19)
+
+Ver juntos desde la app del iPhone: en la ficha de una pelicula o
+serie pulsa Ver juntos para crear la sala, o unete con el enlace o el
+codigo. La pausa, los saltos y el idioma van a la vez para todos, y hay
+chat.
+
+Arreglado: algunos canales de futbol de la IPTV (DAZN y M+ LaLiga, por
+ejemplo) se veian con rayas en el iPhone porque llegaban entrelazados
+sin decirlo. Ahora el Umbrel mira la imagen y los desentrelaza.
+
 ## 0.9.5 (2026-10-18)
 
 Ver juntos ya funciona desde fuera de casa. En la sala, Copiar

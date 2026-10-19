@@ -1576,12 +1576,12 @@ export const V1_ROUTES = {
     legacyTwin: 'GET /api/search',
   }),
 
-  // --- Ver juntos (docs/ver-juntos.md, D36): crear y cerrar, solo web; el resto, también
+  // --- Ver juntos (docs/ver-juntos.md, D36): crear y cerrar, la web y la app (token de dispositivo); el resto, también
   // los invitados que entran por el proxy de la sala (credencial `party`, §9) ---
   partyCreate: defineRoute({
     method: 'POST',
     path: '/api/v1/party',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'party',
     summary: 'Crear una sala para ver una película o un episodio a la vez',
@@ -1751,7 +1751,7 @@ export const V1_ROUTES = {
   partyClose: defineRoute({
     method: 'POST',
     path: '/api/v1/party/:code/close',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'party',
     summary: 'Cerrar la sala para todos (solo el anfitrión)',
