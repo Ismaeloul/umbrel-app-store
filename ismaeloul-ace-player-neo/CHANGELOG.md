@@ -2,6 +2,16 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.7 (2026-10-19)
+
+Ahora puedes subir una lista .m3u que te hayas descargado (en la web,
+en Ajustes > Listas, o en la app del iPhone). Te pregunta de donde la
+descargaste: con ese enlace, el Umbrel la actualiza sola.
+
+Arreglado: las listas de IPFS (como NEW ERA) habian dejado de
+actualizarse porque la pasarela que usaba el Umbrel estaba caida; ahora
+prueba otras.
+
 ## 0.9.6 (2026-10-19)
 
 Ver juntos desde la app del iPhone: en la ficha de una pelicula o

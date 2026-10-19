@@ -27,7 +27,13 @@
      sincronización que lanza la resolución, y esta solo refresca los
      directorios que tocan (más de 30 min y sin espera pendiente). */
 
-import type { DirectorySyncBody, DirectoryView, Item, LegacyDirectoryResponse } from '@ace/shared';
+import type {
+  DirectorySyncBody,
+  DirectoryUploadBody,
+  DirectoryView,
+  Item,
+  LegacyDirectoryResponse,
+} from '@ace/shared';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { NetClient } from '../net/types.js';
 import type { StateService } from '../state/types.js';
@@ -57,6 +63,12 @@ export interface DirectoriesService extends Lifecycle {
    * `net`. Devuelve la forma antigua (`directoryResponse`); v1 usa `view()`.
    */
   sync(body: DirectorySyncBody | Record<string, unknown>): Promise<LegacyDirectoryResponse>;
+  /**
+   * Una lista subida como archivo (0.9.7). Sin descargar nada: parsea `content` (M3U y, si no salen
+   * canales, HTML) y guarda. Con `url` (de dónde vino), queda como un directorio normal que se actualiza
+   * solo; sin ella, con `uploadedSourceUrl(id)` y fuera de las actualizaciones automáticas.
+   */
+  upload(body: DirectoryUploadBody): Promise<LegacyDirectoryResponse>;
   /** Elegir el directorio activo (`source_not_found`). */
   activate(sourceId: string): Promise<LegacyDirectoryResponse>;
   /** Borrar un directorio: nunca el último (`last_source`, `source_not_found`). */

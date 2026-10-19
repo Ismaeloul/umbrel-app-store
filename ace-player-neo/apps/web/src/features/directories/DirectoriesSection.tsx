@@ -13,12 +13,21 @@
    - el motivo del último fallo sale corto en la tarjeta y, debajo, con el
      mensaje completo del catálogo de @ace/shared.
 
+   0.9.7: «Subir archivo .m3u». Se elige el archivo y se pregunta de dónde
+   se descargó: con el enlace, la lista se actualiza sola como las demás;
+   sin él, se queda tal cual (y la tarjeta lo dice y deja ponérselo luego).
+
    En la demo no hay backend: guardar, activar y borrar dan el aviso de
    siempre («En modo demo no hay backend…»). */
 
-import { errorMessage, type WebSourceSummary } from '@ace/shared';
+import {
+  errorMessage,
+  isUploadedSourceUrl,
+  MAX_UPLOADED_LIST_CHARS,
+  type WebSourceSummary,
+} from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { api, useApiQuery } from '../../api/index.ts';
 import { rememberViewParam } from '../../app/router.tsx';
 import { notify } from '../../notices/index.ts';
@@ -49,7 +58,13 @@ import './directories.css';
 
 registerDirectoriesDemo();
 
-type Busy = { kind: 'add' } | { kind: 'refresh' | 'activate' | 'delete'; id: string } | null;
+type Busy =
+  | { kind: 'add' | 'upload' }
+  | { kind: 'refresh' | 'activate' | 'delete' | 'link'; id: string }
+  | null;
+
+/** Archivo elegido, a la espera del enlace de origen (o de «Sin enlace»). */
+type Pending = { fileName: string; content: string; sourceId?: string } | null;
 
 type Note = { tone: 'info' | 'ok' | 'err'; text: string } | null;
 
@@ -69,6 +84,12 @@ export function DirectoriesSection() {
   const [busy, setBusy] = useState<Busy>(null);
   const [note, setNote] = useState<Note>(null);
   const confirm = useSecondTap(CONFIRM_DELETE_MS);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<Pending>(null);
+  const [originUrl, setOriginUrl] = useState('');
+  const [originError, setOriginError] = useState<string | null>(null);
+  /** Tarjeta de una lista subida a la que se le está poniendo el enlace. */
+  const [linking, setLinking] = useState<{ id: string; url: string } | null>(null);
 
   const data = directories.data;
   const sources = data?.webSources ?? [];
@@ -159,6 +180,77 @@ export function DirectoriesSection() {
     }
   };
 
+  const chooseFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > MAX_UPLOADED_LIST_CHARS) {
+      setNote({ tone: 'err', text: 'El archivo es demasiado grande (como mucho, 1,9 MB).' });
+      return;
+    }
+    const content = await file.text();
+    setOriginUrl('');
+    setOriginError(null);
+    setPending({ fileName: file.name, content });
+  };
+
+  const upload = async (withLink: boolean) => {
+    if (!pending) return;
+    const link = withLink ? originUrl.trim() : '';
+    if (withLink && !isHttpUrl(link)) {
+      setOriginError(errorMessage('bad_url'));
+      return;
+    }
+    setBusy({ kind: 'upload' });
+    setNote({ tone: 'info', text: `Subiendo «${pending.fileName}»…` });
+    try {
+      const view = await api('directoriesUpload', {
+        body: {
+          content: pending.content,
+          ...(name.trim() ? { name: name.trim() } : {}),
+          ...(link ? { url: link } : {}),
+        },
+      });
+      applyDirectoryView(client, view);
+      setNote({
+        tone: 'ok',
+        text: link
+          ? `Lista subida: ${view.web.length} canales. Se actualizará sola desde su enlace cada 3 h.`
+          : `Lista subida: ${view.web.length} canales. Sin enlace no se actualiza sola: vuelve a subirla o ponle el enlace.`,
+      });
+      notify(`Lista subida: ${view.web.length} canales`, { tone: 'ok' });
+      setLibraryTabParam('listas');
+      setPending(null);
+      setName('');
+    } catch (error) {
+      setNote({ tone: 'err', text: directoryErrorMessage(error) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /* Ponerle el enlace a una lista subida: se descarga de ahí ya (como «Actualizar»). */
+  const saveLink = async (source: WebSourceSummary) => {
+    const link = linking?.url.trim() ?? '';
+    if (!isHttpUrl(link)) {
+      notify(errorMessage('bad_url'), { tone: 'warn' });
+      return;
+    }
+    setBusy({ kind: 'link', id: source.id });
+    try {
+      const view = await api('directoriesSync', {
+        body: { url: link, type: source.type, name: source.name, sourceId: source.id },
+      });
+      applyDirectoryView(client, view);
+      notify(`«${source.name}» se actualizará sola desde su enlace`, { tone: 'ok' });
+      setLinking(null);
+    } catch (error) {
+      notify(directoryErrorMessage(error), { tone: 'err' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     void sync('m3u', null);
@@ -218,7 +310,63 @@ export function DirectoriesSection() {
           >
             Guardar HTML
           </Button>
+          <Button
+            variant="quiet"
+            icon="subir"
+            disabled={busy !== null || full}
+            onClick={() => fileInput.current?.click()}
+          >
+            Subir archivo .m3u
+          </Button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".m3u,.m3u8,.txt,.html,.htm,audio/x-mpegurl,audio/mpegurl,text/plain"
+            hidden
+            data-testid="subir-lista"
+            onChange={(event) => void chooseFile(event)}
+          />
         </div>
+        {pending ? (
+          <div className="dir-upload" role="group" aria-label="Enlace de la lista subida">
+            <p className="dir-upload__file">
+              <Icon name="list" size={16} /> {pending.fileName}
+            </p>
+            <TextField
+              label="¿De dónde la has descargado?"
+              placeholder="https://… (el enlace de «Descargar» o «Copiar»)"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              value={originUrl}
+              error={originError}
+              hint="Con el enlace, el Umbrel la actualizará sola cada 3 h. Sin él, se queda como está."
+              onChange={(event) => {
+                setOriginUrl(event.target.value);
+                setOriginError(null);
+              }}
+            />
+            <div className="dir-form__acts">
+              <Button
+                variant="primary"
+                icon="subir"
+                busy={busy?.kind === 'upload'}
+                disabled={busy !== null || !originUrl.trim()}
+                onClick={() => void upload(true)}
+              >
+                Subir con el enlace
+              </Button>
+              <Button variant="quiet" disabled={busy !== null} onClick={() => void upload(false)}>
+                Subir sin enlace
+              </Button>
+              <Button variant="ghost" disabled={busy !== null} onClick={() => setPending(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : null}
         <p className="dir-note">{full ? errorMessage('source_limit') : DIRECTORY_NOTE}</p>
         <p
           className={cx('dir-status', note && `dir-status--${note.tone}`)}
@@ -281,9 +429,46 @@ export function DirectoriesSection() {
                         </Capsule>
                       ) : null}
                     </div>
-                    <p className="dir-card__url mono" title={source.url}>
-                      {source.url}
-                    </p>
+                    {isUploadedSourceUrl(source.url) ? (
+                      <p className="dir-card__url">
+                        Archivo subido · sin enlace, no se actualiza sola
+                      </p>
+                    ) : (
+                      <p className="dir-card__url mono" title={source.url}>
+                        {source.url}
+                      </p>
+                    )}
+                    {linking?.id === source.id ? (
+                      <div className="dir-upload">
+                        <TextField
+                          label="Enlace de la lista"
+                          placeholder="https://…"
+                          type="url"
+                          inputMode="url"
+                          autoComplete="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          value={linking.url}
+                          onChange={(event) =>
+                            setLinking({ id: source.id, url: event.target.value })
+                          }
+                        />
+                        <div className="dir-form__acts">
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            busy={mine === 'link'}
+                            disabled={busy !== null || !linking.url.trim()}
+                            onClick={() => void saveLink(source)}
+                          >
+                            Guardar enlace
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setLinking(null)}>
+                            Cancelar
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
                     <p className={cx('dir-card__meta', failed && 'dir-card__meta--failed')}>
                       {sourceMeta(source)}
                     </p>
@@ -304,16 +489,28 @@ export function DirectoriesSection() {
                     >
                       {active ? 'Activo' : 'Usar'}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="quiet"
-                      icon="refresh"
-                      disabled={busy !== null}
-                      busy={mine === 'refresh'}
-                      onClick={() => void sync(source.type, source)}
-                    >
-                      Actualizar
-                    </Button>
+                    {isUploadedSourceUrl(source.url) ? (
+                      <Button
+                        size="sm"
+                        variant="quiet"
+                        icon="link"
+                        disabled={busy !== null}
+                        onClick={() => setLinking({ id: source.id, url: '' })}
+                      >
+                        Poner enlace
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="quiet"
+                        icon="refresh"
+                        disabled={busy !== null}
+                        busy={mine === 'refresh'}
+                        onClick={() => void sync(source.type, source)}
+                      >
+                        Actualizar
+                      </Button>
+                    )}
                     {armed ? (
                       <Button
                         size="sm"

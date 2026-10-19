@@ -32,6 +32,7 @@ const CAR_URL = `${GATEWAY}/${raizTexto}/data/lista.m3u?format=car&dag-scope=ent
 function setup(
   routes: Record<string, FakeReply | FakeHandler>,
   resolveTxt: (hostname: string) => Promise<string[][]> = async () => [],
+  trustlessFallbacks: readonly string[] = [],
 ) {
   const core = createTestCore();
   const transport = fakeTransport(routes);
@@ -44,6 +45,7 @@ function setup(
     resolveTxt,
     delegatedRouting: 'https://delegated-ipfs.dev',
     trustlessGateway: 'https://trustless-gateway.link',
+    trustlessFallbacks,
   });
   return {
     fetcher,
@@ -96,6 +98,49 @@ describe('T-117 · si ipfs.io se satura se prueba la misma ruta en dweb.link, y 
     expect(esFalloDePasarela(new AppError('http_502'))).toBe(true);
     expect(esFalloDePasarela(new AppError('http_404'))).toBe(false);
     expect(esFalloDePasarela('http_429')).toBe(false);
+  });
+});
+
+describe('pasarelas trustless de reserva (0.9.7: NEW ERA sin actualizar desde el 8-10)', () => {
+  const RESERVA = 'https://reserva.example';
+  const CAR_RESERVA = `${RESERVA}/ipfs/${raizTexto}/data/lista.m3u?format=car&dag-scope=entity`;
+
+  it('la principal da 522: se baja el CAR de la reserva, y la próxima vez se empieza por ella', async () => {
+    const { fetcher, requested, warn } = setup(
+      {
+        [`${ROUTING}/k51abc`]: { body: registroIpnsV2(`/ipfs/${raizTexto}`) },
+        [CAR_URL]: { status: 522 },
+        [CAR_RESERVA]: { body: carDe(bloques) },
+      },
+      undefined,
+      [RESERVA],
+    );
+    const url = 'https://ipfs.io/ipns/k51abc/data/lista.m3u';
+    expect(await fetcher.fetchDirectoryText(url)).toBe(esperado);
+    expect(requested()).toEqual([`${ROUTING}/k51abc`, CAR_URL, CAR_RESERVA]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ gateway: 'trustless-gateway.link' }),
+      expect.stringContaining('trustless'),
+    );
+    expect(await fetcher.fetchDirectoryText(url)).toBe(esperado);
+    expect(requested().slice(3)).toEqual([`${ROUTING}/k51abc`, CAR_RESERVA]);
+  });
+
+  it('un CAR alterado en la reserva tampoco cuela (se comprueba igual)', async () => {
+    const alterados = bloques.map((b, i) => (i === 4 ? { ...b, bloque: Buffer.from('x') } : b));
+    const { fetcher } = setup(
+      {
+        [`${ROUTING}/k51abc`]: { body: registroIpnsV2(`/ipfs/${raizTexto}`) },
+        [CAR_URL]: { status: 525 },
+        [CAR_RESERVA]: { body: carDe(alterados) },
+      },
+      undefined,
+      [RESERVA],
+    );
+    /* El primer error (el de la principal) es el que sube. */
+    expect(
+      await codeOf(fetcher.fetchIpfsDirectory('https://ipfs.io/ipns/k51abc/data/lista.m3u')),
+    ).toBe('http_525');
   });
 });
 

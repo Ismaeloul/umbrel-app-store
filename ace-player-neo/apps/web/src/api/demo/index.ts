@@ -185,6 +185,7 @@ function mutateLibrary(body: LibraryMutationBody): LibraryView {
 
 const UNSUPPORTED: ReadonlySet<JsonRouteId> = new Set([
   'directoriesSync',
+  'directoriesUpload',
   'directoriesActivate',
   'directoriesDelete',
   'iptvSave',

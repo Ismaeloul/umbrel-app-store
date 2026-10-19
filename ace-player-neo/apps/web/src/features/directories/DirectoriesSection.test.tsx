@@ -253,3 +253,85 @@ describe('Ajustes → Listas', () => {
     expect(screen.getByRole('button', { name: 'Guardar M3U' })).toBeDisabled();
   });
 });
+
+describe('Subir archivo .m3u (0.9.7)', () => {
+  const subida = {
+    ...second,
+    id: 'subida',
+    name: 'Lista subida',
+    url: 'https://subida.invalid/subida',
+    type: 'm3u' as const,
+    lastErrorAt: null,
+    lastError: null,
+  };
+  const archivo = () =>
+    new File(['#EXTM3U\n#EXTINF:-1,Uno\nacestream://' + 'a'.repeat(40)], 'm3u.m3u', {
+      type: 'audio/x-mpegurl',
+    });
+
+  it('elige el archivo, pregunta el enlace y lo manda con él', async () => {
+    net = mockFetch({
+      'GET /api/v1/directories': view(),
+      'POST /api/v1/directories/upload': view({
+        webSources: [subida],
+        activeWebSourceId: 'subida',
+      }),
+    });
+    renderWithApp(<DirectoriesSection />);
+    await screen.findByRole('button', { name: 'Subir archivo .m3u' });
+    fireEvent.change(screen.getByTestId('subir-lista'), { target: { files: [archivo()] } });
+    const enlace = await screen.findByRole('textbox', { name: '¿De dónde la has descargado?' });
+    expect(screen.getByText('m3u.m3u')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Subir con el enlace' })).toBeDisabled();
+    fireEvent.change(enlace, { target: { value: 'https://k51.ipns.inbrowser.link/m3u.m3u' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Subir con el enlace' }));
+    await waitFor(() =>
+      expect(net.calls.find((c) => c.url.endsWith('/directories/upload'))?.body).toEqual({
+        content: expect.stringContaining('#EXTM3U'),
+        url: 'https://k51.ipns.inbrowser.link/m3u.m3u',
+      }),
+    );
+    expect(await screen.findByText(/Se actualizará sola desde su enlace/)).toBeInTheDocument();
+  });
+
+  it('«Subir sin enlace» no manda url; la tarjeta lo dice y deja poner el enlace luego', async () => {
+    net = mockFetch({
+      'GET /api/v1/directories': view({ webSources: [subida], activeWebSourceId: 'subida' }),
+      'POST /api/v1/directories/upload': view({
+        webSources: [subida],
+        activeWebSourceId: 'subida',
+      }),
+      'POST /api/v1/directories/sync': view({
+        webSources: [{ ...subida, url: 'https://lista.example/m3u.m3u' }],
+        activeWebSourceId: 'subida',
+      }),
+    });
+    renderWithApp(<DirectoriesSection />);
+    expect(
+      await screen.findByText('Archivo subido · sin enlace, no se actualiza sola'),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('subir-lista'), { target: { files: [archivo()] } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Subir sin enlace' }));
+    await waitFor(() => {
+      const body = net.calls.find((c) => c.url.endsWith('/directories/upload'))?.body as Record<
+        string,
+        unknown
+      >;
+      expect(body).toBeDefined();
+      expect(body.url).toBeUndefined();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Poner enlace' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Enlace de la lista' }), {
+      target: { value: 'https://lista.example/m3u.m3u' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar enlace' }));
+    await waitFor(() =>
+      expect(net.calls.find((c) => c.url.endsWith('/directories/sync'))?.body).toEqual({
+        url: 'https://lista.example/m3u.m3u',
+        type: 'm3u',
+        name: 'Lista subida',
+        sourceId: 'subida',
+      }),
+    );
+  });
+});

@@ -59,7 +59,23 @@ export interface DirectoryFetcherDeps {
   /** IPFS_DELEGATED_ROUTING e IPFS_TRUSTLESS_GATEWAY. */
   readonly delegatedRouting: string;
   readonly trustlessGateway: string;
+  /**
+   * Pasarelas trustless de reserva, por orden, si la principal falla (0.9.7). Por defecto
+   * `IPFS_TRUSTLESS_FALLBACKS`; `[]` para no usar ninguna (los tests).
+   */
+  readonly trustlessFallbacks?: readonly string[];
 }
+
+/**
+ * Reserva de la pasarela trustless (0.9.7). Desde octubre de 2026 trustless-gateway.link da 522/525 a
+ * ratos y el directorio de Isma (NEW ERA) dejó de actualizarse el 8 de octubre. Estas dos sirven el mismo
+ * CAR (`?format=car`, comprobado a mano el 19-10-2026); como cada bloque se comprueba contra su huella,
+ * una pasarela de reserva no puede colar nada distinto.
+ */
+export const IPFS_TRUSTLESS_FALLBACKS = [
+  'https://ipfs.filebase.io',
+  'https://gateway.pinata.cloud',
+] as const;
 
 export interface DirectoryFetcher {
   fetchDirectoryText(url: string, signal?: AbortSignal): Promise<string>;
@@ -68,6 +84,13 @@ export interface DirectoryFetcher {
 
 export function createDirectoryFetcher(deps: DirectoryFetcherDeps): DirectoryFetcher {
   const signalOption = (signal?: AbortSignal) => (signal ? { signal } : {});
+  const gateways = [
+    deps.trustlessGateway,
+    ...(deps.trustlessFallbacks ?? IPFS_TRUSTLESS_FALLBACKS).filter(
+      (g) => g !== deps.trustlessGateway,
+    ),
+  ];
+  let preferred = gateways[0]!;
 
   /* `ipfsResolveName` (server.js:1719-1746): valor de un nombre IPNS
      (/ipfs/<cid>[/ruta] o /ipns/<otro>). Un nombre con punto es un dominio
@@ -115,17 +138,38 @@ export function createDirectoryFetcher(deps: DirectoryFetcherDeps): DirectoryFet
     }
     const root = ipfsCidFromText(name);
     const route = segments.map(encodeURIComponent).join('/');
-    const car = await deps.net.fetchBuffer(
-      `${deps.trustlessGateway}/ipfs/${encodeURIComponent(name)}${route ? `/${route}` : ''}?format=car&dag-scope=entity`,
-      {
-        maxBytes: MAX_BODY_BYTES * 2,
-        totalTimeoutMs: TIMEOUTS.directoryTotalMs,
-        accept: 'application/vnd.ipld.car',
-        ...signalOption(signal),
-      },
-    );
-    const blocks = ipfsCarBlocks(car.body);
-    return ipfsReadFile(blocks, ipfsWalk(blocks, root, segments), MAX_BODY_BYTES).toString('utf8');
+    /* La que funcionó la última vez va primero; las demás, en su orden. */
+    const order = [preferred, ...gateways.filter((g) => g !== preferred)];
+    let firstError: unknown = null;
+    for (const gateway of order) {
+      try {
+        const car = await deps.net.fetchBuffer(
+          `${gateway}/ipfs/${encodeURIComponent(name)}${route ? `/${route}` : ''}?format=car&dag-scope=entity`,
+          {
+            maxBytes: MAX_BODY_BYTES * 2,
+            totalTimeoutMs: TIMEOUTS.directoryTotalMs,
+            accept: 'application/vnd.ipld.car',
+            ...signalOption(signal),
+          },
+        );
+        const blocks = ipfsCarBlocks(car.body);
+        const text = ipfsReadFile(
+          blocks,
+          ipfsWalk(blocks, root, segments),
+          MAX_BODY_BYTES,
+        ).toString('utf8');
+        preferred = gateway;
+        return text;
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        firstError ??= error;
+        deps.logger.warn(
+          { errorCode: motivoDeFallo(error), gateway: new URL(gateway).hostname },
+          '[directorio] pasarela trustless falló; probando la siguiente',
+        );
+      }
+    }
+    throw firstError;
   }
 
   /* `fetchDirectoryFromGateway` (server.js:1788-1798). */

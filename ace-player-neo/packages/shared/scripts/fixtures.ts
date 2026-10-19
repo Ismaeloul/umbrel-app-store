@@ -494,6 +494,15 @@ export const V1_FIXTURES = {
     webSources: [webSource, { ...webSource, id: 'deportes', name: 'Deportes', count: 0 }],
     activeWebSourceId: 'deportes',
   },
+  directoriesUpload: {
+    web: library.web,
+    webSyncedAt: AT,
+    webSources: [
+      webSource,
+      { ...webSource, id: 'subida', name: 'Lista subida', url: 'https://subida.invalid/subida' },
+    ],
+    activeWebSourceId: 'subida',
+  },
   directoriesActivate: {
     web: library.web,
     webSyncedAt: AT,

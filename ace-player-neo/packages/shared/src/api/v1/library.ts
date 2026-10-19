@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { ItemSchema, PreferencesSchema, WebSourceTypeSchema } from '../../state/v1.js';
 import { IPTV_ID_STATES } from '../../constants/iptv.js';
 import { HashSchema } from '../../primitives.js';
+import { MAX_UPLOADED_LIST_CHARS } from '../../constants/limits.js';
 import { WebSourceSummarySchema } from '../common.js';
 
 /** Directorios: los canales del activo y el resumen de todos. */
@@ -97,6 +98,19 @@ export const DirectorySyncBodySchema = z.strictObject({
   name: z.string().max(200).optional(),
 });
 export type DirectorySyncBody = z.infer<typeof DirectorySyncBodySchema>;
+
+/**
+ * POST /api/v1/directories/upload (0.9.7): una lista M3U (o HTML) subida como archivo. Con `url` (de dónde
+ * se descargó), queda como un directorio normal que se actualiza solo desde ahí; sin ella, se guarda tal
+ * cual y no se actualiza. `sourceId`: sustituir esa lista.
+ */
+export const DirectoryUploadBodySchema = z.strictObject({
+  content: z.string().min(1).max(MAX_UPLOADED_LIST_CHARS),
+  name: z.string().max(200).optional(),
+  url: z.string().max(2048).optional(),
+  sourceId: z.string().max(64).optional(),
+});
+export type DirectoryUploadBody = z.infer<typeof DirectoryUploadBodySchema>;
 
 export const DirectoryIdParamsSchema = z.strictObject({
   id: z.string().regex(/^[a-zA-Z0-9_-]{1,48}$/),
