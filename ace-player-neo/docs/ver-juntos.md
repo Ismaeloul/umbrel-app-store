@@ -9,6 +9,7 @@ mismo a la vez y chatean. Pausar, avanzar o cambiar el idioma pasa para todos.
 |---|---|---|
 | 1 | Sala dentro de casa (la web de siempre, con el login de Umbrel): sincronización, chat, idioma | 0.9.4 |
 | 2 | Invitados desde fuera en `https://sala.ismaeloul.es/s/<código>` (§9) | 0.9.5 |
+| 2b | La app del iPhone (Ace Neo) crea, entra y cierra salas (§10) | 0.9.6 |
 | 3 | Extras: reacciones, siguiente episodio para todos, voz | ideas |
 
 Descartado para la fase 2: Cloudflare Tunnel (sus condiciones no quieren mucho vídeo y Isma quiere algo que no dependa
@@ -17,7 +18,7 @@ de terceros) y Tailscale (el invitado tendría que instalar algo).
 ## 2. Piezas
 
 - **`packages/shared`**: `constants/party.ts` (límites y tiempos), `api/v1/party.ts` (esquemas, eventos del SSE de la
-  sala), 10 rutas `party*` en `routes.ts` (todas `web` en la fase 1) y 5 errores `party_*`.
+  sala), 10 rutas `party*` en `routes.ts` (todas `web` en la fase 1; desde la 0.9.6, `any`: §10) y 5 errores `party_*`.
 - **Servidor**: módulo `party` (`modules/party/`), creado después de `playback` (lo usa para abrir el vídeo). Salas en
   memoria: un reinicio las cierra (`party.closed` con `shutdown`).
 - **Web**: vista `?vista=juntos/<código>` (`features/juntos/`) y el botón «Ver juntos» en la ficha
@@ -98,7 +99,7 @@ El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 sale
 
 - Servidor: `modules/party/service.test.ts` (reloj de la sala, esperas, SSE, chat, vídeo, interrupciones, cierre y
   caducidad, con `FakeClock`), `modules/party/routes.test.ts` (HTTP) y la sala compartida en
-  `playback/vod-sessions.test.ts`. `test/security.test.ts` fija que las 10 rutas son solo web.
+  `playback/vod-sessions.test.ts`. `test/security.test.ts` fija quién puede llamar a cada una (§9 y §10).
 - Web: `features/juntos/sync.test.ts`, «Ver juntos» en `features/cine/Ficha.test.tsx` y la ruta en
   `app/routes.test.ts`.
 - A mano (PC, proveedor IPTV falso con `--vod-muestras`): crear desde la ficha, entrar con el enlace en otra pestaña,
@@ -126,8 +127,8 @@ iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:84
 - **Dos cerraduras**: aunque Caddy dejara pasar algo, al backend le llega con `X-Ace-Origin: guest`, que trata como
   `native` (el origen más estricto): sin token de dispositivo solo valen las rutas con **credencial `party`**
   (`partyPreview`, `partyJoin`, `partyEvents`, `partyStream`, `partyVideo`, `partyControl`, `partyStatus`,
-  `partyChat`, `partyLeave`), cuyo manejador comprueba la credencial de la sala. Crear y cerrar salas siguen siendo
-  `web`. Lo fija `test/security.test.ts` y lo probé con un Caddy de verdad (ficheros 200; web de casa, ajustes,
+  `partyChat`, `partyLeave`), cuyo manejador comprueba la credencial de la sala. Crear y cerrar salas piden el
+  token de un dispositivo emparejado (`bearer`): un invitado no puede (§10). Lo fija `test/security.test.ts` y lo probé con un Caddy de verdad (ficheros 200; web de casa, ajustes,
   bootstrap, crear sala y `/native` 404; `%2f` 400).
 - **Vídeo con clave**: cada persona tiene una clave de vídeo (24 bytes); `partyStream` devuelve
   `/api/v1/party/<código>/v/<clave>/index.m3u8` y los segmentos, relativos, la heredan. `partyVideo` sirve los mismos
@@ -142,4 +143,21 @@ iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:84
   propio (`invitado.webmanifest`, ámbito `/s/`) para añadirla a la pantalla de inicio del iPhone.
 - **Órdenes del navegador**: un play, una pausa o un salto del vídeo solo cuentan como orden si la persona acaba de
   tocar o pulsar algo (1,5 s) o está en la pantalla completa nativa del iPhone; con la página oculta, nunca (§6).
+
+## 10. Desde la app del iPhone (0.9.6)
+
+- `partyCreate` y `partyClose` pasan de `web` a `any` con credencial `bearer`: la web de casa sigue igual y la app
+  (origen `native`, con su token de dispositivo) también puede crear y cerrar. Un invitado de fuera (`guest`, sin
+  token) sigue sin poder. El resto de rutas ya eran `any` (§9). Las respuestas de ejemplo de las dos rutas pasan a
+  `APP_FROM_WEB_FIXTURE_ROUTE_IDS` (`packages/shared/scripts/fixtures.ts`).
+- La app (`AceNeo`, `Player/SalaJuntos.swift`) hace lo mismo que `features/juntos/` de la web: SSE de la sala,
+  `status` cada 5 s, desfase de reloj con la muestra de menor ida y vuelta de las 8 últimas, corrección cada 500 ms
+  (salto > 1 s, velocidad ±5 % entre 0,25 y 1 s, en pausa a > 0,3 s), aviso al momento si se queda cargando,
+  «Reanudar» tras una interrupción y reabrir con `stream: lost` (3 veces por minuto como mucho). Los mandos son
+  órdenes para la sala; la velocidad, «Episodios» y «Siguiente episodio» no salen dentro de una sala.
+- La credencial se guarda en el iPhone (`ace.juntos.<código>`): volver a la sala recupera el mismo sitio (y el
+  anfitrión sigue siéndolo). Unirse: botón de personas en Pelis y series, pegando el enlace o el código.
+- Probado en el simulador contra esta rama con el proveedor falso (`--vod-muestras`) y un invitado por la API: crear
+  desde la ficha, play/pausa/salto en los dos sentidos (0,1 s de diferencia tras un salto), chat, entrar a mitad de
+  película y cerrar la sala para todos.
 
