@@ -94,6 +94,7 @@ import {
 import {
   DirectoryIdParamsSchema,
   DirectorySyncBodySchema,
+  DirectoryUploadBodySchema,
   DirectoryViewSchema,
   LibraryMutationBodySchema,
   LibraryViewSchema,
@@ -1350,6 +1351,25 @@ export const V1_ROUTES = {
     sideEffects: true,
     errors: DIRECTORY_FETCH_ERRORS,
     legacyTwin: 'POST /api/streams/sync',
+  }),
+  directoriesUpload: defineRoute({
+    method: 'POST',
+    path: '/api/v1/directories/upload',
+    access: 'any',
+    credential: 'bearer',
+    module: 'directories',
+    summary:
+      'Añadir o sustituir una lista subida como archivo (con su enlace de origen, si se sabe)',
+    description:
+      'El cuerpo lleva el texto de la lista. Con `url`, el directorio se actualiza solo desde ahí como los demás; ' +
+      'sin ella, guarda `https://subida.invalid/<id>` y no se actualiza (hay que volver a subirla o ponerle el enlace).',
+    body: DirectoryUploadBodySchema,
+    response: DirectoryViewSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: ['bad_url', 'empty_directory', 'source_limit', 'source_not_found'],
+    legacyTwin: null,
   }),
   directoriesActivate: defineRoute({
     method: 'POST',

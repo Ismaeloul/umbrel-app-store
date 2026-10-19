@@ -13,6 +13,7 @@
    `DirectoryView` (sin `success` ni `streams`):
    - directoriesGet: GET /api/v1/directories
    - directoriesSync: POST /api/v1/directories/sync
+   - directoriesUpload: POST /api/v1/directories/upload (0.9.7, la lista subida como archivo)
    - directoriesActivate: POST /api/v1/directories/:id/activate
    - directoriesDelete: DELETE /api/v1/directories/:id */
 
@@ -30,6 +31,7 @@ export const LEGACY_ROUTES: readonly string[] = [
 export const V1_ROUTE_IDS: readonly string[] = [
   'directoriesGet',
   'directoriesSync',
+  'directoriesUpload',
   'directoriesActivate',
   'directoriesDelete',
 ];
@@ -67,6 +69,10 @@ export function registerV1Routes(router: V1Router, services: Pick<Services, 'dir
   router.handle('directoriesGet', () => services.directories.view());
   router.handle('directoriesSync', async (input) => {
     await services.directories.sync(input.body);
+    return services.directories.view();
+  });
+  router.handle('directoriesUpload', async (input) => {
+    await services.directories.upload(input.body);
     return services.directories.view();
   });
   router.handle('directoriesActivate', async (input) => {

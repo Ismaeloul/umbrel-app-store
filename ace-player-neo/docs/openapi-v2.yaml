@@ -13019,6 +13019,199 @@ paths:
         - code: internal_error
           status: 500
           message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/directories/upload:
+    post:
+      operationId: directoriesUpload
+      tags:
+        - directories
+      summary: Añadir o sustituir una lista subida como archivo (con su enlace de origen, si se sabe)
+      description: El cuerpo lleva el texto de la lista. Con `url`, el directorio se actualiza solo desde ahí como los demás; sin ella, guarda `https://subida.invalid/<id>` y no se actualiza (hay que volver a subirla o ponerle el enlace).
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+                  maxLength: 1900000
+                name:
+                  type: string
+                  maxLength: 200
+                url:
+                  type: string
+                  maxLength: 2048
+                sourceId:
+                  type: string
+                  maxLength: 64
+              required:
+                - content
+              additionalProperties: false
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  web:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        title:
+                          type: string
+                          maxLength: 120
+                        alias:
+                          type: string
+                          minLength: 1
+                          maxLength: 120
+                        type:
+                          type: string
+                          enum:
+                            - fav
+                            - recent
+                            - web
+                        category:
+                          type: string
+                          maxLength: 48
+                        date:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        fromWebSync:
+                          type: boolean
+                        ih:
+                          type: boolean
+                      required:
+                        - id
+                        - title
+                        - type
+                        - category
+                        - date
+                        - fromWebSync
+                        - ih
+                      additionalProperties: false
+                  webSyncedAt:
+                    type:
+                      - string
+                      - "null"
+                  webSources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-zA-Z0-9_-]{1,48}$
+                        name:
+                          type: string
+                          minLength: 1
+                          maxLength: 60
+                        url:
+                          type: string
+                        type:
+                          type: string
+                          enum:
+                            - m3u
+                            - html
+                        count:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                        syncedAt:
+                          type:
+                            - string
+                            - "null"
+                        lastErrorAt:
+                          type:
+                            - string
+                            - "null"
+                        lastError:
+                          type:
+                            - string
+                            - "null"
+                      required:
+                        - id
+                        - name
+                        - url
+                        - type
+                        - count
+                        - syncedAt
+                        - lastErrorAt
+                        - lastError
+                      additionalProperties: false
+                  activeWebSourceId:
+                    type: string
+                required:
+                  - web
+                  - webSyncedAt
+                  - webSources
+                  - activeWebSourceId
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+        - deviceBearer: []
+      x-access: any
+      x-native-path: /native/api/v1/directories/upload
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: bad_url
+          status: 400
+          message: "La dirección no es válida: tiene que empezar por http:// o https://."
+        - code: empty_directory
+          status: 422
+          message: La fuente respondió, pero no contenía enlaces AceStream válidos.
+        - code: source_limit
+          status: 409
+          message: Ya tienes 8 directorios. Elimina uno antes de añadir otro.
+        - code: source_not_found
+          status: 404
+          message: Ese directorio ya no existe.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
   /api/v1/directories/{id}/activate:
     post:
       operationId: directoriesActivate

@@ -181,6 +181,7 @@ export const PUBLIC_HOSTS: Record<string, readonly ResolvedAddress[]> = {
   'k51abc.ipns.dweb.link': [{ address: '209.94.90.2', family: 4 }],
   'delegated-ipfs.dev': [{ address: '104.18.1.1', family: 4 }],
   'trustless-gateway.link': [{ address: '104.18.1.2', family: 4 }],
+  'reserva.example': [{ address: '93.184.216.37', family: 4 }],
 };
 
 export interface DirectoriesHarness {

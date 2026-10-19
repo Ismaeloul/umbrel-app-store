@@ -28,6 +28,8 @@ import {
   type LegacyDirectoryResponse,
   type StateV1,
   type WebSource,
+  isUploadedSourceUrl,
+  uploadedSourceUrl,
 } from '@ace/shared';
 import type { TimerHandle } from '../../core/clock.js';
 import { AppError } from '../../core/errors.js';
@@ -131,6 +133,8 @@ export function createDirectoriesService(deps: DirectoriesDeps): DirectoriesServ
   /* ¿Le toca refrescarse al resolver? Más de 30 min sin sincronizar
      (server.js:4149-4153) y sin espera exponencial pendiente. */
   function isDue(source: WebSource): boolean {
+    /* Una lista subida sin enlace no tiene de dónde actualizarse (0.9.7). */
+    if (isUploadedSourceUrl(source.url)) return false;
     const now = clock.now();
     const marca = source.syncedAt ? Date.parse(source.syncedAt) : 0;
     const stale = !Number.isFinite(marca) || now - marca > WEB_SYNC_ON_RESOLVE_MS;
@@ -196,7 +200,9 @@ export function createDirectoriesService(deps: DirectoriesDeps): DirectoriesServ
     if (autoRun) return autoRun;
     const run = (async () => {
       const sources = state.get().webSources;
-      const targets = reason === 'resolution' ? sources.filter(isDue) : sources;
+      const targets = (reason === 'resolution' ? sources.filter(isDue) : sources).filter(
+        (source) => !isUploadedSourceUrl(source.url),
+      );
       for (const target of targets) {
         if (lifecycle.signal.aborted) break;
         await lock(() => syncSaved(target.id));
@@ -312,6 +318,64 @@ export function createDirectoriesService(deps: DirectoriesDeps): DirectoriesServ
           return id;
         }, SCOPES);
         failures.delete(id);
+      });
+      return state.directoryResponse();
+    },
+
+    /* POST /api/v1/directories/upload (0.9.7): sin red; el texto lo trae el cliente. */
+    async upload(body) {
+      /* Un .m3u lleva `#EXTM3U`/`#EXTINF`; lo demás se lee como una página (HTML). */
+      const type: WebSource['type'] = /#EXT(M3U|INF)/i.test(body.content) ? 'm3u' : 'html';
+      const streams = parse(type, body.content);
+      if (!streams.length) throw new AppError('empty_directory');
+      const link = body.url?.trim() ? normalizeWebUrl(body.url) : '';
+      if (body.url?.trim() && !link) throw new AppError('bad_url');
+      const requestedSourceId = body.sourceId ?? '';
+      const pick = (sources: readonly WebSource[]): WebSource | undefined => {
+        const source = requestedSourceId
+          ? sources.find((item) => item.id === requestedSourceId)
+          : link
+            ? sources.find((item) => item.url === link)
+            : undefined;
+        if (requestedSourceId && !source) throw new AppError('source_not_found');
+        if (!source && sources.length >= MAX_WEB_SOURCES) throw new AppError('source_limit');
+        return source;
+      };
+      pick(state.get().webSources);
+      await lock(async () => {
+        const syncedAt = nowIso();
+        const id = await state.enqueue((draft) => {
+          const source = pick(draft.webSources);
+          const id =
+            source?.id ||
+            `directorio-${clock.now().toString(36)}-${random().toString(36).slice(2, 7)}`;
+          const saved = normalizeWebSource(
+            {
+              ...source,
+              id,
+              name: body.name?.trim() || source?.name || 'Lista subida',
+              url: link || uploadedSourceUrl(id),
+              type,
+              streams,
+              syncedAt,
+              lastErrorAt: null,
+              lastError: null,
+            },
+            draft.webSources.length,
+            normalizeContext(),
+          );
+          if (!saved) throw new AppError('bad_url');
+          const webSources = source
+            ? draft.webSources.map((item) => (item.id === source.id ? saved : item))
+            : [...draft.webSources, saved];
+          commit(draft, webSources, id);
+          return id;
+        }, SCOPES);
+        failures.delete(id);
+        logger.info(
+          { count: streams.length, withLink: Boolean(link) },
+          '[directorio] lista subida',
+        );
       });
       return state.directoryResponse();
     },

@@ -135,3 +135,20 @@ export const BACKUP_MAX_FILE_BYTES = 2 * MAX_BODY_BYTES;
 /** Clave con la que se protege la contraseña de la IPTV dentro de la copia. */
 export const BACKUP_PASSPHRASE_MIN = 8;
 export const BACKUP_PASSPHRASE_MAX = 256;
+
+/**
+ * Listas subidas como archivo (0.9.7, «Subir archivo .m3u»): sin enlace de origen, el directorio guarda
+ * esta dirección de mentira (`.invalid` nunca resuelve, RFC 2606) y no se actualiza solo. Así el estado
+ * no cambia de forma (la URL sigue siendo https) y una versión anterior lo lee igual.
+ */
+export const UPLOADED_SOURCE_HOST = 'subida.invalid';
+export const uploadedSourceUrl = (id: string): string => `https://${UPLOADED_SOURCE_HOST}/${id}`;
+export function isUploadedSourceUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname === UPLOADED_SOURCE_HOST;
+  } catch {
+    return false;
+  }
+}
+/** Texto de una lista subida (cabe en el tope del cuerpo JSON con margen). */
+export const MAX_UPLOADED_LIST_CHARS = 1_900_000;
