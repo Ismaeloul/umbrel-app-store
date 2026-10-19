@@ -15937,7 +15937,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/party
       x-side-effects: true
       x-legacy-twin: null
@@ -17480,7 +17481,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/party/{code}/close
       x-side-effects: true
       x-legacy-twin: null

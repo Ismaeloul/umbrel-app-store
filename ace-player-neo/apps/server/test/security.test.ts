@@ -243,10 +243,9 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'diagnosticsLogInfo',
       'diagnosticsLogDownload',
       'diagnosticsWebLog',
-      /* «Ver juntos» (docs/ver-juntos.md §9): crear y cerrar una sala, solo web. Las
-         demás son de los invitados del proxy (credencial `party`, abajo). */
-      'partyCreate',
-      'partyClose',
+      /* «Ver juntos»: crear y cerrar una sala ya no es solo web (la app de iPhone
+         también, con su token de dispositivo; ver abajo). Las demás son de los
+         invitados del proxy (credencial `party`). */
     ]);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {

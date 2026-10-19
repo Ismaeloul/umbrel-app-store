@@ -1581,7 +1581,7 @@ export const V1_ROUTES = {
   partyCreate: defineRoute({
     method: 'POST',
     path: '/api/v1/party',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'party',
     summary: 'Crear una sala para ver una película o un episodio a la vez',
@@ -1751,7 +1751,7 @@ export const V1_ROUTES = {
   partyClose: defineRoute({
     method: 'POST',
     path: '/api/v1/party/:code/close',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'party',
     summary: 'Cerrar la sala para todos (solo el anfitrión)',

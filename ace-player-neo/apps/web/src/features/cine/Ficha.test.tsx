@@ -147,7 +147,7 @@ describe('película', () => {
   });
 
   it('«Ver juntos» pide el nombre, crea la sala con la película y abre juntos/<código>', async () => {
-    const created = (await import('@fixtures/web/v1/partyCreate.json')).default;
+    const created = (await import('@fixtures/v1/partyCreate.json')).default;
     serveTitle({ ...MOVIE, progress: null }, { 'POST /api/v1/party': () => json(created, 201) });
     fireEvent.click(await screen.findByRole('button', { name: 'Ver juntos' }));
     const dialog = await screen.findByRole('dialog', { name: 'Ver juntos' });
