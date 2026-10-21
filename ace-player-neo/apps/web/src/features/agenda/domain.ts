@@ -9,7 +9,7 @@
    salen del mismo reloj para que fuera de España cuadren. */
 
 import {
-  channelMatchScore,
+  canonicalMatchScore,
   footballMatchHighlighted,
   footballMatchInScope,
   footballMatchIsMinor,
@@ -608,7 +608,7 @@ export function buildLibraryLookup(library: LibraryLike | null | undefined): Lib
       let found = false;
       if (wanted) {
         for (const name of names) {
-          if (channelMatchScore(wanted, name) >= LIBRARY_MIN_SCORE) {
+          if (canonicalMatchScore(wanted, name) >= LIBRARY_MIN_SCORE) {
             found = true;
             break;
           }

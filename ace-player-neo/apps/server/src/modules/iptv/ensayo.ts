@@ -16,7 +16,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { FootballScheduleSchema, IptvFileSchema, type FootballSchedule } from '@ace/shared';
 import { loadConfig, type Env } from '../../config/index.js';
 import { createSilentLogger } from '../../core/logger.js';
-import { resolutionChannels, scoreResolutionCandidate } from '../football/resolution.js';
+import {
+  CANONICAL_MATCHER,
+  resolutionChannels,
+  scoreResolutionCandidate,
+} from '../football/resolution.js';
 import { channelName } from '../football/programming.js';
 import { addIsoDays, isoDateInMadrid, madridLocalToEpoch } from '../football/time.js';
 import { loadIptvKeys } from './crypto.js';
@@ -120,10 +124,11 @@ export async function runIptvEnsayo(options: EnsayoOptions): Promise<number> {
   const now = options.now ?? Date.now();
   const today = isoDateInMadrid(now);
   const days = new Set([today, addIsoDays(today, 1)]);
+  /* La misma tubería de nombres que el servicio (docs/iptv.md §4.8). */
   const scorer = (
     channels: readonly string[],
     item: { id: string; title: string; alias?: string | null },
-  ) => scoreResolutionCandidate(channels, item, 'iptv');
+  ) => scoreResolutionCandidate(channels, item, 'iptv', CANONICAL_MATCHER);
   let withIptv = 0;
   let total = 0;
   for (const day of schedule.days) {
@@ -135,7 +140,7 @@ export async function runIptvEnsayo(options: EnsayoOptions): Promise<number> {
       const layer = iptvLayer(
         catalog,
         guide,
-        resolutionChannels(announced),
+        resolutionChannels(announced, CANONICAL_MATCHER),
         {
           id: match.id,
           home: match.home,

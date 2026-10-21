@@ -86,6 +86,7 @@ import { GuideArt } from './guide-art.js';
 import { GuideStore, type GuideMeta, type GuideReader, type GuideWriter } from './guide-db.js';
 import { buildFullGuide, writeShortEpg } from './guide-full.js';
 import { adoptedIptvId, iptvChannelId, isIptvId, m3uKey, xtreamKey } from './ids.js';
+import { matchEventChannels } from './event-match.js';
 import { guideGroupMatches, mergeIptvMatches } from './layer.js';
 import { parseM3uStream } from './m3u.js';
 import {
@@ -2516,7 +2517,8 @@ export class IptvServiceImpl implements IptvService {
         provider: record.name,
         quality: this.qualityOf(entry),
         backup: entry.backup,
-        guide: match.guide,
+        /* Un hueco de evento con el partido en el nombre cuenta como confirmado (§4.9). */
+        guide: match.guide || match.event === true,
         ...(match.bucket ? { country: match.bucket } : {}),
         channel: match.key.slice(0, 200),
       },
@@ -2540,7 +2542,11 @@ export class IptvServiceImpl implements IptvService {
       ...variantOptions,
     });
     const byGuide = request.program ? this.guideMatches(request.program, variantOptions) : [];
-    const layer = mergeIptvMatches(byGuide, byName);
+    /* Huecos de evento (PPV) con el partido en el nombre (docs/iptv.md §4.9). */
+    const byEvent = request.program
+      ? matchEventChannels(catalog, request.program, variantOptions)
+      : [];
+    const layer = mergeIptvMatches(byGuide, byName, byEvent);
     return {
       candidates: layer.matches.flatMap((match) => this.toCandidates(match)),
       hints: layer.hints,

@@ -992,6 +992,88 @@ AceStream empiezan por el canal de la guía y su fuente va delante).
 
 ---
 
+### 4.8 Tubería única de nombres y modelo de canal (0.9.9, decisiones.md D37)
+
+**Por qué.** Con la agenda, el directorio AceStream y la IPTV reales de Isma (2026-10-22: 943 partidos y 116 nombres
+de canal distintos, 422 títulos de AceStream, 1807 canales IPTV de España y 5221 sin país) se vio que 25 canales de
+televisión de la agenda puntuaban 0 o 58 contra todo, y por qué:
+
+- `bar` y `hdr` contaban como palabra distintiva en `channelMatchScore` (tope 58) aunque `CHANNEL_VARIANT_TOKENS` ya
+  los declaraba variante: «LaLiga TV Bar» (22 partidos), «M+ #Vamos Bar» (11), «DAZN 1 Bar» frente a «DAZN 1».
+- «LaLiga TV M2/M3/M4/M5» (23 partidos) no se leía como el 2 de LaLiga TV; era el único canal concreto de muchos
+  partidos de Hypermotion y de la Bundesliga.
+- La ruta AceStream puntuaba el título crudo (sin la limpieza de la IPTV de §4.2): «Esport3» no era «ESPORT 3», «DAZN
+  LaLiga» solo casaba con «DAZN LA LIGA 1» por el `alias` del directorio, y los títulos del buscador del motor con
+  enlaces («M+ LALIGA 2 elcano.top https://x.com/…») daban 0.
+- Los únicos «Liga de Campeones» con guía de la lista se llaman «M.LALIGA DE CAMPEONES N» y daban 58: la regla 5 de
+  §4.5 (≥ 70 con la agenda para un canal sin país) no se cumplía y la guía no confirmaba nunca.
+- Un nombre en árabe o cirílico se quedaba solo con sus dígitos y «باب الحارة 7» salía como familia de «TPA7».
+- El tope de 4 carteles IPTV era por partido: en Liga F cuatro «DAZN 2» se comían a «VAMOS 2» aunque puntuaba 100.
+
+**Qué hay.** `packages/shared/src/domain/channel-model.ts`:
+
+- `canonicalChannelName(nombre)`: la MISMA limpieza para todo nombre, venga de donde venga. Quita lo que va tras la
+  flecha, enlaces, dominios y cuentas, superíndices (también ¹²³, U+00B9-B3, que no están en el bloque de los demás),
+  emojis y adornos, el operador delante con dos puntos («M+:», «PRIME:»), la calidad y el códec, y las variantes
+  neutras (Bar, HDR, Low, Dispositivos, reserva, VIP, «GEO»/«RAW» al final). Separa letras y número pegados («Esport3»,
+  «TPA7», «CAMPEONES2»), aplica `channelSpelling` y escribe los productos de una sola forma: «Liga de Campeones» (también
+  «LCAMPEONES», «LIGA CAMPEONES», «LALIGA DE CAMPEONES», «MLIGACAMPEONEST2»), «LaLiga TV Hypermotion» (también «LIGA
+  SMARTBANK», «LALIGA TV 2 HYPERMOTION», «HYPERMOTIONV»), «LaLiga TV N» (de «LaLiga TV M2», «LALIGATVMULTI2»), «Primera
+  Federación» (de «1° FEDERACION», «1RFEF») y «TV Galicia» (de «TVG»).
+- `channelModel(nombre)`: del canónico, el **producto** (lo que se ve, sin relleno ni operador: «laliga», «liga
+  campeones», «laliga hypermotion», «vamos», «dazn») y el **dial** (un solo número, al final o al principio: «2» en
+  «M+ LaLiga TV 2», «1» en «Canal 1 (1RFEF)»; «Liga 1 Perú» o «3 24» no tienen dial). Un producto sin letras («La 7
+  TV» → «7») no decide nada.
+- `canonicalMatchScore(a, b)`: 100 mismo producto y dial; 0 diales distintos; 78 (familia) con un dial de menos, salvo
+  que el que falta sea el 1 de un canal que no es marca paraguas («DAZN LaLiga 1» es «DAZN LaLiga»; «DAZN 1» no es
+  «DAZN»). Si no reconoce el producto de los dos, `channelMatchScore` sobre los nombres canónicos (la protección
+  Hypermotion, «DAZN Eventos» o «ELEVEN DAZN 1» siguen topados en 58). Un nombre sin letras latinas nunca puntúa.
+- `channelMatchScore` (channels.ts) **no cambia**: la matriz 0.6.59 (T-088) sigue congelada y es lo que usa la
+  fachada antigua (`legacy-exports`) y el contraste con la 0.6.59.
+
+**Dónde se usa.** `football/resolution.ts` recibe un `ChannelMatcher` (`deps.matcher`): el servicio pasa
+`CANONICAL_MATCHER` (también a la capa IPTV, al ensayo y a las consultas del motor, que suman el nombre canónico de
+cada canal) y la fachada antigua sigue con `CLASSIC_MATCHER`. `resolutionChannels` junta «M+ LALIGA», «M+ LALIGA
+HDR» y «LaLiga TV Bar» en un canal pedido. La IPTV: `agendaScorer` (regla 5 de la guía), `catalog.preselect` (también
+por el nombre canónico: «Movistar+ Dispositivos» no comparte palabra con «MOVISTAR PLUS+» hasta quitarle la
+variante) y `cleanIptvTitle` (¹²³). La web: «En tu biblioteca» de la agenda y «Emitiendo ahora». El reparto de los 4
+carteles IPTV (`allotPosters` y `capIptv`) asegura un cartel a cada canal PEDIDO distinto antes de rellenar.
+
+**Alias que NO están** (sin confirmar con Isma): «Orange Fútbol 1/2/3» (12 partidos) no existe con ese nombre en
+ninguna lista y no se sabe a qué canal corresponde.
+
+**Medido** (`apps/server/scripts/validar-emparejador.ts` sobre los datos del 2026-10-22): 9 canales que no casaban
+con nada ahora casan (88 partidos) y los de Movistar suman fuentes IPTV (las de Vodafone, Cabel, Orange y «8K SPORT ON
+AIR»). Tests: `packages/shared/test/channel-model.test.ts` (los pares reales), `football/resolution-canonica.test.ts`
+e `iptv/layer-reparto.test.ts`.
+
+### 4.9 Huecos de evento (PPV) con el partido en el nombre (0.9.9, `modules/iptv/event-match.ts`)
+
+Las categorías «ES| DAZN PPV», «SOCCER PPV», «MLS PPV», «RFEF PPV», «TV FOOTBALL PPV», «VIX PPV» o «MAX PPV» no
+tienen un nombre de canal fijo: cada fila es un hueco («DAZN PPV 2») cuyo nombre cambia con lo que emite y lleva el
+partido y la hora dentro («Next Paynesville FC vs. Down Town FC LFA First Division - Liberia 2026-10-21 16:00 (GMT)
+8K EXCLUSIVE ES: DAZN PPV 2», «NEXT REAL BETIS VS. FEYENOORD Wed 21 Oct 20:45 CEST (ES) … VIX PPV 5», «RFEF EVENTO
+05 1ª RFEF UD Logroñés VS Cultural Leonesa J8 18/10 19:55», «América vs. Club Tijuana (2026-10-28 22:45:00)»). Son
+justo los partidos que la agenda anuncia como «OneFootball PPV» (147), «TV FootballClub» (123), «Apple TV» (44),
+«Primera Federación» (20) o «DAZN» a secas (223), que por nombre de canal no casan con nada.
+
+- Se emparejan como la guía (§4.5, regla 2): los DOS equipos en el nombre (`teamsInText` con los alias de
+  `teamAliases`) y, si el nombre trae hora, a menos de 45 min del saque (`EVENT_TIME_TOLERANCE_MS`). La hora se lee
+  en «2026-10-21 16:00 (GMT)», «21-10-2026 14:00 (GMT)», «Thu 22 Oct 01:00 CEST» (el año, el del saque) y «18/10
+  19:55» (hora de Madrid); sin zona, hora de Madrid. Una fila «NO EVENT», «No event» o «FINALIZADO» no cuenta. Solo
+  España o sin país. Las copias del mismo hueco (la categoría «⁽ᴮᴷ⁾») van juntas como variantes.
+- Entran en la capa IPTV (`mergeIptvMatches(byGuide, byName, byEvent)`) con la puntuación de la guía (100), detrás
+  de los canales que confirma la guía y delante de los que casan por nombre, con `event: true` y, en la candidata,
+  `iptv.guide: true` (cuentan como confirmados). Su `matchedChannel` es el nombre corto del hueco («DAZN PPV 2»,
+  «RFEF EVENTO 05»). No dan pistas para AceStream: el nombre de un hueco no es un canal que buscar en el motor.
+- El catálogo se refresca cada 6 h (§3.5): un hueco que cambia de partido entre medias no se ve hasta el siguiente
+  refresco. Refrescar solo esas categorías antes del saque queda pendiente.
+
+Tests: `iptv/event-match.test.ts` (hora en cada formato, huecos vacíos, otro país, copias) e
+`iptv/layer-reparto.test.ts` (su sitio en la capa).
+
+---
+
 ## 5. Contrato de la API (`packages/shared`, zod)
 
 ### 5.1 Una candidata IPTV es una candidata más

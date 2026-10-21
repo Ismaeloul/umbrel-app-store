@@ -19,6 +19,7 @@ export * from './constants/vod.js';
 
 export * from './demo/guide.js';
 
+export * from './domain/channel-model.js';
 export * from './domain/channel-names.js';
 export * from './domain/channels.js';
 export * from './domain/faults.js';

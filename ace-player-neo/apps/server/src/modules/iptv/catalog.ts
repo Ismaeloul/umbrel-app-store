@@ -19,7 +19,12 @@
    - Se guarda cifrado en `catalogo.enc` (con las URLs de stream y las de la
      guía, que llevan credenciales) y se carga al arrancar sin red. */
 
-import { CHANNEL_FILLER_TOKENS, type IptvKind, type IptvQuality } from '@ace/shared';
+import {
+  CHANNEL_FILLER_TOKENS,
+  canonicalChannelName,
+  type IptvKind,
+  type IptvQuality,
+} from '@ace/shared';
 import {
   cleanIptvTitle,
   countryBucket,
@@ -529,12 +534,18 @@ export class Catalog {
   /**
    * Grupos que merece la pena puntuar para estos canales: los que comparten
    * alguna palabra, los de la misma clave y los de la clave con « 1» al final
-   * (la regla del « 1», docs/iptv.md §4.2).
+   * (la regla del « 1», docs/iptv.md §4.2). También con el nombre canónico
+   * (§4.8): «Movistar+ Dispositivos» no comparte palabra con «MOVISTAR PLUS+»
+   * hasta que se le quita la variante.
    */
   preselect(channels: readonly string[], limit = 4000): string[] {
     const out = new Set<string>();
     for (const channel of channels) {
-      for (const variant of new Set([channel, iptvSpelling(channel)])) {
+      for (const variant of new Set([
+        channel,
+        iptvSpelling(channel),
+        canonicalChannelName(channel),
+      ])) {
         const key = cleanIptvTitle(variant).key;
         if (!key) continue;
         if (this.groups.has(key)) out.add(key);

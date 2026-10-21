@@ -181,7 +181,9 @@ const SUPERSCRIPT_QUALITY: readonly (readonly [RegExp, IptvQuality])[] = [
 /* «ᴿᴬᵂ»: el feed en crudo del mismo canal (reserva). */
 const SUPERSCRIPT_RAW_RE = /ᴿᴬᵂ/gu;
 /* Cualquier otra tira de superíndices («ᵛᶦᵖ», «ᴺᴱᵂ»): adorno. */
-const SUPERSCRIPT_RE = /[\u1D2C-\u1D6A\u1D9B-\u1DBF\u2070-\u209F]+/gu;
+/* También ¹²³ (U+00B9-B3, que no están en el bloque de los demás superíndices): «M+ LALIGA TV ³» es la
+   tercera copia de M+ LaLiga TV, no un canal con «³» en el nombre (docs/iptv.md §4.8). */
+const SUPERSCRIPT_RE = /[¹²³ᴬ-ᵪᶛ-ᶿ⁰-₟]+/gu;
 
 /* Cabeceras y huecos de la lista: «##### ES - M. LALIGA #####», «==== CINE ====», «XX - NO MATCH». */
 const FILLER_RE =

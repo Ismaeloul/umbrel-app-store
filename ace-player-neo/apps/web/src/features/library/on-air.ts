@@ -1,9 +1,10 @@
 /* Qué da cada canal de tu biblioteca hoy (maqueta A e injerto C1 «Emitiendo
    ahora»): se cruza el nombre del canal con los canales que anuncia la agenda.
 
-   - Cruce: `channelMatchScore >= RESOLUTION_EXACT_SCORE` (92, «es ese canal
-     sin duda», @ace/shared). Con la familia (78, «DAZN» frente a «DAZN 1») NO
-     basta: la agenda que dice «DAZN» no dice cuál de los DAZN lo da.
+   - Cruce: `canonicalMatchScore >= RESOLUTION_EXACT_SCORE` (92, «es ese canal
+     sin duda», la tubería única de @ace/shared, docs/iptv.md §4.8). Con la
+     familia (78, «DAZN» frente a «DAZN 1») NO basta: la agenda que dice
+     «DAZN» no dice cuál de los DAZN lo da.
    - Hora: la de Madrid, no la del dispositivo (regla 28): se porta
      `minutosParaPartido` de la 0.6.59 (index.html:2984-3000). En juego desde
      la hora de inicio hasta 2 h después; el marcador de ESPN manda si llega
@@ -14,7 +15,7 @@
      vista oculta la consulta se para sola (Activity). */
 
 import {
-  channelMatchScore,
+  canonicalMatchScore,
   RESOLUTION_EXACT_SCORE,
   type FootballMatch,
   type LiveScore,
@@ -115,9 +116,9 @@ export function broadcastsMatch(
 ): boolean {
   return match.channels.some(
     (ref) =>
-      channelMatchScore(channel.title, ref.name) >= RESOLUTION_EXACT_SCORE ||
+      canonicalMatchScore(channel.title, ref.name) >= RESOLUTION_EXACT_SCORE ||
       (channel.alias
-        ? channelMatchScore(channel.alias, ref.name) >= RESOLUTION_EXACT_SCORE
+        ? canonicalMatchScore(channel.alias, ref.name) >= RESOLUTION_EXACT_SCORE
         : false),
   );
 }

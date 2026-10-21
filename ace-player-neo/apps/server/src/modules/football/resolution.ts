@@ -17,10 +17,15 @@ import {
   IPTV_SEARCH,
   LIBRARY_MIN_SCORE,
   RESOLUTION_EXACT_SCORE,
+  canonicalChannelKey,
+  canonicalChannelName,
+  canonicalMatchScore,
   channelAllowsFamilyFallback,
   channelMatchScore,
   cleanTitle,
   esFamiliaDe,
+  isChannelFamily,
+  isUmbrellaChannel,
   normalizeChannelKey,
   type ResolutionCandidate,
   type SourceStats,
@@ -81,17 +86,53 @@ function claveDeCanalSinVariante(channel: string): string {
 }
 
 /**
- * `resolutionChannels` (server.js:3667-3685): limpia los rótulos, fusiona las
- * variantes de calidad quedándose el más corto y corta en 8. T-113.
+ * Cómo se comparan dos nombres de canal. La fachada antigua y los tests
+ * portados usan el CLÁSICO (la matriz 0.6.59, T-088); el servicio usa la
+ * TUBERÍA ÚNICA de @ace/shared (docs/iptv.md §4.8): la misma limpieza para
+ * la agenda, las listas de AceStream, el buscador del motor y la IPTV.
  */
-export function resolutionChannels(values: unknown): string[] {
+export interface ChannelMatcher {
+  /** 0..100: ¿son el mismo canal? */
+  readonly score: (channel: string, name: string) => number;
+  /** ¿Es `name` de la familia numerada de `channel` (o al revés)? */
+  readonly family: (channel: string, name: string) => boolean;
+  /** ¿Vale la familia como sustituto cuando no está el canal exacto? */
+  readonly allowsFamilyFallback: (channel: string) => boolean;
+  /** Clave sin variantes: «M+ LALIGA HDR» y «M+ LALIGA» dan la misma. */
+  readonly variantKey: (channel: string) => string;
+}
+
+export const CLASSIC_MATCHER: ChannelMatcher = {
+  score: channelMatchScore,
+  family: esFamiliaDe,
+  allowsFamilyFallback: channelAllowsFamilyFallback,
+  variantKey: claveDeCanalSinVariante,
+};
+
+export const CANONICAL_MATCHER: ChannelMatcher = {
+  score: canonicalMatchScore,
+  family: isChannelFamily,
+  allowsFamilyFallback: (channel) =>
+    channelAllowsFamilyFallback(channel) || isUmbrellaChannel(channel),
+  variantKey: canonicalChannelKey,
+};
+
+/**
+ * `resolutionChannels` (server.js:3667-3685): limpia los rótulos, fusiona las
+ * variantes de calidad quedándose el más corto y corta en 8. T-113. Con la
+ * tubería única también «LaLiga TV Bar» y «M+ LALIGA» son uno.
+ */
+export function resolutionChannels(
+  values: unknown,
+  matcher: ChannelMatcher = CLASSIC_MATCHER,
+): string[] {
   const output: string[] = [];
   const posicion = new Map<string, number>();
   for (const raw of Array.isArray(values) ? (values as unknown[]) : [values]) {
     const channel = cleanTitle(raw, '');
     const key = normalizeChannelKey(channel);
     if (!channel || !key) continue;
-    const variante = claveDeCanalSinVariante(channel) || key;
+    const variante = matcher.variantKey(channel) || key;
     const index = posicion.get(variante);
     if (index !== undefined) {
       const previous = output[index] ?? '';
@@ -115,6 +156,7 @@ export function scoreResolutionCandidate(
   channels: readonly string[],
   item: ResolvableItem,
   source: ResolutionCandidate['source'],
+  matcher: ChannelMatcher = CLASSIC_MATCHER,
 ): BaseCandidate {
   let score = 0;
   let matchedChannel = channels[0] || '';
@@ -122,11 +164,11 @@ export function scoreResolutionCandidate(
   const names = item.alias ? [item.title, item.alias] : [item.title];
   for (const channel of channels) {
     for (const name of names) {
-      const candidateScore = channelMatchScore(channel, name);
+      const candidateScore = matcher.score(channel, name);
       if (candidateScore > score) {
         score = candidateScore;
         matchedChannel = channel;
-        soloFamilia = esFamiliaDe(channel, name);
+        soloFamilia = matcher.family(channel, name);
       }
     }
   }
@@ -139,7 +181,7 @@ export function scoreResolutionCandidate(
     score,
     matchedChannel,
     soloFamilia,
-    familyFallbackAllowed: soloFamilia && channelAllowsFamilyFallback(matchedChannel),
+    familyFallbackAllowed: soloFamilia && matcher.allowsFamilyFallback(matchedChannel),
     listaId: item.listaId || null,
     availability: typeof item.availability === 'number' ? item.availability : null,
     bitrate: typeof item.bitrate === 'number' ? item.bitrate : null,
@@ -153,8 +195,12 @@ export function libraryResolutionCandidates(
   state: ResolutionState,
   channels: readonly string[],
   minimumScore: number = LIBRARY_MIN_SCORE,
-  options: { readonly sourceOrder?: readonly LibrarySource[] } = {},
+  options: {
+    readonly sourceOrder?: readonly LibrarySource[];
+    readonly matcher?: ChannelMatcher;
+  } = {},
 ): BaseCandidate[] {
+  const matcher = options.matcher ?? CLASSIC_MATCHER;
   const output: BaseCandidate[] = [];
   const seen = new Set<string>();
   const webSources = state.webSources;
@@ -175,7 +221,7 @@ export function libraryResolutionCandidates(
     for (const item of sourceItems[source]) {
       if (seen.has(item.id)) continue;
       seen.add(item.id);
-      const candidate = scoreResolutionCandidate(channels, item, source);
+      const candidate = scoreResolutionCandidate(channels, item, source, matcher);
       /* 70, no 58: con 58 se colaba "LaLiga TV Hypermotion" en Champions (B-162). */
       if (candidate.score >= minimumScore) output.push(candidate);
     }
@@ -271,6 +317,12 @@ export interface ResolveDeps {
   readonly model: string;
   /** Canales de toda la agenda (catálogo de programación). */
   readonly programChannels: readonly string[];
+  /**
+   * Cómo se comparan los nombres (docs/iptv.md §4.8). El servicio pasa
+   * `CANONICAL_MATCHER`; sin él (la fachada antigua y los tests portados), el
+   * clásico de la 0.6.59.
+   */
+  readonly matcher?: ChannelMatcher;
   /** Capa IPTV (docs/iptv.md §4.3): se consulta siempre que esté activa. */
   readonly iptv?: ResolutionIptv;
   /**
@@ -350,6 +402,7 @@ export interface ResolutionCore {
 function withGuideHints(
   candidates: readonly BaseCandidate[],
   hints: readonly string[],
+  matcher: ChannelMatcher,
 ): BaseCandidate[] {
   if (!hints.length) return [...candidates];
   return candidates.map((candidate) => {
@@ -358,6 +411,7 @@ function withGuideHints(
       hints,
       { id: candidate.id, title: candidate.title, alias: candidate.alias },
       candidate.source,
+      matcher,
     );
     if (byHint.score < LIBRARY_MIN_SCORE) return candidate;
     return {
@@ -528,10 +582,18 @@ function untilAborted<T>(work: Promise<T>, signal: AbortSignal | undefined): Pro
 /**
  * Como mucho 4 carteles IPTV (docs/iptv.md §17): primero la guía, luego la
  * puntuación y, entre iguales, el orden de la capa IPTV (las variantes de un
- * canal ya vienen 1080p, 4K, 720p, SD y reserva).
+ * canal ya vienen 1080p, 4K, 720p, SD y reserva). El tope es por PARTIDO,
+ * así que antes se reparte: cada canal pedido que tenga IPTV se lleva un
+ * cartel y solo después se rellena (0.9.9, §4.8: en Liga F cuatro «DAZN 2»
+ * se comían a «VAMOS 2» aunque puntuaba 100).
  */
 function capIptv<
-  T extends { readonly id: string; readonly source: string; readonly score: number },
+  T extends {
+    readonly id: string;
+    readonly source: string;
+    readonly score: number;
+    readonly matchedChannel?: string;
+  },
 >(candidates: readonly T[]): T[] {
   const iptv = candidates
     .filter((candidate) => candidate.source === 'iptv')
@@ -541,6 +603,14 @@ function capIptv<
       return guideB - guideA || b.score - a.score;
     });
   const keep = new Set<string>();
+  const served = new Set<string>();
+  for (const candidate of iptv) {
+    if (keep.size >= IPTV_MAX_CANDIDATES) break;
+    const channel = canonicalChannelKey(candidate.matchedChannel ?? '');
+    if (served.has(channel)) continue;
+    served.add(channel);
+    keep.add(candidate.id);
+  }
   for (const candidate of iptv) {
     if (keep.size >= IPTV_MAX_CANDIDATES) break;
     keep.add(candidate.id);
@@ -566,6 +636,7 @@ export async function resolveFootballChannel(
   options: ResolveOptions = {},
 ): Promise<ResolutionCore> {
   const scope: ResolveScope = options.scope ?? 'match';
+  const matcher = deps.matcher ?? CLASSIC_MATCHER;
   /* Canal suelto tocado como canal IPTV: sus carteles primero y su nombre limpio pedido (§14.4 y §17). */
   const pinnedList =
     scope === 'channel' && options.iptvId && deps.iptv ? deps.iptv.tapped(options.iptvId) : [];
@@ -573,6 +644,7 @@ export async function resolveFootballChannel(
   const requested = Array.isArray(values) ? (values as unknown[]) : [values];
   const channels = resolutionChannels(
     pinned?.matchedChannel ? [...requested, pinned.matchedChannel] : requested,
+    matcher,
   );
   if (!channels.length && scope !== 'guide') throw new AppError('channel_required');
   const reverse = scope === 'channel' && options.engine === true;
@@ -620,6 +692,7 @@ export async function resolveFootballChannel(
                 channels,
                 { ...binding, title: binding.channel },
                 'saved',
+                matcher,
               );
               return { ...scored, title: binding.title, ih: binding.ih as boolean };
             })
@@ -632,17 +705,18 @@ export async function resolveFootballChannel(
     withGuideHints(
       withGuideChannels(
         scope === 'guide'
-          ? libraryResolutionCandidates(state, hints, 0)
+          ? libraryResolutionCandidates(state, hints, 0, { matcher })
           : libraryResolutionCandidates(
               state,
               channels,
               0,
-              research ? { sourceOrder: ['favorites', 'm3u'] } : {},
+              research ? { sourceOrder: ['favorites', 'm3u'], matcher } : { matcher },
             ),
         guideChannels,
         sameChannel,
       ),
       scope === 'guide' ? [] : hints,
+      matcher,
     ).map((candidate) =>
       scope === 'guide'
         ? { ...candidate, score: Math.min(candidate.score, RESOLUTION_EXACT_SCORE - 1) }
@@ -663,9 +737,13 @@ export async function resolveFootballChannel(
   try {
     if (scope === 'match') {
       /* Las pistas de la guía también se buscan (8 consultas como mucho); el canal que confirma
-         la guía, el primero (agenda híbrida). */
+         la guía, el primero (agenda híbrida). Con la tubería única, también el nombre canónico
+         de cada canal («LaLiga TV Bar» no existe en el motor; «Movistar LaLiga TV» sí). */
+      const canonical = deps.matcher
+        ? channels.map((channel) => canonicalChannelName(channel))
+        : [];
       const queries = aceSearchQueries(
-        [...guideQueries(guideChannels), ...channels, ...hints],
+        [...guideQueries(guideChannels), ...channels, ...canonical, ...hints],
         semanticEnabled,
       );
       const searched = await Promise.allSettled(
@@ -677,13 +755,15 @@ export async function resolveFootballChannel(
       for (const result of searched) {
         if (result.status !== 'fulfilled') continue;
         for (const item of result.value)
-          found.push(scoreResolutionCandidate(channels, item, 'acestream'));
+          found.push(scoreResolutionCandidate(channels, item, 'acestream', matcher));
       }
       /* Un id IPTV no llega nunca al motor: del buscador se descarta. */
       remote.push(
-        ...withGuideHints(withGuideChannels(found, guideChannels, sameChannel), hints).filter(
-          (candidate) => !deps.iptv || deps.iptv.classify(candidate.id) === 'engine',
-        ),
+        ...withGuideHints(
+          withGuideChannels(found, guideChannels, sameChannel),
+          hints,
+          matcher,
+        ).filter((candidate) => !deps.iptv || deps.iptv.classify(candidate.id) === 'engine'),
       );
     } else if (reverse) {
       /* Búsqueda inversa de un canal suelto (§14.4): 2 consultas como mucho y
@@ -697,7 +777,7 @@ export async function resolveFootballChannel(
       const same =
         deps.iptv?.sameChannel.bind(deps.iptv) ??
         ((channel: string, title: string) =>
-          scoreResolutionCandidate([channel], { id: '', title }, 'acestream').score);
+          scoreResolutionCandidate([channel], { id: '', title }, 'acestream', matcher).score);
       const seen = new Set<string>();
       for (const result of searched) {
         if (result.status !== 'fulfilled') continue;
@@ -716,7 +796,7 @@ export async function resolveFootballChannel(
           }
           if (score < RESOLUTION_EXACT_SCORE) continue;
           remote.push({
-            ...scoreResolutionCandidate(channels, item, 'acestream'),
+            ...scoreResolutionCandidate(channels, item, 'acestream', matcher),
             score,
             matchedChannel,
           });

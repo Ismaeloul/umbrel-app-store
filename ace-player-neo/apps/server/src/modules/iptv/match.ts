@@ -98,6 +98,8 @@ export interface IptvGroupMatch {
   readonly score: number;
   readonly matchedChannel: string;
   readonly guide: boolean;
+  /** Canal de evento (PPV) con el partido en el nombre (event-match.ts, docs/iptv.md §4.9). */
+  readonly event?: boolean;
 }
 
 /**
@@ -281,7 +283,12 @@ export function groupMatch(
   key: string,
   bucket: string,
   entries: readonly CatalogEntry[],
-  match: { readonly score: number; readonly matchedChannel: string; readonly guide: boolean },
+  match: {
+    readonly score: number;
+    readonly matchedChannel: string;
+    readonly guide: boolean;
+    readonly event?: boolean;
+  },
   options: VariantOptions = {},
 ): IptvGroupMatch | null {
   const plan = planVariants(entries, options);

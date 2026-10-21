@@ -73,6 +73,7 @@ import {
 } from './preheat.js';
 import { ProgrammingCatalog, channelName } from './programming.js';
 import {
+  CANONICAL_MATCHER,
   overlayIptv,
   resolutionChannels,
   resolveFootballChannel,
@@ -484,7 +485,8 @@ export class FootballServiceImpl implements FootballService {
         iptv.resolve({
           channels,
           program: this.iptvProgram(program),
-          scorer: (wanted, item) => scoreResolutionCandidate(wanted, item, 'iptv'),
+          scorer: (wanted, item) =>
+            scoreResolutionCandidate(wanted, item, 'iptv', CANONICAL_MATCHER),
           reliability: (id) => {
             try {
               return sources.reliability({ id, title: '', listaId: null, source: 'iptv' });
@@ -548,6 +550,8 @@ export class FootballServiceImpl implements FootballService {
         semantic: { enabled: config.ai.enabled, embed: this.embed, cache: this.vectors },
         model: config.ai.embedModel,
         programChannels: this.programming.channels,
+        /* La tubería única de nombres (docs/iptv.md §4.8): la fachada antigua sigue con el clásico. */
+        matcher: CANONICAL_MATCHER,
         ...(iptv ? { iptv } : {}),
         deadline: (ms) => {
           const controller = new AbortController();

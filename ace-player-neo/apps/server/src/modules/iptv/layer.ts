@@ -6,11 +6,12 @@ import {
   IPTV_GUIDE_SCORE,
   IPTV_MAX_CANDIDATES,
   IPTV_MAX_GUIDE_HINTS,
-  IPTV_MAX_MATCHED_CHANNELS,
-  channelMatchScore,
+  canonicalChannelKey,
+  canonicalMatchScore,
   normalizeChannelKey,
 } from '@ace/shared';
 import type { Catalog } from './catalog.js';
+import { matchEventChannels } from './event-match.js';
 import type { GuideWindow, StoredProgramme } from './guide.js';
 import { confirmByGuide, type GuideChannelCandidate } from './guide-match.js';
 import {
@@ -57,7 +58,10 @@ export function guideCandidates(
 /**
  * Cuánto casa el nombre de un canal IPTV con los canales que anuncia la
  * agenda, como los busca la IPTV: «La 1 TVE» es «La 1» y «RTVE Play» no
- * cuenta (reglas 5 y 6 de la guía).
+ * cuenta (reglas 5 y 6 de la guía). Por la tubería única (docs/iptv.md
+ * §4.8): los únicos «Liga de Campeones» con guía de la lista real se llaman
+ * «M.LALIGA DE CAMPEONES N» y con el clásico daban 58, así que la guía no
+ * confirmaba nunca.
  */
 export function agendaScorer(channels: readonly string[]): (display: string) => number {
   const asked = channels
@@ -67,7 +71,7 @@ export function agendaScorer(channels: readonly string[]): (display: string) => 
     const bare = withoutTrailingNote(display);
     return asked.reduce(
       (max, channel) =>
-        Math.max(max, channelMatchScore(channel, display), channelMatchScore(channel, bare)),
+        Math.max(max, canonicalMatchScore(channel, display), canonicalMatchScore(channel, bare)),
       0,
     );
   };
@@ -123,19 +127,26 @@ export interface IptvLayerResult {
 }
 
 /**
- * Reparte los 4 carteles IPTV entre los canales, ya en orden (§17): los 2
- * primeros canales «de verdad» tienen uno asegurado cada uno (el gemelo de
- * otro país de un canal que ya está, «DE: DAZN 1» con «DAZN 1», no cuenta:
- * solo entra si sobra sitio) y el resto se llena en orden, así el primer
- * canal enseña todas sus resoluciones. Lo que no cabe pasa a respaldo.
+ * Reparte los 4 carteles IPTV entre los canales, ya en orden (§17): cada
+ * CANAL PEDIDO distinto («DAZN 2» y «M+ Vamos 2» son dos; «DAZN 2» y «M+:
+ * DAZN 2» son uno, docs/iptv.md §4.8) tiene un cartel asegurado mientras
+ * quepan (el gemelo de otro país de un canal que ya está, «DE: DAZN 1» con
+ * «DAZN 1», no cuenta: solo entra si sobra sitio) y el resto se llena en
+ * orden, así el primer canal enseña todas sus resoluciones. Lo que no cabe
+ * pasa a respaldo. Hasta la 0.9.8 solo los 2 primeros grupos tenían cartel
+ * seguro y en Liga F cuatro «DAZN 2» se comían a «VAMOS 2».
  */
 export function allotPosters(ordered: readonly IptvGroupMatch[]): IptvGroupMatch[] {
   const withSpain = new Set(ordered.filter((match) => match.bucket === '').map((m) => m.key));
   const twin = (match: IptvGroupMatch): boolean => match.bucket !== '' && withSpain.has(match.key);
   const counts = new Map<IptvGroupMatch, number>();
+  const served = new Set<string>();
   let left = IPTV_MAX_CANDIDATES;
-  for (const match of ordered.filter((item) => !twin(item)).slice(0, IPTV_MAX_MATCHED_CHANNELS)) {
+  for (const match of ordered.filter((item) => !twin(item))) {
     if (left <= 0) break;
+    const channel = canonicalChannelKey(match.matchedChannel) || match.key;
+    if (served.has(channel)) continue;
+    served.add(channel);
     counts.set(match, 1);
     left -= 1;
   }
@@ -158,18 +169,26 @@ export function allotPosters(ordered: readonly IptvGroupMatch[]): IptvGroupMatch
     });
 }
 
-/** Junta la guía y el nombre: un canal una vez (la guía primero) y 4 carteles como mucho (§17). */
+/**
+ * Junta la guía, los huecos de evento (§4.9) y el nombre: un canal una vez
+ * (la guía primero, luego los eventos) y 4 carteles como mucho (§17). Las
+ * pistas para AceStream salen solo de la guía: el nombre de un hueco de
+ * evento no es un canal que buscar en el motor.
+ */
 export function mergeIptvMatches(
   byGuide: readonly IptvGroupMatch[],
   byName: readonly IptvGroupMatch[],
+  byEvent: readonly IptvGroupMatch[] = [],
 ): IptvLayerResult {
   const merged = new Map<string, IptvGroupMatch>();
   const id = (match: IptvGroupMatch): string => `${match.key}\u0000${match.bucket}`;
   for (const match of byGuide) merged.set(id(match), match);
+  for (const match of byEvent) if (!merged.has(id(match))) merged.set(id(match), match);
   for (const match of byName) if (!merged.has(id(match))) merged.set(id(match), match);
   const ordered = [...merged.values()].sort(
     (a, b) =>
       Number(b.guide) - Number(a.guide) ||
+      Number(b.event === true) - Number(a.event === true) ||
       b.score - a.score ||
       Number(a.bucket !== '') - Number(b.bucket !== '') ||
       a.best.order - b.best.order,
@@ -218,5 +237,6 @@ export function iptvLayer(
 ): IptvLayerResult {
   const byName = matchIptvChannels(catalog, channels, { scorer });
   const byGuide = program ? guideGroupMatches(catalog, window, program) : [];
-  return mergeIptvMatches(byGuide, byName);
+  const byEvent = program ? matchEventChannels(catalog, program) : [];
+  return mergeIptvMatches(byGuide, byName, byEvent);
 }

@@ -887,3 +887,22 @@ Detalle en docs/vod.md §4.10.
   mandando el 443 solo ahí. Lista blanca en Caddy y, en el backend, credencial `party` para las rutas que usan los
   invitados (origen `guest` = `native`, sin token de dispositivo). El vídeo va por `partyVideo` con una clave por
   persona y el latido de la sesión por `partyStatus` (docs/ver-juntos.md §9).
+
+## D37. Tubería única de nombres de canal y huecos de evento de la IPTV (0.9.9, docs/iptv.md §4.8 y §4.9)
+
+- **Qué pasaba**: con los datos reales de Isma (2026-10-22), 25 nombres de canal de la agenda puntuaban 0 o 58
+  contra las dos listas («LaLiga TV Bar», «LaLiga TV M2», «M+ #Vamos Bar», «DAZN 1 Bar», «Esport3», los títulos del
+  buscador del motor con enlaces…), la guía no confirmaba nunca (sus canales se llaman «M.LALIGA DE CAMPEONES N») y
+  el tope de 4 carteles IPTV lo gastaba un solo canal.
+- **Decisión**: una sola limpieza para todo nombre (`canonicalChannelName`) y un modelo producto + dial
+  (`channelModel`, `canonicalMatchScore`) en @ace/shared. «Bar», «HDR», «Low», «Dispositivos» y la calidad son
+  variantes del mismo canal (hasta ahora «LaLiga TV Bar» NO era «LaLiga TV», T-017; cambia a propósito: la agenda
+  lista el bar como otra entrada del mismo partido). «LaLiga TV M2» es «LaLiga TV 2».
+- **`channelMatchScore` no se toca**: la matriz 0.6.59 (T-088) y el contraste con la 0.6.59 siguen iguales porque la
+  fachada antigua usa el emparejador clásico (`CLASSIC_MATCHER`); el servicio, el ensayo y la web usan el canónico.
+- **Huecos de evento**: las filas «… PPV N» y «… EVENTO NN» con el partido en el nombre se emparejan por equipos y
+  hora, como la guía, y cuentan como confirmadas. Cubren lo que la agenda anuncia como plataformas (OneFootball,
+  TV FootballClub, Apple TV, Primera Federación, DAZN a secas).
+- **Sin alias para «Orange Fútbol N»**: no hay canal con ese nombre en ninguna lista y no se sabe a cuál equivale.
+- **Vuelta atrás**: sin datos nuevos en disco; quitar `matcher` de `FootballService.resolveChannels` devuelve el
+  emparejado de la 0.9.8.
