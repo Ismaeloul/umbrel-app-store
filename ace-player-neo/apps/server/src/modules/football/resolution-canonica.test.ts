@@ -5,10 +5,16 @@
 
 import { describe, expect, it } from 'vitest';
 import { RESOLUTION_EXACT_SCORE, type ResolutionCandidate } from '@ace/shared';
-import { asVectorStore, unavailableEmbedder } from './ai.js';
+import {
+  applySemanticCandidateScores,
+  asVectorStore,
+  unavailableEmbedder,
+  type SemanticOptions,
+} from './ai.js';
 import {
   CANONICAL_MATCHER,
   CLASSIC_MATCHER,
+  SEMANTIC_ALLOW,
   resolutionChannels,
   resolveFootballChannel,
   scoreResolutionCandidate,
@@ -60,7 +66,6 @@ const ids = (candidates: readonly { id: string }[]): string[] => candidates.map(
 
 describe('la tubería única en la biblioteca', () => {
   it.each([
-    ['LaLiga TV Bar', ID_A],
     ['M+ LALIGA HDR', ID_A],
     ['M+ #Vamos Bar', ID_B],
     ['DAZN 1', ID_C],
@@ -75,8 +80,40 @@ describe('la tubería única en la biblioteca', () => {
     expect(result.candidate?.score).toBeGreaterThanOrEqual(RESOLUTION_EXACT_SCORE);
   });
 
-  it('con el canal exacto, la hermana numerada no entra (LaLiga TV Bar no trae M+ LALIGA 2)', async () => {
+  it('cada tag busca solo lo suyo: «LaLiga TV Bar» no trae M+ LALIGA ni DAZN LaLiga', async () => {
     const result = await resolveFootballChannel(library, ['LaLiga TV Bar'], deps());
+    expect(result.status).toBe('not_found');
+    expect(ids(result.candidates)).toEqual([]);
+    /* Con un canal que se llame así, sí (y con sus grafías). */
+    const conBar = withStreams([
+      { id: ID_A, title: 'M+ LALIGA --> ELCANO' },
+      { id: ID_F, title: 'M+ LALIGA TV BAR FHD --> NEW ERA' },
+    ]);
+    const found = await resolveFootballChannel(conBar, ['LaLiga TV Bar'], deps());
+    expect(ids(found.candidates)).toEqual([ID_F]);
+  });
+
+  it('con varios tags se buscan todos y cada uno trae lo suyo', async () => {
+    const result = await resolveFootballChannel(
+      library,
+      ['DAZN LaLiga', 'DAZN', 'LaLiga TV Bar', 'M+ #Vamos Bar'],
+      deps(),
+    );
+    const porCanal = new Map<string, string[]>();
+    for (const candidate of result.candidates) {
+      porCanal.set(candidate.matchedChannel, [
+        ...(porCanal.get(candidate.matchedChannel) ?? []),
+        candidate.id,
+      ]);
+    }
+    expect(porCanal.get('M+ #Vamos Bar')).toEqual([ID_B]);
+    expect(porCanal.get('DAZN')).toEqual([ID_C]);
+    expect(porCanal.has('LaLiga TV Bar')).toBe(false);
+    expect(ids(result.candidates)).not.toContain(ID_A);
+  });
+
+  it('con el canal exacto, la hermana numerada no entra (M+ LALIGA no trae M+ LALIGA 2)', async () => {
+    const result = await resolveFootballChannel(library, ['M+ LALIGA HDR'], deps());
     expect(ids(result.candidates)).toEqual([ID_A]);
   });
 
@@ -85,23 +122,21 @@ describe('la tubería única en la biblioteca', () => {
     expect(ids(result.candidates)).toEqual([ID_D]);
   });
 
-  it('la fachada antigua sigue con el clásico: «LaLiga TV Bar» no era «M+ LALIGA»', () => {
-    const item = { id: ID_A, title: 'M+ LALIGA --> ELCANO' };
-    expect(scoreResolutionCandidate(['LaLiga TV Bar'], item, 'm3u').score).toBeLessThan(70);
-    expect(
-      scoreResolutionCandidate(['LaLiga TV Bar'], item, 'm3u', CLASSIC_MATCHER).score,
-    ).toBeLessThan(70);
-    expect(scoreResolutionCandidate(['LaLiga TV Bar'], item, 'm3u', CANONICAL_MATCHER).score).toBe(
+  it('la fachada antigua sigue con el clásico: «LaLiga TV M2» no era «M+ LALIGA 2»', () => {
+    const item = { id: ID_D, title: 'M+ LALIGA 2 --> ELCANO' };
+    expect(scoreResolutionCandidate(['LaLiga TV M2'], item, 'm3u').score).toBe(0);
+    expect(scoreResolutionCandidate(['LaLiga TV M2'], item, 'm3u', CLASSIC_MATCHER).score).toBe(0);
+    expect(scoreResolutionCandidate(['LaLiga TV M2'], item, 'm3u', CANONICAL_MATCHER).score).toBe(
       100,
     );
   });
 });
 
 describe('canales pedidos y consultas al motor', () => {
-  it('resolutionChannels junta «M+ LALIGA», «M+ LALIGA HDR» y «LaLiga TV Bar» en uno', () => {
+  it('resolutionChannels junta «M+ LALIGA» y «M+ LALIGA HDR»; «LaLiga TV Bar» es otro canal', () => {
     expect(
       resolutionChannels(['M+ LALIGA', 'M+ LALIGA HDR', 'LaLiga TV Bar'], CANONICAL_MATCHER),
-    ).toEqual(['M+ LALIGA']);
+    ).toEqual(['M+ LALIGA', 'LaLiga TV Bar']);
     expect(resolutionChannels(['LaLiga TV Bar', 'M+ LALIGA 2'], CANONICAL_MATCHER)).toEqual([
       'LaLiga TV Bar',
       'M+ LALIGA 2',
@@ -137,6 +172,52 @@ describe('canales pedidos y consultas al motor', () => {
     expect(result.candidate?.id).toBe(ID_F);
     expect(result.candidate?.source).toBe('acestream');
     expect(result.candidate?.score).toBe(100);
+  });
+});
+
+describe('la IA no levanta otro producto de la misma marca', () => {
+  /* Un embed que confunde a propósito: todo lo que lleva «dazn» cae en el mismo vector. */
+  const embed = async (texts: string[]): Promise<number[][]> =>
+    texts.map((text) =>
+      /dazn/.test(text) ? [1, 0] : /campeones|ucl/.test(text) ? [0, 1] : [0.5, 0.5],
+    );
+  const semantic = (allow?: SemanticOptions['allow']) => ({
+    enabled: true,
+    cache: asVectorStore(new Map()),
+    embed,
+    ...(allow ? { allow } : {}),
+  });
+  const candidates = [
+    { title: 'DAZN F1 --> ELCANO', alias: null, score: 58 },
+    { title: 'DAZN Baloncesto SDp *', alias: null, score: 58 },
+    { title: 'UCL Principal --> ELCANO', alias: null, score: 0 },
+  ];
+
+  it('sin la guarda (la 0.6.59) promociona DAZN F1 por «DAZN»', async () => {
+    const result = await applySemanticCandidateScores(
+      ['DAZN'],
+      candidates,
+      ['DAZN', 'M+ LALIGA'],
+      semantic(),
+    );
+    expect(result.candidates[0]?.score).toBeGreaterThanOrEqual(70);
+  });
+
+  it('con la guarda del servicio, DAZN F1 y DAZN Baloncesto se quedan en 58; «UCL Principal» sí se rescata', async () => {
+    const result = await applySemanticCandidateScores(
+      ['DAZN', 'M+ Liga de Campeones'],
+      candidates,
+      ['DAZN', 'M+ Liga de Campeones', 'M+ LALIGA'],
+      semantic(SEMANTIC_ALLOW),
+    );
+    expect(result.candidates.map((candidate) => candidate.score)).toEqual([
+      58,
+      58,
+      expect.any(Number),
+    ]);
+    const rescued = result.candidates[2] as { score: number; matchedChannel?: string };
+    expect(rescued.score).toBeGreaterThanOrEqual(70);
+    expect(rescued.matchedChannel).toBe('M+ Liga de Campeones');
   });
 });
 

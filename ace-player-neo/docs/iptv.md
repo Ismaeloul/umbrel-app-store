@@ -1039,6 +1039,22 @@ por el nombre canónico: «Movistar+ Dispositivos» no comparte palabra con «MO
 variante) y `cleanIptvTitle` (¹²³). La web: «En tu biblioteca» de la agenda y «Emitiendo ahora». El reparto de los 4
 carteles IPTV (`allotPosters` y `capIptv`) asegura un cartel a cada canal PEDIDO distinto antes de rellenar.
 
+**Cada tag de la agenda busca solo lo suyo (0.9.10).** Isma lo pidió así tras la 0.9.9: lo que pone en «Dónde se
+emite» de la tarjeta es lo que se busca, cada tag con sus grafías y variantes, todos a la vez, y nada más.
+
+- «LaLiga TV Bar» NO es el bar de M+ LaLiga TV: es el canal para bares de LaLiga, que da todos los partidos (los de
+  DAZN, los de Movistar y hasta la Conference) y futbolenlatv lo anuncia como otra entrada del mismo partido. En la
+  0.9.9 se juntaba con «M+ LALIGA» y un Alavés–Málaga de DAZN traía nueve fuentes de Movistar LaLiga. Ahora es el
+  producto «LaLigaBar» (una palabra) y solo casa con un canal que se llame así («M+ LALIGA TV BAR», «LALIGATV BAR»).
+  «DAZN 1 Bar» y «M+ #Vamos Bar» sí son el bar de su canal: ahí «bar» sigue siendo variante.
+- La IA no levanta otro producto de la misma marca (`SemanticOptions.allow`, `SEMANTIC_ALLOW`): solo puede promocionar
+  un nombre que el emparejador no entiende en absoluto («UCL Principal» por «M+ Liga de Campeones», 0) o que ya casa.
+  «DAZN F1» o «DAZN Baloncesto» por «DAZN» están topados en 58 a propósito y se quedan ahí. La fachada antigua no
+  lleva la guarda.
+- La familia numerada se aparta por canal, no por resolución (`familyScope: 'channel'` en `mergeResolutionCandidates`):
+  con «DAZN | M+ #Vamos Bar», las fuentes exactas de Vamos no borran la familia de DAZN; «DAZN LaLiga» (más
+  concreto que «DAZN», `canalEsGenerico`) sí la aparta, como antes.
+
 **Alias que NO están** (sin confirmar con Isma): «Orange Fútbol 1/2/3» (12 partidos) no existe con ese nombre en
 ninguna lista y no se sabe a qué canal corresponde.
 

@@ -904,5 +904,8 @@ Detalle en docs/vod.md §4.10.
   hora, como la guía, y cuentan como confirmadas. Cubren lo que la agenda anuncia como plataformas (OneFootball,
   TV FootballClub, Apple TV, Primera Federación, DAZN a secas).
 - **Sin alias para «Orange Fútbol N»**: no hay canal con ese nombre en ninguna lista y no se sabe a cuál equivale.
+- **0.9.10, cada tag busca solo lo suyo**: «LaLiga TV Bar» es el canal para bares de LaLiga (producto propio), no
+  M+ LaLiga TV; la IA no levanta otro producto de la misma marca («DAZN F1» por «DAZN»); y la familia numerada se
+  aparta por canal (`familyScope: 'channel'`), para que con varios tags cada uno traiga sus señales.
 - **Vuelta atrás**: sin datos nuevos en disco; quitar `matcher` de `FootballService.resolveChannels` devuelve el
   emparejado de la 0.9.8.

@@ -109,6 +109,19 @@ export const CLASSIC_MATCHER: ChannelMatcher = {
   variantKey: claveDeCanalSinVariante,
 };
 
+/**
+ * Lo que la IA puede promocionar con la tubería única (`SemanticOptions.allow`,
+ * docs/iptv.md §4.8): solo un nombre que el emparejador no entiende en
+ * absoluto («UCL Principal» por «M+ Liga de Campeones», 0) o que ya casa. Lo
+ * que comparte marca pero es otro producto («DAZN F1», «DAZN Baloncesto» por
+ * «DAZN») está topado en 58 a propósito y la IA no lo levanta: cada tag de
+ * la agenda busca solo lo suyo.
+ */
+export const SEMANTIC_ALLOW = (requestedChannel: string, candidateName: string): boolean => {
+  const score = canonicalMatchScore(requestedChannel, candidateName);
+  return score === 0 || score >= LIBRARY_MIN_SCORE;
+};
+
 export const CANONICAL_MATCHER: ChannelMatcher = {
   score: canonicalMatchScore,
   family: isChannelFamily,
@@ -866,11 +879,14 @@ export async function resolveFootballChannel(
           sourceStats: state.sourceStats ?? null,
           requestedChannels: channels,
           ...(preferred ? { preferred } : {}),
+          ...(deps.matcher ? { familyScope: 'channel' as const } : {}),
         }
       : {
           sourceStats: state.sourceStats ?? null,
           requestedChannels: channels,
           ...(preferred ? { preferred } : {}),
+          /* Cada tag de la agenda trae lo suyo (§4.8): un exacto de otro tag no aparta esta familia. */
+          ...(deps.matcher ? { familyScope: 'channel' as const } : {}),
         },
   );
   const ai: AiInfo = {
@@ -1012,6 +1028,7 @@ export function overlayIptv(
         sourceStats: options.sourceStats ?? null,
         requestedChannels: channels,
         ...(preferred ? { preferred } : {}),
+        familyScope: 'channel',
       })
     : qualified;
   const checked = core.checked.filter((item) => item !== 'iptv');

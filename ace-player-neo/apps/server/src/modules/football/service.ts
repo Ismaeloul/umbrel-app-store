@@ -74,6 +74,7 @@ import {
 import { ProgrammingCatalog, channelName } from './programming.js';
 import {
   CANONICAL_MATCHER,
+  SEMANTIC_ALLOW,
   overlayIptv,
   resolutionChannels,
   resolveFootballChannel,
@@ -547,7 +548,13 @@ export class FootballServiceImpl implements FootballService {
             candidates as readonly BaseCandidate[] as readonly ResolutionCandidate[],
           ),
         refreshLists: () => this.refreshLists(),
-        semantic: { enabled: config.ai.enabled, embed: this.embed, cache: this.vectors },
+        semantic: {
+          enabled: config.ai.enabled,
+          embed: this.embed,
+          cache: this.vectors,
+          /* La IA no levanta otro producto de la misma marca (§4.8): cada tag busca solo lo suyo. */
+          allow: SEMANTIC_ALLOW,
+        },
         model: config.ai.embedModel,
         programChannels: this.programming.channels,
         /* La tubería única de nombres (docs/iptv.md §4.8): la fachada antigua sigue con el clásico. */

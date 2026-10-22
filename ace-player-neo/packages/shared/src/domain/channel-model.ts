@@ -64,7 +64,12 @@ const LALIGATV_M_RE = word(String.raw`la\s*liga\s*tv\s+(?:m|multi)\s*(\d{1,2})`)
 const HYPERMOTIONV_RE = word('hypermotionv');
 /* 5. Marcas de calidad que `stripQualityMarks` no conoce («LA 1 3840P»). */
 const RESOLUTION_RE = word(String.raw`(?:3840|1920)p?`);
-/* Variantes neutras: el mismo canal para otro local, otra calidad u otro aparato. */
+/* «LaLiga TV Bar» NO es el bar de M+ LaLiga TV: es el canal para bares de LaLiga, que da todos los partidos
+   (los de DAZN, los de Movistar y hasta la Conference). futbolenlatv lo anuncia como otra entrada del mismo
+   partido junto a «DAZN LaLiga» o a «M+ LALIGA». Se deja como producto propio («LaLigaBar», una palabra, para que
+   «bar» no cuente como variante) y solo casa con un canal que se llame así. */
+const LALIGA_BAR_RE = word(String.raw`la\s*liga\s*(?:tv\s*)?bar`);
+/* Variantes neutras: el mismo canal para otro local («DAZN 1 Bar», «M+ #Vamos Bar»), otra calidad u otro aparato. */
 const NEUTRAL_VARIANT_RE = word('bar|low|dispositivos|backup|bkp|alt|multiaudio|vip');
 /* Al final y en mayúsculas: «Teledeporte GEO», «LA 1 RAW» (un «Geo News» es otro canal). */
 const TRAILING_MARK_RE = /\s+(?:GEO|RAW)\s*$/u;
@@ -117,7 +122,8 @@ export function canonicalChannelName(value: unknown): string {
     .replace(GLUED_LALIGATV_MULTI_RE, 'LaLiga TV $1')
     .replace(GLUED_LALIGATV_RE, 'LaLiga TV')
     .replace(LALIGATV_M_RE, 'LaLiga TV $1')
-    .replace(HYPERMOTIONV_RE, 'Hypermotion');
+    .replace(HYPERMOTIONV_RE, 'Hypermotion')
+    .replace(LALIGA_BAR_RE, 'LaLigaBar');
   text = stripQualityMarks(text)
     .replace(RESOLUTION_RE, ' ')
     .replace(TRAILING_MARK_RE, ' ')

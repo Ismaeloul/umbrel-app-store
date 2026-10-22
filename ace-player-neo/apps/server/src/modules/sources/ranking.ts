@@ -136,6 +136,14 @@ export interface MergeOptions {
    * Sin esto (sin IPTV o sin guía), el orden de siempre.
    */
   readonly preferred?: ReadonlySet<string>;
+  /**
+   * Cuándo se aparta la familia numerada (docs/iptv.md §4.8, 0.9.10).
+   * `resolution` (la 0.6.59): con cualquier canal exacto en la resolución,
+   * ninguna familia. `channel`: solo si el canal exacto es el de ESA familia
+   * o uno más concreto de su marca («DAZN LaLiga» aparta a la familia de
+   * «DAZN»; «M+ #Vamos Bar» no): cada tag de la agenda trae lo suyo.
+   */
+  readonly familyScope?: 'resolution' | 'channel';
 }
 
 /** `mergeResolutionCandidates` (server.js:4004-4133). T-050 a T-055, T-092, T-093. */
@@ -183,16 +191,28 @@ export function mergeResolutionCandidates<T extends RankableCandidate>(
   const todos = [...byId.values()];
   /* La familia solo se ofrece cuando NO aparece el canal exacto; un vínculo
      guardado no cuenta como prueba de que existe (server.js:4033-4045). */
-  const hayExacto = todos.some(
+  const exactos = todos.filter(
     (candidate) =>
       candidate.source !== 'saved' &&
       !candidate.soloFamilia &&
       candidate.score >= RESOLUTION_EXACT_SCORE,
   );
+  const hayExacto = exactos.length > 0;
+  /* Con `familyScope: 'channel'`, la familia de un canal solo se aparta si el exacto es ese canal (o uno más
+     concreto de su marca); un exacto de otro tag de la agenda no la toca. */
+  const exactoPara = (candidate: T): boolean => {
+    if (options.familyScope !== 'channel') return hayExacto;
+    const mine = normalizeChannelKey(candidate.matchedChannel);
+    return exactos.some(
+      (exacto) =>
+        normalizeChannelKey(exacto.matchedChannel) === mine ||
+        canalEsGenerico(candidate.matchedChannel, [exacto.matchedChannel]),
+    );
+  };
   const vivas = todos
     .filter((candidate) => {
       if (!candidate.soloFamilia) return true;
-      if (hayExacto) return false;
+      if (exactoPara(candidate)) return false;
       return candidate.familyFallbackAllowed !== false;
     })
     /* El 0 del buscador solo poda sus resultados sueltos (B-037, B-038). */

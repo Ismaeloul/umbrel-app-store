@@ -46,7 +46,9 @@ describe('canonicalChannelName · la misma forma venga de donde venga', () => {
     ['M+ #Vamos Bar 2', 'Movistar Vamos 2'],
     ['#VAMOS FHD --> NEW ERA', 'VAMOS'],
     ['DAZN 1 BAR FHD --> NEW ERA', 'DAZN 1'],
-    ['LaLiga TV Bar', 'LaLiga TV'],
+    ['LaLiga TV Bar', 'LaLigaBar'],
+    ['M+ LALIGA TV BAR HD', 'Movistar LaLigaBar'],
+    ['LALIGATV BAR', 'LaLigaBar'],
     ['M+ LALIGA HDR', 'Movistar LaLiga'],
     ['M+ LIGA DE CAMPEONES LOW', 'Movistar Liga de Campeones'],
     ['Movistar+ Dispositivos', 'Movistar+'],
@@ -67,7 +69,8 @@ describe('canonicalChannelName · la misma forma venga de donde venga', () => {
 describe('channelModel · producto y dial', () => {
   it.each([
     ['M+ LaLiga TV 2', 'laliga', '2'],
-    ['LaLiga TV Bar', 'laliga', null],
+    ['LaLiga TV Bar', 'laligabar', null],
+    ['DAZN 1 Bar', 'dazn', '1'],
     ['M+ Liga de Campeones 13', 'liga campeones', '13'],
     ['LALIGA TV Hypermotion 2', 'laliga hypermotion', '2'],
     ['DAZN', 'dazn', null],
@@ -90,12 +93,15 @@ describe('channelModel · producto y dial', () => {
 
   it('canonicalChannelKey junta las variantes de un canal', () => {
     const keys = new Set(
-      ['M+ LALIGA', 'M+ LALIGA HDR', 'LaLiga TV Bar', 'M+ LALIGA TV ³', 'M+: M.LALIGA'].map(
-        canonicalChannelKey,
-      ),
+      ['M+ LALIGA', 'M+ LALIGA HDR', 'M+ LALIGA TV ³', 'M+: M.LALIGA'].map(canonicalChannelKey),
     );
     expect(keys.size).toBe(1);
     expect(canonicalChannelKey('M+ LALIGA 2')).not.toBe(canonicalChannelKey('M+ LALIGA'));
+    /* El canal para bares de LaLiga no es M+ LaLiga TV: cada tag busca solo lo suyo. */
+    expect(canonicalChannelKey('LaLiga TV Bar')).not.toBe(canonicalChannelKey('M+ LALIGA'));
+    expect(canonicalMatchScore('LaLiga TV Bar', 'M+ LALIGA --> ELCANO')).toBe(0);
+    expect(canonicalMatchScore('LaLiga TV Bar', 'M+ LALIGA TV ³')).toBe(0);
+    expect(canonicalMatchScore('LaLiga TV Bar', 'DAZN LA LIGA 1')).toBe(0);
   });
 
   it('isUmbrellaChannel: la marca a secas, no su dial', () => {
@@ -108,9 +114,8 @@ describe('channelModel · producto y dial', () => {
 
 describe('canonicalMatchScore · lo que fallaba el 2026-10-22', () => {
   it.each([
-    ['LaLiga TV Bar', 'M+ LALIGA --> ELCANO'],
-    ['LaLiga TV Bar', 'M+ LALIGA TV ³'],
-    ['LaLiga TV Bar', 'LALIGATV'],
+    ['LaLiga TV Bar', 'M+ LALIGA TV BAR'],
+    ['LaLiga TV Bar', 'LALIGATV BAR HD'],
     ['LaLiga TV M2', 'M+ LALIGA 2 --> ELCANO'],
     ['LaLiga TV M2', 'LALIGATVMULTI2'],
     ['LaLiga TV M2', 'MOVISTAR LALIGA 2'],

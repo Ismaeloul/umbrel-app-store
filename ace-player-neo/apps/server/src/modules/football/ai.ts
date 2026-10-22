@@ -284,6 +284,15 @@ export interface SemanticOptions {
   readonly enabled: boolean;
   readonly cache: VectorStore;
   readonly embed: EmbedFunction;
+  /**
+   * ¿Puede la IA promocionar este nombre a este canal pedido? (docs/iptv.md
+   * §4.8, 0.9.10). El servicio deja pasar solo lo que el emparejador no
+   * entiende en absoluto («UCL Principal» por «M+ Liga de Campeones»); lo que
+   * comparte marca pero es otro producto («DAZN F1», «DAZN Baloncesto» por
+   * «DAZN») ya está topado en 58 a propósito y la IA no lo levanta. Sin esto
+   * (la fachada antigua), todo como en la 0.6.59.
+   */
+  readonly allow?: (requestedChannel: string, candidateName: string) => boolean;
 }
 
 export type SemanticFields = {
@@ -347,6 +356,7 @@ export async function applySemanticCandidateScores<T extends SemanticCandidate>(
         if (!semanticNumbersCompatible(entry.name, rawName)) continue;
         const similarity = cosineSimilarity(vectors.get(entry.text), candidateVector);
         if (entry.requested) {
+          if (options.allow && !options.allow(entry.name, rawName)) continue;
           if (similarity > bestRequested.similarity) {
             bestRequested = { similarity, channel: entry.name };
           }
