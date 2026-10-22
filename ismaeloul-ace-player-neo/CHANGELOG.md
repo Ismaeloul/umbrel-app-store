@@ -2,6 +2,14 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.10 (2026-10-22)
+
+Cada canal de "Donde se emite" busca solo lo suyo: LaLiga TV Bar ya no
+trae los Movistar LaLiga en un partido de DAZN, la IA no cuela DAZN F1
+ni DAZN Baloncesto por "DAZN", y con varios canales en la tarjeta cada
+uno conserva sus señales (las de DAZN no desaparecen porque Vamos tenga
+las suyas).
+
 ## 0.9.9 (2026-10-22)
 
 Los partidos encuentran mas canales. La agenda, las listas de AceStream

@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.9.9"
+version: "0.9.10"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,12 +13,11 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Los partidos encuentran mas canales. La agenda, las listas de AceStream
-  y la IPTV se leen con la misma limpieza de nombres (LaLiga TV Bar,
-  LaLiga TV M2, Vamos Bar, DAZN 1 Bar, Esport3, los titulos con enlaces
-  del buscador), la Segunda no se mezcla con la Primera, cada canal del
-  partido conserva su cartel IPTV y los eventos PPV de la IPTV se
-  emparejan por equipos y hora.
+  Cada canal de "Donde se emite" busca solo lo suyo: LaLiga TV Bar ya no
+  trae los Movistar LaLiga en un partido de DAZN, la IA no cuela DAZN F1
+  ni DAZN Baloncesto por "DAZN", y con varios canales en la tarjeta cada
+  uno conserva sus señales (las de DAZN no desaparecen porque Vamos tenga
+  las suyas).
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []
