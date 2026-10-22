@@ -96,6 +96,19 @@ const NOTE_RE =
 /* «TVG» es como la agenda llama a TV Galicia (la lista pone «GALICIA TV» o «TV GALICIA»). */
 const TVG_RE = word('tvg');
 
+/* Plataformas de internet que la agenda anuncia como «canal» («RTVE Play», «Disney+», «Apple TV», «OneFootball
+   PPV», «Fanatiz»…): no son un canal de televisión y no se emparejan por nombre («Disney+» no es «Disney Channel»).
+   Lo mismo que `iptvAskedChannel` hace en la IPTV, aquí para todas las rutas. «Gol Play» es un canal de la TDT. */
+const PLATFORM_RE =
+  /(?<![\p{L}\p{N}])(?:play|app|youtube|twitch|facebook|twitter|instagram|tiktok|ppv|web|online|netflix|skyshowtime|filmin|atresplayer|mitele|fanseat|fanplay|fanatiz|onefootball|zapping|peacock|hbo\s*max|prime\s*video|amazon\s*prime|apple\s*tv|vix|pluto\s*tv|rakuten)(?![\p{L}\p{N}])|\bparamount\s*\+|\bdisney\s*(?:\+|plus(?![\p{L}\p{N}]))|^\s*max\s*$|\p{L}play(?![\p{L}\p{N}])|@/iu;
+const TV_CHANNEL_PLAY_RE = /^\s*gol\s*play(?![\p{L}\p{N}])/iu;
+
+/** ¿Es una plataforma de internet y no un canal («RTVE Play», «Disney+», «Apple TV», «OneFootball PPV»)? */
+export function isInternetPlatform(value: unknown): boolean {
+  const text = String(value ?? '').normalize('NFC');
+  return !TV_CHANNEL_PLAY_RE.test(text) && PLATFORM_RE.test(text);
+}
+
 /**
  * El nombre canónico de un canal, venga de la agenda, de una lista de
  * AceStream, del buscador del motor o de la IPTV: sin proveedor, enlaces,
@@ -111,7 +124,11 @@ export function canonicalChannelName(value: unknown): string {
     .replace(URL_RE, ' ')
     .replace(DOMAIN_RE, ' ')
     .replace(HANDLE_RE, ' ')
-    .replace(JUNK_WORDS_RE, ' ')
+    .replace(JUNK_WORDS_RE, ' ');
+  /* Una plataforma no tiene nombre canónico: nunca casa con nada por nombre (ya sin enlaces: «shickat.online»
+     no es una plataforma). */
+  if (isInternetPlatform(text)) return '';
+  text = text
     .replace(SUPERSCRIPT_RE, ' ')
     .replace(EMOJI_RE, ' ')
     .replace(DECOR_RE, ' ')
@@ -224,6 +241,10 @@ export function channelModelScore(a: ChannelModel, b: ChannelModel): number | nu
  * letras latinas nunca puntúa.
  */
 export function canonicalMatchScore(left: unknown, right: unknown): number {
+  /* El mismo nombre es el mismo canal, sea lo que sea: un vínculo hecho a mano sobre «Amazon Prime Video» sigue
+     valiendo aunque una plataforma no se empareje por nombre con nada más. */
+  const sameKey = normalizeChannelKey(left);
+  if (sameKey && sameKey === normalizeChannelKey(right)) return 100;
   const a = channelModel(left);
   const b = channelModel(right);
   if (!a.key || !b.key || !a.letters || !b.letters) return 0;

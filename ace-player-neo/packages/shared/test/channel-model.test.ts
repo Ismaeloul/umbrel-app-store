@@ -12,6 +12,7 @@ import {
   channelMatchScore,
   channelModel,
   isChannelFamily,
+  isInternetPlatform,
   isUmbrellaChannel,
 } from '../src/index.js';
 
@@ -83,6 +84,19 @@ describe('channelModel · producto y dial', () => {
     const model = channelModel(name);
     expect(model.product).toBe(product);
     expect(model.dial).toBe(dial);
+  });
+
+  it('una plataforma de internet no es un canal: «Disney+» no es «Disney Channel»', () => {
+    expect(isInternetPlatform('Disney+')).toBe(true);
+    expect(isInternetPlatform('RTVE Play')).toBe(true);
+    expect(isInternetPlatform('OneFootball PPV')).toBe(true);
+    expect(isInternetPlatform('Apple TV')).toBe(true);
+    expect(isInternetPlatform('GOL Play')).toBe(false);
+    expect(isInternetPlatform('M+ LALIGA')).toBe(false);
+    expect(canonicalChannelName('Disney+')).toBe('');
+    expect(canonicalMatchScore('Disney+', 'Disney Channel --> NEW ERA III')).toBe(0);
+    expect(canonicalMatchScore('RTVE Play', 'La 1 TVE 720p *')).toBe(0);
+    expect(canonicalMatchScore('GOL Play', 'GOL PLAY FHD --> NEW ERA')).toBe(100);
   });
 
   it('un nombre en árabe se queda sin letras y nunca puntúa', () => {
