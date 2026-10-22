@@ -2,6 +2,13 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.11 (2026-10-22)
+
+Una plataforma de internet en la tarjeta (Disney+, RTVE Play, Apple TV,
+OneFootball) ya no se confunde con un canal de tu lista: Disney+ no es
+Disney Channel. Un vinculo que hagas a mano sobre la plataforma sigue
+valiendo.
+
 ## 0.9.10 (2026-10-22)
 
 Cada canal de "Donde se emite" busca solo lo suyo: LaLiga TV Bar ya no
