@@ -2,6 +2,15 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.9 (2026-10-22)
+
+Los partidos encuentran mas canales. La agenda, las listas de AceStream
+y la IPTV se leen con la misma limpieza de nombres (LaLiga TV Bar,
+LaLiga TV M2, Vamos Bar, DAZN 1 Bar, Esport3, los titulos con enlaces
+del buscador), la Segunda no se mezcla con la Primera, cada canal del
+partido conserva su cartel IPTV y los eventos PPV de la IPTV se
+emparejan por equipos y hora.
+
 ## 0.9.8 (2026-10-19)
 
 Las descargas de peliculas y series del iPhone siguen aunque cierres
