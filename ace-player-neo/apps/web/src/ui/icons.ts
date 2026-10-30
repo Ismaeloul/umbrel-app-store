@@ -84,6 +84,9 @@ export const ICONS = {
   personas:
     '<circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5a6 6 0 0 1 12 0"/><path d="M15.5 5.6a3.3 3.3 0 0 1 0 6M17.5 14.2a6 6 0 0 1 3.5 5.3"/>',
   corona: '<path d="M4 17.5L3 8l5 4 4-6.5 4 6.5 5-4-1 9.5z"/><path d="M4.5 20.5h15"/>',
+  chat: '<path d="M4.5 5.5h15a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V17.5h-1A1.5 1.5 0 0 1 3 16V7a1.5 1.5 0 0 1 1.5-1.5z"/><path d="M7.5 10h9M7.5 13.5h6"/>',
+  emoji:
+    '<circle cx="12" cy="12" r="8.5"/><path d="M8.3 14.2a4.6 4.6 0 0 0 7.4 0"/><circle cx="9.2" cy="9.8" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.8" cy="9.8" r="1.1" fill="currentColor" stroke="none"/>',
 } as const satisfies Record<string, string>;
 
 export type IconName = keyof typeof ICONS;

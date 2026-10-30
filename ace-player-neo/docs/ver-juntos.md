@@ -11,6 +11,7 @@ mismo a la vez y chatean. Pausar, avanzar o cambiar el idioma pasa para todos.
 | 2 | Invitados desde fuera en `https://sala.ismaeloul.es/s/<código>` (§9) | 0.9.5 |
 | 2b | La app del iPhone (Ace Neo) crea, entra y cierra salas (§10) | 0.9.6 |
 | 3 | Como Rave (§11): líder, echar, reacciones, lista con votos, siguiente episodio para todos | 0.9.13 (web) |
+| 3c | Reproductor nuevo: controles sobre el vídeo, pantalla completa con chat (§12) | 0.9.15 (web) |
 | 3b | Lo mismo en la app del iPhone; chat de voz; que los invitados busquen y añadan títulos | ideas |
 
 Descartado para la fase 2: Cloudflare Tunnel (sus condiciones no quieren mucho vídeo y Isma quiere algo que no dependa
@@ -199,3 +200,29 @@ no haya que aprender nada. Lo que se sabe de Rave sale de fuentes públicas (no 
 - **Pendiente:** la app del iPhone aún no conoce nada de esto (si no es la líder, el servidor le contesta
   `party_leader_only` al pausar); el chat de voz (Isma prefiere no abrir más puertos por ahora); que los invitados
   puedan buscar en el catálogo.
+
+## 12. El reproductor de la sala (0.9.15)
+
+El de la 0.9.4 era una fila de controles bajo el vídeo. Ahora (`features/juntos/Theater.tsx`) va como el reproductor
+de casa y como Rave: todo encima del vídeo y escondiéndose solo.
+
+- **Arriba**, sobre un degradado: título (en el móvil, no: ya está en la cabecera), cuántos hay conectados y, si no
+  mandas, «Controla Ana (líder)».
+- **Centro:** el botón grande de reproducir o pausar (solo quien manda), «Toca para empezar», «Esperando a Ana…»,
+  cargando o el aviso de error con «Reintentar». Sin vídeo (preparando, error, interrumpida) no se pinta la barra.
+- **Abajo:** la barra de tiempo del reproductor de casa (`VodTimeline`: arrastrar con el dedo, tiempo flotante y
+  salto al soltar; antes, un `input range` que en el iPhone no siempre avisaba al soltar) y la fila: reproducir,
+  ±10 s (no en pantallas de menos de 480 px), el tiempo, reacciones (una bandeja encima de la barra, como en Rave),
+  volumen (el deslizador solo con ratón), idioma, chat (en pantalla completa, con los mensajes nuevos en un globo) y
+  pantalla completa.
+- **El tiempo y la barra son los de la sala** (`targetPosition` con el reloj del servidor), no `currentTime` del
+  vídeo: un invitado iba sincronizado pero su contador decía 0:10 con la sala en el minuto 10.
+- **Se esconden** a los 3 s si reproduce y nadie toca; vuelven al mover el ratón o tocar. Ratón: clic, reproducir o
+  pausar; doble clic, pantalla completa. Dedo: un toque enseña o esconde. Teclado: espacio o K, ← →, F, M y C.
+- **Pantalla completa** sobre el reproductor Y el panel (`.juntos__body`), con el chat como cajón de cristal (a la
+  derecha; en vertical, la mitad de abajo) que se abre y se cierra. En el iPhone no hay pantalla completa para un
+  trozo de página (la del vídeo esconde chat y reacciones): la sala ocupa toda la pantalla con CSS. Si el navegador
+  no contesta en 1,5 s, también. En Android se gira a horizontal.
+- **Móvil:** el vídeo de lado a lado, la cabecera en una fila (Invitar y Cerrar, solo con icono por debajo de
+  480 px) y la pestaña «Gente» (antes «Personas», que no cabía).
+- **Pruebas:** `Theater.test.tsx` y a mano en el PC (ordenador y móvil, sin vídeo: sin ffmpeg no hay muestras).

@@ -1,30 +1,35 @@
-/* La sala (docs/ver-juntos.md §7 y §11): el vídeo con sus controles, las
-   reacciones encima y debajo, y al lado (en el móvil, debajo) las pestañas
-   Chat, Lista y Personas, más Ajustes para el líder. Si solo controla el
-   líder, los demás ven los controles apagados y quién manda. */
+/* La sala (docs/ver-juntos.md §7, §11 y §12): el reproductor (Theater) y, al
+   lado en el ordenador o debajo en el móvil, las pestañas Chat, Lista y
+   Personas, más Ajustes para el líder.
 
-import type { PartyCloseReason, PartyCredential, PartyRoom } from '@ace/shared';
+   Pantalla completa: la de verdad sobre el reproductor Y el panel, para que
+   el chat siga a mano (se abre y se cierra con su botón, con los mensajes
+   nuevos en un globo). En el iPhone no hay pantalla completa para un trozo de
+   página (solo la del vídeo, que esconde chat y reacciones): allí la sala
+   ocupa toda la pantalla con CSS. En Android, además, se gira a horizontal. */
+
+import type { PartyCloseReason, PartyCredential } from '@ace/shared';
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
-  type RefObject,
 } from 'react';
 import { describeFailure } from '../../api/index.ts';
+import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
+import { copyText } from '../../player/clipboard.ts';
 import { Button, IconButton } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
-import { Icon } from '../../ui/Icon.tsx';
-import { copyText } from '../../player/clipboard.ts';
 import { Tabs, tabPanelProps } from '../../ui/Segmented.tsx';
 import { Chat } from './Chat.tsx';
-import { canControl, inviteUrl, PartyClient, rememberRoom, type PartyState } from './client.ts';
-import { People, Queue, ReactionBar, ReactionLayer, Settings, UpNext } from './Panels.tsx';
-import { RoomPlayer, type PlayerView } from './player.ts';
-import { clock, isRunning } from './sync.ts';
+import { inviteUrl, PartyClient, rememberRoom } from './client.ts';
+import { People, Queue, Settings } from './Panels.tsx';
+import { RoomPlayer } from './player.ts';
+import { Theater } from './Theater.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
 
 const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
@@ -37,6 +42,11 @@ const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
 };
 
 type SideTab = 'chat' | 'lista' | 'personas' | 'ajustes';
+
+/** ¿Este navegador sabe poner un elemento cualquiera en pantalla completa? (el iPhone, no). */
+function nativeFullscreen(element: HTMLElement | null): boolean {
+  return !!element && typeof element.requestFullscreen === 'function';
+}
 
 export function Room({
   code,
@@ -59,9 +69,13 @@ export function Room({
   const client = useMemo(() => new PartyClient(code, credential), [code, credential]);
   const state = useSyncExternalStore(client.subscribe, client.getState);
   const video = useRef<HTMLVideoElement>(null);
-  const stage = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
   const [player, setPlayer] = useState<RoomPlayer | null>(null);
   const [tab, setTab] = useState<SideTab>('chat');
+  /* `native`: la del navegador; `page`: la sala a toda pantalla con CSS (iPhone). */
+  const [fullscreen, setFullscreen] = useState<'native' | 'page' | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [seenMessages, setSeenMessages] = useState(0);
 
   useEffect(() => {
     rememberRoom(code);
@@ -85,6 +99,54 @@ export function Room({
   useEffect(() => {
     if (state.closed === 'forbidden') onForbidden();
   }, [state.closed, onForbidden]);
+
+  /* Salir de la pantalla completa del navegador (Esc, el gesto de atrás) también la quita aquí. */
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) setFullscreen((now) => (now === 'native' ? null : now));
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  /* Mensajes del chat ya vistos: con el chat a la vista (o fuera de la pantalla completa), todos. */
+  const chatVisible = !fullscreen || chatOpen;
+  const messages = state.chat.filter((message) => message.kind === 'chat').length;
+  useEffect(() => {
+    if (chatVisible) setSeenMessages(messages);
+  }, [chatVisible, messages]);
+
+  const toggleFullscreen = useCallback(() => {
+    const element = body.current;
+    if (fullscreen === 'native') {
+      void document.exitFullscreen?.().catch(() => undefined);
+      setFullscreen(null);
+      return;
+    }
+    if (fullscreen === 'page') {
+      setFullscreen(null);
+      return;
+    }
+    setChatOpen(false);
+    if (element && nativeFullscreen(element)) {
+      /* Si el navegador no contesta (algunos marcos no lo dejan y la promesa no acaba), la de la página. */
+      const fallback = globalThis.setTimeout(() => setFullscreen('page'), 1_500);
+      void element
+        .requestFullscreen({ navigationUI: 'hide' })
+        .finally(() => globalThis.clearTimeout(fallback))
+        .then(() => {
+          setFullscreen('native');
+          /* Android: a horizontal (si el navegador no deja, se queda como está). */
+          const orientation = screen.orientation as ScreenOrientation & {
+            lock?: (o: string) => Promise<void>;
+          };
+          void orientation?.lock?.('landscape').catch(() => undefined);
+        })
+        .catch(() => setFullscreen('page'));
+    } else {
+      setFullscreen('page');
+    }
+  }, [fullscreen]);
 
   if (state.closed && state.closed !== 'forbidden') {
     return <EmptyState title={CLOSED_TEXT[state.closed]} actions={exitAction} />;
@@ -128,7 +190,7 @@ export function Room({
   };
 
   return (
-    <div className="juntos">
+    <div className={cx('juntos', fullscreen === 'page' && 'juntos--page-fs')}>
       <header className="juntos__head">
         <div className="juntos__heading">
           <h1 className="juntos__title">{room?.title.title ?? JUNTOS_TEXT.connecting}</h1>
@@ -148,22 +210,48 @@ export function Room({
           </Button>
         </div>
       </header>
-      <div className="juntos__body">
-        <div className="juntos__stage" ref={stage}>
+      <div
+        ref={body}
+        className="juntos__body"
+        data-fullscreen={fullscreen ? 'true' : 'false'}
+        data-chat={chatOpen ? 'open' : 'closed'}
+      >
+        <div className="juntos__stage">
           <video ref={video} className="juntos__video" playsInline preload="auto" />
           {player && room ? (
-            <Stage player={player} client={client} room={room} state={state} stage={stage} />
+            <Theater
+              player={player}
+              client={client}
+              room={room}
+              state={state}
+              video={video.current}
+              fullscreen={fullscreen !== null}
+              onFullscreen={toggleFullscreen}
+              chatOpen={chatOpen}
+              onChat={() => setChatOpen((open) => !open)}
+              unread={Math.max(0, messages - seenMessages)}
+            />
           ) : null}
         </div>
         <aside className="juntos__side">
-          <Tabs
-            label={JUNTOS_TEXT.people}
-            idPrefix="juntos"
-            block
-            items={tabs}
-            value={shownTab}
-            onChange={setTab}
-          />
+          <div className="juntos__side-head">
+            <Tabs
+              label={JUNTOS_TEXT.people}
+              idPrefix="juntos"
+              block
+              items={tabs}
+              value={shownTab}
+              onChange={setTab}
+            />
+            {fullscreen ? (
+              <IconButton
+                icon="x"
+                label={JUNTOS_TEXT.closePanel}
+                variant="quiet"
+                onClick={() => setChatOpen(false)}
+              />
+            ) : null}
+          </div>
           <div className="juntos__panel" {...tabPanelProps('juntos', shownTab)}>
             {shownTab === 'chat' ? (
               <Chat
@@ -183,189 +271,4 @@ export function Room({
       </div>
     </div>
   );
-}
-
-function Stage({
-  player,
-  client,
-  room,
-  state,
-  stage,
-}: {
-  player: RoomPlayer;
-  client: PartyClient;
-  room: PartyRoom;
-  state: PartyState;
-  stage: RefObject<HTMLDivElement | null>;
-}) {
-  const view = useSyncExternalStore(player.subscribe, player.getView);
-  const [scrub, setScrub] = useState<number | null>(null);
-  const playback = room.playback;
-  const control = canControl(room, client.credential.id);
-  const leaderName = room.members.find((member) => member.leader)?.name ?? '';
-  const running = isRunning(playback);
-  const waitingNames = room.members
-    .filter((member) => playback.waitingFor.includes(member.id))
-    .map((member) => member.name);
-
-  const order = (action: 'play' | 'pause' | 'seek', positionS: number) =>
-    void client
-      .control({ action, positionS })
-      .catch((error: unknown) => notify(describeFailure(error), { tone: 'err' }));
-  const position = scrub ?? view.positionS;
-  const duration = view.durationS ?? room.title.durationS ?? 0;
-
-  const fullscreen = () => {
-    const element = stage.current;
-    const videoEl = element?.querySelector('video') as
-      (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else if (element?.requestFullscreen) void element.requestFullscreen().catch(() => undefined);
-    else videoEl?.webkitEnterFullscreen?.();
-  };
-
-  return (
-    <>
-      <ReactionLayer reactions={state.reactions} client={client} />
-      <Overlay view={view} room={room} player={player} />
-      <UpNext room={room} client={client} selfId={client.credential.id} />
-      <div className="juntos-controls" role="group" aria-label="Controles">
-        <IconButton
-          icon={playback.playing ? 'pause' : 'play'}
-          label={playback.playing ? JUNTOS_TEXT.pause : JUNTOS_TEXT.play}
-          variant="video"
-          size="lg"
-          disabled={!control}
-          onClick={() => order(playback.playing ? 'pause' : 'play', view.positionS)}
-        />
-        <IconButton
-          icon="back"
-          label={JUNTOS_TEXT.back10}
-          variant="video"
-          disabled={!control}
-          onClick={() => order('seek', Math.max(0, view.positionS - 10))}
-        />
-        <IconButton
-          icon="chev-r"
-          label={JUNTOS_TEXT.forward10}
-          variant="video"
-          disabled={!control}
-          onClick={() => order('seek', Math.min(duration || Infinity, view.positionS + 10))}
-        />
-        <span className="juntos-controls__time">
-          {clock(position)} / {clock(duration)}
-        </span>
-        <input
-          className="juntos-controls__bar"
-          type="range"
-          min={0}
-          max={Math.max(1, duration)}
-          step={1}
-          value={Math.min(position, Math.max(1, duration))}
-          disabled={!control}
-          aria-label={JUNTOS_TEXT.position}
-          aria-valuetext={`${clock(position)} de ${clock(duration)}`}
-          onChange={(event) => setScrub(Number(event.target.value))}
-          onPointerUp={() => {
-            if (scrub !== null) order('seek', scrub);
-            setScrub(null);
-          }}
-          onKeyUp={() => {
-            if (scrub !== null) order('seek', scrub);
-            setScrub(null);
-          }}
-        />
-        {room.audio.tracks.length > 1 ? (
-          <label className="juntos-controls__lang">
-            <span className="sr-only">{JUNTOS_TEXT.language}</span>
-            <select
-              aria-label={JUNTOS_TEXT.language}
-              value={room.audio.index ?? ''}
-              disabled={!control}
-              onChange={(event) =>
-                void client
-                  .control({
-                    action: 'audio',
-                    positionS: view.positionS,
-                    audio: Number(event.target.value),
-                  })
-                  .catch((error: unknown) => notify(describeFailure(error), { tone: 'err' }))
-              }
-            >
-              {room.audio.tracks.map((track) => (
-                <option key={track.index} value={track.index}>
-                  {track.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <IconButton
-          icon="full"
-          label={JUNTOS_TEXT.fullscreen}
-          variant="video"
-          onClick={fullscreen}
-        />
-        {!control && leaderName ? (
-          <span className="juntos-controls__who">
-            <Icon name="corona" size={16} />
-            {JUNTOS_TEXT.leaderControls(leaderName)}
-          </span>
-        ) : null}
-      </div>
-      <ReactionBar client={client} />
-      {state.connection === 'reconnecting' ? (
-        <p className="juntos__status">{JUNTOS_TEXT.reconnecting}</p>
-      ) : !running && waitingNames.length ? (
-        <p className="juntos__status">{JUNTOS_TEXT.waitingFor(waitingNames.join(', '))}</p>
-      ) : null}
-    </>
-  );
-}
-
-function Overlay({
-  view,
-  room,
-  player,
-}: {
-  view: PlayerView;
-  room: PartyRoom;
-  player: RoomPlayer;
-}) {
-  if (view.phase === 'blocked') {
-    return (
-      <button
-        type="button"
-        className="juntos-overlay juntos-overlay--tap"
-        onClick={() => player.unlock()}
-      >
-        <span className="juntos-overlay__big">{JUNTOS_TEXT.tapToStart}</span>
-        <span className="juntos-overlay__hint">{JUNTOS_TEXT.tapToStartHint}</span>
-      </button>
-    );
-  }
-  if (view.phase === 'interrupted' || view.phase === 'error') {
-    const text =
-      view.phase === 'error'
-        ? (view.error ?? JUNTOS_TEXT.interruptedFailed)
-        : room.interrupted === 'taken'
-          ? JUNTOS_TEXT.interruptedTaken
-          : JUNTOS_TEXT.interruptedFailed;
-    return (
-      <div className="juntos-overlay" role="status">
-        <span className="juntos-overlay__big">{text}</span>
-        <Button variant="primary" icon="play" onClick={() => player.retry()}>
-          {view.phase === 'error' ? JUNTOS_TEXT.retry : JUNTOS_TEXT.resumeHere}
-        </Button>
-      </div>
-    );
-  }
-  if (view.phase === 'preparing' || view.phase === 'idle') {
-    return (
-      <div className="juntos-overlay" role="status">
-        <span className="juntos-overlay__hint">{JUNTOS_TEXT.preparing}</span>
-      </div>
-    );
-  }
-  return null;
 }

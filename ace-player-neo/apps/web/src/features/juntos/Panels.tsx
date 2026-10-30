@@ -3,13 +3,7 @@
    lista con sus votos, los ajustes del líder, las reacciones que suben por
    encima del vídeo y la tarjeta de «A continuación» con su cuenta atrás. */
 
-import {
-  PARTY_REACTIONS,
-  type PartyQueueMode,
-  type PartyMember,
-  type PartyReactBody,
-  type PartyRoom,
-} from '@ace/shared';
+import { type PartyQueueMode, type PartyMember, type PartyRoom } from '@ace/shared';
 import { useEffect, useState } from 'react';
 import { describeFailure } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
@@ -277,21 +271,7 @@ const QUEUE_MODES: ReadonlyArray<readonly [PartyQueueMode, string]> = [
   ['once', JUNTOS_TEXT.queueOnce],
 ];
 
-// --- Reacciones ---
-
-/** La fila de emojis para lanzar. */
-export function ReactionBar({ client }: { client: PartyClient }) {
-  const send = (emoji: PartyReactBody['emoji']) => attempt(() => client.react(emoji));
-  return (
-    <div className="juntos-react" role="group" aria-label={JUNTOS_TEXT.react}>
-      {PARTY_REACTIONS.map((emoji) => (
-        <button key={emoji} type="button" className="juntos-react__btn" onClick={() => send(emoji)}>
-          {emoji}
-        </button>
-      ))}
-    </div>
-  );
-}
+// --- Reacciones (se lanzan desde el reproductor, Theater.tsx) ---
 
 /** Las reacciones subiendo por encima del vídeo; cada una se quita al acabar de subir. */
 export function ReactionLayer({

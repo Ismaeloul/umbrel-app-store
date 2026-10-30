@@ -41,13 +41,16 @@ export function timeAtPointer(
   return x * duration;
 }
 
-/** La barra de tiempo: salta al soltar; mientras se arrastra solo se mueve el tiempo flotante. */
+/**
+ * La barra de tiempo: salta al soltar; mientras se arrastra solo se mueve el
+ * tiempo flotante. También la usa la sala de «Ver juntos» (features/juntos).
+ */
 export function VodTimeline({
   vod,
   onSeek,
   onNudge,
 }: {
-  vod: VodPlayback;
+  vod: Pick<VodPlayback, 'positionS' | 'durationS' | 'bufferedEndS'>;
   onSeek(seconds: number): void;
   onNudge(delta: number): void;
 }) {

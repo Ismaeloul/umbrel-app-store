@@ -42,106 +42,475 @@
 }
 @media (min-width: 1024px) {
   .juntos__body {
-    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-columns: minmax(0, 1fr) 380px;
     align-items: start;
   }
 }
 
-/* El escenario: el vídeo con los controles debajo y los avisos encima. */
+/* El reproductor (Theater.tsx, docs/ver-juntos.md §12): el vídeo con todo
+   encima, como en el reproductor de casa. Los controles se esconden solos. */
 .juntos__stage {
   position: relative;
-  display: grid;
   overflow: hidden;
   border-radius: var(--r-l, 16px);
   background: #000;
   color: var(--on-video, #fff);
-}
-.juntos__stage:fullscreen {
-  border-radius: 0;
-  align-content: center;
+  aspect-ratio: 16 / 9;
+  isolation: isolate;
 }
 .juntos__video {
-  display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: 100%;
+  object-fit: contain;
   background: #000;
 }
-.juntos__stage:fullscreen .juntos-overlay {
-  aspect-ratio: auto;
-  bottom: 64px;
+/* En el móvil en vertical, el vídeo de lado a lado y arriba del todo. */
+@media (max-width: 719px) {
+  .juntos {
+    gap: 12px;
+    padding-top: 8px;
+  }
+  /* Cabecera en una fila: el título (cortado) y los botones. */
+  .juntos__head {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  .juntos__title {
+    overflow: hidden;
+    font-size: var(--fs-17, 17px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .juntos__sub {
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos__actions {
+    flex-wrap: nowrap;
+  }
 }
-.juntos__stage:fullscreen .juntos__video {
-  aspect-ratio: auto;
-  height: calc(100vh - 64px);
+@media (max-width: 479px) {
+  /* Solo los iconos: el texto queda para el lector de pantalla. */
+  .juntos__actions .btn__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .juntos__stage {
+    margin: 0 calc(-1 * var(--gutter, 16px));
+    border-radius: 0;
+  }
 }
-.juntos-controls {
+
+.juntos-chrome {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.juntos-chrome[data-visible='false'] {
+  cursor: none;
+}
+/* La superficie que recibe toques y clics (debajo de los controles). */
+.juntos-chrome__surface {
+  position: absolute;
+  inset: 0;
+}
+.juntos-chrome__top,
+.juntos-chrome__bottom {
+  position: relative;
+  z-index: 2;
+  transition:
+    opacity var(--dur-rapido) var(--ease-estandar),
+    translate var(--dur-rapido) var(--ease-estandar);
+}
+.juntos-chrome[data-visible='false'] .juntos-chrome__top,
+.juntos-chrome[data-visible='false'] .juntos-chrome__bottom {
+  opacity: 0;
+  pointer-events: none;
+}
+.juntos-chrome[data-visible='false'] .juntos-chrome__top {
+  translate: 0 -8px;
+}
+.juntos-chrome[data-visible='false'] .juntos-chrome__bottom {
+  translate: 0 8px;
+}
+
+/* Arriba: título y quién manda, sobre un degradado. */
+.juntos-chrome__top {
+  grid-row: 1;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  padding: 8px 12px 10px;
-  background: var(--glass-video-solid, rgba(0, 0, 0, 0.72));
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 28px;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.7), rgb(0 0 0 / 0));
+  pointer-events: none;
 }
-.juntos-controls__time {
-  font-family: var(--mono);
-  font-size: var(--fs-13, 13px);
-  font-variant-numeric: tabular-nums;
+.juntos-chrome__heading {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}
+.juntos-chrome__title {
+  overflow: hidden;
+  font-size: var(--fs-17, 17px);
+  font-weight: var(--wght-head, 760);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.juntos-controls__bar {
-  flex: 1 1 160px;
-  min-width: 120px;
-  accent-color: var(--accent);
+.juntos-chrome__sub {
+  color: var(--on-video-2, rgb(255 255 255 / 0.76));
+  font-size: var(--fs-13, 13px);
 }
-.juntos-controls__lang select {
-  max-width: 180px;
-  padding: 6px 8px;
-  border: 1px solid var(--line-strong, rgba(255, 255, 255, 0.3));
-  border-radius: var(--r-s, 8px);
+.juntos-chrome__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.juntos-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--glass-video, rgb(10 12 16 / 0.62));
+  font-size: var(--fs-13, 13px);
+  font-weight: 650;
+  white-space: nowrap;
+  backdrop-filter: blur(12px);
+}
+/* La sala y la cabecera ya dicen el título fuera de la pantalla completa en escritorio. */
+@media (min-width: 720px) {
+  .juntos__body[data-fullscreen='false'] .juntos-chrome__heading {
+    visibility: hidden;
+  }
+}
+
+/* Centro: botón grande, «cargando», avisos. */
+.juntos-center {
+  grid-row: 2;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 8px 16px;
+  pointer-events: none;
+}
+.juntos-center > * {
+  pointer-events: auto;
+}
+.juntos-center__big-btn {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--glass-video, rgb(10 12 16 / 0.62));
+  color: var(--on-video, #fff);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition:
+    opacity var(--dur-rapido) var(--ease-estandar),
+    scale var(--dur-rapido) var(--ease-rapido);
+}
+.juntos-center__big-btn:active {
+  scale: 0.92;
+}
+.juntos-center__big-btn:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.juntos-chrome[data-visible='false'] .juntos-center__big-btn--toggle {
+  opacity: 0;
+  pointer-events: none;
+}
+.juntos-center__tap {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: var(--fs-13, 13px);
-}
-.juntos-controls__lang option {
-  color: #000;
-}
-.juntos__status {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  margin: 0;
-  padding: 6px 12px;
-  border-radius: var(--r-pill, 999px);
-  background: var(--glass-video-solid, rgba(0, 0, 0, 0.72));
-  font-size: var(--fs-13, 13px);
-}
-/* Encima del vídeo y solo del vídeo (los controles pueden ocupar dos filas en el móvil). */
-.juntos-overlay {
-  position: absolute;
-  inset: 0 0 auto;
-  aspect-ratio: 16 / 9;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 12px;
-  padding: 24px;
-  border: 0;
-  background: var(--scrim, rgba(0, 0, 0, 0.55));
-  color: inherit;
-  font: inherit;
-  text-align: center;
-}
-.juntos-overlay--tap {
   cursor: pointer;
 }
-.juntos-overlay__big {
-  font-size: var(--fs-22, 22px);
-  font-weight: var(--wght-strong, 700);
+.juntos-center__tap .juntos-center__big-btn {
+  background: var(--accent);
+  color: var(--on-accent, #000);
 }
-.juntos-overlay__hint {
-  color: var(--on-video-2, rgba(255, 255, 255, 0.75));
-  font-size: var(--fs-15, 15px);
+.juntos-center__card {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 420px;
+  padding: 18px 22px;
+  border-radius: var(--r-l, 16px);
+  background: var(--glass-video, rgb(10 12 16 / 0.62));
+  text-align: center;
+  backdrop-filter: blur(12px);
+}
+.juntos-center__text {
+  font-size: var(--fs-17, 17px);
+  font-weight: var(--wght-strong, 700);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}
+.juntos-center__hint {
+  color: var(--on-video-2, rgb(255 255 255 / 0.76));
+  font-size: var(--fs-13, 13px);
+}
+.juntos-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgb(255 255 255 / 0.25);
+  border-top-color: var(--on-video, #fff);
+  border-radius: 50%;
+  animation: juntos-spin calc(var(--dur-heroe) * 1.2) linear infinite;
+}
+.juntos-spinner--bare {
+  width: 48px;
+  height: 48px;
+}
+@keyframes juntos-spin {
+  to {
+    rotate: 1turn;
+  }
+}
+
+/* Abajo: la barra de tiempo y la fila de botones, sobre un degradado. */
+.juntos-chrome__bottom {
+  grid-row: 3;
+  display: grid;
+  gap: 2px;
+  padding: 28px 8px 6px;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.75), rgb(0 0 0 / 0));
+}
+.juntos-chrome__bar--locked {
+  pointer-events: none;
+}
+.juntos-chrome__bar--locked .vod-bar__thumb {
+  display: none;
+}
+.juntos-chrome__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+}
+.juntos-chrome__group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.juntos-chrome__time {
+  padding: 0 8px;
+  font-family: var(--mono);
+  font-size: var(--fs-13, 13px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}
+.juntos-chrome__dur {
+  color: var(--on-video-2, rgb(255 255 255 / 0.76));
+}
+.juntos-chrome__badge-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.juntos-chrome__badge {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--accent);
+  color: var(--on-accent, #000);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+/* Volumen: el deslizador solo con ratón (en el móvil manda el botón del teléfono). */
+.juntos-volume {
+  display: inline-flex;
+  align-items: center;
+}
+.juntos-volume__slider {
+  width: 0;
+  opacity: 0;
+  accent-color: var(--on-video, #fff);
+  transition: opacity var(--dur-rapido) var(--ease-estandar);
+}
+.juntos-volume:hover .juntos-volume__slider,
+.juntos-volume:focus-within .juntos-volume__slider {
+  width: 84px;
+  opacity: 1;
+}
+@media (pointer: coarse) {
+  .juntos-volume__slider {
+    display: none;
+  }
+}
+/* Las reacciones, encima de la barra al pulsar el emoji (como en Rave). */
+.juntos-tray {
+  display: flex;
+  justify-self: end;
+  gap: 2px;
+  margin: 0 6px 4px;
+  padding: 4px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--glass-video, rgb(10 12 16 / 0.62));
+  backdrop-filter: blur(12px);
+}
+.juntos-tray__btn {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: scale var(--dur-rapido) var(--ease-rapido);
+}
+.juntos-tray__btn:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+.juntos-tray__btn:active {
+  scale: 1.3;
+}
+/* Sin vídeo (preparando, error, interrumpida) la barra no sirve y en el móvil taparía el aviso. */
+.juntos-chrome:is(
+    [data-phase='preparing'],
+    [data-phase='idle'],
+    [data-phase='error'],
+    [data-phase='interrupted']
+  )
+  .juntos-chrome__bottom {
+  display: none;
+}
+@media (max-width: 479px) {
+  /* El título ya está en la cabecera y el vídeo es bajito: fuera lo que sobra. */
+  .juntos-chrome__heading,
+  .juntos-chrome__nudge {
+    display: none;
+  }
+  .juntos-chrome__top {
+    justify-content: flex-end;
+  }
+  .juntos-center__card {
+    gap: 8px;
+    padding: 10px 14px;
+  }
+  .juntos-center__text {
+    font-size: var(--fs-15, 15px);
+  }
+  .juntos-center .btn {
+    min-height: 36px;
+  }
+  .juntos-tray {
+    justify-self: stretch;
+    justify-content: space-between;
+  }
+  .juntos-tray__btn {
+    width: 34px;
+    height: 34px;
+    font-size: 20px;
+  }
+  .juntos-chrome__top {
+    padding: 10px 12px 20px;
+  }
+  .juntos-chrome__bottom {
+    padding: 20px 4px 2px;
+  }
+  .juntos-center__big-btn {
+    width: 60px;
+    height: 60px;
+  }
+}
+
+/* Pantalla completa: la del navegador (sobre `.juntos__body`) o la de la página (iPhone). */
+.juntos__body[data-fullscreen='true'] {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+.juntos--page-fs {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  padding: 0;
+  max-width: none;
+  background: #000;
+}
+.juntos--page-fs .juntos__head {
+  display: none;
+}
+.juntos--page-fs .juntos__body {
+  position: absolute;
+  inset: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+.juntos__body[data-fullscreen='true'] .juntos__stage {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+  aspect-ratio: auto;
+}
+/* El panel (chat, lista…) como cajón a la derecha, de cristal; se abre con el botón del chat. */
+.juntos__body[data-fullscreen='true'] .juntos__side {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  width: min(420px, calc(100% - 24px));
+  padding: 10px;
+  border-radius: var(--r-l, 16px);
+  background: rgb(14 16 20 / 0.86);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+  transition:
+    translate var(--dur-estandar) var(--ease-estandar),
+    opacity var(--dur-rapido) var(--ease-estandar);
+}
+.juntos__body[data-fullscreen='true'][data-chat='closed'] .juntos__side {
+  translate: calc(100% + 24px) 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.juntos__body[data-fullscreen='true'] .juntos-chat {
+  height: 100%;
+}
+.juntos__body[data-fullscreen='true'] .juntos__side {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.juntos__body[data-fullscreen='true'] .juntos__panel {
+  overflow-y: auto;
+}
+/* Con el cajón abierto en una pantalla ancha, los controles no quedan debajo. */
+@media (min-width: 900px) {
+  .juntos__body[data-fullscreen='true'][data-chat='open'] .juntos__stage {
+    width: calc(100% - 444px);
+  }
 }
 
 /* Al lado (o debajo en el móvil): quién está y el chat. */
@@ -338,32 +707,10 @@
   font-size: var(--fs-13, 13px);
 }
 
-/* Reacciones: la fila para lanzarlas y las que suben por encima del vídeo. */
-.juntos-react {
-  display: flex;
-  justify-content: space-around;
-  gap: 2px;
-  padding: 4px 8px 8px;
-  background: var(--glass-video-solid, rgba(0, 0, 0, 0.72));
-}
-.juntos-react__btn {
-  min-width: 40px;
-  min-height: 40px;
-  border: 0;
-  border-radius: var(--r-pill, 999px);
-  background: transparent;
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform var(--dur-rapido) var(--ease-rapido);
-}
-.juntos-react__btn:active {
-  transform: scale(1.3);
-}
+/* Las reacciones que suben por encima del vídeo. */
 .juntos-floats {
   position: absolute;
-  inset: 0 0 auto;
-  aspect-ratio: 16 / 9;
+  inset: 0;
   overflow: hidden;
   pointer-events: none;
   /* Por delante de los avisos y de «A continuación»: una reacción siempre se ve. */
@@ -404,8 +751,7 @@
 .juntos-upnext {
   position: absolute;
   right: 12px;
-  bottom: auto;
-  top: 12px;
+  bottom: 104px;
   z-index: 3;
   display: grid;
   gap: 4px;
@@ -429,15 +775,6 @@
   display: flex;
   gap: 6px;
   margin-top: 4px;
-}
-
-/* Quién manda, cuando no eres tú. */
-.juntos-controls__who {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--on-video-2, rgba(255, 255, 255, 0.75));
-  font-size: var(--fs-13, 13px);
 }
 
 /* «Añadir a la sala» en la ficha. */
@@ -582,4 +919,30 @@
 .juntos-join__error {
   margin: 0;
   color: var(--fail-ink);
+}
+
+/* Cabecera del panel: las pestañas y, en pantalla completa, cerrar. */
+.juntos__side-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.juntos__side-head > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+/* En vertical (móvil), el cajón es la mitad de abajo: el vídeo sigue a la vista. */
+@media (max-aspect-ratio: 1 / 1) {
+  .juntos__body[data-fullscreen='true'] .juntos__side {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    width: auto;
+    height: 52%;
+  }
+  .juntos__body[data-fullscreen='true'][data-chat='closed'] .juntos__side {
+    translate: 0 calc(100% + 24px);
+  }
 }
