@@ -2,6 +2,15 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.15 (2026-10-30)
+
+Reproductor nuevo en Ver juntos: los controles van encima del video y se
+esconden solos, con boton grande de reproducir, barra para arrastrar con el
+dedo, volumen, idioma y la bandeja de emojis. En pantalla completa el chat
+sale como un panel que se abre y se cierra (en el iPhone la sala ocupa toda
+la pantalla sin perder chat ni reacciones). El tiempo es el de la sala: ya
+nadie ve 0:10 cuando vais por el minuto 10.
+
 ## 0.9.14 (2026-10-30)
 
 Invitar ya copia el enlace de la sala tambien desde la web de casa (sin
