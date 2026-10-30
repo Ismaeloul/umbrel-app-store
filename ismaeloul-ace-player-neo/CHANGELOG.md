@@ -2,6 +2,14 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.12 (2026-10-30)
+
+Mas seguridad para Ver juntos desde fuera de casa: el servidor de la app
+ya no funciona como administrador (root). Arranca, prepara sus datos y
+pasa a un usuario normal sin permisos especiales; si alguien encontrara
+un fallo en la sala, tendria mucho menos margen. No cambia nada de lo que
+ves ni de lo que guardas.
+
 ## 0.9.11 (2026-10-22)
 
 Una plataforma de internet en la tarjeta (Disney+, RTVE Play, Apple TV,
