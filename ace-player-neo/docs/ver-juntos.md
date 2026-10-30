@@ -10,7 +10,8 @@ mismo a la vez y chatean. Pausar, avanzar o cambiar el idioma pasa para todos.
 | 1 | Sala dentro de casa (la web de siempre, con el login de Umbrel): sincronización, chat, idioma | 0.9.4 |
 | 2 | Invitados desde fuera en `https://sala.ismaeloul.es/s/<código>` (§9) | 0.9.5 |
 | 2b | La app del iPhone (Ace Neo) crea, entra y cierra salas (§10) | 0.9.6 |
-| 3 | Extras: reacciones, siguiente episodio para todos, voz | ideas |
+| 3 | Como Rave (§11): líder, echar, reacciones, lista con votos, siguiente episodio para todos | 0.9.13 (web) |
+| 3b | Lo mismo en la app del iPhone; chat de voz; que los invitados busquen y añadan títulos | ideas |
 
 Descartado para la fase 2: Cloudflare Tunnel (sus condiciones no quieren mucho vídeo y Isma quiere algo que no dependa
 de terceros) y Tailscale (el invitado tendría que instalar algo).
@@ -113,7 +114,7 @@ El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 sale
 ```
 iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:8443 ── Caddy (servicio sala)
                                                                    ├─ /s/<código>, invitado.html, assets → ficheros de la release
-                                                                   ├─ /api/v1/party/<código>[/join|events|stream|control|status|chat|leave|v/<clave>/<fichero>]
+                                                                   ├─ /api/v1/party/<código>[/join|events|stream|control|status|chat|react|settings|member|queue|leave|v/<clave>/<fichero>]
                                                                    │      → storage:3000 con X-Ace-Origin: guest
                                                                    └─ todo lo demás → 404 (y rutas raras, 400)
 ```
@@ -161,3 +162,40 @@ iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:84
   desde la ficha, play/pausa/salto en los dos sentidos (0,1 s de diferencia tras un salto), chat, entrar a mitad de
   película y cerrar la sala para todos.
 
+
+## 11. Como en Rave (fase 3, 0.9.13)
+
+Isma y sus amigos venían de Rave (Apple la quitó de la App Store en agosto de 2025): la sala imita su manejo para que
+no haya que aprender nada. Lo que se sabe de Rave sale de fuentes públicas (no se ha abierto su app).
+
+- **Líder.** Al principio, quien crea la sala (`leaderId`; `hostId` sigue siendo el creador, el único que la
+  cierra). Por defecto solo el líder controla el vídeo y pone otro título (`settings.control: leader`); en Ajustes
+  puede dejarlo a todos (`everyone`). Los demás ven los controles apagados y «Controla Ana (líder)», y sus controles
+  nativos no mandan órdenes (`party_leader_only` si llegara alguna).
+- **Si el líder se va** (sale, o lleva `memberTimeoutMs` sin aparecer), lo es quien lleva más tiempo en la sala y
+  sigue conectado. El líder puede darle el liderazgo a otro (solo a alguien conectado) y quien creó la sala puede
+  recuperarlo cuando quiera («Ser líder otra vez»).
+- **Echar** (`partyMember` con `kick`): solo el líder, no a sí mismo ni a quien creó la sala. A quien echan le llega
+  `party.closed` con `kicked` y su credencial deja de valer; con el enlace puede volver a entrar (como en Rave).
+- **Reacciones** (`partyReact`): 😂 ❤️ 😮 😢 👏 🔥 😱 👍, 10 cada 10 s por persona. Llegan a todos como
+  `party.reaction` y suben unos 3 s por encima del vídeo con el nombre de quien la lanza. No van al chat.
+- **Lista** (`partyQueue`): `add` (cualquiera; en «Elige el líder», solo él), `remove` (quien lo añadió o el líder),
+  `vote` (cada uno, uno por título, se quita pulsando otra vez), `play` (poner ya), `next` y `cancel`. Hasta 30.
+  Desde fuera no se ve el catálogo de casa: se añade desde la ficha de una película o un episodio («Ver juntos» →
+  «Añadir a la sala», a la última sala en la que entró ese navegador). Los invitados votan.
+- **Al acabar** (el servidor lo ve: la posición llega a la duración), según `settings.queueMode`, como los modos de
+  Rave: `autoplay`, lo primero de la lista; `vote`, lo más votado (empate: lo que se añadió antes); `leader`, nada,
+  elige el líder; `once`, se para. Sin nada en la lista, en una serie sigue el siguiente episodio (el `next` de la
+  concesión del vídeo), con el mismo idioma. Antes, `upNext` con `PARTY.upNextMs` (10 s) de cuenta atrás: «Ver ya» o
+  «Cancelar» para quien puede controlar.
+- **Otro título** (`switchTo`): se sueltan las sesiones de todos, `playback` a 0 reproduciendo y la acción `title`;
+  cada reproductor ve que `title.id` ha cambiado y vuelve a abrir el vídeo. Los traspasos de las sesiones viejas ya no
+  son de la sala (`viewers` se vacía).
+- **Web:** pestañas Chat, Lista, Personas y Ajustes (solo el líder); la fila de reacciones bajo los controles; en
+  Personas, la inicial de cada uno, la corona del líder y «⋯» o pulsación larga para echar o hacer líder.
+- **Pruebas:** `modules/party/service.test.ts` (líder, control, echar, reacciones, lista, votos, fin y siguiente
+  episodio), `features/juntos/Panels.test.tsx` y a mano en el PC (sin vídeo: sin ffmpeg no hay muestras) con dos
+  personas: reacciones, chat, lista, «Poner ya», pasar y recuperar el liderazgo y los ajustes.
+- **Pendiente:** la app del iPhone aún no conoce nada de esto (si no es la líder, el servidor le contesta
+  `party_leader_only` al pausar); el chat de voz (Isma prefiere no abrir más puertos por ahora); que los invitados
+  puedan buscar en el catálogo.

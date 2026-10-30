@@ -3,9 +3,11 @@
    - La credencial de cada sala se guarda en este navegador (localStorage),
      así que recargar o volver a la sala no pide el nombre otra vez.
    - `PartyClient` abre el SSE de la sala, junta lo que llega (foto,
-     reproducción, personas, chat), manda el latido de estado cada 5 s y las
-     órdenes, y estima el desfase de reloj con cada respuesta. Lo leen los
-     componentes con `useSyncExternalStore`. */
+     reproducción, personas, chat, reacciones), manda el latido de estado
+     cada 5 s y las órdenes, y estima el desfase de reloj con cada respuesta.
+     Lo leen los componentes con `useSyncExternalStore`.
+   - La última sala en la que se entró desde este navegador: la ficha de una
+     película ofrece «Añadir a la sala» (docs/ver-juntos.md §11). */
 
 import {
   PARTY,
@@ -15,8 +17,12 @@ import {
   type PartyControlBody,
   type PartyCredential,
   type PartyEvent,
+  type PartyMemberBody,
   type PartyPlayback,
+  type PartyQueueBody,
+  type PartyReactBody,
   type PartyRoom,
+  type PartySettingsBody,
 } from '@ace/shared';
 import { api, isApiError } from '../../api/index.ts';
 import { routeUrl } from '../../api/routes.ts';
@@ -41,6 +47,23 @@ export function saveCredential(code: string, credential: PartyCredential): void 
 
 export function forgetCredential(code: string): void {
   removeItem(credentialKey(code));
+}
+
+const LAST_ROOM_KEY = 'aceneo-juntos-ultima';
+
+/** La última sala en la que se entró (con su credencial), o null. */
+export function lastRoom(): { code: string; credential: PartyCredential } | null {
+  const code = readItem(LAST_ROOM_KEY);
+  const credential = code ? savedCredential(code) : null;
+  return code && credential ? { code, credential } : null;
+}
+
+export function rememberRoom(code: string): void {
+  writeItem(LAST_ROOM_KEY, code);
+}
+
+export function forgetLastRoom(): void {
+  removeItem(LAST_ROOM_KEY);
 }
 
 export function savedName(): string {
@@ -75,7 +98,19 @@ export interface PartyState {
   readonly offsetMs: number;
   /** Lo que dijo el último latido de la sesión de vídeo (`partyStatus`). */
   readonly stream: 'ok' | 'lost' | 'none';
+  /** Las últimas reacciones (las pinta la vista mientras suben y luego las quita). */
+  readonly reactions: readonly Reaction[];
 }
+
+export interface Reaction {
+  readonly id: number;
+  readonly emoji: string;
+  readonly name: string;
+  readonly self: boolean;
+}
+
+/** Reacciones a la vez como mucho (si llueven, las viejas se van antes). */
+const MAX_REACTIONS = 24;
 
 const INITIAL: PartyState = {
   room: null,
@@ -84,7 +119,13 @@ const INITIAL: PartyState = {
   closed: null,
   offsetMs: 0,
   stream: 'none',
+  reactions: [],
 };
+
+/** ¿Puede esta persona mandar en el vídeo? El líder, o todos si así lo ha dejado. */
+export function canControl(room: PartyRoom | null, selfId: string): boolean {
+  return !!room && (room.settings.control === 'everyone' || room.leaderId === selfId);
+}
 
 /** Lo que el cliente necesita del navegador (los tests lo cambian). */
 export interface PartyEnv {
@@ -106,6 +147,7 @@ const EVENT_TYPES: readonly PartyEvent['type'][] = [
   'party.playback',
   'party.room',
   'party.chat',
+  'party.reaction',
   'party.closed',
 ];
 
@@ -116,6 +158,7 @@ export class PartyClient {
   private statusTimer: unknown = null;
   private samples: OffsetSample[] = [];
   private stopped = false;
+  private nextReaction = 1;
   /** Lo que el reproductor dice de sí mismo para el latido. */
   private local: { positionS: number; buffering: boolean } = { positionS: 0, buffering: false };
 
@@ -210,6 +253,16 @@ export class PartyClient {
       case 'party.chat':
         this.set({ chat: [...this.state.chat, event.data.message].slice(-PARTY.chatHistory) });
         break;
+      case 'party.reaction': {
+        const reaction: Reaction = {
+          id: this.nextReaction++,
+          emoji: event.data.emoji,
+          name: event.data.name,
+          self: event.data.memberId === this.credential.id,
+        };
+        this.set({ reactions: [...this.state.reactions, reaction].slice(-MAX_REACTIONS) });
+        break;
+      }
       case 'party.closed':
         this.set({ closed: event.data.reason });
         this.stop();
@@ -289,6 +342,56 @@ export class PartyClient {
         params: { code: this.code },
         body: { token: this.credential.token, text },
       });
+    } catch (error) {
+      this.handleFailure(error);
+      throw error;
+    }
+  }
+
+  /** La reacción ya ha terminado de subir: deja de pintarse. */
+  dropReaction(id: number): void {
+    if (!this.state.reactions.some((reaction) => reaction.id === id)) return;
+    this.set({ reactions: this.state.reactions.filter((reaction) => reaction.id !== id) });
+  }
+
+  async react(emoji: PartyReactBody['emoji']): Promise<void> {
+    const { code, credential } = this;
+    await this.guard(() =>
+      api('partyReact', { params: { code }, body: { token: credential.token, emoji } }),
+    );
+  }
+
+  async settings(patch: Omit<PartySettingsBody, 'token'>): Promise<void> {
+    const { code, credential } = this;
+    await this.guard(() =>
+      api('partySettings', { params: { code }, body: { ...patch, token: credential.token } }),
+    );
+  }
+
+  async member(memberId: string, action: PartyMemberBody['action']): Promise<void> {
+    const { code, credential } = this;
+    await this.guard(() =>
+      api('partyMember', {
+        params: { code },
+        body: { token: credential.token, memberId, action },
+      }),
+    );
+  }
+
+  async queue(order: DistributiveOmit<PartyQueueBody, 'token'>): Promise<void> {
+    const { code, credential } = this;
+    await this.guard(() =>
+      api('partyQueue', {
+        params: { code },
+        body: { ...order, token: credential.token } as PartyQueueBody,
+      }),
+    );
+  }
+
+  /** Si la respuesta dice que ya no estás o que no está la sala, la vista se cierra. */
+  private async guard(run: () => Promise<unknown>): Promise<void> {
+    try {
+      await run();
     } catch (error) {
       this.handleFailure(error);
       throw error;

@@ -105,6 +105,10 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'partyControl',
   'partyStatus',
   'partyChat',
+  'partyReact',
+  'partySettings',
+  'partyMember',
+  'partyQueue',
   'partyLeave',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
@@ -1232,7 +1236,7 @@ const partyTitle: PartyTitle = {
 };
 
 function partyMember(id: string, name: string, host: boolean): PartyMember {
-  return { id, name, host, online: true, buffering: false };
+  return { id, name, host, leader: host, online: true, buffering: false };
 }
 
 function partyJoined(self: string, others: readonly PartyMember[]): PartyJoinResponse {
@@ -1244,9 +1248,13 @@ function partyJoined(self: string, others: readonly PartyMember[]): PartyJoinRes
       audio: { index: null, tracks: [] },
       interrupted: null,
       hostId: 'm_IsmaAnfitrion',
+      leaderId: 'm_IsmaAnfitrion',
       createdAt: AT_MS,
       members: [partyMember('m_IsmaAnfitrion', 'Isma', true), ...others],
       playback: { playing: false, positionS: 0, at: AT_MS, rev: 1, waitingFor: [] },
+      settings: { control: 'leader', queueMode: 'autoplay' },
+      queue: [],
+      upNext: null,
     },
     member: { id: self, token: `${self}.c2VjcmV0b0RlRWplbXBsbzAx` },
     chat: [
@@ -1512,6 +1520,10 @@ export const WEB_V1_FIXTURES = {
   partyControl: { serverNow: AT_MS + 60_000, rev: 3 },
   partyStatus: { serverNow: AT_MS + 65_000, rev: 3, stream: 'ok' },
   partyChat: { ok: true },
+  partyReact: { ok: true },
+  partySettings: { ok: true },
+  partyMember: { ok: true },
+  partyQueue: { ok: true },
   partyLeave: { ok: true },
   partyClose: { ok: true },
 } satisfies { [K in WebFixtureRouteId | AppFromWebFixtureRouteId]: V1ResponseInput<K> };

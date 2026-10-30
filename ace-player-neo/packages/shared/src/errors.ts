@@ -686,6 +686,26 @@ export const ERROR_CATALOG = {
     public: true,
     message: 'Solo quien ha creado la sala puede cerrarla.',
   },
+  /** Lo hace el líder (o todos, si el líder deja el control a todos: docs/ver-juntos.md §11). */
+  party_leader_only: {
+    status: 403,
+    legacyStatus: null,
+    public: true,
+    message: 'Solo el líder de la sala puede hacerlo.',
+  },
+  /** La persona o el título de la lista ya no está (o no se puede: echar a quien creó la sala). */
+  party_gone: {
+    status: 404,
+    legacyStatus: null,
+    public: true,
+    message: 'Eso ya no está en la sala.',
+  },
+  party_queue_full: {
+    status: 409,
+    legacyStatus: null,
+    public: true,
+    message: 'La lista de la sala está llena. Quita algún título.',
+  },
   party_limit: {
     status: 503,
     legacyStatus: null,

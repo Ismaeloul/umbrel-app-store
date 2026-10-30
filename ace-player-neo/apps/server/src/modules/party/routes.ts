@@ -14,7 +14,9 @@
    - partyStream: GET /api/v1/party/:code/stream (la `VodGrant` de la sala)
    - partyVideo: GET /api/v1/party/:code/v/:key/:file (la lista y los segmentos)
    - partyControl, partyStatus, partyChat, partyLeave, partyClose: POST con
-     la credencial en `token`. */
+     la credencial en `token`.
+   - partyReact, partySettings, partyMember, partyQueue (§11): reacciones,
+     ajustes y personas (el líder) y la lista; también POST con `token`. */
 
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
@@ -32,6 +34,10 @@ export const V1_ROUTE_IDS: readonly string[] = [
   'partyControl',
   'partyStatus',
   'partyChat',
+  'partyReact',
+  'partySettings',
+  'partyMember',
+  'partyQueue',
   'partyLeave',
   'partyClose',
 ];
@@ -70,6 +76,22 @@ export function registerV1Routes(router: V1Router, services: Services): void {
   router.handle('partyStatus', (input) => party.status(input.params.code, input.body));
   router.handle('partyChat', (input) => {
     party.chat(input.params.code, input.body);
+    return { ok: true as const };
+  });
+  router.handle('partyReact', (input) => {
+    party.react(input.params.code, input.body);
+    return { ok: true as const };
+  });
+  router.handle('partySettings', (input) => {
+    party.settings(input.params.code, input.body);
+    return { ok: true as const };
+  });
+  router.handle('partyMember', (input) => {
+    party.member(input.params.code, input.body);
+    return { ok: true as const };
+  });
+  router.handle('partyQueue', (input) => {
+    party.queue(input.params.code, input.body);
     return { ok: true as const };
   });
   router.handle('partyLeave', (input) => {

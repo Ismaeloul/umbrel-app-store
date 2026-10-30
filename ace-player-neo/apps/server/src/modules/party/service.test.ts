@@ -56,7 +56,7 @@ interface Call {
   readonly options: VodAcquireOptions | undefined;
 }
 
-function setup(env: Record<string, string> = {}) {
+function setup(env: Record<string, string> = {}, grant: VodGrant = GRANT) {
   const core = createTestCore({ env });
   const clock = core.clock as FakeClock;
   const calls: Call[] = [];
@@ -68,7 +68,7 @@ function setup(env: Record<string, string> = {}) {
     playback: {
       acquireVod: async (id, query, viewer, _signal, options) => {
         calls.push({ id, query, viewer, options });
-        return GRANT;
+        return grant;
       },
       heartbeat: async (sid, body) => {
         if (control.beatFails) throw new AppError('session_expired');
@@ -130,9 +130,20 @@ describe('«Ver juntos»: salas', () => {
     const { party } = setup();
     const host = party.create(BODY);
     expect(host.room.members).toEqual([
-      { id: host.member.id, name: 'Isma', host: true, online: true, buffering: false },
+      {
+        id: host.member.id,
+        name: 'Isma',
+        host: true,
+        leader: true,
+        online: true,
+        buffering: false,
+      },
     ]);
     expect(host.room.hostId).toBe(host.member.id);
+    expect(host.room.leaderId).toBe(host.member.id);
+    expect(host.room.settings).toEqual({ control: 'leader', queueMode: 'autoplay' });
+    expect(host.room.queue).toEqual([]);
+    expect(host.room.upNext).toBeNull();
     expect(host.room.code).toMatch(/^[A-Za-z0-9_-]{16}$/);
     expect(host.chat.map((m) => m.text)).toEqual(['Isma ha creado la sala.']);
 
@@ -478,3 +489,191 @@ function handoff(viewerIds: string[], hash: string) {
     reason: 'other_channel' as const,
   };
 }
+
+describe('«Ver juntos»: líder, lista y reacciones (§11)', () => {
+  const OTRA = '0123456789abcdef0123456789abcdef01234567';
+  const EPI2 = 'aaaabbbbccccddddeeeeffff0000111122223333';
+
+  function room2() {
+    const s = setup();
+    const host = s.party.create(BODY);
+    const room = host.room.code;
+    const ana = s.party.join(room, 'Ana');
+    return { ...s, host, ana, room };
+  }
+
+  const add = (token: string, titleId = OTRA, title = 'Otra peli') => ({
+    token,
+    action: 'add' as const,
+    titleId,
+    kind: 'movie' as const,
+    artId: titleId,
+    poster: null,
+    title,
+    subtitle: null,
+  });
+
+  it('solo el líder controla; con «todos», cualquiera; los ajustes, solo el líder', () => {
+    const { party, host, ana, room } = room2();
+    const play = (token: string) => party.control(room, { token, action: 'play', positionS: 0 });
+    expect(code(catchError(() => play(ana.member.token)))).toBe('party_leader_only');
+    expect(play(host.member.token).rev).toBeGreaterThan(1);
+    expect(
+      code(
+        catchError(() => party.settings(room, { token: ana.member.token, control: 'everyone' })),
+      ),
+    ).toBe('party_leader_only');
+    party.settings(room, { token: host.member.token, control: 'everyone' });
+    expect(() => play(ana.member.token)).not.toThrow();
+  });
+
+  it('echar: a quien echan le llega `kicked` y su credencial deja de valer; a quien creó la sala, no', () => {
+    const { party, host, ana, room } = room2();
+    const anaSse = listen(party, room, ana.member.token);
+    party.member(room, { token: host.member.token, memberId: ana.member.id, action: 'kick' });
+    expect(anaSse.of('party.closed')).toEqual([{ reason: 'kicked' }]);
+    expect(
+      code(catchError(() => party.chat(room, { token: ana.member.token, text: 'hola' }))),
+    ).toBe('party_forbidden');
+    const bea = party.join(room, 'Bea');
+    party.member(room, { token: host.member.token, memberId: bea.member.id, action: 'lead' });
+    expect(
+      code(
+        catchError(() =>
+          party.member(room, { token: bea.member.token, memberId: host.member.id, action: 'kick' }),
+        ),
+      ),
+    ).toBe('party_leader_only');
+  });
+
+  it('si el líder se va, lo es quien lleva más tiempo; quien creó la sala lo recupera cuando quiera', () => {
+    const { party, host, ana, room } = room2();
+    listen(party, room, ana.member.token);
+    party.leave(room, host.member.token);
+    expect(party.preview(room).members).toContain('Isma');
+    const sse = listen(party, room, ana.member.token);
+    expect(sse.of('party.snapshot')[0]?.room.leaderId).toBe(ana.member.id);
+    party.member(room, { token: host.member.token, memberId: host.member.id, action: 'lead' });
+    expect(sse.of('party.room').at(-1)?.leaderId).toBe(host.member.id);
+  });
+
+  it('reacciones: llegan a todos y tienen tope', () => {
+    const { party, host, ana, room } = room2();
+    const sse = listen(party, room, host.member.token);
+    party.react(room, { token: ana.member.token, emoji: '😂' });
+    expect(sse.of('party.reaction')).toEqual([
+      { memberId: ana.member.id, name: 'Ana', emoji: '😂' },
+    ]);
+    for (let i = 1; i < PARTY.reactionsPerWindow; i += 1) {
+      party.react(room, { token: ana.member.token, emoji: '🔥' });
+    }
+    expect(
+      code(catchError(() => party.react(room, { token: ana.member.token, emoji: '🔥' }))),
+    ).toBe('rate_limited');
+  });
+
+  it('lista: cualquiera añade y vota; quitar, quien lo añadió o el líder; en «elige el líder», solo él añade', () => {
+    const { party, host, ana, room } = room2();
+    const sse = listen(party, room, host.member.token);
+    party.queue(room, add(ana.member.token));
+    const item = sse.of('party.room').at(-1)?.queue[0];
+    expect(item).toMatchObject({ addedBy: ana.member.id, addedByName: 'Ana', votes: [] });
+    party.queue(room, { token: host.member.token, action: 'vote', itemId: item!.id });
+    expect(sse.of('party.room').at(-1)?.queue[0]?.votes).toEqual([host.member.id]);
+    party.queue(room, add(host.member.token, EPI2, 'De Isma'));
+    const mine = sse.of('party.room').at(-1)!.queue[1]!;
+    expect(
+      code(
+        catchError(() =>
+          party.queue(room, { token: ana.member.token, action: 'remove', itemId: mine.id }),
+        ),
+      ),
+    ).toBe('party_leader_only');
+    party.queue(room, { token: ana.member.token, action: 'remove', itemId: item!.id });
+    expect(
+      sse
+        .of('party.room')
+        .at(-1)
+        ?.queue.map((q) => q.id),
+    ).toEqual([mine.id]);
+    party.settings(room, { token: host.member.token, queueMode: 'leader' });
+    expect(code(catchError(() => party.queue(room, add(ana.member.token))))).toBe(
+      'party_leader_only',
+    );
+  });
+
+  it('al acabar: cuenta atrás y lo primero de la lista empieza para todos', async () => {
+    const { party, clock, host, room, released } = room2();
+    const sse = listen(party, room, host.member.token);
+    await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    party.queue(room, add(host.member.token));
+    party.control(room, {
+      token: host.member.token,
+      action: 'play',
+      positionS: GRANT.vod.durationS - 2,
+    });
+    clock.advance(3_000);
+    expect(sse.of('party.playback').at(-1)?.action).toBe('ended');
+    expect(sse.of('party.room').at(-1)?.upNext).toMatchObject({ title: { id: OTRA } });
+    clock.advance(PARTY.upNextMs);
+    const last = sse.of('party.playback').at(-1);
+    expect(last?.action).toBe('title');
+    expect(last?.playback).toMatchObject({ playing: true, positionS: 0 });
+    const now = sse.of('party.room').at(-1);
+    expect(now?.title).toMatchObject({ id: OTRA, durationS: null });
+    expect(now?.queue).toEqual([]);
+    expect(released.at(-1)).toEqual({ sid: GRANT.session.id, viewer: 'v-isma' });
+  });
+
+  it('en «votar» gana lo más votado; cancelar quita la cuenta atrás; en «se para», no sigue nada', async () => {
+    const { party, clock, host, ana, room } = room2();
+    const sse = listen(party, room, host.member.token);
+    await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    party.queue(room, add(host.member.token, EPI2, 'Primera'));
+    party.queue(room, add(ana.member.token, OTRA, 'Votada'));
+    const votada = sse.of('party.room').at(-1)!.queue[1]!;
+    party.queue(room, { token: ana.member.token, action: 'vote', itemId: votada.id });
+    party.settings(room, { token: host.member.token, queueMode: 'vote' });
+    const end = GRANT.vod.durationS - 1;
+    party.control(room, { token: host.member.token, action: 'play', positionS: end });
+    clock.advance(2_000);
+    expect(sse.of('party.room').at(-1)?.upNext?.title.id).toBe(OTRA);
+    party.queue(room, { token: host.member.token, action: 'cancel' });
+    expect(sse.of('party.room').at(-1)?.upNext).toBeNull();
+    clock.advance(PARTY.upNextMs);
+    expect(sse.of('party.playback').at(-1)?.action).toBe('ended');
+
+    party.settings(room, { token: host.member.token, queueMode: 'once' });
+    party.control(room, { token: host.member.token, action: 'play', positionS: end });
+    clock.advance(2_000);
+    expect(sse.of('party.room').at(-1)?.upNext).toBeNull();
+  });
+
+  it('sin lista, en un episodio sigue el siguiente episodio (con el mismo idioma)', async () => {
+    const grant: VodGrant = {
+      ...GRANT,
+      vod: {
+        ...GRANT.vod,
+        next: { id: EPI2, title: 'The Office', label: 'T1 · E2 · Diversidad' },
+      },
+    };
+    const s = setup({}, grant);
+    const host = s.party.create({ ...BODY, kind: 'episode', audio: 1 });
+    const room = host.room.code;
+    const sse = listen(s.party, room, host.member.token);
+    await s.party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    s.party.control(room, {
+      token: host.member.token,
+      action: 'play',
+      positionS: grant.vod.durationS - 1,
+    });
+    s.clock.advance(2_000 + PARTY.upNextMs);
+    const now = sse.of('party.room').at(-1);
+    expect(now?.title).toMatchObject({
+      id: EPI2,
+      kind: 'episode',
+      subtitle: 'T1 · E2 · Diversidad',
+    });
+    expect(now?.audio.index).toBe(1);
+  });
+});

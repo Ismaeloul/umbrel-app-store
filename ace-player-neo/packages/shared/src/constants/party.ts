@@ -37,4 +37,14 @@ export const PARTY = {
   driftRate: 0.05,
   /** Latido SSE de la sala (comentario `: ping`). */
   heartbeatMs: 15_000,
+  /** Títulos en la lista de la sala (§11). */
+  queueMax: 30,
+  /** Al acabar, lo siguiente empieza tras esta cuenta atrás (el líder la puede cancelar). */
+  upNextMs: 10_000,
+  /** Reacciones por persona en `reactionWindowMs`. */
+  reactionsPerWindow: 10,
+  reactionWindowMs: 10_000,
 } as const;
+
+/** Las reacciones que se pueden lanzar sobre el vídeo (§11). */
+export const PARTY_REACTIONS = ['😂', '❤️', '😮', '😢', '👏', '🔥', '😱', '👍'] as const;

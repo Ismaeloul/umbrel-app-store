@@ -150,41 +150,313 @@
   gap: 12px;
   min-width: 0;
 }
+/* Pestañas (Chat, Lista, Personas, Ajustes) y su panel, de la altura del chat. */
+.juntos__panel {
+  min-height: 0;
+}
+.juntos__panel:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent));
+  outline-offset: 2px;
+  border-radius: var(--r-l, 16px);
+}
+
+/* Personas: una fila cada una con su inicial, la corona del líder y «⋯» (o pulsación larga). */
 .juntos-people__list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  gap: 4px;
   margin: 0;
-  padding: 0;
+  padding: 8px;
   list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-l, 16px);
+  background: var(--surface);
 }
 .juntos-people__item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px 6px;
+  border-radius: var(--r-m, 12px);
+  font-size: var(--fs-15, 15px);
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.juntos-people__avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+  font-weight: var(--wght-strong, 700);
+}
+.juntos-people__name {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--r-pill, 999px);
-  background: var(--surface-2);
-  font-size: var(--fs-13, 13px);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
-.juntos-people__item--self {
+.juntos-people__item--self .juntos-people__name {
   font-weight: var(--wght-strong, 700);
 }
-.juntos-people__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ok);
+.juntos-people__leader {
+  display: inline-flex;
+  color: var(--warn, #e0a100);
 }
 .juntos-people__item--off {
   color: var(--text-3);
 }
-.juntos-people__item--off .juntos-people__dot {
+.juntos-people__item--off .juntos-people__avatar {
   background: var(--idle);
 }
 .juntos-people__tag {
   color: var(--text-2);
+  font-size: var(--fs-13, 13px);
+}
+
+/* Lista de la sala: título, quién lo añadió, votos y «Poner ya». */
+.juntos-queue {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-l, 16px);
+  background: var(--surface);
+}
+.juntos-queue__empty p {
+  margin: 0;
+}
+.juntos-queue__hint {
+  margin-top: 4px !important;
+  color: var(--text-2);
+  font-size: var(--fs-13, 13px);
+}
+.juntos-queue__list {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.juntos-queue__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--r-m, 12px);
+  background: var(--surface-2);
+}
+.juntos-queue__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.juntos-queue__title {
+  font-weight: var(--wght-strong, 700);
+  overflow-wrap: anywhere;
+}
+.juntos-queue__sub,
+.juntos-queue__by {
+  color: var(--text-2);
+  font-size: var(--fs-13, 13px);
+}
+.juntos-queue__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+}
+.juntos-vote {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill, 999px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-13, 13px);
+  cursor: pointer;
+}
+.juntos-vote--on {
+  border-color: var(--accent);
+  background: var(--accent-soft, rgba(80, 120, 255, 0.15));
+  color: var(--accent-ink);
+}
+
+/* Ajustes del líder. */
+.juntos-settings {
+  display: grid;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-l, 16px);
+  background: var(--surface);
+}
+.juntos-settings__group {
+  display: grid;
+  gap: 8px;
+}
+.juntos-settings__label {
+  margin: 0;
+  font-weight: var(--wght-strong, 700);
+}
+.juntos-settings__modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.juntos-settings__mode {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m, 12px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.juntos-settings__mode--on {
+  border-color: var(--accent);
+  background: var(--accent-soft, rgba(80, 120, 255, 0.15));
+  color: var(--accent-ink);
+  font-weight: var(--wght-strong, 700);
+}
+.juntos-settings__hint {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13, 13px);
+}
+
+/* Reacciones: la fila para lanzarlas y las que suben por encima del vídeo. */
+.juntos-react {
+  display: flex;
+  justify-content: space-around;
+  gap: 2px;
+  padding: 4px 8px 8px;
+  background: var(--glass-video-solid, rgba(0, 0, 0, 0.72));
+}
+.juntos-react__btn {
+  min-width: 40px;
+  min-height: 40px;
+  border: 0;
+  border-radius: var(--r-pill, 999px);
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform var(--dur-rapido) var(--ease-rapido);
+}
+.juntos-react__btn:active {
+  transform: scale(1.3);
+}
+.juntos-floats {
+  position: absolute;
+  inset: 0 0 auto;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  pointer-events: none;
+  /* Por delante de los avisos y de «A continuación»: una reacción siempre se ve. */
+  z-index: 4;
+}
+.juntos-floats__item {
+  position: absolute;
+  bottom: 0;
+  display: grid;
+  justify-items: center;
+  /* Unos 3 s subiendo: lo bastante para verla sin tapar la película. */
+  animation: juntos-float calc(var(--dur-heroe) * 4) var(--ease-out) forwards;
+}
+.juntos-floats__emoji {
+  font-size: 34px;
+  line-height: 1;
+}
+.juntos-floats__name {
   font-size: var(--fs-11, 11px);
+  text-shadow: 0 1px 2px #000;
+}
+@keyframes juntos-float {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  12% {
+    transform: translateY(-12%) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-260%) scale(1);
+    opacity: 0;
+  }
+}
+
+/* «A continuación»: tarjeta en la esquina del vídeo con la cuenta atrás. */
+.juntos-upnext {
+  position: absolute;
+  right: 12px;
+  bottom: auto;
+  top: 12px;
+  z-index: 3;
+  display: grid;
+  gap: 4px;
+  max-width: min(320px, calc(100% - 24px));
+  padding: 12px 14px;
+  border-radius: var(--r-m, 12px);
+  background: var(--glass-video-solid, rgba(0, 0, 0, 0.82));
+}
+.juntos-upnext__kicker,
+.juntos-upnext__in {
+  color: var(--on-video-2, rgba(255, 255, 255, 0.75));
+  font-size: var(--fs-13, 13px);
+}
+.juntos-upnext__title {
+  font-weight: var(--wght-strong, 700);
+}
+.juntos-upnext__sub {
+  font-size: var(--fs-13, 13px);
+}
+.juntos-upnext__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* Quién manda, cuando no eres tú. */
+.juntos-controls__who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--on-video-2, rgba(255, 255, 255, 0.75));
+  font-size: var(--fs-13, 13px);
+}
+
+/* «Añadir a la sala» en la ficha. */
+.juntos-add {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  margin-bottom: 16px;
+}
+.juntos-add__hint,
+.juntos-add__or {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13, 13px);
+}
+.juntos-add__or {
+  margin-top: 8px;
+  font-weight: var(--wght-strong, 700);
+  color: var(--text);
 }
 .juntos-chat {
   display: grid;

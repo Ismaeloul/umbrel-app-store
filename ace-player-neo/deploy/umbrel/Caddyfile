@@ -42,7 +42,7 @@
 	@raro expression `{http.request.orig_uri.path}.matches("(?i)%(2f|2e|5c)|\\.\\.|\\x5c|^//")`
 
 	# La API de una sala: el codigo (16), la accion o el video (clave de 32 y fichero).
-	@sala path_regexp ^/api/v1/party/[A-Za-z0-9_-]{16}(/(join|events|stream|control|status|chat|leave)|/v/[A-Za-z0-9_-]{32}/[A-Za-z0-9_.-]{1,40})?$
+	@sala path_regexp ^/api/v1/party/[A-Za-z0-9_-]{16}(/(join|events|stream|control|status|chat|react|settings|member|queue|leave)|/v/[A-Za-z0-9_-]{32}/[A-Za-z0-9_.-]{1,40})?$
 
 	# La pagina de invitado y lo que carga.
 	@pagina path_regexp ^/s/[A-Za-z0-9_-]{16}/?$

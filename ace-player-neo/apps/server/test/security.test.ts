@@ -200,6 +200,10 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'partyControl',
       'partyStatus',
       'partyChat',
+      'partyReact',
+      'partySettings',
+      'partyMember',
+      'partyQueue',
       'partyLeave',
     ]);
     const failures: string[] = [];

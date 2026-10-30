@@ -1,5 +1,7 @@
-/* La sala (docs/ver-juntos.md §7): el vídeo con sus controles, quién está y
-   el chat. En escritorio, el chat a la derecha; en el móvil, debajo. */
+/* La sala (docs/ver-juntos.md §7 y §11): el vídeo con sus controles, las
+   reacciones encima y debajo, y al lado (en el móvil, debajo) las pestañas
+   Chat, Lista y Personas, más Ajustes para el líder. Si solo controla el
+   líder, los demás ven los controles apagados y quién manda. */
 
 import type { PartyCloseReason, PartyCredential, PartyRoom } from '@ace/shared';
 import {
@@ -12,12 +14,14 @@ import {
   type RefObject,
 } from 'react';
 import { describeFailure } from '../../api/index.ts';
-import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
 import { Button, IconButton } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
+import { Icon } from '../../ui/Icon.tsx';
+import { Tabs, tabPanelProps } from '../../ui/Segmented.tsx';
 import { Chat } from './Chat.tsx';
-import { inviteUrl, PartyClient, type PartyState } from './client.ts';
+import { canControl, inviteUrl, PartyClient, rememberRoom, type PartyState } from './client.ts';
+import { People, Queue, ReactionBar, ReactionLayer, Settings, UpNext } from './Panels.tsx';
 import { RoomPlayer, type PlayerView } from './player.ts';
 import { clock, isRunning } from './sync.ts';
 import { JUNTOS_TEXT } from './texts.ts';
@@ -27,8 +31,11 @@ const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
   expired: JUNTOS_TEXT.closedExpired,
   empty: JUNTOS_TEXT.closedEmpty,
   shutdown: JUNTOS_TEXT.closedShutdown,
+  kicked: JUNTOS_TEXT.closedKicked,
   gone: JUNTOS_TEXT.gone,
 };
+
+type SideTab = 'chat' | 'lista' | 'personas' | 'ajustes';
 
 export function Room({
   code,
@@ -53,11 +60,13 @@ export function Room({
   const video = useRef<HTMLVideoElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const [player, setPlayer] = useState<RoomPlayer | null>(null);
+  const [tab, setTab] = useState<SideTab>('chat');
 
   useEffect(() => {
+    rememberRoom(code);
     client.start();
     return () => client.stop();
-  }, [client]);
+  }, [client, code]);
 
   useEffect(() => {
     const element = video.current;
@@ -82,6 +91,14 @@ export function Room({
 
   const room = state.room;
   const isHost = room?.hostId === credential.id;
+  const isLeader = room?.leaderId === credential.id;
+  const shownTab: SideTab = tab === 'ajustes' && !isLeader ? 'chat' : tab;
+  const tabs: { value: SideTab; label: string; count?: number }[] = [
+    { value: 'chat', label: JUNTOS_TEXT.tabChat },
+    { value: 'lista', label: JUNTOS_TEXT.tabQueue, count: room?.queue.length ?? 0 },
+    { value: 'personas', label: JUNTOS_TEXT.tabPeople, count: room?.members.length ?? 0 },
+    ...(isLeader ? [{ value: 'ajustes' as const, label: JUNTOS_TEXT.tabSettings }] : []),
+  ];
 
   const copyLink = async () => {
     try {
@@ -114,8 +131,8 @@ export function Room({
           {room?.title.subtitle ? <p className="juntos__sub">{room.title.subtitle}</p> : null}
         </div>
         <div className="juntos__actions">
-          <Button size="sm" icon="link" onClick={() => void copyLink()}>
-            {JUNTOS_TEXT.copyLink}
+          <Button size="sm" variant="primary" icon="link" onClick={() => void copyLink()}>
+            {JUNTOS_TEXT.invite}
           </Button>
           <Button
             size="sm"
@@ -135,40 +152,32 @@ export function Room({
           ) : null}
         </div>
         <aside className="juntos__side">
-          {room ? <People room={room} selfId={credential.id} /> : null}
-          <Chat messages={state.chat} selfId={credential.id} onSend={(text) => client.chat(text)} />
+          <Tabs
+            label={JUNTOS_TEXT.people}
+            idPrefix="juntos"
+            block
+            items={tabs}
+            value={shownTab}
+            onChange={setTab}
+          />
+          <div className="juntos__panel" {...tabPanelProps('juntos', shownTab)}>
+            {shownTab === 'chat' ? (
+              <Chat
+                messages={state.chat}
+                selfId={credential.id}
+                onSend={(text) => client.chat(text)}
+              />
+            ) : !room ? null : shownTab === 'lista' ? (
+              <Queue room={room} client={client} selfId={credential.id} />
+            ) : shownTab === 'personas' ? (
+              <People room={room} client={client} selfId={credential.id} />
+            ) : (
+              <Settings room={room} client={client} />
+            )}
+          </div>
         </aside>
       </div>
     </div>
-  );
-}
-
-function People({ room, selfId }: { room: PartyRoom; selfId: string }) {
-  return (
-    <section className="juntos-people" aria-label={JUNTOS_TEXT.people}>
-      <ul className="juntos-people__list">
-        {room.members.map((member) => (
-          <li
-            key={member.id}
-            className={cx(
-              'juntos-people__item',
-              !member.online && 'juntos-people__item--off',
-              member.id === selfId && 'juntos-people__item--self',
-            )}
-          >
-            <span className="juntos-people__dot" aria-hidden="true" />
-            {member.name}
-            {member.host ? <span className="juntos-people__tag">{JUNTOS_TEXT.host}</span> : null}
-            {!member.online ? (
-              <span className="juntos-people__tag">{JUNTOS_TEXT.offline}</span>
-            ) : null}
-            {member.online && member.buffering ? (
-              <span className="juntos-people__tag">{JUNTOS_TEXT.loading}</span>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }
 
@@ -188,6 +197,8 @@ function Stage({
   const view = useSyncExternalStore(player.subscribe, player.getView);
   const [scrub, setScrub] = useState<number | null>(null);
   const playback = room.playback;
+  const control = canControl(room, client.credential.id);
+  const leaderName = room.members.find((member) => member.leader)?.name ?? '';
   const running = isRunning(playback);
   const waitingNames = room.members
     .filter((member) => playback.waitingFor.includes(member.id))
@@ -211,25 +222,30 @@ function Stage({
 
   return (
     <>
+      <ReactionLayer reactions={state.reactions} client={client} />
       <Overlay view={view} room={room} player={player} />
+      <UpNext room={room} client={client} selfId={client.credential.id} />
       <div className="juntos-controls" role="group" aria-label="Controles">
         <IconButton
           icon={playback.playing ? 'pause' : 'play'}
           label={playback.playing ? JUNTOS_TEXT.pause : JUNTOS_TEXT.play}
           variant="video"
           size="lg"
+          disabled={!control}
           onClick={() => order(playback.playing ? 'pause' : 'play', view.positionS)}
         />
         <IconButton
           icon="back"
           label={JUNTOS_TEXT.back10}
           variant="video"
+          disabled={!control}
           onClick={() => order('seek', Math.max(0, view.positionS - 10))}
         />
         <IconButton
           icon="chev-r"
           label={JUNTOS_TEXT.forward10}
           variant="video"
+          disabled={!control}
           onClick={() => order('seek', Math.min(duration || Infinity, view.positionS + 10))}
         />
         <span className="juntos-controls__time">
@@ -242,6 +258,7 @@ function Stage({
           max={Math.max(1, duration)}
           step={1}
           value={Math.min(position, Math.max(1, duration))}
+          disabled={!control}
           aria-label={JUNTOS_TEXT.position}
           aria-valuetext={`${clock(position)} de ${clock(duration)}`}
           onChange={(event) => setScrub(Number(event.target.value))}
@@ -260,6 +277,7 @@ function Stage({
             <select
               aria-label={JUNTOS_TEXT.language}
               value={room.audio.index ?? ''}
+              disabled={!control}
               onChange={(event) =>
                 void client
                   .control({
@@ -284,7 +302,14 @@ function Stage({
           variant="video"
           onClick={fullscreen}
         />
+        {!control && leaderName ? (
+          <span className="juntos-controls__who">
+            <Icon name="corona" size={16} />
+            {JUNTOS_TEXT.leaderControls(leaderName)}
+          </span>
+        ) : null}
       </div>
+      <ReactionBar client={client} />
       {state.connection === 'reconnecting' ? (
         <p className="juntos__status">{JUNTOS_TEXT.reconnecting}</p>
       ) : !running && waitingNames.length ? (

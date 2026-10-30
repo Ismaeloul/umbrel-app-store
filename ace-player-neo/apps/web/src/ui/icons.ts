@@ -80,6 +80,10 @@ export const ICONS = {
   /* Idiomas de Películas y series (docs/vod.md §4.10): un globo con sus meridianos. */
   idioma:
     '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5S9.7 5.9 12 3.5z"/>',
+  /* «Ver juntos» (docs/ver-juntos.md §11): quién está en la sala y el líder. */
+  personas:
+    '<circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5a6 6 0 0 1 12 0"/><path d="M15.5 5.6a3.3 3.3 0 0 1 0 6M17.5 14.2a6 6 0 0 1 3.5 5.3"/>',
+  corona: '<path d="M4 17.5L3 8l5 4 4-6.5 4 6.5 5-4-1 9.5z"/><path d="M4.5 20.5h15"/>',
 } as const satisfies Record<string, string>;
 
 export type IconName = keyof typeof ICONS;

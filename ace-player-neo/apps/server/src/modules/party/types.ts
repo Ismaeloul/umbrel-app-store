@@ -16,7 +16,11 @@ import type {
   PartyControlBody,
   PartyCreateBody,
   PartyJoinResponse,
+  PartyMemberBody,
   PartyPreview,
+  PartyQueueBody,
+  PartyReactBody,
+  PartySettingsBody,
   PartyStatusBody,
   PartyStatusResponse,
   PartyStreamQuery,
@@ -66,6 +70,11 @@ export interface PartyService extends Lifecycle {
   control(code: string, body: PartyControlBody): PartyStatusResponse;
   status(code: string, body: PartyStatusBody): Promise<PartyStatusResponse>;
   chat(code: string, body: PartyChatBody): void;
+  /** Reacciones, líder, ajustes y lista (docs/ver-juntos.md §11). */
+  react(code: string, body: PartyReactBody): void;
+  settings(code: string, body: PartySettingsBody): void;
+  member(code: string, body: PartyMemberBody): void;
+  queue(code: string, body: PartyQueueBody): void;
   leave(code: string, token: string): void;
   close(code: string, token: string): void;
   health(): PartyHealth;

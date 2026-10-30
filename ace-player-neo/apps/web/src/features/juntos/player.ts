@@ -15,6 +15,9 @@
      cosa), se espera a que alguien pulse «Reanudar»; si no, se vuelve a abrir
      sola (3 veces por minuto como mucho).
    - Idioma: si la sala cambia de pista, se vuelve a abrir el vídeo.
+   - Otro título (la lista o el siguiente episodio, §11): también.
+   - Quien no puede mandar (solo controla el líder) no manda órdenes desde los
+     controles nativos: la corrección le devuelve a donde va la sala.
    - Controles nativos (pantalla completa del iPhone): un play, una pausa o un
      salto que no coincide con la sala se manda como orden, pero solo si la
      persona acaba de tocar o pulsar algo (o está en esa pantalla completa).
@@ -29,7 +32,7 @@ import { HLS_PLAYLIST_RETRY, HLS_VOD_CONFIG } from '../../player/engines/hls.ts'
 import { chooseEngine, detectPlatform, streamClient } from '../../player/engines/index.ts';
 import { absoluteUrl } from '../../player/engines/types.ts';
 import { canPlayHevc } from '../cine/play.ts';
-import type { PartyClient } from './client.ts';
+import { canControl, type PartyClient } from './client.ts';
 import { correction, isRunning, targetPosition } from './sync.ts';
 import { JUNTOS_TEXT } from './texts.ts';
 
@@ -132,6 +135,8 @@ export class RoomPlayer {
   private reopenTimer: unknown = null;
   private reopens: number[] = [];
   private acquiredAudio: number | null = null;
+  /** El título que se pidió en el último `acquire` (si la sala cambia de título, se vuelve a abrir). */
+  private requestedTitle: string | null = null;
   private generation = 0;
   private unlocked = false;
   /** El play de «Toca para empezar» está en curso: no es una orden de la sala. */
@@ -235,6 +240,11 @@ export class RoomPlayer {
       void this.acquire();
       return;
     }
+    if (this.requestedTitle !== null && this.requestedTitle !== room.title.id) {
+      this.reopens = [];
+      void this.acquire();
+      return;
+    }
     const wanted = room.audio.index;
     if (
       this.grant &&
@@ -257,6 +267,7 @@ export class RoomPlayer {
     const room = this.room();
     if (!room || this.destroyed) return;
     const generation = ++this.generation;
+    this.requestedTitle = room.title.id;
     this.teardown();
     this.set({ phase: 'preparing', error: null });
     const platform = detectPlatform();
@@ -438,6 +449,7 @@ export class RoomPlayer {
   private onNative(type: 'play' | 'pause' | 'seeking'): void {
     const room = this.room();
     if (this.view.phase !== 'ready' || !room || this.unlocking) return;
+    if (!canControl(room, this.client.credential.id)) return;
     /* Con la página oculta (pestaña de fondo, iPhone bloqueado) el navegador pausa solo: eso no para a los demás. */
     if (globalThis.document?.visibilityState === 'hidden') return;
     /* Solo es de la persona si acaba de tocar o pulsar algo, o si está en la pantalla completa

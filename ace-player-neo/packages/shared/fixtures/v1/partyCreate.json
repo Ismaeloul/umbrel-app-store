@@ -14,9 +14,17 @@
     "audio": { "index": null, "tracks": [] },
     "interrupted": null,
     "hostId": "m_IsmaAnfitrion",
+    "leaderId": "m_IsmaAnfitrion",
     "createdAt": 1790188200000,
     "members": [
-      { "id": "m_IsmaAnfitrion", "name": "Isma", "host": true, "online": true, "buffering": false }
+      {
+        "id": "m_IsmaAnfitrion",
+        "name": "Isma",
+        "host": true,
+        "leader": true,
+        "online": true,
+        "buffering": false
+      }
     ],
     "playback": {
       "playing": false,
@@ -24,7 +32,10 @@
       "at": 1790188200000,
       "rev": 1,
       "waitingFor": []
-    }
+    },
+    "settings": { "control": "leader", "queueMode": "autoplay" },
+    "queue": [],
+    "upNext": null
   },
   "member": { "id": "m_IsmaAnfitrion", "token": "m_IsmaAnfitrion.c2VjcmV0b0RlRWplbXBsbzAx" },
   "chat": [

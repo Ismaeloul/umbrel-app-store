@@ -8,7 +8,7 @@
    quien entró. */
 
 import { z } from 'zod';
-import { PARTY } from '../../constants/party.js';
+import { PARTY, PARTY_REACTIONS } from '../../constants/party.js';
 import { HashSchema } from '../../primitives.js';
 import { ChannelStreamQuerySchema, VideoParamsSchema } from './playback.js';
 import { VodArtStampSchema } from './vod.js';
@@ -56,7 +56,10 @@ export type PartyAudio = z.infer<typeof PartyAudioSchema>;
 export const PartyMemberSchema = z.strictObject({
   id: PartyMemberIdSchema,
   name: z.string().max(PARTY.nameMaxChars),
+  /** Quien creó la sala: solo él la cierra. */
   host: z.boolean(),
+  /** El líder (§11): manda en la sala. Al principio, quien la creó. */
+  leader: z.boolean(),
   /** Tiene el SSE de la sala abierto o mandó su estado hace poco. */
   online: z.boolean(),
   /** Está cargando: la sala le espera (hasta `holdMaxMs`). */
@@ -88,6 +91,50 @@ export type PartyPlayback = z.infer<typeof PartyPlaybackSchema>;
 export const PartyInterruptedSchema = z.enum(['taken', 'failed']).nullable();
 export type PartyInterrupted = z.infer<typeof PartyInterruptedSchema>;
 
+/** Quién controla el vídeo (§11): el líder, como en Rave, o todos. */
+export const PartyControlModeSchema = z.enum(['leader', 'everyone']);
+export type PartyControlMode = z.infer<typeof PartyControlModeSchema>;
+
+/**
+ * Qué pasa al acabar (§11), como los modos de Rave: `autoplay`, lo primero de
+ * la lista (o el siguiente episodio); `vote`, lo más votado; `leader`, nada:
+ * elige el líder; `once`, se para.
+ */
+export const PartyQueueModeSchema = z.enum(['autoplay', 'vote', 'leader', 'once']);
+export type PartyQueueMode = z.infer<typeof PartyQueueModeSchema>;
+
+export const PartySettingsSchema = z.strictObject({
+  control: PartyControlModeSchema,
+  queueMode: PartyQueueModeSchema,
+});
+export type PartySettings = z.infer<typeof PartySettingsSchema>;
+
+/** Un título de la lista (lo mismo que `PartyTitle`, sin la duración). */
+export const PartyQueueTitleSchema = PartyTitleSchema.omit({ durationS: true });
+export type PartyQueueTitle = z.infer<typeof PartyQueueTitleSchema>;
+
+export const PartyQueueItemIdSchema = z.string().regex(/^q_[A-Za-z0-9_-]{8}$/, 'id de la lista');
+
+export const PartyQueueItemSchema = z.strictObject({
+  id: PartyQueueItemIdSchema,
+  title: PartyQueueTitleSchema,
+  /** Quien lo añadió (puede quitarlo), o null si ya no está en la sala. */
+  addedBy: PartyMemberIdSchema.nullable(),
+  addedByName: z.string().max(PARTY.nameMaxChars),
+  votes: z.array(PartyMemberIdSchema).max(PARTY.maxMembers),
+});
+export type PartyQueueItem = z.infer<typeof PartyQueueItemSchema>;
+
+/** Lo que empieza al acabar la cuenta atrás (`PARTY.upNextMs`). */
+export const PartyUpNextSchema = z.strictObject({
+  title: PartyQueueTitleSchema,
+  /** De la lista, o null si es el siguiente episodio. */
+  itemId: PartyQueueItemIdSchema.nullable(),
+  /** Hora del servidor (ms) a la que empieza. */
+  startsAt: z.number().int().nonnegative(),
+});
+export type PartyUpNext = z.infer<typeof PartyUpNextSchema>;
+
 export const PartyRoomSchema = z.strictObject({
   code: PartyCodeSchema,
   /** Enlace para invitar: el del proxy de la sala (`https://…/s/<código>`) o null (el de casa). */
@@ -96,9 +143,13 @@ export const PartyRoomSchema = z.strictObject({
   audio: PartyAudioSchema,
   interrupted: PartyInterruptedSchema,
   hostId: PartyMemberIdSchema,
+  leaderId: PartyMemberIdSchema,
   createdAt: z.number().int().nonnegative(),
   members: z.array(PartyMemberSchema).max(PARTY.maxMembers),
   playback: PartyPlaybackSchema,
+  settings: PartySettingsSchema,
+  queue: z.array(PartyQueueItemSchema).max(PARTY.queueMax),
+  upNext: PartyUpNextSchema.nullable(),
 });
 export type PartyRoom = z.infer<typeof PartyRoomSchema>;
 
@@ -218,6 +269,51 @@ export type PartyTokenBody = z.infer<typeof PartyTokenBodySchema>;
 
 export const PartyOkSchema = z.strictObject({ ok: z.literal(true) });
 
+/** POST /api/v1/party/:code/react: una reacción que sube por encima del vídeo de todos. */
+export const PartyReactBodySchema = z.strictObject({
+  token: PartyTokenSchema,
+  emoji: z.enum(PARTY_REACTIONS),
+});
+export type PartyReactBody = z.infer<typeof PartyReactBodySchema>;
+
+/** POST /api/v1/party/:code/settings (solo el líder): lo que no se manda no cambia. */
+export const PartySettingsBodySchema = z.strictObject({
+  token: PartyTokenSchema,
+  control: PartyControlModeSchema.optional(),
+  queueMode: PartyQueueModeSchema.optional(),
+});
+export type PartySettingsBody = z.infer<typeof PartySettingsBodySchema>;
+
+/** POST /api/v1/party/:code/member (solo el líder): echar a alguien o darle el liderazgo. */
+export const PartyMemberBodySchema = z.strictObject({
+  token: PartyTokenSchema,
+  memberId: PartyMemberIdSchema,
+  action: z.enum(['kick', 'lead']),
+});
+export type PartyMemberBody = z.infer<typeof PartyMemberBodySchema>;
+
+/** POST /api/v1/party/:code/queue: la lista de la sala (§11). */
+export const PartyQueueBodySchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    token: PartyTokenSchema,
+    action: z.literal('add'),
+    titleId: HashSchema,
+    kind: z.enum(['movie', 'episode']),
+    artId: HashSchema,
+    poster: VodArtStampSchema.nullable().default(null),
+    title: z.string().trim().min(1).max(200),
+    subtitle: z.string().trim().max(200).nullable().default(null),
+  }),
+  z.strictObject({
+    token: PartyTokenSchema,
+    action: z.enum(['remove', 'vote', 'play']),
+    itemId: PartyQueueItemIdSchema,
+  }),
+  /** `next`: lo siguiente ya, sin esperar; `cancel`: quita la cuenta atrás. */
+  z.strictObject({ token: PartyTokenSchema, action: z.enum(['next', 'cancel']) }),
+]);
+export type PartyQueueBody = z.infer<typeof PartyQueueBodySchema>;
+
 /** Clave de vídeo de una persona (base64url de 24 bytes). */
 export const PartyVideoKeySchema = z.string().regex(/^[A-Za-z0-9_-]{32}$/, 'clave de vídeo');
 
@@ -246,11 +342,23 @@ export type PartyStreamQuery = z.infer<typeof PartyStreamQuerySchema>;
 
 // --- Eventos del SSE de la sala ---
 
-export const PartyCloseReasonSchema = z.enum(['host', 'expired', 'empty', 'shutdown']);
+/** `kicked`: solo le llega a quien han echado. */
+export const PartyCloseReasonSchema = z.enum(['host', 'expired', 'empty', 'shutdown', 'kicked']);
 export type PartyCloseReason = z.infer<typeof PartyCloseReasonSchema>;
 
 /** Por qué cambió `playback` (para la línea «Ana ha pausado»). */
-export const PartyActionSchema = z.enum(['play', 'pause', 'seek', 'audio', 'wait', 'resume']);
+export const PartyActionSchema = z.enum([
+  'play',
+  'pause',
+  'seek',
+  'audio',
+  'wait',
+  'resume',
+  /** Se ha acabado el título. */
+  'ended',
+  /** Empieza otro título (`party.room` ya trae el nuevo): hay que abrir el vídeo otra vez. */
+  'title',
+]);
 export type PartyAction = z.infer<typeof PartyActionSchema>;
 
 export const PartyEventSchema = z.discriminatedUnion('type', [
@@ -279,6 +387,18 @@ export const PartyEventSchema = z.discriminatedUnion('type', [
       audio: PartyAudioSchema,
       interrupted: PartyInterruptedSchema,
       members: z.array(PartyMemberSchema).max(PARTY.maxMembers),
+      leaderId: PartyMemberIdSchema,
+      settings: PartySettingsSchema,
+      queue: z.array(PartyQueueItemSchema).max(PARTY.queueMax),
+      upNext: PartyUpNextSchema.nullable(),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal('party.reaction'),
+    data: z.strictObject({
+      memberId: PartyMemberIdSchema,
+      name: z.string().max(PARTY.nameMaxChars),
+      emoji: z.enum(PARTY_REACTIONS),
     }),
   }),
   z.strictObject({
