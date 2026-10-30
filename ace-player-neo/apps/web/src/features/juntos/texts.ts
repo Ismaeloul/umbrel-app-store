@@ -23,7 +23,7 @@ export const JUNTOS_TEXT = {
   backToCine: 'Volver a Películas y series',
   copyLink: 'Copiar enlace',
   linkCopied: 'Enlace copiado. Pásaselo a quien quieras.',
-  linkCopyFailed: 'No se ha podido copiar. Copia la dirección de la barra.',
+  linkCopyManual: 'No se ha podido copiar solo. Copia este enlace y pásaselo a quien quieras:',
   leave: 'Salir',
   closeRoom: 'Cerrar sala',
   closeConfirm: '¿Cerrar la sala para todos?',

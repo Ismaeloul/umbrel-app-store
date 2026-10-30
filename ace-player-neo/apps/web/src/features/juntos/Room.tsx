@@ -18,6 +18,7 @@ import { notify } from '../../notices/index.ts';
 import { Button, IconButton } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
 import { Icon } from '../../ui/Icon.tsx';
+import { copyText } from '../../player/clipboard.ts';
 import { Tabs, tabPanelProps } from '../../ui/Segmented.tsx';
 import { Chat } from './Chat.tsx';
 import { canControl, inviteUrl, PartyClient, rememberRoom, type PartyState } from './client.ts';
@@ -100,13 +101,16 @@ export function Room({
     ...(isLeader ? [{ value: 'ajustes' as const, label: JUNTOS_TEXT.tabSettings }] : []),
   ];
 
+  /* La web de casa va por http: sin la API del portapapeles, `copyText` tira del
+     respaldo. Si tampoco puede, el enlace sale en una ventana para copiarlo a mano
+     (la barra tiene la dirección de casa, no la del invitado). */
   const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(inviteUrl(code, room?.inviteUrl ?? null));
+    const link = inviteUrl(code, room?.inviteUrl ?? null);
+    if (await copyText(link)) {
       notify(JUNTOS_TEXT.linkCopied, { tone: 'ok' });
-    } catch {
-      notify(JUNTOS_TEXT.linkCopyFailed, { tone: 'err' });
+      return;
     }
+    globalThis.prompt(JUNTOS_TEXT.linkCopyManual, link);
   };
 
   const leave = async () => {
