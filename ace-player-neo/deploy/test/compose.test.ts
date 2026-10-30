@@ -112,11 +112,12 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
     expect(RAW).toContain('PROXY_AUTH_WHITELIST: "/native/*"');
   });
 
-  it('storage: el entorno de la 0.6.59 más ACE_SEED de APP_SEED y el enlace público de «Ver juntos»', () => {
+  it('storage: el entorno de la 0.6.59 más ACE_SEED de APP_SEED, el enlace público de «Ver juntos» y sin root (ACE_RUN_AS)', () => {
     expect(service('storage').environment).toEqual({
       ...legacy('storage').environment,
       ACE_SEED: '${APP_SEED}',
       PARTY_PUBLIC_URL: 'https://sala.ismaeloul.es',
+      ACE_RUN_AS: '1000:1000',
     });
     expect(RAW).toContain('ACE_SEED: "${APP_SEED}"');
     expect(service('engine_control').environment).toEqual(legacy('engine_control').environment);

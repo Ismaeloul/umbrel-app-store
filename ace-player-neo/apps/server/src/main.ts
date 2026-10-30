@@ -27,10 +27,11 @@
 import type { FastifyInstance } from 'fastify';
 import { LOG_CLEAN_STOP_MSG, SHUTDOWN_TIMINGS } from '@ace/shared';
 import { buildApp } from './app.js';
-import { loadConfig, type Env } from './config/index.js';
+import { DEFAULTS, loadConfig, type Env } from './config/index.js';
 import { createDomainBus } from './core/bus.js';
 import { createSystemClock, type Clock } from './core/clock.js';
 import { createLogger, createLogRing, logRingOf, logStoreOf, type Logger } from './core/logger.js';
+import { dropRoot } from './core/privileges.js';
 import {
   HEARTBEAT_MS,
   attachLogStore,
@@ -248,8 +249,14 @@ export async function main(): Promise<void> {
     });
     return;
   }
+  /* Antes de abrir ningún fichero: con ACE_RUN_AS, el backend deja de ser root (core/privileges.ts). */
+  const privileges = dropRoot(process.env, process.env.DATA_DIR || DEFAULTS.dataDir);
   const server = await startServer();
   const { logger, clock } = server.services;
+  if (privileges.status === 'dropped') logger.info({ privileges }, 'el servidor ya no es root');
+  else if (privileges.status === 'failed') {
+    logger.warn({ privileges }, 'no se ha podido dejar de ser root: sigue como root');
+  }
   installProcessHandlers(process, {
     logger,
     clock,

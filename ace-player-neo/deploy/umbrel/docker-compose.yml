@@ -112,6 +112,11 @@ services:
       # «Ver juntos» desde fuera (docs/ver-juntos.md §9): los enlaces de
       # invitacion van al proxy de la sala (servicio sala).
       PARTY_PUBLIC_URL: "https://sala.ismaeloul.es"
+      # Arranca como root solo para instalar ffmpeg; antes de abrir ningun
+      # fichero el backend pasa a ser este usuario (el node de la imagen) y
+      # deja suya la carpeta de datos (core/privileges.ts). Desde fuera llega
+      # la sala de Ver juntos: mejor que no sea root.
+      ACE_RUN_AS: "1000:1000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # ffmpeg: re-empaqueta HEVC de TS a fMP4 para iOS (sin transcodificar).
