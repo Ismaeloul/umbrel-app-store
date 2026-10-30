@@ -2,6 +2,18 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.13 (2026-10-30)
+
+Ver juntos ahora se usa como Rave. Quien crea la sala es el lider (con
+corona): por defecto solo el controla el video, y en Ajustes puede dejar el
+control a todos. El lider puede echar a alguien o pasar el liderazgo (pulsa
+... o manten pulsado su nombre). Reacciones con emojis que suben por encima
+del video de todos. Lista de la sala con votos: anade titulos desde la ficha
+con Ver juntos > Anadir a la sala; al acabar sigue lo primero de la lista,
+lo mas votado o lo que elija el lider, con 10 s de cuenta atras. En una
+serie, el siguiente episodio empieza solo para todos. La app del iPhone aun
+no muestra lo nuevo.
+
 ## 0.9.12 (2026-10-30)
 
 Mas seguridad para Ver juntos desde fuera de casa: el servidor de la app

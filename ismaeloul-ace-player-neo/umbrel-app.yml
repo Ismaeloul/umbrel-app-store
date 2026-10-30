@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.9.12"
+version: "0.9.13"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,11 +13,15 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Mas seguridad para Ver juntos desde fuera de casa: el servidor de la app
-  ya no funciona como administrador (root). Arranca, prepara sus datos y
-  pasa a un usuario normal sin permisos especiales; si alguien encontrara
-  un fallo en la sala, tendria mucho menos margen. No cambia nada de lo que
-  ves ni de lo que guardas.
+  Ver juntos ahora se usa como Rave. Quien crea la sala es el lider (con
+  corona): por defecto solo el controla el video, y en Ajustes puede dejar el
+  control a todos. El lider puede echar a alguien o pasar el liderazgo (pulsa
+  ... o manten pulsado su nombre). Reacciones con emojis que suben por encima
+  del video de todos. Lista de la sala con votos: anade titulos desde la ficha
+  con Ver juntos > Anadir a la sala; al acabar sigue lo primero de la lista,
+  lo mas votado o lo que elija el lider, con 10 s de cuenta atras. En una
+  serie, el siguiente episodio empieza solo para todos. La app del iPhone aun
+  no muestra lo nuevo.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []
