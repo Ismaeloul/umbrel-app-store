@@ -11,8 +11,12 @@ interface FakeEntry {
   dir: boolean;
 }
 
-function fakeOps(options: { uid?: number; files?: Record<string, FakeEntry>; failSetuid?: boolean } = {}) {
-  const files = new Map(Object.entries(options.files ?? {}).map(([k, v]) => [path.normalize(k), { ...v }]));
+function fakeOps(
+  options: { uid?: number; files?: Record<string, FakeEntry>; failSetuid?: boolean } = {},
+) {
+  const files = new Map(
+    Object.entries(options.files ?? {}).map(([k, v]) => [path.normalize(k), { ...v }]),
+  );
   const calls: string[] = [];
   let uid = options.uid ?? 0;
   const ops: PrivilegeOps = {
@@ -80,7 +84,12 @@ describe('dropRoot', () => {
         '/data/v2/settings.json': { uid: 1000, gid: 1000, dir: false },
       },
     });
-    expect(dropRoot(ON, '/data', ops)).toEqual({ status: 'dropped', uid: 1000, gid: 1000, chowned: 3 });
+    expect(dropRoot(ON, '/data', ops)).toEqual({
+      status: 'dropped',
+      uid: 1000,
+      gid: 1000,
+      chowned: 3,
+    });
     for (const entry of files.values()) expect([entry.uid, entry.gid]).toEqual([1000, 1000]);
     expect(calls.slice(-3)).toEqual(['setgroups 1000', 'setgid 1000', 'setuid 1000']);
     expect(calls.filter((call) => call.startsWith('lchown'))).toHaveLength(3);
@@ -98,7 +107,10 @@ describe('dropRoot', () => {
   });
 
   it('un fallo no lanza: lo devuelve y el proceso sigue como estaba', () => {
-    const { ops } = fakeOps({ failSetuid: true, files: { '/data': { uid: 1000, gid: 1000, dir: true } } });
+    const { ops } = fakeOps({
+      failSetuid: true,
+      files: { '/data': { uid: 1000, gid: 1000, dir: true } },
+    });
     expect(dropRoot(ON, '/data', ops)).toEqual({ status: 'failed', reason: 'EPERM' });
     expect(ops.getuid()).toBe(0);
   });

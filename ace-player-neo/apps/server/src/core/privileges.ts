@@ -34,7 +34,12 @@ export interface PrivilegeOps {
 export type DropResult =
   | { readonly status: 'off' }
   | { readonly status: 'not-root' }
-  | { readonly status: 'dropped'; readonly uid: number; readonly gid: number; readonly chowned: number }
+  | {
+      readonly status: 'dropped';
+      readonly uid: number;
+      readonly gid: number;
+      readonly chowned: number;
+    }
   | { readonly status: 'failed'; readonly reason: string };
 
 /** `"1000:1000"` → `{ uid: 1000, gid: 1000 }`; cualquier otra cosa, null. */
@@ -97,7 +102,8 @@ export function dropRoot(
   const raw = env.ACE_RUN_AS;
   if (raw === undefined || raw.trim() === '') return { status: 'off' };
   const target = parseRunAs(raw);
-  if (!target) return { status: 'failed', reason: `ACE_RUN_AS no vale: "${raw}" (uid:gid, sin root)` };
+  if (!target)
+    return { status: 'failed', reason: `ACE_RUN_AS no vale: "${raw}" (uid:gid, sin root)` };
   if (!ops) return { status: 'failed', reason: 'este sistema no permite cambiar de usuario' };
   if (ops.getuid() !== 0) return { status: 'not-root' };
   try {
