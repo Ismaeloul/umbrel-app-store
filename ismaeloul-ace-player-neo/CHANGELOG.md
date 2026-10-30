@@ -2,6 +2,13 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.9.14 (2026-10-30)
+
+Invitar ya copia el enlace de la sala tambien desde la web de casa (sin
+candado, por http). Si el navegador no deja copiar, el enlace sale en una
+ventana para copiarlo a mano. Antes decia que copiaras la barra, que tiene
+la direccion de casa y no la que necesita tu amigo.
+
 ## 0.9.13 (2026-10-30)
 
 Ver juntos ahora se usa como Rave. Quien crea la sala es el lider (con
