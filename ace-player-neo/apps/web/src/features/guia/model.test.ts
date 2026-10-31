@@ -11,6 +11,7 @@ import {
   buildTimeline,
   dayChipLabel,
   dayStart,
+  DESK_MAX_DAYS,
   formatSpan,
   GAP_MIN_MS,
   HOUR,
@@ -99,6 +100,9 @@ describe('línea de tiempo', () => {
     expect(xOf(TODAY + 30 * MINUTE, timeline, scaleFor('wide'))).toBeCloseTo(156);
     expect(xOf(TODAY + 30 * MINUTE, timeline, scaleFor('mobile'))).toBeCloseTo(120);
     expect(scaleFor('desktop').rowH).toBe(64);
+    // La columna de canales de la maqueta: 120 px, solo el logo.
+    expect(scaleFor('desktop').colW).toBe(120);
+    expect(scaleFor('wide').colW).toBe(120);
   });
 
   it('escritorio: «Ayer» solo si la guía guardada lo cubre bien; el móvil nunca', () => {
@@ -121,6 +125,24 @@ describe('línea de tiempo', () => {
       yesterday: true,
     });
     expect(short.start).toBe(TODAY);
+  });
+
+  it('escritorio: hasta cuatro días desde hoy si la guía llega (el móvil, tres)', () => {
+    const coverage = {
+      from: TODAY - 24 * HOUR,
+      to: TODAY + 80 * HOUR,
+      coveredFrom: TODAY - 20 * HOUR,
+      coveredTo: TODAY + 80 * HOUR,
+    };
+    const desk = buildTimeline(coverage, NOW, { yesterday: true, maxDays: DESK_MAX_DAYS });
+    expect(desk.days.map((day) => day.start)).toEqual([
+      addDays(TODAY, -1),
+      TODAY,
+      addDays(TODAY, 1),
+      addDays(TODAY, 2),
+      addDays(TODAY, 3),
+    ]);
+    expect(buildTimeline(coverage, NOW).days).toHaveLength(3);
   });
 });
 

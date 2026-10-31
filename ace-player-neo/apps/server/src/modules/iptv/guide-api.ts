@@ -120,6 +120,8 @@ export class GuideApi {
   private rows: Rows | null = null;
   private building: { key: string; promise: Promise<Rows> } | null = null;
   private readonly facets = new FacetDeriver();
+  /** La cobertura de «Todos» con un tipo, por filas: se calcula una vez por guía y tipo. */
+  private readonly typeCoverage = new WeakMap<Rows, Map<string, GuideCoverage | null>>();
 
   constructor(private readonly source: GuideApiSource) {}
 
@@ -174,10 +176,20 @@ export class GuideApi {
     const list = type ? scoped.filter((row) => row.types.includes(type)) : scoped;
     /* Hasta dónde llega la programación de las filas del ámbito («Todos»: la de toda la guía
        que sale en filas; se calcula una vez por guía en el lector). */
-    const covered =
-      scope === 'favorites' || type
-        ? reader.coverage(list.flatMap((row) => (row.guide === null ? [] : [row.guide])))
-        : rows.coverage;
+    const coverageOf = () =>
+      reader.coverage(list.flatMap((row) => (row.guide === null ? [] : [row.guide])));
+    let covered: GuideCoverage | null;
+    if (scope === 'favorites') covered = coverageOf();
+    else if (!type) covered = rows.coverage;
+    else {
+      /* «Todos» con un tipo: las mismas filas en cada página, así que se
+         guarda (con las filas: otra guía u otro catálogo, otras filas). */
+      let byType = this.typeCoverage.get(rows);
+      if (!byType) this.typeCoverage.set(rows, (byType = new Map()));
+      const key = `${reader.version}|${type}`;
+      if (!byType.has(key)) byType.set(key, coverageOf());
+      covered = byType.get(key) ?? null;
+    }
     return {
       ...base,
       state: 'ready',

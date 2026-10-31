@@ -7,13 +7,14 @@
    la barra de todas las secciones, así que mientras la app está abierta hay
    quien lo arme. */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from '../../app/router.tsx';
 import { Icon, IconButton, Popover } from '../../ui/index.ts';
 import {
   AVISO_LEAD_MS,
   noticePermission,
   removeAviso,
+  setAvisoOpener,
   useAvisos,
   useAvisosClock,
   type Aviso,
@@ -38,6 +39,16 @@ export function avisoDay(start: number, now: number): string {
 
 export function AvisosBell() {
   useAvisosClock();
+  const navigate = useNavigate();
+  // Pulsar la notificación: la ficha del partido o, si no lo es, la Guía.
+  useEffect(() => {
+    setAvisoOpener((aviso) =>
+      navigate(
+        aviso.match ? { vista: 'partido', id: aviso.match, canal: null } : { vista: 'guia' },
+      ),
+    );
+    return () => setAvisoOpener(null);
+  }, [navigate]);
   const list = useAvisos();
   const pending = list.filter((aviso) => !aviso.fired);
   const [open, setOpen] = useState(false);

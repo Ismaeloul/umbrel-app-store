@@ -24,6 +24,9 @@ export const GAP_MIN_MS = 2 * MINUTE;
 export const DAY_WITH_DATA_MS = 6 * HOUR;
 /** Días que puede enseñar la parrilla: hoy, mañana y pasado. */
 export const MAX_DAYS = 3;
+/* En escritorio, uno más (la maqueta: Ayer, Hoy, Dom 1, Lun 2, Mar 3), si la
+   guía llega: la ventana guardada va hasta +80 h. */
+export const DESK_MAX_DAYS = 4;
 /** Filas por bloque de programas pedido (las teselas son de `IPTV_GUIDE_API.tileMs`). */
 export const BLOCK_ROWS = IPTV_GUIDE_API.tileRows;
 export const TILE_MS = IPTV_GUIDE_API.tileMs;
@@ -45,16 +48,16 @@ export interface Scale {
 
 /* Desde 768, la parrilla del rediseño de escritorio (01-escritorio.html §2):
    156 px por media hora (unas 3 h a la vista a 1280), filas de 64 y la
-   columna justa para el logo y el nombre. El programa elegido sale en un
-   popover; en el móvil, en una hoja. */
+   columna de 120 de la maqueta, con solo el logo (o el nombre en su ficha de
+   color). El programa elegido sale en un popover; en el móvil, en una hoja. */
 export function scaleFor(kind: LayoutKind): Scale {
   switch (kind) {
     case 'wide':
-      return { ppm: 156 / 30, colW: 196, rowH: 64, rulerH: 40 };
+      return { ppm: 156 / 30, colW: 120, rowH: 64, rulerH: 40 };
     case 'desktop':
-      return { ppm: 156 / 30, colW: 176, rowH: 64, rulerH: 40 };
+      return { ppm: 156 / 30, colW: 120, rowH: 64, rulerH: 40 };
     case 'tablet':
-      return { ppm: 140 / 30, colW: 160, rowH: 64, rulerH: 40 };
+      return { ppm: 140 / 30, colW: 120, rowH: 64, rulerH: 40 };
     default:
       return { ppm: 120 / 30, colW: 96, rowH: 64, rulerH: 32 };
   }
@@ -177,10 +180,11 @@ export interface Coverage {
 export function buildTimeline(
   coverage: Coverage,
   now: number,
-  options: { yesterday?: boolean } = {},
+  options: { yesterday?: boolean; maxDays?: number } = {},
 ): Timeline {
   const today = dayStart(now);
-  const lastEnd = addDays(today, MAX_DAYS);
+  const maxDays = options.maxDays ?? MAX_DAYS;
+  const lastEnd = addDays(today, maxDays);
   /* Escritorio (la maqueta): también ayer, si la guía guardada lo tiene bien
      dentro (no hay catch-up: se ve lo que echaron, el canal suena en directo). */
   const yesterday = addDays(today, -1);
@@ -200,7 +204,7 @@ export function buildTimeline(
   end = Math.max(end, todayEnd, start + SLOT_MS);
   const days: GuideDay[] = [];
   if (withYesterday) days.push({ start: yesterday, label: 'Ayer' });
-  for (let index = 0; index < MAX_DAYS; index += 1) {
+  for (let index = 0; index < maxDays; index += 1) {
     const day = addDays(today, index);
     if (day >= end) break;
     // Un día cuenta si la guía llega bien dentro de él, no si solo se asoma un

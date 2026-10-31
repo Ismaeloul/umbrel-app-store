@@ -5,7 +5,8 @@
 
    Desde 768, la Guía del rediseño de escritorio (01-escritorio.html §2):
    barra «Guía» con buscador y campana; debajo, los días (Ayer, Hoy, Dom 1…)
-   y los chips Favoritos, Todos, Deportes, Cine y Noticias (`&tipo=`); la
+   y los chips Favoritos (se quita y se pone: sin él, todos los canales),
+   Deportes, Cine y Noticias (`&tipo=`, que se suman a Favoritos); la
    parrilla a lo ancho (unas 3 h a la vista) y, al pulsar un programa, un
    popover con «Te aviso» y «Ver ficha». El móvil no cambia.
 
@@ -39,6 +40,7 @@ import {
   buildTimeline,
   dayChipLabel,
   dayStart,
+  DESK_MAX_DAYS,
   formatLongDay,
   GUIDE_TYPES,
   pagesBetween,
@@ -80,7 +82,7 @@ function useScope(): [IptvGuideScope, (scope: IptvGuideScope) => void] {
   return [scope, set];
 }
 
-/** El chip de tipo de escritorio (`&tipo=deportes`): va con «Todos» y no se recuerda. */
+/** El chip de tipo de escritorio (`&tipo=deportes`): filtra dentro del ámbito y no se recuerda. */
 function useType(): [GuideType | null, (type: GuideType | null) => void] {
   const [param, setParam] = useSearchParam(TYPE_PARAM);
   const set = useCallback((next: GuideType | null) => setParam(next), [setParam]);
@@ -104,9 +106,9 @@ export default function GuiaView({ active }: ViewProps) {
   const [urlType, setType] = useType();
   // Los chips de tipo son de escritorio: en el móvil, `&tipo=` no cuenta.
   const type = desk ? urlType : null;
-  const scope = type ? 'all' : chosenScope;
+  const scope = chosenScope;
   const [pageList, setPageList] = useState<number[]>([0]);
-  const pages = useGuidePages(scope, pageList, active, type);
+  const pages = useGuidePages(scope, pageList, active, type, desk);
   const head = pages.head;
 
   const onRows = useCallback((first: number, last: number) => {
@@ -123,6 +125,10 @@ export default function GuiaView({ active }: ViewProps) {
 
   // Otro ámbito u otro tipo: de nuevo arriba, a esta hora.
   const shownScope = head?.scope ?? scope;
+  /* Los chips responden al momento: mientras llega la lista nueva (se sigue
+     viendo la de antes), marcan lo pedido; luego, lo que dio el servidor
+     (sin favoritos, «Todos»). */
+  const chipScope = pages.stale ? scope : shownScope;
   const listKey = `${shownScope}|${type ?? ''}`;
   const lastList = useRef(listKey);
   useEffect(() => {
@@ -143,7 +149,7 @@ export default function GuiaView({ active }: ViewProps) {
           coveredTo: head?.coveredTo ?? null,
         },
         now,
-        { yesterday: desk },
+        desk ? { yesterday: true, maxDays: DESK_MAX_DAYS } : {},
       ),
     // Basta con recalcularla al cambiar de día o de guía.
     [head?.from, head?.to, head?.coveredFrom, head?.coveredTo, dayStart(now), desk],
@@ -304,30 +310,41 @@ export default function GuiaView({ active }: ViewProps) {
       </EmptyState>
     );
   } else if (head.total === 0 && type) {
+    const typeName = GUIDE_TYPES.find((item) => item.value === type)?.label.toLowerCase() ?? type;
+    const inFavorites = shownScope === 'favorites';
     body = (
       <>
         <DeskBar
           days={[]}
           viewDay={dayStart(viewTime)}
           today={dayStart(now)}
-          scope={shownScope}
+          scope={chipScope}
           type={type}
           onDay={() => {}}
-          onScope={(next) => {
-            setType(null);
-            setScope(next);
-          }}
+          onScope={setScope}
           onType={setType}
         />
         <EmptyState
-          title={`No hay canales de ${GUIDE_TYPES.find((item) => item.value === type)?.label.toLowerCase() ?? type} con guía`}
+          title={
+            inFavorites
+              ? `Ninguno de tus favoritos es de ${typeName} con guía`
+              : `No hay canales de ${typeName} con guía`
+          }
           actions={
-            <Button variant="quiet" onClick={() => setType(null)}>
-              Ver todos los canales
-            </Button>
+            inFavorites ? (
+              <Button variant="quiet" onClick={() => setScope('all')}>
+                Buscar en todos los canales
+              </Button>
+            ) : (
+              <Button variant="quiet" onClick={() => setType(null)}>
+                Ver todos los canales
+              </Button>
+            )
           }
         >
-          Tu proveedor no tiene programación de canales de este tipo.
+          {inFavorites
+            ? 'Quita «Favoritos» para ver los de todos los canales de tu proveedor.'
+            : 'Tu proveedor no tiene programación de canales de este tipo.'}
         </EmptyState>
       </>
     );
@@ -360,14 +377,12 @@ export default function GuiaView({ active }: ViewProps) {
             days={days.map((day) => day.start)}
             viewDay={viewDay}
             today={today}
-            scope={shownScope}
+            scope={chipScope}
             type={type}
             onDay={goDay}
-            onScope={(next) => {
-              setType(null);
-              setScope(next);
-            }}
+            onScope={setScope}
             onType={setType}
+            onlyToday={onlyToday && head.coveredTo !== null}
           />
         ) : (
           <div className="guia-toolbar">
@@ -468,14 +483,14 @@ export default function GuiaView({ active }: ViewProps) {
   }
 
   return (
-    <div className={cx('guia', desk && 'guia--desk', popover && 'guia--pop')} data-layout={kind}>
+    <div className={cx('guia', desk && 'guia--desk')} data-layout={kind}>
       {header}
       {body}
     </div>
   );
 }
 
-/** La barra de escritorio bajo el título: los días y los chips (Favoritos, Todos y por tipo). */
+/** La barra de escritorio bajo el título: los días y los chips (Favoritos y por tipo). */
 function DeskBar({
   days,
   viewDay,
@@ -485,6 +500,7 @@ function DeskBar({
   onDay,
   onScope,
   onType,
+  onlyToday = false,
 }: {
   days: readonly number[];
   viewDay: number;
@@ -494,6 +510,8 @@ function DeskBar({
   onDay(start: number): void;
   onScope(scope: IptvGuideScope): void;
   onType(type: GuideType | null): void;
+  /** Solo hay «Hoy» porque el proveedor no da más: se dice (como en el móvil). */
+  onlyToday?: boolean;
 }) {
   return (
     <div className="guia-bar">
@@ -514,11 +532,11 @@ function DeskBar({
         </div>
       ) : null}
       <div className="guia-bar__chips" role="group" aria-label="Canales">
-        <Chip pressed={!type && scope === 'favorites'} onClick={() => onScope('favorites')}>
+        <Chip
+          pressed={scope === 'favorites'}
+          onClick={() => onScope(scope === 'favorites' ? 'all' : 'favorites')}
+        >
           Favoritos
-        </Chip>
-        <Chip pressed={!type && scope === 'all'} onClick={() => onScope('all')}>
-          Todos
         </Chip>
         {GUIDE_TYPES.map((item) => (
           <Chip
@@ -530,6 +548,7 @@ function DeskBar({
           </Chip>
         ))}
       </div>
+      {onlyToday ? <p className="guia-bar__hint">Tu proveedor solo da la guía de hoy</p> : null}
     </div>
   );
 }

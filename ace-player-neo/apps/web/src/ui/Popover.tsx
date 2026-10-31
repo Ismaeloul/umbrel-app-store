@@ -4,7 +4,11 @@
    - NO es modal: el resto de la app sigue viva (se puede pulsar otro programa
      sin cerrar antes). Escape, un clic fuera o desplazar lo de debajo lo
      cierran, y el foco vuelve a quien lo tenía al abrir.
-   - Al abrir se enfoca la propia tarjeta (Tab llega a sus botones).
+   - Al abrir se enfoca la propia tarjeta (Tab llega a sus botones), una vez
+     colocada: mientras se mide va con `visibility: hidden` y un elemento
+     oculto no puede tener el foco. Tab al salir de la tarjeta (o Mayús+Tab
+     desde ella) vuelve a lo pulsado y la cierra: el portal está al final del
+     documento y, si no, el foco se iría fuera de la página.
    - `position: fixed` dentro de la pantalla: debajo de lo pulsado y, si no
      cabe, encima. `align` dice si se alinea por la izquierda (un programa) o
      por la derecha (la campana, en la esquina).
@@ -60,6 +64,13 @@ export function placePopover(
   return { left: Math.round(left), top: Math.round(top), above };
 }
 
+const FOCUSABLE =
+  'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function focusables(box: HTMLElement): HTMLElement[] {
+  return [...box.querySelectorAll<HTMLElement>(FOCUSABLE)];
+}
+
 function rectOf(anchor: HTMLElement | PopoverRect): PopoverRect {
   return anchor instanceof HTMLElement ? anchor.getBoundingClientRect() : anchor;
 }
@@ -79,6 +90,7 @@ export function Popover({
   const latestClose = useRef(onClose);
   latestClose.current = onClose;
   const returnFocus = useRef<HTMLElement | null>(null);
+  const wantFocus = useRef(false);
   const anchorNode = anchor instanceof HTMLElement ? anchor : null;
 
   // Colocar al abrir (y si cambia lo pulsado) y enfocar la tarjeta.
@@ -99,15 +111,38 @@ export function Popover({
         inset,
       ),
     );
-    box.focus({ preventScroll: true });
+    if (!box.contains(document.activeElement)) wantFocus.current = true;
   }, [open, anchor, align, inset]);
+
+  // Ya colocada (visible): ahora sí puede tomar el foco.
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (!place || !box || !wantFocus.current) return;
+    wantFocus.current = false;
+    box.focus({ preventScroll: true });
+  }, [place]);
 
   // Escape, clic fuera y desplazar lo de debajo cierran.
   useEffect(() => {
     if (!open) return;
     const close = () => latestClose.current();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.defaultPrevented) return;
+      if (event.key === 'Tab') {
+        const box = boxRef.current;
+        if (!box || !box.contains(document.activeElement)) return;
+        const items = focusables(box);
+        const edge = event.shiftKey ? (items[0] ?? box) : items.at(-1);
+        const leaving =
+          document.activeElement === edge || (event.shiftKey && document.activeElement === box);
+        const back = returnFocus.current;
+        if (!leaving || !back?.isConnected) return;
+        event.preventDefault();
+        back.focus({ preventScroll: true });
+        close();
+        return;
+      }
+      if (event.key !== 'Escape') return;
       event.preventDefault();
       close();
     };

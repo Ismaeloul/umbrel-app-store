@@ -13,7 +13,7 @@ import '../agenda/demo.ts';
 import { useSchedule } from '../agenda/data.ts';
 import { Button, Capsule, Num, Popover, ProgressBar, Sheet, Skeleton } from '../../ui/index.ts';
 import { matchForProgramme } from './agenda-link.ts';
-import { ChannelLogo, type Picked } from './Board.tsx';
+import { ChannelBadge, ChannelLogo, type Picked } from './Board.tsx';
 import { useGuideProgramme } from './data.ts';
 import {
   airingOf,
@@ -343,7 +343,7 @@ function PopoverBody({
   return (
     <div className="guia-pop__body">
       <div className="guia-pop__channel">
-        <ChannelLogo channel={picked.channel} version={version} size={32} />
+        <ChannelBadge channel={picked.channel} version={version} small />
         <span className="guia-pop__chname">
           {picked.channel.name}
           {category ? ` · ${category}` : ''}
@@ -374,18 +374,6 @@ function PopoverBody({
           </span>
         ) : null}
       </p>
-      {programme && detail?.description ? (
-        <p className="guia-pop__text">{detail.description}</p>
-      ) : null}
-      {match ? (
-        <p className="guia-pop__agenda">
-          Este partido está en tu Agenda
-          {match.channels.length
-            ? ` con ${match.channels.length} ${match.channels.length === 1 ? 'canal' : 'canales'}`
-            : ''}
-          .
-        </p>
-      ) : null}
       <div className="guia-pop__actions">
         {shown.airing === 'future' && programme ? (
           <Button
@@ -413,15 +401,8 @@ function PopoverBody({
           >
             Ver ficha
           </Button>
-        ) : shown.airing === 'future' ? (
-          <Button variant="quiet" icon="play" onClick={onPlay}>
-            Ver el canal
-          </Button>
         ) : null}
       </div>
-      {shown.airing === 'future' && programme ? (
-        <p className="guia-pop__note">Te avisaremos 5 minutos antes</p>
-      ) : null}
     </div>
   );
 }

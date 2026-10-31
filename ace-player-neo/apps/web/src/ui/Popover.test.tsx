@@ -64,4 +64,35 @@ describe('Popover', () => {
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Otro' }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+
+  it('toma el foco ya colocada (no oculta: Chrome no enfoca lo invisible)', () => {
+    const seen: string[] = [];
+    const onFocus = (event: FocusEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.getAttribute('role') === 'dialog') seen.push(target.style.visibility);
+    };
+    document.addEventListener('focusin', onFocus);
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir' }));
+    document.removeEventListener('focusin', onFocus);
+    expect(seen).toEqual(['']);
+  });
+
+  it('Tab desde el último botón (o Mayús+Tab desde la tarjeta) vuelve a lo pulsado y cierra', () => {
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Abrir' });
+    opener.focus();
+    fireEvent.click(opener);
+    const inside = screen.getByRole('button', { name: 'Dentro' });
+    inside.focus();
+    fireEvent.keyDown(inside, { key: 'Tab' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(opener).toHaveFocus();
+    fireEvent.click(opener);
+    const dialog = screen.getByRole('dialog', { name: 'Detalle' });
+    expect(dialog).toHaveFocus();
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(opener).toHaveFocus();
+  });
 });

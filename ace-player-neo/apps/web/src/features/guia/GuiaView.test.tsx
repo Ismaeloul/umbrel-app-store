@@ -196,7 +196,7 @@ describe('Guía TV', () => {
 });
 
 describe('Guía de escritorio (desde 768)', () => {
-  it('barra «Guía» con días y chips; un tipo filtra en el servidor y va en la URL', async () => {
+  it('barra «Guía» con días y chips; un tipo filtra en el servidor, se suma a Favoritos y va en la URL', async () => {
     setViewport(1280);
     scrollable();
     serve();
@@ -210,13 +210,29 @@ describe('Guía de escritorio (desde 768)', () => {
     );
     // En escritorio no hay «Favoritos | Todos» arriba: son chips.
     expect(screen.queryByRole('radio', { name: /Favoritos/ })).toBeNull();
+    // Como la maqueta: no hay chip «Todos»; Favoritos se quita y se pone.
+    expect(screen.queryByRole('button', { name: 'Todos' })).toBeNull();
+    const guideCalls = () => net.calls.filter((call) => call.url.startsWith('/api/v1/iptv/guide?'));
     fireEvent.click(screen.getByRole('button', { name: 'Noticias' }));
     await waitFor(() => expect(location.search).toContain('tipo=noticias'));
     await waitFor(() =>
+      expect(queryOf(guideCalls().at(-1) as MockCall)).toMatchObject({
+        scope: 'favorites',
+        type: 'noticias',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Favoritos' }));
+    expect(screen.getByRole('button', { name: 'Favoritos' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await waitFor(() =>
       expect(screen.getByRole('grid', { name: 'Guía TV' })).toHaveAttribute('aria-rowcount', '4'),
     );
-    const asked = net.calls.filter((call) => call.url.startsWith('/api/v1/iptv/guide?'));
-    expect(queryOf(asked.at(-1) as MockCall)).toMatchObject({ scope: 'all', type: 'noticias' });
+    expect(queryOf(guideCalls().at(-1) as MockCall)).toMatchObject({
+      scope: 'all',
+      type: 'noticias',
+    });
     expect(
       within(screen.getByRole('grid', { name: 'Guía TV' })).getByRole('rowheader', {
         name: /Euronews/,

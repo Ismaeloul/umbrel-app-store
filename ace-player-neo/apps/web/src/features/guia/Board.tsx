@@ -18,7 +18,7 @@
      Más info si no se está emitiendo), I = Más info, y números para saltar a
      un canal como con el mando. */
 
-import type { IptvGuideChannel, IptvGuideResponse } from '@ace/shared';
+import { stripQualityMarks, type IptvGuideChannel, type IptvGuideResponse } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -32,6 +32,7 @@ import {
   type KeyboardEvent,
   type RefObject,
 } from 'react';
+import { channelTone, oklchCss } from '../../lib/color.ts';
 import { cx } from '../../lib/cx.ts';
 import { prefersReducedMotion } from '../../lib/media.ts';
 import { Button, ChannelMark, Icon, Num, Skeleton } from '../../ui/index.ts';
@@ -163,9 +164,12 @@ export function Board({
   const [view, setView] = useState({ left: 0, width: 1200 });
   const [settled, setSettled] = useState(view);
   const frame = useRef(0);
+  /** Esconde las horas de la regla tapadas a medias (más abajo, en «Pintar»). */
+  const coverMarks = useRef<(() => void) | null>(null);
   const readView = useCallback(() => {
     const node = scrollRef.current;
     if (!node) return;
+    coverMarks.current?.();
     /* El título de un programa que empezó antes se ve desde el borde de la
        columna (como en el deco): el CSS lo desplaza con --sl, sin repintar
        React en cada fotograma. React solo se entera cada 48 px. */
@@ -467,6 +471,31 @@ export function Board({
   const marks = rulerMarks(timeline);
   const today = dayStart(now);
   const leftDay = dayStart(Math.max(timeline.start, leftTime));
+  /* Una hora de la regla a medias no se pinta (nada de un «1» o un «:30»
+     sueltos): ni la que tape la píldora de «ahora» ni la que se meta bajo la
+     esquina de la columna al desplazar. Se mide tras pintar y en cada
+     fotograma del desplazamiento (readView), sin repintar React. */
+  const pillRef = useRef<HTMLSpanElement>(null);
+  const cornerRef = useRef<HTMLDivElement>(null);
+  const nowRef = useRef(now);
+  nowRef.current = now;
+  coverMarks.current = () => {
+    const corner = cornerRef.current;
+    const ruler = corner?.parentElement;
+    if (!corner || !ruler) return;
+    const edge = corner.getBoundingClientRect().right;
+    const pill = pillRef.current?.getBoundingClientRect();
+    for (const mark of ruler.querySelectorAll<HTMLElement>('.guia-ruler__mark')) {
+      const rect = mark.firstElementChild?.getBoundingClientRect();
+      if (!rect) continue;
+      const near = Math.abs(Number(mark.dataset.t) - nowRef.current) < 60 * MINUTE;
+      const covered =
+        mark.getBoundingClientRect().left < edge - 1 ||
+        (pill !== undefined && near && rect.right > pill.left - 4 && rect.left < pill.right + 4);
+      mark.toggleAttribute('data-covered', covered);
+    }
+  };
+  useLayoutEffect(() => coverMarks.current?.());
   const failed = useMemo(() => {
     for (const row of tileStates.values())
       for (const state of row.values()) if (state.status === 'error') return true;
@@ -499,7 +528,7 @@ export function Board({
       >
         <div className="guia-grid__content" style={{ width: contentW, height: contentH }}>
           <div className="guia-ruler" aria-hidden="true" style={{ width: contentW }}>
-            <div className="guia-ruler__corner">
+            <div ref={cornerRef} className="guia-ruler__corner">
               <span className="guia-ruler__day">{dayLabel(leftDay, today)}</span>
               <span className="guia-ruler__date">{formatShortDay(leftDay)}</span>
             </div>
@@ -510,6 +539,7 @@ export function Board({
               return (
                 <span
                   key={t}
+                  data-t={t}
                   className={cx('guia-ruler__mark', t === dayStart(t) && 'guia-ruler__mark--day')}
                   style={{ left, width, '--bx': `${left}px` } as CSSProperties}
                 >
@@ -523,13 +553,18 @@ export function Board({
               );
             })}
             {nowInRange ? (
-              <span className="guia-ruler__now" style={{ left: nowX }}>
+              <span ref={pillRef} className="guia-ruler__now" style={{ left: nowX }}>
                 {formatTime(now)}
               </span>
             ) : null}
           </div>
           {nowInRange ? (
-            <div className="guia-now" aria-hidden="true" style={{ left: nowX, height: contentH }} />
+            <div
+              className="guia-now"
+              aria-hidden="true"
+              // En escritorio llega hasta abajo de la parrilla aunque haya pocos canales (CSS).
+              style={desk ? { left: nowX } : { left: nowX, height: contentH }}
+            />
           ) : null}
           {timeline.endsEarly ? (
             <div
@@ -676,6 +711,13 @@ function ChannelCell({
         <Skeleton width="70%" height={12} />
       </div>
     );
+  if (desk)
+    return (
+      <div className="guia-chan" role="rowheader" title={channel.name}>
+        <ChannelBadge channel={channel} version={version} />
+        <span className="sr-only">{channel.name}</span>
+      </div>
+    );
   return (
     <div className="guia-chan" role="rowheader" title={channel.name}>
       <span className="guia-chan__num">
@@ -685,13 +727,52 @@ function ChannelCell({
           <span aria-hidden="true">·</span>
         )}
       </span>
-      {desk ? <ChannelLogo channel={channel} version={version} size={32} /> : null}
       <span className="guia-chan__name">
         {channel.name}
         {channel.country ? <small className="guia-chan__country">{channel.country}</small> : null}
       </span>
       {channel.favorite ? <Icon name="star-f" size={16} className="guia-chan__fav" /> : null}
     </div>
+  );
+}
+
+/* Escritorio (la maqueta: columna de 120 con el logo): el logo del proveedor
+   o, si no hay, el nombre en una ficha del tono del canal (el de su dorsal,
+   oscurecido para que el blanco pase de 4,5:1). `small`: la del popover
+   (48 × 32 en la maqueta). */
+export function ChannelBadge({
+  channel,
+  version,
+  small = false,
+}: {
+  channel: IptvGuideChannel;
+  version: string;
+  small?: boolean;
+}) {
+  const src = logoSrc(channel, version);
+  const [broken, setBroken] = useState(false);
+  if (src && !broken)
+    return (
+      <img
+        className={cx('guia-logo guia-chan__logo', small && 'guia-chan__logo--sm')}
+        src={src}
+        alt=""
+        width={small ? 64 : 88}
+        height={small ? 32 : 40}
+        loading="lazy"
+        decoding="async"
+        onError={() => setBroken(true)}
+      />
+    );
+  const tone = channelTone(channel.name);
+  return (
+    <span
+      className={cx('guia-chan__badge', small && 'guia-chan__badge--sm')}
+      aria-hidden="true"
+      style={{ '--tone': oklchCss({ ...tone, l: Math.min(tone.l, 0.42) }) } as CSSProperties}
+    >
+      <span className="guia-chan__badge-text">{stripQualityMarks(channel.name)}</span>
+    </span>
   );
 }
 
@@ -768,6 +849,7 @@ function Block({
         `guia-block--${segment.kind}`,
         airing && `guia-block--${airing}`,
         onAir && 'guia-block--onair',
+        narrow && 'guia-block--narrow',
         selected && 'guia-block--selected',
       )}
       style={
@@ -782,7 +864,8 @@ function Block({
         <span className="guia-block__label">
           <span className="guia-block__title">
             {onAir && desk ? <span className="guia-block__dot" aria-hidden="true" /> : null}
-            {text}
+            {/* En su propio trozo: con el punto, el título es flex y los «…» van aquí. */}
+            <span className="guia-block__text">{text}</span>
           </span>
           {segment.kind === 'prog' && width >= (desk ? 96 : 140) ? (
             <span className="guia-block__time">

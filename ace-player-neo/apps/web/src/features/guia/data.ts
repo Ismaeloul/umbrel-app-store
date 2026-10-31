@@ -38,6 +38,8 @@ export interface GuidePages {
   /** La primera página: estado, sello, recuentos y las primeras filas. */
   head: IptvGuideResponse | undefined;
   loading: boolean;
+  /** `head` es aún la lista de antes (otro chip): la nueva está en camino. */
+  stale: boolean;
   error: unknown;
   refetch(): void;
   /** La fila `index`, si su página ya llegó (con el mismo sello que la primera). */
@@ -47,18 +49,19 @@ export interface GuidePages {
 /**
  * Las páginas de canales que hacen falta (`pages`), con la primera siempre.
  * `type`: solo los canales de ese tipo (los chips de escritorio).
+ * `keep`: en escritorio, al cambiar de chip se sigue viendo la lista de antes
+ * hasta que llega la nueva (sin el esqueleto entre medias); el móvil no cambia.
  */
 export function useGuidePages(
   scope: IptvGuideScope,
   pages: readonly number[],
   enabled: boolean,
   type: GuideType | null = null,
+  keep = false,
 ): GuidePages {
-  /* Al cambiar de chip se sigue viendo la lista de antes hasta que llega la
-     nueva (sin el esqueleto de la carga entre medias). */
   const first = useApiQuery('iptvGuide', pageQuery(scope, 0, type), {
     enabled,
-    placeholderData: keepPreviousData,
+    ...(keep ? { placeholderData: keepPreviousData } : {}),
   });
   const head = first.data;
   const ready = enabled && head?.state === 'ready' && head.total > PAGE_ROWS;
@@ -76,6 +79,7 @@ export function useGuidePages(
   return {
     head,
     loading: first.isPending && enabled,
+    stale: first.isPlaceholderData,
     error: first.error,
     refetch: () => void first.refetch(),
     row: (index) => byPage.get(Math.floor(index / PAGE_ROWS))?.[index % PAGE_ROWS],

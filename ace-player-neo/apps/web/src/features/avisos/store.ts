@@ -9,7 +9,11 @@
      la página abierta: sin service worker no hay aviso con ella cerrada.
    - Un único temporizador para el próximo aviso, armado mientras haya alguien
      mirando (la campana de la barra, `useAvisosClock`). Los ya empezados se
-     tiran solos. */
+     tiran solos.
+   - Con varias pestañas abiertas, avisa solo la primera que llega: antes de
+     avisar se relee lo guardado y se apunta como avisado (las demás ya lo ven
+     así). Pulsar la notificación lleva a la ficha del partido o a la Guía
+     (`setAvisoOpener`, lo pone la campana, que tiene el router). */
 
 import { useEffect } from 'react';
 import { createStore, useStore } from '../../lib/store.ts';
@@ -142,6 +146,13 @@ export function avisoWhen(start: number, now: number): string {
   return 'Ha empezado';
 }
 
+let opener: ((aviso: Aviso) => void) | null = null;
+
+/** Qué hacer al pulsar la notificación (la campana: la ficha del partido o la Guía). */
+export function setAvisoOpener(next: ((aviso: Aviso) => void) | null): void {
+  opener = next;
+}
+
 function fire(aviso: Aviso, now: number): void {
   const when = `${avisoWhen(aviso.start, now)} · ${aviso.channel} · ${TIME.format(aviso.start)}`;
   if (noticePermission() === 'granted') {
@@ -151,6 +162,7 @@ function fire(aviso: Aviso, now: number): void {
         try {
           window.focus();
         } catch {}
+        opener?.(aviso);
         shown.close();
       };
       return;
@@ -168,15 +180,21 @@ export function dueAvisos(list: readonly Aviso[], now: number): Aviso[] {
   );
 }
 
+const sameAvisos = (a: readonly Aviso[], b: readonly Aviso[]): boolean =>
+  a.length === b.length &&
+  a.every((aviso, index) => aviso.id === b[index]?.id && aviso.fired === b[index]?.fired);
+
 let timer = 0;
 let watchers = 0;
 
 function tick(): void {
   timer = 0;
   const now = Date.now();
-  const list = avisos.get();
+  /* Lo guardado manda (otra pestaña puede haber avisado ya); si no se puede
+     leer (navegación privada), lo de memoria. */
+  const stored = readJson(AVISOS_KEY, isAvisoList);
+  const list = stored ? pruneAvisos(stored, now) : avisos.get();
   const due = dueAvisos(list, now);
-  for (const aviso of due) fire(aviso, now);
   const dueIds = new Set(due.map((aviso) => aviso.id));
   const next = pruneAvisos(
     list.map((aviso) =>
@@ -186,13 +204,12 @@ function tick(): void {
     ),
     now,
   );
-  const changed =
-    next.length !== list.length ||
-    next.some((aviso, index) => aviso.fired !== list[index]?.fired || aviso.id !== list[index]?.id);
-  if (changed) {
+  if (!sameAvisos(next, list)) {
+    // Primero se apunta como avisado y luego se avisa: la otra pestaña ya no repite.
     avisos.set(next);
     writeJson(AVISOS_KEY, next);
-  }
+  } else if (!sameAvisos(next, avisos.get())) avisos.set(next);
+  for (const aviso of due) fire(aviso, now);
   arm();
 }
 

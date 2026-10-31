@@ -11,13 +11,20 @@
     margin-left: var(--s-2);
   }
 }
-/* 40 px como en la maqueta (tbtn): cuadrado redondeado y tenue. */
+/* 40 px como en la maqueta (tbtn): cuadrado redondeado y tenue; la zona
+   que se pulsa llega a 44 con el ::before. */
 .avisos-bell {
+  position: relative;
   width: 40px;
   height: 40px;
   border-radius: 12px;
   background: var(--line-soft);
   color: var(--text-2);
+}
+.avisos-bell::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
 }
 .avisos-bell .icon {
   width: 20px;

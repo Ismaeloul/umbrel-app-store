@@ -558,6 +558,13 @@
   .guia-bar__chips .chip {
     height: 30px;
   }
+  .guia-bar__hint {
+    flex: none;
+    margin: 0;
+    color: var(--text-3);
+    font-size: var(--fs-12);
+    white-space: nowrap;
+  }
   /* Como la maqueta: el elegido es el velo de acento, sin filo. */
   .guia-bar__chips .chip[aria-pressed='true'] {
     box-shadow: none;
@@ -592,9 +599,19 @@
     color: var(--text-2);
     font-weight: var(--wght-strong);
   }
+  /* Como la maqueta, cada hora en su sitio, sin pegarse a la columna al
+     desplazar (con el margen del móvil asomaba un «1» suelto y una hora se
+     montaba sobre la siguiente): la que pasa por debajo de la esquina queda
+     tapada por ella. */
   .guia--desk .guia-ruler__label {
+    margin-left: 0;
+    overflow: visible;
     padding-left: 6px;
     translate: -6px 0;
+  }
+  /* La hora que la píldora taparía a medias no se pinta (Board.tsx la marca). */
+  .guia--desk .guia-ruler__mark[data-covered] .guia-ruler__label {
+    visibility: hidden;
   }
   .guia--desk .guia-ruler__now {
     padding: 0 7px;
@@ -610,29 +627,61 @@
     box-shadow: 0 0 0 3px var(--bg);
   }
   .guia--desk .guia-now {
+    bottom: 0;
     background: var(--accent);
   }
+  /* La parrilla llena la pantalla hasta abajo (la raya de «ahora» también). */
+  .guia--desk .guia-board {
+    height: max(340px, calc(100dvh - var(--guia-top, 200px) - var(--guia-bottom)));
+  }
+  .guia--desk .guia-grid-wrap {
+    flex: 1 1 auto;
+    height: auto;
+  }
+  .guia--desk .guia-grid__content {
+    min-height: 100%;
+  }
 
-  /* Canales: logo y nombre sobre el fondo, filo a la derecha y debajo. */
+  /* Canales: 120 px con solo el logo sobre el fondo, filo a la derecha y debajo. */
   .guia--desk .guia-chan {
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 10px;
-    padding: 0 10px 0 16px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
     background: var(--bg);
     border-right: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
   }
-  .guia--desk .guia-chan__num,
-  .guia--desk .guia-chan__fav {
-    display: none;
-  }
-  .guia--desk .guia-chan__name {
-    font-size: var(--fs-13);
-    font-weight: 650;
-  }
-  .guia--desk .guia-chan .guia-logo,
-  .guia--desk .guia-chan .channel-mark {
+  .guia--desk .guia-chan__logo {
+    width: auto;
+    max-width: 100%;
+    height: 40px;
     border-radius: 10px;
+  }
+  /* Sin logo, el nombre en una ficha del tono del canal (la maqueta: `.lg`). */
+  .guia-chan__badge {
+    display: grid;
+    place-items: center;
+    max-width: 100%;
+    min-width: 46px;
+    height: 40px;
+    padding: 0 8px;
+    border-radius: 10px;
+    background: var(--tone);
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+    color: #fff;
+  }
+  .guia-chan__badge-text {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: var(--fs-11);
+    font-weight: 800;
+    font-stretch: 85%;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+    text-align: center;
+    overflow-wrap: anywhere;
   }
   .guia--desk .guia-row {
     border-bottom: 1px solid var(--line);
@@ -651,6 +700,15 @@
   .guia--desk .guia-block__label {
     gap: 3px;
     padding: 0 10px;
+    /* Su ancho es lo que asoma del programa (el margen lo empuja hasta la
+       columna): si no cabe ni una palabra, nada de una letra suelta. */
+    container-type: inline-size;
+  }
+  @container (max-width: 24px) {
+    .guia--desk .guia-block__title,
+    .guia--desk .guia-block__time {
+      visibility: hidden;
+    }
   }
   .guia--desk .guia-block__title {
     display: flex;
@@ -660,6 +718,20 @@
     font-size: var(--fs-13);
     font-weight: 650;
     font-stretch: 100%;
+  }
+  .guia--desk .guia-block__text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Lo que empezó antes de lo visible llega hasta la columna con la esquina
+     de la izquierda recortada (la maqueta: `.prog.cut`), también mientras se
+     desplaza: 4 px si su borde (--bx) queda bajo la columna (--sl, el
+     desplazamiento, lo pone Board.tsx en cada fotograma) y 12 si no. */
+  .guia--desk .guia-block {
+    --cut-r: clamp(4px, calc((var(--bx) - var(--sl, 0px) - var(--col-w) + 2px) * 100), 12px);
+    border-start-start-radius: var(--cut-r);
+    border-end-start-radius: var(--cut-r);
   }
   .guia--desk .guia-block__time {
     color: var(--text-3);
@@ -683,14 +755,23 @@
     border-radius: 50%;
     background: var(--live);
   }
-  /* Lo pasado, apagado (como la maqueta: la hora sigue leyéndose). */
+  /* Lo pasado, apagado como en la maqueta, pero sin bajar la opacidad: la
+     tarjeta se funde con el fondo y el texto pasa a --text-3, que sigue en
+     4,5:1 o más (la maqueta, al 45 %, se quedaba en 2-3:1). */
   .guia--desk .guia-block--past {
-    background: var(--surface);
-    opacity: 0.5;
+    background: color-mix(in oklab, var(--surface) 45%, var(--bg));
+    box-shadow: inset 0 0 0 1px var(--line-soft);
   }
   .guia--desk .guia-block--past .guia-block__title {
-    color: var(--text-2);
+    color: var(--text-3);
     font-weight: 600;
+  }
+  /* Un programa de unos minutos no cabe ni en una letra: en lugar de una
+     tarjeta vacía, una muesca sin relleno entre las de al lado (el nombre va
+     en su `title` y en la etiqueta para lectores de pantalla). */
+  .guia--desk .guia-block--narrow:not(.guia-block--onair) {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-soft);
   }
   .guia--desk .guia-block--none,
   .guia--desk .guia-block--loading,
@@ -714,7 +795,6 @@
   .guia--desk .guia-block--selected .guia-block__title {
     color: inherit;
   }
-  .guia--desk.guia--pop .guia-block--selected,
   .guia--desk .guia-grid:focus-visible .guia-block--selected {
     box-shadow: inset 0 0 0 2px var(--accent-edge);
     opacity: 1;
@@ -764,6 +844,23 @@
 }
 
 /* ---- El popover del programa (escritorio) ---------------------------------- */
+/* La ficha del canal, más pequeña (la maqueta: 48 × 32 con radio 9). Fuera
+   del bloque de escritorio porque el popover va en un portal. */
+.guia-chan__badge--sm {
+  flex: none;
+  min-width: 48px;
+  max-width: 96px;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 9px;
+}
+.guia-chan__logo--sm {
+  flex: none;
+  width: auto;
+  max-width: 96px;
+  height: 32px;
+  border-radius: 9px;
+}
 .guia-pop {
   width: 340px;
 }
@@ -823,21 +920,6 @@
   background: color-mix(in oklab, var(--live) 14%, transparent);
   color: var(--live-ink);
 }
-.guia-pop__text {
-  display: -webkit-box;
-  margin: 12px 0 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  color: var(--text-2);
-  font-size: var(--fs-13);
-  line-height: var(--lh-text);
-}
-.guia-pop__agenda {
-  margin: 10px 0 0;
-  color: var(--text-2);
-  font-size: var(--fs-13);
-}
 .guia-pop__actions {
   display: flex;
   flex-wrap: wrap;
@@ -854,9 +936,4 @@
 .guia-pop__aviso[aria-pressed='false'] {
   background: var(--accent-wash);
   color: var(--accent-ink);
-}
-.guia-pop__note {
-  margin: 10px 0 0;
-  color: var(--text-3);
-  font-size: var(--fs-12);
 }

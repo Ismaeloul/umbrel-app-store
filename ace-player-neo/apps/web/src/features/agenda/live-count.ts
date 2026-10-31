@@ -3,6 +3,7 @@
    hora de inicio, sin marcadores: el menú no debe pedir resultados. */
 
 import { countLive, madridClock } from './domain.ts';
+import './demo.ts';
 import { useNow, useSchedule } from './data.ts';
 
 export function useLiveCountToday(): number {
