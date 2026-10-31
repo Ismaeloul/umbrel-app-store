@@ -17,7 +17,7 @@ import { Icon } from '../../ui/Icon.tsx';
 import { Menu, MenuButton, useContextMenu, type MenuItem } from '../../ui/Menu.tsx';
 import { Segmented } from '../../ui/Segmented.tsx';
 import { canControl, isManager, roleOf, type PartyClient } from './client.ts';
-import { CONTROL_ITEMS, controlSettings, controlValue } from './Panels.tsx';
+import { CONTROL_ITEMS, controlSettings, controlValue, useKickConfirm } from './Panels.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
 
 /** Una orden de la sala: si falla, se dice por qué (p. ej. «Solo el líder…»). */
@@ -59,6 +59,7 @@ function Person({
   const self = room.members.find((m) => m.id === selfId);
   const iLead = room.leaderId === selfId;
   const role = roleOf(room, member.id);
+  const kick = useKickConfirm(member, client);
   const items: MenuItem[] = [];
   if (iLead && member.id !== selfId) {
     items.push(
@@ -90,11 +91,7 @@ function Person({
         label: JUNTOS_TEXT.kick,
         icon: 'x',
         danger: true,
-        onSelect: () => {
-          if (globalThis.confirm(JUNTOS_TEXT.kickConfirm(member.name))) {
-            attempt(() => client.member(member.id, 'kick'));
-          }
-        },
+        onSelect: () => kick.tap(),
       });
     }
   }
@@ -134,15 +131,18 @@ function Person({
           </span>
         ) : null}
       </span>
-      <span className="juntos-people__tag">
-        {!member.online
-          ? JUNTOS_TEXT.offline
-          : member.buffering
-            ? JUNTOS_TEXT.loading
-            : member.host
-              ? JUNTOS_TEXT.host
-              : ''}
-      </span>
+      {/* Armado, el botón de echar ocupa el sitio de la etiqueta (la fila no crece). */}
+      {kick.confirm ?? (
+        <span className="juntos-people__tag">
+          {!member.online
+            ? JUNTOS_TEXT.offline
+            : member.buffering
+              ? JUNTOS_TEXT.loading
+              : member.host
+                ? JUNTOS_TEXT.host
+                : ''}
+        </span>
+      )}
       {items.length ? (
         <>
           <MenuButton

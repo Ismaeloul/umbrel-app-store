@@ -33,6 +33,7 @@ import { Button } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
 import { Tabs, tabPanelProps } from '../../ui/Segmented.tsx';
 import { Art } from '../cine/Art.tsx';
+import { useSecondTap } from '../settings/second-tap.ts';
 import { Chat } from './Chat.tsx';
 import { canControl, controllers, inviteUrl, PartyClient, rememberRoom, roleOf } from './client.ts';
 import { MEDIA, useMediaQuery } from '../../lib/media.ts';
@@ -50,6 +51,9 @@ const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
   kicked: JUNTOS_TEXT.closedKicked,
   gone: JUNTOS_TEXT.gone,
 };
+
+/** «Cerrar sala» queda armado este rato tras el primer toque. */
+const CLOSE_CONFIRM_MS = 5_000;
 
 type SideTab = 'chat' | 'siguiente' | 'gente';
 /* Las del móvil, las de siempre. */
@@ -73,7 +77,7 @@ export function Room({
   code: string;
   credential: PartyCredential;
   onForbidden(): void;
-  /** Tras «Salir» (en casa, a Películas y series; el invitado, a la entrada). */
+  /** Tras «Salir» o «Cerrar sala» (en casa, a Películas y series; el invitado, a la entrada). */
   onLeft(): void;
   /** Al montar el vídeo (en casa, se para el reproductor de la casa: la sala usa la plaza de la IPTV). */
   onEnter?: () => void;
@@ -95,6 +99,9 @@ export function Room({
   const desk = useMediaQuery(MEDIA.tablet);
   /* `native`: la del navegador; `page`: el vídeo a toda pantalla con CSS (iPhone). */
   const [fullscreen, setFullscreen] = useState<'native' | 'page' | null>(null);
+  /* «Cerrar sala» pide un segundo toque (regla 31, sin confirm() nativo). */
+  const closeTap = useSecondTap(CLOSE_CONFIRM_MS);
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     rememberRoom(code);
@@ -160,7 +167,14 @@ export function Room({
   }, [fullscreen]);
 
   if (state.closed && state.closed !== 'forbidden') {
-    return <EmptyState title={CLOSED_TEXT[state.closed]} actions={exitAction} />;
+    /* Quien la creó (en otra pestaña, o mientras vuelve la respuesta de cerrar): «Has cerrado la sala». */
+    const self = state.closed === 'host' && state.room?.hostId === credential.id;
+    return (
+      <EmptyState
+        title={self ? JUNTOS_TEXT.closedBySelf : CLOSED_TEXT[state.closed]}
+        actions={exitAction}
+      />
+    );
   }
 
   const room = state.room;
@@ -195,19 +209,29 @@ export function Room({
     globalThis.prompt(JUNTOS_TEXT.linkCopyManual, link);
   };
 
+  /* Quien la creó la cierra para todos (los demás reciben `party.closed`) y se
+     va de la sala: no se queda mirando «la han cerrado». */
+  const closeRoom = async () => {
+    if (closing) return;
+    setClosing(true);
+    try {
+      await client.close();
+      onLeft();
+    } catch (error) {
+      notify(describeFailure(error), { tone: 'err' });
+      setClosing(false);
+    }
+  };
+
   const leave = async () => {
     if (isHost) {
-      if (!globalThis.confirm(JUNTOS_TEXT.closeConfirm)) return;
-      try {
-        await client.close();
-      } catch (error) {
-        notify(describeFailure(error), { tone: 'err' });
-      }
+      closeTap.tap('close', () => void closeRoom());
       return;
     }
     await client.leave();
     onLeft();
   };
+  const closeArmed = closeTap.armed === 'close';
 
   const stageContent = (
     <div ref={stage} className="juntos__stage" data-fullscreen={fullscreen ? 'true' : 'false'}>
@@ -262,10 +286,17 @@ export function Room({
             <Button
               size="sm"
               variant={isHost ? 'danger' : 'quiet'}
-              icon="x"
+              icon={isHost && closeArmed ? 'aviso' : 'x'}
+              className={cx('juntos__close', isHost && closeArmed && 'juntos__close--armed')}
+              busy={isHost && closing}
+              aria-label={isHost && closeArmed ? JUNTOS_TEXT.closeArmed : undefined}
               onClick={() => void leave()}
             >
-              {isHost ? JUNTOS_TEXT.closeRoom : JUNTOS_TEXT.leave}
+              {isHost
+                ? closeArmed
+                  ? JUNTOS_TEXT.closeArmedShort
+                  : JUNTOS_TEXT.closeRoom
+                : JUNTOS_TEXT.leave}
             </Button>
           </div>
         </header>
@@ -396,6 +427,8 @@ export function Room({
                 client={client}
                 selfId={selfId}
                 onCloseRoom={isHost ? () => void leave() : undefined}
+                closeArmed={closeArmed}
+                closing={closing}
               />
             )}
           </div>

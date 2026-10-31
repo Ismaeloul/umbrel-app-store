@@ -68,6 +68,16 @@ export function forgetLastRoom(): void {
   removeItem(LAST_ROOM_KEY);
 }
 
+/**
+ * Una sala que ya no sirve (cerrada, caducada o de la que se ha salido): se
+ * olvida su credencial y, si era la última, deja de ofrecerse «Volver a tu
+ * sala» o «Añadir a la sala».
+ */
+export function forgetRoom(code: string): void {
+  forgetCredential(code);
+  if (readItem(LAST_ROOM_KEY) === code) forgetLastRoom();
+}
+
 export function savedName(): string {
   return readItem(NAME_KEY) ?? '';
 }
@@ -312,6 +322,7 @@ export class PartyClient {
         break;
       }
       case 'party.closed':
+        forgetRoom(this.code);
         this.set({ closed: event.data.reason });
         this.stop();
         break;
@@ -332,6 +343,7 @@ export class PartyClient {
   private handleFailure(error: unknown): void {
     if (!isApiError(error)) return;
     if (error.code === 'party_not_found') {
+      forgetRoom(this.code);
       this.set({ closed: 'gone' });
       this.stop();
     } else if (error.code === 'party_forbidden') {
@@ -484,13 +496,28 @@ export class PartyClient {
       body: { token: this.credential.token },
       keepalive: true,
     }).catch(() => undefined);
+    forgetRoom(this.code);
   }
 
+  /**
+   * Cierra la sala para todos (quien la creó). Si ya no existía, también vale:
+   * el resultado es el mismo. Al acabar, este aparato deja de escuchar y la
+   * olvida; la vista se encarga de llevar a otro sitio.
+   */
   async close(): Promise<void> {
-    await api('partyClose', {
-      params: { code: this.code },
-      body: { token: this.credential.token },
-    });
+    try {
+      await api('partyClose', {
+        params: { code: this.code },
+        body: { token: this.credential.token },
+      });
+    } catch (error) {
+      if (!isApiError(error) || error.code !== 'party_not_found') {
+        this.handleFailure(error);
+        throw error;
+      }
+    }
+    this.stop();
+    forgetRoom(this.code);
   }
 
   /** Hora del servidor ahora mismo según este aparato. */

@@ -17,6 +17,7 @@ export const JUNTOS_TEXT = {
   gone: 'Esta sala ya no existe',
   goneHint: 'Quien la creó la ha cerrado o ha caducado. Pide un enlace nuevo.',
   closedByHost: 'Quien creó la sala la ha cerrado.',
+  closedBySelf: 'Has cerrado la sala.',
   closedExpired: 'La sala ha caducado.',
   closedEmpty: 'La sala se ha cerrado porque no quedaba nadie.',
   closedShutdown: 'El servidor se ha reiniciado y la sala se ha cerrado.',
@@ -30,7 +31,11 @@ export const JUNTOS_TEXT = {
   linkCopyManual: 'No se ha podido copiar solo. Copia este enlace y pásaselo a quien quieras:',
   leave: 'Salir',
   closeRoom: 'Cerrar sala',
-  closeConfirm: '¿Cerrar la sala para todos?',
+  /* Segundo toque en vez de confirm() (regla 31): algunos navegadores
+     incrustados no enseñan esa ventana y la dan por cancelada al momento. */
+  /** Lo que se lee (aria-label); en el botón cabe solo el corto. */
+  closeArmed: '¿Cerrar la sala para todos? Pulsa otra vez',
+  closeArmedShort: '¿Seguro? Pulsa otra vez',
   people: 'En la sala',
   host: 'anfitrión',
   offline: 'desconectado',
@@ -103,7 +108,10 @@ export const JUNTOS_TEXT = {
   makeLeader: 'Pasar el liderazgo',
   takeLead: 'Ser líder otra vez',
   kick: 'Echar de la sala',
-  kickConfirm: (name: string) => `¿Echar a ${name} de la sala?`,
+  /** Lo que se lee en voz alta con «Echar» armado (regla 31: segundo toque). */
+  kickArmed: (name: string) => `¿Echar a ${name} de la sala? Pulsa otra vez`,
+  /** Lo que se ve en la fila con «Echar» armado. */
+  kickArmedShort: '¿Echar? Pulsa',
   you: '(tú)',
   roleLeader: 'Líder',
   roleColeader: 'Co-líder · también controla',

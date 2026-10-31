@@ -50,6 +50,32 @@ function client(selfId: string) {
 }
 
 describe('«Ver juntos» en el móvil', () => {
+  it('Gente (móvil): «Echar» pide un segundo toque en la fila, sin confirm() nativo', async () => {
+    const confirmSpy = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirmSpy);
+    try {
+      net = mockFetch({ 'POST /api/v1/party/:code/member': () => json({ ok: true }) });
+      render(<MobilePeople room={room} client={client(HOST)} selfId={HOST} />);
+      const anaRow = screen.getByText('Ana').closest('li') as HTMLElement;
+      fireEvent.click(within(anaRow).getByRole('button', { name: 'Opciones de Ana' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: /Echar de la sala/ }));
+      expect(net?.calls).toHaveLength(0);
+      const armed = within(anaRow).getByRole('button', { name: JUNTOS_TEXT.kickArmed('Ana') });
+      expect(armed).toHaveTextContent(JUNTOS_TEXT.kickArmedShort);
+      fireEvent.click(armed);
+      await waitFor(() =>
+        expect(net?.calls.at(-1)?.body).toMatchObject({ memberId: ANA, action: 'kick' }),
+      );
+      expect(net?.calls).toHaveLength(1);
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(
+        within(anaRow).queryByRole('button', { name: JUNTOS_TEXT.kickArmed('Ana') }),
+      ).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('Ajustes: «Quién controla» con las tres opciones manda los dos campos compatibles', async () => {
     net = mockFetch({ 'POST /api/v1/party/:code/settings': () => json({ ok: true }) });
     render(<MobileSettings room={room} client={client(HOST)} />);
@@ -102,6 +128,32 @@ describe('«Ver juntos» en el móvil', () => {
 });
 
 describe('«Ver juntos» en escritorio', () => {
+  it('Gente (escritorio): «Echar» pide un segundo toque en la fila, sin confirm() nativo', async () => {
+    const confirmSpy = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirmSpy);
+    try {
+      net = mockFetch({ 'POST /api/v1/party/:code/member': () => json({ ok: true }) });
+      render(<People room={room} client={client(HOST)} selfId={HOST} />);
+      const anaRow = screen.getByText('Ana').closest('li') as HTMLElement;
+      fireEvent.click(within(anaRow).getByRole('button', { name: 'Opciones de Ana' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: /Echar de la sala/ }));
+      expect(net?.calls).toHaveLength(0);
+      const armed = within(anaRow).getByRole('button', { name: JUNTOS_TEXT.kickArmed('Ana') });
+      expect(armed).toHaveTextContent(JUNTOS_TEXT.kickArmedShort);
+      fireEvent.click(armed);
+      await waitFor(() =>
+        expect(net?.calls.at(-1)?.body).toMatchObject({ memberId: ANA, action: 'kick' }),
+      );
+      expect(net?.calls).toHaveLength(1);
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(
+        within(anaRow).queryByRole('button', { name: JUNTOS_TEXT.kickArmed('Ana') }),
+      ).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('el chat en burbujas con «está escribiendo»', () => {
     render(
       <Chat

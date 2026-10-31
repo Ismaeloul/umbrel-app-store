@@ -12,7 +12,7 @@ import {
   type PartyQueueMode,
   type PartyRoom,
 } from '@ace/shared';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { describeFailure } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
@@ -22,11 +22,41 @@ import { Menu, MenuButton, useContextMenu, type MenuItem } from '../../ui/Menu.t
 import { canControl, controllers, isManager, roleOf, type PartyClient } from './client.ts';
 import { Art } from '../cine/Art.tsx';
 import { clock, targetPosition } from './sync.ts';
+import { useSecondTap } from '../settings/second-tap.ts';
 import { JUNTOS_TEXT } from './texts.ts';
 
 /** Una orden de la sala: si falla, se dice por qué (p. ej. «Solo el líder…»). */
 function attempt(run: () => Promise<void>): void {
   void run().catch((error: unknown) => notify(describeFailure(error), { tone: 'err' }));
+}
+
+/* «Echar» con segundo toque (regla 31, sin confirm() nativo). El menú se
+   cierra al elegir, así que el primer toque arma y deja en la fila un botón
+   rojo «¿Echar? Pulsa» durante unos segundos; ese botón (o «Echar» otra vez
+   en el menú) es el segundo toque. Lo usan la sala de escritorio y la del
+   móvil. */
+const KICK_CONFIRM_MS = 5_000;
+
+export function useKickConfirm(
+  member: PartyMember,
+  client: PartyClient,
+): { tap(): void; armed: boolean; confirm: ReactNode } {
+  const second = useSecondTap(KICK_CONFIRM_MS);
+  const armed = second.armed === 'kick';
+  const tap = () => second.tap('kick', () => attempt(() => client.member(member.id, 'kick')));
+  const confirm = armed ? (
+    <Button
+      size="sm"
+      variant="danger"
+      icon="aviso"
+      className="juntos-people__kick"
+      aria-label={JUNTOS_TEXT.kickArmed(member.name)}
+      onClick={tap}
+    >
+      {JUNTOS_TEXT.kickArmedShort}
+    </Button>
+  ) : null;
+  return { tap, armed, confirm };
 }
 
 /** «Ismael y Yassin» o «Ana, Bea y Carla». */
@@ -126,12 +156,17 @@ export function People({
   client,
   selfId,
   onCloseRoom,
+  closeArmed = false,
+  closing = false,
 }: {
   room: PartyRoom;
   client: PartyClient;
   selfId: string;
   /** «Cerrar la sala» al final (quien la creó; en la maqueta no hay sitio para ello junto a «Invitar»). */
   onCloseRoom?: () => void;
+  /** Primer toque dado: el segundo la cierra (regla 31, sin confirm() nativo). */
+  closeArmed?: boolean;
+  closing?: boolean;
 }) {
   const control = canControl(room, selfId);
   const names = controllers(room);
@@ -155,8 +190,15 @@ export function People({
       ) : null}
       {iLead ? <ControlRule room={room} client={client} /> : null}
       {onCloseRoom ? (
-        <Button variant="quiet" icon="x" className="juntos-people__close" onClick={onCloseRoom}>
-          {JUNTOS_TEXT.closeRoom}
+        <Button
+          variant={closeArmed ? 'danger' : 'quiet'}
+          icon={closeArmed ? 'aviso' : 'x'}
+          className="juntos-people__close"
+          busy={closing}
+          aria-label={closeArmed ? JUNTOS_TEXT.closeArmed : undefined}
+          onClick={onCloseRoom}
+        >
+          {closeArmed ? JUNTOS_TEXT.closeArmedShort : JUNTOS_TEXT.closeRoom}
         </Button>
       ) : null}
     </div>
@@ -242,6 +284,7 @@ function Person({
   const self = room.members.find((m) => m.id === selfId);
   const iLead = room.leaderId === selfId;
   const role = roleOf(room, member.id);
+  const kick = useKickConfirm(member, client);
   const items: MenuItem[] = [];
   /* El líder, sobre los demás. El co-líder no ve nada de esto: no echa ni pasa la corona. */
   if (iLead && member.id !== selfId) {
@@ -274,11 +317,7 @@ function Person({
         label: JUNTOS_TEXT.kick,
         icon: 'salir',
         danger: true,
-        onSelect: () => {
-          if (globalThis.confirm(JUNTOS_TEXT.kickConfirm(member.name))) {
-            attempt(() => client.member(member.id, 'kick'));
-          }
-        },
+        onSelect: () => kick.tap(),
       });
     }
   }
@@ -322,6 +361,7 @@ function Person({
         </span>
         <span className="juntos-people__tag">{status}</span>
       </span>
+      {kick.confirm}
       {items.length ? (
         <>
           <MenuButton
