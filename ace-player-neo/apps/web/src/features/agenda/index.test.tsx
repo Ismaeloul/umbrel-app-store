@@ -134,7 +134,7 @@ describe('vista Agenda', () => {
       'polite',
     );
     expect(within(live).getByText('Tu equipo')).toBeInTheDocument();
-    expect(screen.getByText('futbolenlatv.com', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('futbolenlatv.es', { exact: false })).toBeInTheDocument();
     expect(screen.getByText(/horario peninsular/)).toBeInTheDocument();
   });
 
@@ -177,7 +177,7 @@ describe('vista Agenda', () => {
       );
       const view = renderAgenda();
       expect(await screen.findByText(text)).toBeInTheDocument();
-      expect(screen.getByText('Datos: futbolenlatv.com')).toBeInTheDocument();
+      expect(screen.getByText('Datos: futbolenlatv.es')).toBeInTheDocument();
       view.unmount();
     }
   });

@@ -312,7 +312,7 @@ export async function fetchFutbolEnLaTvSchedule(
   if (!airings.length) throw new AppError('fltv_empty');
   return schedulePayload(ctx, {
     source: 'futbolenlatv',
-    attribution: 'futbolenlatv.com',
+    attribution: 'futbolenlatv.es',
     days: footballDaysFromMatches(startDate, fltvMatches(airings, ctx.flavor), ctx.days),
   });
 }

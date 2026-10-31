@@ -12,6 +12,18 @@ const HOUR = 60 * MINUTE;
 
 /** Caché de la agenda (server.js:77). */
 export const FOOTBALL_CACHE_MS = 30 * MINUTE;
+/**
+ * Una agenda de respaldo (la EPG de Movistar+ o TheSportsDB, mucho más
+ * pobres) solo se guarda esto: futbolenlatv se vuelve a probar enseguida. Antes
+ * se guardaba 30 min como una completa, y un fallo al arrancar dejaba la
+ * agenda con un partido por día media hora (en local, el 31-10-2026).
+ */
+export const FOOTBALL_FALLBACK_CACHE_MS = 2 * MINUTE;
+/**
+ * Si futbolenlatv falla pero hay una agenda suya de hace menos de esto, se
+ * sigue sirviendo esa (con `stale: true`) en vez de la de respaldo.
+ */
+export const FOOTBALL_FULL_KEEP_MS = 6 * HOUR;
 /** Zona horaria de toda la agenda (server.js:78). */
 export const FOOTBALL_TIMEZONE = 'Europe/Madrid';
 /** `FOOTBALL_DAYS` sin variable de entorno (server.js:76): lo usa la fachada antigua. */
@@ -61,8 +73,11 @@ export const THESPORTSDB_NATIONAL_TEAMS: readonly string[] = ['133909'];
 export const THESPORTSDB_LEAGUE_BATCH = 4;
 /** Plazo de cada petición por competición (el global de la agenda es de 60 s). */
 export const THESPORTSDB_REQUEST_MS = 10_000;
-/** futbolenlatv (server.js:1991-1992). */
-export const FLTV_URL = 'https://www.futbolenlatv.com/';
+/**
+ * futbolenlatv (server.js:1991-1992). Desde el 31-10-2026 la `.com` redirige
+ * a `https://futbolenlatv.es/` y esta a `www.`: se va directo (la misma página).
+ */
+export const FLTV_URL = 'https://www.futbolenlatv.es/';
 export const FLTV_MAX_BYTES = 6 * 1024 * 1024;
 /** Plazo por descarga de la agenda: el de `fetchText` (server.js:43). */
 export const AGENDA_FETCH_MS = TIMEOUTS.directoryTotalMs;

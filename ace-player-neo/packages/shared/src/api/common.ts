@@ -131,7 +131,7 @@ export const FootballScheduleSchema = z.strictObject({
   timezone: z.literal('Europe/Madrid'),
   country: z.string(),
   source: FootballSourceSchema,
-  /** "futbolenlatv.com", "EPG de Movistar Plus+", "TheSportsDB" o "Datos de muestra". */
+  /** "futbolenlatv.es", "EPG de Movistar Plus+", "TheSportsDB" o "Datos de muestra". */
   attribution: z.string(),
   demo: z.boolean(),
   /** Solo true con TheSportsDB y la clave pública "123". */
