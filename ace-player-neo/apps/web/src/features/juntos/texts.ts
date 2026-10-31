@@ -92,6 +92,37 @@ export const JUNTOS_TEXT = {
   tabSettings: 'Ajustes',
   chatPlaceholderMobile: 'Escribe un mensaje',
   leaderControls: (name: string) => `Controla ${name} (líder)`,
+
+  // --- En directo (docs/ver-juntos.md §14) ---
+  tabSources: 'Fuentes',
+  tabMatches: 'Partidos',
+  liveBadge: 'DIRECTO',
+  liveStatus: 'En directo',
+  liveAuto: 'Cambio automático si se cae',
+  liveAutoHint: 'Si la que suena se cae, la sala salta sola a la siguiente buena.',
+  livePut: 'Poner',
+  liveHere: 'En la sala',
+  liveSearching: 'Buscando las fuentes del partido…',
+  liveSourcesFailed: 'Las fuentes y la agenda solo se ven desde casa.',
+  liveNoSources: 'No hay fuentes para este partido.',
+  liveNoSourcesFor: (match: string) => `No hay fuentes para ${match}.`,
+  liveNoMatch: 'Suena un canal suelto: elige un partido en «Partidos».',
+  liveOnNow: 'En directo',
+  liveLater: 'Más tarde',
+  liveNowShort: 'Ahora',
+  liveNoMatches: 'Hoy no quedan partidos.',
+  livePutChannel: 'Poner un canal',
+  liveNoFavorites: 'No tienes canales en favoritos.',
+  liveYouControl: (channel: string) => `Tú controlas · ${channel}`,
+  liveColeader: (leader: string) => `Co-líder · controlas con ${leader}`,
+  liveGuestOf: (host: string, many: boolean) =>
+    `Sala de ${host} · ${many ? 'controlan' : 'controla'} el partido`,
+  liveGuestNote: (names: string, many: boolean) =>
+    `Solo ${names} ${many ? 'pueden' : 'puede'} cambiar de canal o de fuente. Tú puedes chatear.`,
+  liveCreateTitle: 'Ver el partido juntos',
+  liveCreateHint:
+    'Todos ven lo mismo que tú, en directo. El NAS abre una sola conexión y la reparte.',
+  liveCreateNoSource: 'No hay ninguna fuente para este partido todavía.',
   listEmpty: 'La lista está vacía.',
   listEmptyHint:
     'En casa, abre una película o un episodio en «Pelis y series» y pulsa «Ver juntos» → «Proponer en la sala».',

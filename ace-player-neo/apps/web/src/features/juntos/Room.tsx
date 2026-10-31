@@ -13,9 +13,13 @@
      va cargando por debajo.
    - Pantalla completa: solo el vídeo (sin chat). En el iPhone no hay
      pantalla completa para un trozo de página: allí el vídeo ocupa toda la
-     pantalla con CSS. En Android, además, se gira a horizontal. */
+     pantalla con CSS. En Android, además, se gira a horizontal.
+   - En directo (§14): sin «Cuando acabe» ni Siguiente. Quien controla tiene
+     Chat, Fuentes, Partidos y Gente; los demás, Chat y Gente. Fuentes y
+     Partidos tiran de la agenda y las fuentes de casa: solo en casa
+     (`liveTools`), no en la página del invitado. */
 
-import type { PartyCloseReason, PartyCredential } from '@ace/shared';
+import type { PartyCloseReason, PartyCredential, PartyRoom } from '@ace/shared';
 import {
   useCallback,
   useEffect,
@@ -36,10 +40,13 @@ import { Art } from '../cine/Art.tsx';
 import { useSecondTap } from '../settings/second-tap.ts';
 import { Chat } from './Chat.tsx';
 import { canControl, controllers, inviteUrl, PartyClient, rememberRoom, roleOf } from './client.ts';
+import { Icon } from '../../ui/Icon.tsx';
 import { MEDIA, useMediaQuery } from '../../lib/media.ts';
 import { MobilePeople, MobileQueue, MobileSettings } from './Mobile.tsx';
 import { Faces, joinNames, Lobby, NextCard, NextPanel, People } from './Panels.tsx';
-import { RoomPlayer } from './player.ts';
+import { LiveMatches, LiveSources, useRoomMatch } from './LivePanels.tsx';
+import { nextSource, useLiveSources } from './live.ts';
+import { RoomPlayer, type PlayerView } from './player.ts';
 import { Theater } from './Theater.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
 
@@ -55,9 +62,42 @@ const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
 /** «Cerrar sala» queda armado este rato tras el primer toque. */
 const CLOSE_CONFIRM_MS = 5_000;
 
-type SideTab = 'chat' | 'siguiente' | 'gente';
-/* Las del móvil, las de siempre. */
-type MobileTab = 'chat' | 'lista' | 'personas' | 'ajustes';
+type SideTab = 'chat' | 'siguiente' | 'fuentes' | 'partidos' | 'gente';
+/* Las del móvil, las de siempre (y las del directo). */
+type MobileTab = 'chat' | 'lista' | 'fuentes' | 'partidos' | 'personas' | 'ajustes';
+
+/**
+ * «Cambio automático si se cae» (§14): si el vídeo de la sala falla y quien lo
+ * nota manda (el líder, o quien controle si el líder no está), salta a la
+ * siguiente fuente que la sala no haya probado aún. Sin pintar nada.
+ */
+function LiveAutoSwitch({
+  room,
+  client,
+  player,
+}: {
+  room: PartyRoom;
+  client: PartyClient;
+  player: RoomPlayer;
+}) {
+  const match = useRoomMatch(room);
+  const sources = useLiveSources(match, true);
+  const view: PlayerView = useSyncExternalStore(player.subscribe, player.getView);
+  const tried = useRef(new Set<string>());
+  const live = room.live;
+  const selfId = client.credential.id;
+  const leader = room.members.find((member) => member.id === room.leaderId);
+  const decides = selfId === room.leaderId || (!leader?.online && canControl(room, selfId));
+  if (live) tried.current.add(live.hash);
+  useEffect(() => {
+    if (!live?.auto || !decides || view.phase !== 'error' || room.interrupted) return;
+    const next = nextSource(sources.data ?? [], live, tried.current);
+    if (!next) return;
+    tried.current.add(next.choice.hash);
+    void client.control({ action: 'live', live: next.choice }).catch(() => undefined);
+  }, [live, decides, view.phase, room.interrupted, sources.data, client]);
+  return null;
+}
 
 /** ¿Este navegador sabe poner un elemento cualquiera en pantalla completa? (el iPhone, no). */
 function nativeFullscreen(element: HTMLElement | null): boolean {
@@ -73,6 +113,7 @@ export function Room({
   onPropose,
   header,
   exitAction,
+  liveTools = false,
 }: {
   code: string;
   credential: PartyCredential;
@@ -87,6 +128,8 @@ export function Room({
   header?: ReactNode;
   /** El botón para irse cuando la sala ya no existe (null en la página del invitado). */
   exitAction: ReactNode;
+  /** En casa: Fuentes y Partidos de la sala en directo (la agenda y las fuentes son de casa). */
+  liveTools?: boolean;
 }) {
   const client = useMemo(() => new PartyClient(code, credential), [code, credential]);
   const state = useSyncExternalStore(client.subscribe, client.getState);
@@ -186,16 +229,25 @@ export function Room({
   const leaderName = room?.members.find((member) => member.id === room.leaderId)?.name ?? '';
   const hostName = room?.members.find((member) => member.id === room.hostId)?.name ?? leaderName;
   const lobby = !!room?.playback.lobby;
+  const live = room?.live ?? null;
+  /* Fuentes y Partidos: quien controla, en casa. */
+  const liveTabs = !!live && control && liveTools;
   const names = room ? (controllers(room) ?? []) : [];
   const whoControls = !room
     ? ''
-    : room.settings.control === 'everyone'
-      ? JUNTOS_TEXT.everyoneControls(lobby)
-      : role === 'leader'
-        ? JUNTOS_TEXT.youControl(lobby)
+    : live
+      ? role === 'leader' || (control && room.settings.control === 'everyone')
+        ? JUNTOS_TEXT.liveYouControl(live.channel)
         : role === 'coleader' && control
-          ? JUNTOS_TEXT.coleaderControls(leaderName)
-          : JUNTOS_TEXT.guestOf(hostName, joinNames(names), names.length > 1);
+          ? JUNTOS_TEXT.liveColeader(leaderName)
+          : JUNTOS_TEXT.liveGuestOf(hostName, names.length > 1)
+      : room.settings.control === 'everyone'
+        ? JUNTOS_TEXT.everyoneControls(lobby)
+        : role === 'leader'
+          ? JUNTOS_TEXT.youControl(lobby)
+          : role === 'coleader' && control
+            ? JUNTOS_TEXT.coleaderControls(leaderName)
+            : JUNTOS_TEXT.guestOf(hostName, joinNames(names), names.length > 1);
 
   /* La web de casa va por http: sin la API del portapapeles, `copyText` tira del
      respaldo. Si tampoco puede, el enlace sale en una ventana para copiarlo a mano
@@ -233,6 +285,21 @@ export function Room({
   };
   const closeArmed = closeTap.armed === 'close';
 
+  const liveSide =
+    room && live && liveTools ? (
+      <>
+        {player && control ? <LiveAutoSwitch room={room} client={client} player={player} /> : null}
+      </>
+    ) : null;
+  const livePanel = (which: 'fuentes' | 'partidos') =>
+    room ? (
+      which === 'fuentes' ? (
+        <LiveSourcesHere room={room} client={client} />
+      ) : (
+        <LiveMatches room={room} client={client} />
+      )
+    ) : null;
+
   const stageContent = (
     <div ref={stage} className="juntos__stage" data-fullscreen={fullscreen ? 'true' : 'false'}>
       <video ref={video} className="juntos__video" playsInline preload="auto" />
@@ -264,16 +331,30 @@ export function Room({
 
   if (!desk) {
     /* Móvil: la sala de siempre. */
-    const shownTab: MobileTab = mobileTab === 'ajustes' && !isLeader ? 'chat' : mobileTab;
-    const mobileTabs: { value: MobileTab; label: string; count?: number }[] = [
-      { value: 'chat', label: JUNTOS_TEXT.tabChat },
-      { value: 'lista', label: JUNTOS_TEXT.tabQueue, count: room?.queue.length ?? 0 },
-      { value: 'personas', label: JUNTOS_TEXT.tabPeople, count: room?.members.length ?? 0 },
-      ...(isLeader ? [{ value: 'ajustes' as const, label: JUNTOS_TEXT.tabSettings }] : []),
-    ];
+    const mobileTabs: { value: MobileTab; label: string; count?: number }[] = live
+      ? [
+          { value: 'chat', label: JUNTOS_TEXT.tabChat },
+          ...(liveTabs
+            ? [
+                { value: 'fuentes' as const, label: JUNTOS_TEXT.tabSources },
+                { value: 'partidos' as const, label: JUNTOS_TEXT.tabMatches },
+              ]
+            : []),
+          { value: 'personas', label: JUNTOS_TEXT.tabPeople, count: room?.members.length ?? 0 },
+        ]
+      : [
+          { value: 'chat', label: JUNTOS_TEXT.tabChat },
+          { value: 'lista', label: JUNTOS_TEXT.tabQueue, count: room?.queue.length ?? 0 },
+          { value: 'personas', label: JUNTOS_TEXT.tabPeople, count: room?.members.length ?? 0 },
+          ...(isLeader ? [{ value: 'ajustes' as const, label: JUNTOS_TEXT.tabSettings }] : []),
+        ];
+    const shownTab: MobileTab = mobileTabs.some((item) => item.value === mobileTab)
+      ? mobileTab
+      : 'chat';
     return (
       <div className={cx('juntos', fullscreen === 'page' && 'juntos--page-fs')}>
         {header}
+        {liveSide}
         <header className="juntos__head">
           <div className="juntos__heading">
             <h1 className="juntos__title">{room?.title.title ?? JUNTOS_TEXT.connecting}</h1>
@@ -322,7 +403,9 @@ export function Room({
                   onSend={(text) => client.chat(text)}
                   onTyping={() => client.typing()}
                 />
-              ) : !room ? null : shownTab === 'lista' ? (
+              ) : !room ? null : shownTab === 'fuentes' || shownTab === 'partidos' ? (
+                livePanel(shownTab)
+              ) : shownTab === 'lista' ? (
                 <MobileQueue room={room} client={client} selfId={selfId} />
               ) : shownTab === 'personas' ? (
                 <MobilePeople room={room} client={client} selfId={selfId} />
@@ -336,11 +419,23 @@ export function Room({
     );
   }
 
-  const tabs: { value: SideTab; label: string; count?: number }[] = [
-    { value: 'chat', label: JUNTOS_TEXT.tabChat },
-    { value: 'siguiente', label: JUNTOS_TEXT.tabNext, count: room?.queue.length ?? 0 },
-    { value: 'gente', label: JUNTOS_TEXT.tabPeople },
-  ];
+  const tabs: { value: SideTab; label: string; count?: number }[] = live
+    ? [
+        { value: 'chat', label: JUNTOS_TEXT.tabChat },
+        ...(liveTabs
+          ? [
+              { value: 'fuentes' as const, label: JUNTOS_TEXT.tabSources },
+              { value: 'partidos' as const, label: JUNTOS_TEXT.tabMatches },
+            ]
+          : []),
+        { value: 'gente', label: JUNTOS_TEXT.tabPeople },
+      ]
+    : [
+        { value: 'chat', label: JUNTOS_TEXT.tabChat },
+        { value: 'siguiente', label: JUNTOS_TEXT.tabNext, count: room?.queue.length ?? 0 },
+        { value: 'gente', label: JUNTOS_TEXT.tabPeople },
+      ];
+  const shownSide: SideTab = tabs.some((item) => item.value === tab) ? tab : 'chat';
   /* Como la maqueta: quien creó la sala, solo «Invitar» («Cerrar sala» va al
      final de Gente); los demás, «Salir» (e «Invitar» si controlan). */
   const deskActions = (
@@ -367,18 +462,25 @@ export function Room({
       )}
     >
       {header}
+      {liveSide}
       <div className="juntos__body" data-fullscreen={fullscreen ? 'true' : 'false'}>
         <div className="juntos__main">
           {stageContent}
           {room ? (
             <div className="juntos-info">
-              <Art
-                id={room.title.artId}
-                art="poster"
-                v={room.title.poster}
-                title={room.title.title}
-                className="juntos-poster juntos-info__poster"
-              />
+              {live ? (
+                <span className="juntos-info__live" aria-hidden="true">
+                  <Icon name="tv" size={24} />
+                </span>
+              ) : (
+                <Art
+                  id={room.title.artId}
+                  art="poster"
+                  v={room.title.poster}
+                  title={room.title.title}
+                  className="juntos-poster juntos-info__poster"
+                />
+              )}
               <div className="juntos-info__text">
                 <h1 className="juntos-info__title">
                   {room.title.title}
@@ -393,7 +495,7 @@ export function Room({
           ) : (
             <h1 className="juntos-info__title">{JUNTOS_TEXT.connecting}</h1>
           )}
-          {room ? <NextCard room={room} onSeeList={() => setTab('siguiente')} /> : null}
+          {room && !live ? <NextCard room={room} onSeeList={() => setTab('siguiente')} /> : null}
         </div>
         <aside className="juntos__side">
           {room ? <Faces room={room} selfId={selfId} /> : null}
@@ -403,12 +505,12 @@ export function Room({
               idPrefix="juntos"
               block
               items={tabs}
-              value={tab}
+              value={shownSide}
               onChange={setTab}
             />
           </div>
-          <div className="juntos__panel" {...tabPanelProps('juntos', tab)}>
-            {tab === 'chat' ? (
+          <div className="juntos__panel" {...tabPanelProps('juntos', shownSide)}>
+            {shownSide === 'chat' ? (
               <Chat
                 messages={state.chat}
                 room={room}
@@ -419,7 +521,9 @@ export function Room({
                 onTyping={() => client.typing()}
                 onExpireTyping={() => client.expireTyping()}
               />
-            ) : !room ? null : tab === 'siguiente' ? (
+            ) : !room ? null : shownSide === 'fuentes' || shownSide === 'partidos' ? (
+              livePanel(shownSide)
+            ) : shownSide === 'siguiente' ? (
               <NextPanel room={room} client={client} selfId={selfId} onPropose={onPropose} />
             ) : (
               <People
@@ -436,4 +540,10 @@ export function Room({
       </div>
     </div>
   );
+}
+
+/** Fuentes del partido que suena (lo busca en la agenda de casa). */
+function LiveSourcesHere({ room, client }: { room: PartyRoom; client: PartyClient }) {
+  const match = useRoomMatch(room);
+  return <LiveSources room={room} client={client} match={match} />;
 }

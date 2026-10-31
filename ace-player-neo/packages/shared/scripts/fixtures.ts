@@ -1265,6 +1265,7 @@ function partyJoined(self: string, others: readonly PartyMember[]): PartyJoinRes
       settings: { control: 'leader', coleaders: true, queueMode: 'vote' },
       queue: [],
       upNext: null,
+      live: null,
     },
     member: { id: self, token: `${self}.c2VjcmV0b0RlRWplbXBsbzAx` },
     chat: [

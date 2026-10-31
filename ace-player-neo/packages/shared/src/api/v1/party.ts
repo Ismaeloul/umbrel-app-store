@@ -10,8 +10,8 @@
 import { z } from 'zod';
 import { PARTY } from '../../constants/party.js';
 import { HashSchema } from '../../primitives.js';
-import { ChannelStreamQuerySchema, VideoParamsSchema } from './playback.js';
-import { VodArtStampSchema } from './vod.js';
+import { ChannelStreamQuerySchema, StreamGrantSchema, VideoParamsSchema } from './playback.js';
+import { VodArtStampSchema, VodGrantSchema } from './vod.js';
 
 export const PartyCodeSchema = z
   .string()
@@ -31,10 +31,10 @@ export const PartyParamsSchema = z.strictObject({ code: PartyCodeSchema });
 export type PartyParams = z.infer<typeof PartyParamsSchema>;
 
 export const PartyTitleSchema = z.strictObject({
-  /** Película o episodio que se reproduce. */
+  /** Película o episodio que se reproduce; en directo (§14), el canal que suena. */
   id: HashSchema,
-  kind: z.enum(['movie', 'episode']),
-  /** Película o serie, para el cartel (`vodArt`). */
+  kind: z.enum(['movie', 'episode', 'live']),
+  /** Película o serie, para el cartel (`vodArt`); en directo, el canal. */
   artId: HashSchema,
   poster: VodArtStampSchema.nullable(),
   title: z.string().max(200),
@@ -52,6 +52,36 @@ export const PartyAudioSchema = z.strictObject({
   tracks: z.array(z.strictObject({ index: z.number().int(), label: z.string().max(40) })).max(16),
 });
 export type PartyAudio = z.infer<typeof PartyAudioSchema>;
+
+/**
+ * Sala de un partido o un canal en directo (§14): el NAS abre UNA conexión (la
+ * plaza de la IPTV o un AceStream) y la reparte a todos por la ruta de la sala.
+ * Todos van en directo a la vez: sin pausa ni saltos.
+ */
+export const PartyLiveSchema = z.strictObject({
+  /** El canal que suena (el mismo id que `channelStream`). */
+  hash: HashSchema,
+  /** Cómo se llama: «DAZN 1 · 1080p». */
+  channel: z.string().max(120),
+  source: z.enum(['engine', 'iptv']),
+  /** El partido de la Agenda, o null con un canal suelto. */
+  matchId: z.string().max(120).nullable(),
+  /** «Real Madrid – Barcelona», o null. */
+  match: z.string().max(200).nullable(),
+  /** «Cambio automático si se cae»: quien controla salta solo a la siguiente fuente buena. */
+  auto: z.boolean(),
+});
+export type PartyLive = z.infer<typeof PartyLiveSchema>;
+
+/** Lo que se elige al crear una sala en directo o al cambiar de canal (`live` de `partyControl`). */
+export const PartyLiveChoiceSchema = z.strictObject({
+  hash: HashSchema,
+  channel: z.string().trim().min(1).max(120),
+  source: z.enum(['engine', 'iptv']),
+  matchId: z.string().max(120).nullable().default(null),
+  match: z.string().trim().max(200).nullable().default(null),
+});
+export type PartyLiveChoice = z.infer<typeof PartyLiveChoiceSchema>;
 
 /**
  * Papel en la sala (§13): `leader` (la corona), `coleader` (el escudo: controla
@@ -184,6 +214,8 @@ export const PartyRoomSchema = z.strictObject({
   settings: PartySettingsSchema,
   queue: z.array(PartyQueueItemSchema).max(PARTY.queueMax),
   upNext: PartyUpNextSchema.nullable(),
+  /** Sala en directo (§14), o null: película o episodio. */
+  live: PartyLiveSchema.nullable().default(null),
 });
 export type PartyRoom = z.infer<typeof PartyRoomSchema>;
 
@@ -212,8 +244,8 @@ export type PartyCredential = z.infer<typeof PartyCredentialSchema>;
 
 // --- Peticiones ---
 
-/** POST /api/v1/party: crear una sala con un título. */
-export const PartyCreateBodySchema = z.strictObject({
+/** POST /api/v1/party con una película o un episodio. */
+export const PartyCreateVodBodySchema = z.strictObject({
   /** Película o episodio. */
   titleId: HashSchema,
   kind: z.enum(['movie', 'episode']),
@@ -228,6 +260,19 @@ export const PartyCreateBodySchema = z.strictObject({
   coleaders: z.boolean().default(true),
   queueMode: PartyQueueModeSchema.default('autoplay'),
 });
+export type PartyCreateVodBody = z.infer<typeof PartyCreateVodBodySchema>;
+
+/** POST /api/v1/party con un partido o un canal en directo (§14). */
+export const PartyCreateLiveBodySchema = z.strictObject({
+  live: PartyLiveChoiceSchema,
+  name: PartyNameSchema,
+  control: PartyControlModeSchema.default('leader'),
+  coleaders: z.boolean().default(true),
+});
+export type PartyCreateLiveBody = z.infer<typeof PartyCreateLiveBodySchema>;
+
+/** POST /api/v1/party: crear una sala con un título o en directo. */
+export const PartyCreateBodySchema = z.union([PartyCreateLiveBodySchema, PartyCreateVodBodySchema]);
 export type PartyCreateBody = z.infer<typeof PartyCreateBodySchema>;
 
 /** POST /api/v1/party/:code/join. */
@@ -264,6 +309,12 @@ export const PartyControlBodySchema = z.discriminatedUnion('action', [
     action: z.literal('audio'),
     positionS: z.number().min(0).max(86_400),
     audio: z.number().int().min(0).max(15),
+  }),
+  /** En directo (§14): otro canal o fuente para todos. */
+  z.strictObject({
+    token: PartyTokenSchema,
+    action: z.literal('live'),
+    live: PartyLiveChoiceSchema,
   }),
 ]);
 export type PartyControlBody = z.infer<typeof PartyControlBodySchema>;
@@ -320,6 +371,8 @@ export const PartySettingsBodySchema = z.strictObject({
   control: PartyControlModeSchema.optional(),
   coleaders: z.boolean().optional(),
   queueMode: PartyQueueModeSchema.optional(),
+  /** En directo (§14): «Cambio automático si se cae» (quien controla). */
+  auto: z.boolean().optional(),
 });
 export type PartySettingsBody = z.infer<typeof PartySettingsBodySchema>;
 
@@ -382,6 +435,10 @@ export const PartyStreamQuerySchema = ChannelStreamQuerySchema.pick({
 });
 export type PartyStreamQuery = z.infer<typeof PartyStreamQuerySchema>;
 
+/** Lo que devuelve `partyStream`: una `VodGrant` o, en directo (§14), una `StreamGrant`. */
+export const PartyStreamGrantSchema = z.union([VodGrantSchema, StreamGrantSchema]);
+export type PartyStreamGrant = z.infer<typeof PartyStreamGrantSchema>;
+
 // --- Eventos del SSE de la sala ---
 
 /** `kicked`: solo le llega a quien han echado. */
@@ -433,6 +490,7 @@ export const PartyEventSchema = z.discriminatedUnion('type', [
       settings: PartySettingsSchema,
       queue: z.array(PartyQueueItemSchema).max(PARTY.queueMax),
       upNext: PartyUpNextSchema.nullable(),
+      live: PartyLiveSchema.nullable().default(null),
     }),
   }),
   /** «Ana está escribiendo…» (§13): como mucho uno cada `typingIntervalMs` por persona. */

@@ -27,6 +27,7 @@ import { useCallback, useId, useLayoutEffect, useRef, useState, type CSSProperti
 import { cx } from '../../lib/cx.ts';
 import { competitionLogo, teamCrest, teamPalette, teamShort } from '../../lib/teams.ts';
 import { Button, Chip, Icon, LiveDot, Num, TeamMark, VersusCard } from '../../ui/index.ts';
+import { LiveJuntosButton } from '../juntos/LiveCreate.tsx';
 import { statusLine } from '../match-center/MatchHead.tsx';
 import { matchGlow, versusSide, versusWhen } from './cards.ts';
 import { useMatchSignal } from './data.ts';
@@ -147,15 +148,11 @@ export function AgendaStage({
                 onHide={() => hideScore(match.id)}
               />
             ) : null}
-            {/* Como en la ficha: la sala del partido en directo llega en otra fase. */}
-            <Button
-              icon="personas"
-              className="agenda-stage__together"
-              aria-disabled="true"
-              title="Pronto: ver el partido con amigos"
-            >
-              Ver juntos
-            </Button>
+            {/* Como en la ficha: la sala del partido en directo (docs/ver-juntos.md §14). */}
+            <LiveJuntosButton
+              match={match}
+              look={{ className: 'agenda-stage__together', size: 'md' }}
+            />
           </div>
         </header>
         <section className="agenda-stage__where" aria-label="Dónde se emite">

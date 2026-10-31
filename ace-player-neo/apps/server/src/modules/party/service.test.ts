@@ -70,6 +70,8 @@ function setup(env: Record<string, string> = {}, grant: VodGrant = GRANT) {
   const party = createPartyService({
     ...core,
     playback: {
+      /* Las salas en directo tienen su prueba (live.test.ts). */
+      acquire: () => Promise.reject(new Error('directo')),
       acquireVod: async (id, query, viewer, _signal, options) => {
         calls.push({ id, query, viewer, options });
         return grant;

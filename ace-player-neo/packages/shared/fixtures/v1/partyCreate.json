@@ -39,7 +39,8 @@
     },
     "settings": { "control": "leader", "coleaders": true, "queueMode": "vote" },
     "queue": [],
-    "upNext": null
+    "upNext": null,
+    "live": null
   },
   "member": { "id": "m_IsmaAnfitrion", "token": "m_IsmaAnfitrion.c2VjcmV0b0RlRWplbXBsbzAx" },
   "chat": [

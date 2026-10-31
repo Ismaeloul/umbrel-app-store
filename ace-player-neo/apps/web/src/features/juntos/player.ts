@@ -27,11 +27,16 @@
      vídeo solo): hasta entonces, «Toca para empezar».
    - «Esperando a todos» (§13): con la sala en espera, cada latido dice cuánto
      vídeo hay cargado por delante (`PARTY.lobbyBufferS` es el 100 %) y si ya
-     puede empezar; la sala arranca sola cuando todos lo están. */
+     puede empezar; la sala arranca sola cuando todos lo están.
+   - En directo (§14): `partyStream` da una `StreamGrant` del canal de la sala
+     (el remux del NAS, el mismo para todos). Nada de posición: cada uno va en
+     el directo con la configuración de casa (`hlsConfig` del perfil
+     equilibrado) y, si se para, vuelve a reproducir solo. Otro canal llega
+     como otro título: se vuelve a abrir. */
 
-import type { PartyRoom, VodGrant } from '@ace/shared';
+import { PLAYBACK_PROFILES, type PartyRoom, type PartyStreamGrant } from '@ace/shared';
 import { api, getDeviceId, getViewerId, isApiError } from '../../api/index.ts';
-import { HLS_PLAYLIST_RETRY, HLS_VOD_CONFIG } from '../../player/engines/hls.ts';
+import { HLS_PLAYLIST_RETRY, HLS_VOD_CONFIG, hlsConfig } from '../../player/engines/hls.ts';
 import { chooseEngine, detectPlatform, streamClient } from '../../player/engines/index.ts';
 import { absoluteUrl } from '../../player/engines/types.ts';
 import { canPlayHevc } from '../cine/play.ts';
@@ -132,7 +137,7 @@ export class RoomPlayer {
     buffering: false,
   };
   private readonly listeners = new Set<() => void>();
-  private grant: VodGrant | null = null;
+  private grant: PartyStreamGrant | null = null;
   private hls: HlsInstance | null = null;
   private tickTimer: unknown = null;
   private reopenTimer: unknown = null;
@@ -274,7 +279,7 @@ export class RoomPlayer {
     this.teardown();
     this.set({ phase: 'preparing', error: null });
     const platform = detectPlatform();
-    let grant: VodGrant;
+    let grant: PartyStreamGrant;
     try {
       grant = await api('partyStream', {
         params: { code: this.client.code },
@@ -295,6 +300,10 @@ export class RoomPlayer {
       return;
     }
     if (generation !== this.generation || this.destroyed) return;
+    if (!('vod' in grant)) {
+      await this.attachLive(grant, platform, generation);
+      return;
+    }
     const engine = chooseEngine(grant.protocol, platform);
     const codecs = `video/mp4; codecs="${grant.vod.video.codecs},mp4a.40.2"`;
     if (!engine || !this.env.supportsType(codecs, engine === 'native', this.video)) {
@@ -335,6 +344,41 @@ export class RoomPlayer {
       } catch {}
     }
     this.set({ phase: this.unlocked ? 'ready' : 'blocked', durationS: grant.vod.durationS });
+  }
+
+  /** En directo (§14): el canal de la sala, en el directo, sin posición que seguir. */
+  private async attachLive(
+    grant: PartyStreamGrant,
+    platform: ReturnType<typeof detectPlatform>,
+    generation: number,
+  ): Promise<void> {
+    const engine = chooseEngine(grant.protocol, platform);
+    if (engine !== 'hls' && engine !== 'native') {
+      this.set({ phase: 'error', error: JUNTOS_TEXT.codecUnsupported });
+      return;
+    }
+    this.grant = grant;
+    this.acquiredAudio = null;
+    const Hls = engine === 'hls' ? await this.env.loadHls() : null;
+    if (generation !== this.generation || this.destroyed) return;
+    if (Hls) {
+      const hls = new Hls(hlsConfig(PLAYBACK_PROFILES.balanced));
+      this.hls = hls;
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal || this.hls !== hls) return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+        else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+        else this.lost();
+      });
+      hls.loadSource(absoluteUrl(grant.url));
+      hls.attachMedia(this.video);
+    } else {
+      this.video.src = absoluteUrl(grant.url);
+      try {
+        this.video.load();
+      } catch {}
+    }
+    this.set({ phase: this.unlocked ? 'ready' : 'blocked', durationS: null });
   }
 
   /** La sesión ya no está: se espera a ver si es una interrupción de la sala y, si no, se reabre. */
@@ -407,6 +451,11 @@ export class RoomPlayer {
         : null,
     );
     if (!room || !ready) return;
+    /* En directo no hay posición que seguir: solo que no se quede parado. */
+    if (room.live) {
+      if (video.paused && !video.ended) this.playVideo();
+      return;
+    }
     const running = isRunning(room.playback);
     const target = targetPosition(room.playback, this.client.serverNow(), durationS);
     if (running && video.paused) this.playVideo();
@@ -463,7 +512,7 @@ export class RoomPlayer {
    */
   private onNative(type: 'play' | 'pause' | 'seeking'): void {
     const room = this.room();
-    if (this.view.phase !== 'ready' || !room || this.unlocking) return;
+    if (this.view.phase !== 'ready' || !room || this.unlocking || room.live) return;
     if (!canControl(room, this.client.credential.id)) return;
     /* Con la página oculta (pestaña de fondo, iPhone bloqueado) el navegador pausa solo: eso no para a los demás. */
     if (globalThis.document?.visibilityState === 'hidden') return;

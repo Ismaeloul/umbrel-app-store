@@ -22,14 +22,14 @@ import type {
   PartySettingsBody,
   PartyStatusBody,
   PartyStatusResponse,
+  PartyStreamGrant,
   PartyStreamQuery,
-  VodGrant,
 } from '@ace/shared';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { PlaybackService, ViewerIdentity } from '../playback/types.js';
 
 export interface PartyDeps extends CoreDeps {
-  readonly playback: Pick<PlaybackService, 'acquireVod' | 'heartbeat' | 'release'>;
+  readonly playback: Pick<PlaybackService, 'acquire' | 'acquireVod' | 'heartbeat' | 'release'>;
 }
 
 /** Lo mínimo de `http.ServerResponse` que usa el SSE de la sala (los tests pasan uno falso). */
@@ -63,7 +63,7 @@ export interface PartyService extends Lifecycle {
     query: PartyStreamQuery,
     viewer: ViewerIdentity,
     signal: AbortSignal,
-  ): Promise<VodGrant>;
+  ): Promise<PartyStreamGrant>;
   /** La sesión de vídeo de la persona con esta clave (`partyVideo`). */
   videoSession(code: string, key: string): string;
   control(code: string, body: PartyControlBody): PartyStatusResponse;

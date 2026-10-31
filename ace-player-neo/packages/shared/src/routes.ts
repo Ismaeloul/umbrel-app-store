@@ -177,6 +177,7 @@ import {
   PartyStatusBodySchema,
   PartyStatusResponseSchema,
   PartyStreamQuerySchema,
+  PartyStreamGrantSchema,
   PartyTokenBodySchema,
   PartyVideoParamsSchema,
 } from './api/v1/party.js';
@@ -1697,18 +1698,29 @@ export const V1_ROUTES = {
     access: 'any',
     credential: 'party',
     module: 'party',
-    summary: 'Abrir el vídeo de la sala: la misma sesión VOD para todos',
+    summary: 'Abrir el vídeo de la sala: la misma sesión para todos',
     description:
       'Como `vodStream`, pero el título, el audio y la posición los pone la sala, y quien ya está en la sesión no ' +
       'recibe un traspaso: todos leen la misma lista HLS (una sola plaza del proveedor). La `url` es la de ' +
-      '`partyVideo`, con la clave de vídeo de la persona; el latido de la sesión lo da `partyStatus`.',
+      '`partyVideo`, con la clave de vídeo de la persona; el latido de la sesión lo da `partyStatus`. En una sala ' +
+      'en directo (§14) es como `channelStream` del canal de la sala, siempre por el remux, y devuelve una `StreamGrant`.',
     params: PartyParamsSchema,
     query: PartyStreamQuerySchema,
-    response: VodGrantSchema,
+    response: PartyStreamGrantSchema,
     status: 200,
     content: 'json',
     sideEffects: true,
-    errors: [...PARTY_MEMBER_ERRORS, ...VOD_STREAM_ERRORS],
+    errors: [
+      ...PARTY_MEMBER_ERRORS,
+      ...VOD_STREAM_ERRORS,
+      'engine_unavailable',
+      'engine_timeout',
+      'source_no_peers',
+      'remux_timeout',
+      'remux_died',
+      'ffmpeg_missing',
+      ...IPTV_STREAM_ERRORS,
+    ],
     legacyTwin: null,
   }),
   partyVideo: defineRoute({

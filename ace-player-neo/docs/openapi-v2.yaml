@@ -16006,71 +16006,124 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                titleId:
-                  type: string
-                  pattern: ^[a-f0-9]{40}$
-                kind:
-                  type: string
-                  enum:
-                    - movie
-                    - episode
-                artId:
-                  type: string
-                  pattern: ^[a-f0-9]{40}$
-                poster:
-                  default: null
-                  anyOf:
-                    - type: string
-                      pattern: ^[a-f0-9]{8}$
-                    - type: "null"
-                title:
-                  type: string
-                  minLength: 1
-                  maxLength: 200
-                subtitle:
-                  default: null
-                  anyOf:
-                    - type: string
+              anyOf:
+                - type: object
+                  properties:
+                    live:
+                      type: object
+                      properties:
+                        hash:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        channel:
+                          type: string
+                          minLength: 1
+                          maxLength: 120
+                        source:
+                          type: string
+                          enum:
+                            - engine
+                            - iptv
+                        matchId:
+                          default: null
+                          anyOf:
+                            - type: string
+                              maxLength: 120
+                            - type: "null"
+                        match:
+                          default: null
+                          anyOf:
+                            - type: string
+                              maxLength: 200
+                            - type: "null"
+                      required:
+                        - hash
+                        - channel
+                        - source
+                      additionalProperties: false
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 24
+                      pattern: ^[^\p{Cc}\p{Cf}]+$
+                    control:
+                      default: leader
+                      type: string
+                      enum:
+                        - leader
+                        - everyone
+                    coleaders:
+                      default: true
+                      type: boolean
+                  required:
+                    - live
+                    - name
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    titleId:
+                      type: string
+                      pattern: ^[a-f0-9]{40}$
+                    kind:
+                      type: string
+                      enum:
+                        - movie
+                        - episode
+                    artId:
+                      type: string
+                      pattern: ^[a-f0-9]{40}$
+                    poster:
+                      default: null
+                      anyOf:
+                        - type: string
+                          pattern: ^[a-f0-9]{8}$
+                        - type: "null"
+                    title:
+                      type: string
+                      minLength: 1
                       maxLength: 200
-                    - type: "null"
-                audio:
-                  default: null
-                  anyOf:
-                    - type: integer
-                      minimum: 0
-                      maximum: 15
-                    - type: "null"
-                name:
-                  type: string
-                  minLength: 1
-                  maxLength: 24
-                  pattern: ^[^\p{Cc}\p{Cf}]+$
-                control:
-                  default: leader
-                  type: string
-                  enum:
-                    - leader
-                    - everyone
-                coleaders:
-                  default: true
-                  type: boolean
-                queueMode:
-                  default: autoplay
-                  type: string
-                  enum:
-                    - autoplay
-                    - vote
-                    - leader
-                    - once
-              required:
-                - titleId
-                - kind
-                - artId
-                - title
-                - name
-              additionalProperties: false
+                    subtitle:
+                      default: null
+                      anyOf:
+                        - type: string
+                          maxLength: 200
+                        - type: "null"
+                    audio:
+                      default: null
+                      anyOf:
+                        - type: integer
+                          minimum: 0
+                          maximum: 15
+                        - type: "null"
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 24
+                      pattern: ^[^\p{Cc}\p{Cf}]+$
+                    control:
+                      default: leader
+                      type: string
+                      enum:
+                        - leader
+                        - everyone
+                    coleaders:
+                      default: true
+                      type: boolean
+                    queueMode:
+                      default: autoplay
+                      type: string
+                      enum:
+                        - autoplay
+                        - vote
+                        - leader
+                        - once
+                  required:
+                    - titleId
+                    - kind
+                    - artId
+                    - title
+                    - name
+                  additionalProperties: false
       responses:
         "201":
           description: Correcto
@@ -16102,6 +16155,7 @@ paths:
                             enum:
                               - movie
                               - episode
+                              - live
                           artId:
                             type: string
                             pattern: ^[a-f0-9]{40}$
@@ -16305,6 +16359,7 @@ paths:
                                   enum:
                                     - movie
                                     - episode
+                                    - live
                                 artId:
                                   type: string
                                   pattern: ^[a-f0-9]{40}$
@@ -16365,6 +16420,7 @@ paths:
                                     enum:
                                       - movie
                                       - episode
+                                      - live
                                   artId:
                                     type: string
                                     pattern: ^[a-f0-9]{40}$
@@ -16404,6 +16460,43 @@ paths:
                               - startsAt
                             additionalProperties: false
                           - type: "null"
+                      live:
+                        default: null
+                        anyOf:
+                          - type: object
+                            properties:
+                              hash:
+                                type: string
+                                pattern: ^[a-f0-9]{40}$
+                              channel:
+                                type: string
+                                maxLength: 120
+                              source:
+                                type: string
+                                enum:
+                                  - engine
+                                  - iptv
+                              matchId:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 120
+                                  - type: "null"
+                              match:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 200
+                                  - type: "null"
+                              auto:
+                                type: boolean
+                            required:
+                              - hash
+                              - channel
+                              - source
+                              - matchId
+                              - match
+                              - auto
+                            additionalProperties: false
+                          - type: "null"
                     required:
                       - code
                       - inviteUrl
@@ -16418,6 +16511,7 @@ paths:
                       - settings
                       - queue
                       - upNext
+                      - live
                     additionalProperties: false
                   member:
                     type: object
@@ -16562,6 +16656,7 @@ paths:
                         enum:
                           - movie
                           - episode
+                          - live
                       artId:
                         type: string
                         pattern: ^[a-f0-9]{40}$
@@ -16713,6 +16808,7 @@ paths:
                             enum:
                               - movie
                               - episode
+                              - live
                           artId:
                             type: string
                             pattern: ^[a-f0-9]{40}$
@@ -16916,6 +17012,7 @@ paths:
                                   enum:
                                     - movie
                                     - episode
+                                    - live
                                 artId:
                                   type: string
                                   pattern: ^[a-f0-9]{40}$
@@ -16976,6 +17073,7 @@ paths:
                                     enum:
                                       - movie
                                       - episode
+                                      - live
                                   artId:
                                     type: string
                                     pattern: ^[a-f0-9]{40}$
@@ -17015,6 +17113,43 @@ paths:
                               - startsAt
                             additionalProperties: false
                           - type: "null"
+                      live:
+                        default: null
+                        anyOf:
+                          - type: object
+                            properties:
+                              hash:
+                                type: string
+                                pattern: ^[a-f0-9]{40}$
+                              channel:
+                                type: string
+                                maxLength: 120
+                              source:
+                                type: string
+                                enum:
+                                  - engine
+                                  - iptv
+                              matchId:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 120
+                                  - type: "null"
+                              match:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 200
+                                  - type: "null"
+                              auto:
+                                type: boolean
+                            required:
+                              - hash
+                              - channel
+                              - source
+                              - matchId
+                              - match
+                              - auto
+                            additionalProperties: false
+                          - type: "null"
                     required:
                       - code
                       - inviteUrl
@@ -17029,6 +17164,7 @@ paths:
                       - settings
                       - queue
                       - upNext
+                      - live
                     additionalProperties: false
                   member:
                     type: object
@@ -17223,8 +17359,8 @@ paths:
       operationId: partyStream
       tags:
         - party
-      summary: "Abrir el vídeo de la sala: la misma sesión VOD para todos"
-      description: "Como `vodStream`, pero el título, el audio y la posición los pone la sala, y quien ya está en la sesión no recibe un traspaso: todos leen la misma lista HLS (una sola plaza del proveedor). La `url` es la de `partyVideo`, con la clave de vídeo de la persona; el latido de la sesión lo da `partyStatus`."
+      summary: "Abrir el vídeo de la sala: la misma sesión para todos"
+      description: "Como `vodStream`, pero el título, el audio y la posición los pone la sala, y quien ya está en la sesión no recibe un traspaso: todos leen la misma lista HLS (una sola plaza del proveedor). La `url` es la de `partyVideo`, con la clave de vídeo de la persona; el latido de la sesión lo da `partyStatus`. En una sala en directo (§14) es como `channelStream` del canal de la sala, siempre por el remux, y devuelve una `StreamGrant`."
       parameters:
         - name: code
           in: path
@@ -17273,280 +17409,412 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  session:
-                    type: object
+                anyOf:
+                  - type: object
                     properties:
-                      id:
+                      session:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            pattern: ^s_[A-Za-z0-9_-]{8,64}$
+                          heartbeatMs:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                          expiresAfterMs:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - heartbeatMs
+                          - expiresAfterMs
+                        additionalProperties: false
+                      url:
                         type: string
-                        pattern: ^s_[A-Za-z0-9_-]{8,64}$
-                      heartbeatMs:
-                        type: integer
-                        exclusiveMinimum: 0
-                        maximum: 9007199254740991
-                      expiresAfterMs:
-                        type: integer
-                        exclusiveMinimum: 0
-                        maximum: 9007199254740991
-                    required:
-                      - id
-                      - heartbeatMs
-                      - expiresAfterMs
-                    additionalProperties: false
-                  url:
-                    type: string
-                    format: starts_with
-                    pattern: ^\/.*
-                  protocol:
-                    type: string
-                    enum:
-                      - mpegts
-                      - hls
-                      - hls-fmp4
-                  remux:
-                    type: boolean
-                  codec:
-                    type: object
-                    properties:
-                      video:
+                        format: starts_with
+                        pattern: ^\/.*
+                      protocol:
                         type: string
-                      audio:
-                        type: string
+                        enum:
+                          - mpegts
+                          - hls
+                          - hls-fmp4
+                      remux:
+                        type: boolean
+                      codec:
+                        type: object
+                        properties:
+                          video:
+                            type: string
+                          audio:
+                            type: string
+                          source:
+                            type: string
+                            enum:
+                              - scanner
+                              - player
+                              - ffprobe
+                              - unknown
+                        required:
+                          - video
+                          - audio
+                          - source
+                        additionalProperties: false
+                      latency:
+                        type: object
+                        properties:
+                          mode:
+                            type: string
+                            enum:
+                              - stable
+                              - balanced
+                              - low
+                          initialBufferS:
+                            type: number
+                            minimum: 0
+                          rebuildS:
+                            type: number
+                            minimum: 0
+                          liveSync:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  targetS:
+                                    type: number
+                                    minimum: 0
+                                  maxS:
+                                    type: number
+                                    minimum: 0
+                                  rate:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                required:
+                                  - targetS
+                                  - maxS
+                                  - rate
+                                additionalProperties: false
+                              - type: "null"
+                          ios:
+                            type: object
+                            properties:
+                              preferredForwardBufferDuration:
+                                type: number
+                                minimum: 0
+                              liveEdgeOffsetS:
+                                type: number
+                                minimum: 0
+                            required:
+                              - preferredForwardBufferDuration
+                              - liveEdgeOffsetS
+                            additionalProperties: false
+                        required:
+                          - mode
+                          - initialBufferS
+                          - rebuildS
+                          - liveSync
+                        additionalProperties: false
+                      stats:
+                        type: object
+                        properties:
+                          via:
+                            type: string
+                            const: sse
+                        required:
+                          - via
+                        additionalProperties: false
+                      handoff:
+                        type: boolean
                       source:
                         type: string
                         enum:
-                          - scanner
-                          - player
-                          - ffprobe
-                          - unknown
-                    required:
-                      - video
-                      - audio
-                      - source
-                    additionalProperties: false
-                  latency:
-                    type: object
-                    properties:
-                      mode:
-                        type: string
-                        enum:
-                          - stable
-                          - balanced
-                          - low
-                      initialBufferS:
-                        type: number
-                        minimum: 0
-                      rebuildS:
-                        type: number
-                        minimum: 0
-                      liveSync:
-                        anyOf:
-                          - type: object
-                            properties:
-                              targetS:
-                                type: number
-                                minimum: 0
-                              maxS:
-                                type: number
-                                minimum: 0
-                              rate:
-                                type: number
-                                exclusiveMinimum: 0
-                            required:
-                              - targetS
-                              - maxS
-                              - rate
-                            additionalProperties: false
-                          - type: "null"
-                      ios:
+                          - engine
+                          - iptv
+                      vod:
                         type: object
                         properties:
-                          preferredForwardBufferDuration:
-                            type: number
-                            minimum: 0
-                          liveEdgeOffsetS:
-                            type: number
-                            minimum: 0
-                        required:
-                          - preferredForwardBufferDuration
-                          - liveEdgeOffsetS
-                        additionalProperties: false
-                    required:
-                      - mode
-                      - initialBufferS
-                      - rebuildS
-                      - liveSync
-                    additionalProperties: false
-                  stats:
-                    type: object
-                    properties:
-                      via:
-                        type: string
-                        const: sse
-                    required:
-                      - via
-                    additionalProperties: false
-                  handoff:
-                    type: boolean
-                  source:
-                    type: string
-                    enum:
-                      - engine
-                      - iptv
-                  vod:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        pattern: ^[a-f0-9]{40}$
-                      kind:
-                        type: string
-                        enum:
-                          - movie
-                          - episode
-                      seriesId:
-                        anyOf:
-                          - type: string
+                          id:
+                            type: string
                             pattern: ^[a-f0-9]{40}$
-                          - type: "null"
-                      title:
-                        type: string
-                        maxLength: 200
-                      subtitle:
-                        anyOf:
-                          - type: string
-                            maxLength: 200
-                          - type: "null"
-                      durationS:
-                        type: number
-                        exclusiveMinimum: 0
-                        maximum: 86400
-                      startS:
-                        type: number
-                        minimum: 0
-                      resumed:
-                        type: boolean
-                      audio:
-                        maxItems: 16
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            index:
-                              type: integer
-                              minimum: -9007199254740991
-                              maximum: 9007199254740991
-                            label:
-                              type: string
-                              maxLength: 40
-                            lang:
-                              anyOf:
-                                - type: string
-                                  maxLength: 12
-                                - type: "null"
-                            codec:
-                              type: string
-                              maxLength: 16
-                            channels:
-                              anyOf:
-                                - type: integer
-                                  minimum: -9007199254740991
-                                  maximum: 9007199254740991
-                                - type: "null"
-                            converted:
-                              type: boolean
-                          required:
-                            - index
-                            - label
-                            - lang
-                            - codec
-                            - channels
-                            - converted
-                          additionalProperties: false
-                      audioIndex:
-                        type: integer
-                        minimum: -9007199254740991
-                        maximum: 9007199254740991
-                      video:
-                        type: object
-                        properties:
-                          codec:
+                          kind:
                             type: string
                             enum:
-                              - h264
-                              - hevc
-                          codecs:
-                            type: string
-                            maxLength: 64
-                          width:
+                              - movie
+                              - episode
+                          seriesId:
                             anyOf:
-                              - type: integer
-                                minimum: -9007199254740991
-                                maximum: 9007199254740991
+                              - type: string
+                                pattern: ^[a-f0-9]{40}$
                               - type: "null"
-                          height:
+                          title:
+                            type: string
+                            maxLength: 200
+                          subtitle:
                             anyOf:
-                              - type: integer
-                                minimum: -9007199254740991
-                                maximum: 9007199254740991
+                              - type: string
+                                maxLength: 200
+                              - type: "null"
+                          durationS:
+                            type: number
+                            exclusiveMinimum: 0
+                            maximum: 86400
+                          startS:
+                            type: number
+                            minimum: 0
+                          resumed:
+                            type: boolean
+                          audio:
+                            maxItems: 16
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                index:
+                                  type: integer
+                                  minimum: -9007199254740991
+                                  maximum: 9007199254740991
+                                label:
+                                  type: string
+                                  maxLength: 40
+                                lang:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 12
+                                    - type: "null"
+                                codec:
+                                  type: string
+                                  maxLength: 16
+                                channels:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: -9007199254740991
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                                converted:
+                                  type: boolean
+                              required:
+                                - index
+                                - label
+                                - lang
+                                - codec
+                                - channels
+                                - converted
+                              additionalProperties: false
+                          audioIndex:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                          video:
+                            type: object
+                            properties:
+                              codec:
+                                type: string
+                                enum:
+                                  - h264
+                                  - hevc
+                              codecs:
+                                type: string
+                                maxLength: 64
+                              width:
+                                anyOf:
+                                  - type: integer
+                                    minimum: -9007199254740991
+                                    maximum: 9007199254740991
+                                  - type: "null"
+                              height:
+                                anyOf:
+                                  - type: integer
+                                    minimum: -9007199254740991
+                                    maximum: 9007199254740991
+                                  - type: "null"
+                            required:
+                              - codec
+                              - codecs
+                              - width
+                              - height
+                            additionalProperties: false
+                          next:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    pattern: ^[a-f0-9]{40}$
+                                  title:
+                                    type: string
+                                    maxLength: 200
+                                  label:
+                                    type: string
+                                    maxLength: 80
+                                required:
+                                  - id
+                                  - title
+                                  - label
+                                additionalProperties: false
+                              - type: "null"
+                          poster:
+                            anyOf:
+                              - type: string
+                                pattern: ^[a-f0-9]{8}$
                               - type: "null"
                         required:
-                          - codec
-                          - codecs
-                          - width
-                          - height
+                          - id
+                          - kind
+                          - seriesId
+                          - title
+                          - subtitle
+                          - durationS
+                          - startS
+                          - resumed
+                          - audio
+                          - audioIndex
+                          - video
+                          - next
+                          - poster
                         additionalProperties: false
-                      next:
-                        anyOf:
-                          - type: object
-                            properties:
-                              id:
-                                type: string
-                                pattern: ^[a-f0-9]{40}$
-                              title:
-                                type: string
-                                maxLength: 200
-                              label:
-                                type: string
-                                maxLength: 80
-                            required:
-                              - id
-                              - title
-                              - label
-                            additionalProperties: false
-                          - type: "null"
-                      poster:
-                        anyOf:
-                          - type: string
-                            pattern: ^[a-f0-9]{8}$
-                          - type: "null"
                     required:
-                      - id
-                      - kind
-                      - seriesId
-                      - title
-                      - subtitle
-                      - durationS
-                      - startS
-                      - resumed
-                      - audio
-                      - audioIndex
-                      - video
-                      - next
-                      - poster
+                      - session
+                      - url
+                      - protocol
+                      - remux
+                      - codec
+                      - latency
+                      - stats
+                      - handoff
+                      - vod
                     additionalProperties: false
-                required:
-                  - session
-                  - url
-                  - protocol
-                  - remux
-                  - codec
-                  - latency
-                  - stats
-                  - handoff
-                  - vod
-                additionalProperties: false
+                  - type: object
+                    properties:
+                      session:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            pattern: ^s_[A-Za-z0-9_-]{8,64}$
+                          heartbeatMs:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                          expiresAfterMs:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - heartbeatMs
+                          - expiresAfterMs
+                        additionalProperties: false
+                      url:
+                        type: string
+                        format: starts_with
+                        pattern: ^\/.*
+                      protocol:
+                        type: string
+                        enum:
+                          - mpegts
+                          - hls
+                          - hls-fmp4
+                      remux:
+                        type: boolean
+                      codec:
+                        type: object
+                        properties:
+                          video:
+                            type: string
+                          audio:
+                            type: string
+                          source:
+                            type: string
+                            enum:
+                              - scanner
+                              - player
+                              - ffprobe
+                              - unknown
+                        required:
+                          - video
+                          - audio
+                          - source
+                        additionalProperties: false
+                      latency:
+                        type: object
+                        properties:
+                          mode:
+                            type: string
+                            enum:
+                              - stable
+                              - balanced
+                              - low
+                          initialBufferS:
+                            type: number
+                            minimum: 0
+                          rebuildS:
+                            type: number
+                            minimum: 0
+                          liveSync:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  targetS:
+                                    type: number
+                                    minimum: 0
+                                  maxS:
+                                    type: number
+                                    minimum: 0
+                                  rate:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                required:
+                                  - targetS
+                                  - maxS
+                                  - rate
+                                additionalProperties: false
+                              - type: "null"
+                          ios:
+                            type: object
+                            properties:
+                              preferredForwardBufferDuration:
+                                type: number
+                                minimum: 0
+                              liveEdgeOffsetS:
+                                type: number
+                                minimum: 0
+                            required:
+                              - preferredForwardBufferDuration
+                              - liveEdgeOffsetS
+                            additionalProperties: false
+                        required:
+                          - mode
+                          - initialBufferS
+                          - rebuildS
+                          - liveSync
+                        additionalProperties: false
+                      stats:
+                        type: object
+                        properties:
+                          via:
+                            type: string
+                            const: sse
+                        required:
+                          - via
+                        additionalProperties: false
+                      handoff:
+                        type: boolean
+                      source:
+                        type: string
+                        enum:
+                          - engine
+                          - iptv
+                    required:
+                      - session
+                      - url
+                      - protocol
+                      - remux
+                      - codec
+                      - latency
+                      - stats
+                      - handoff
+                    additionalProperties: false
         default:
           description: Error con el formato de /api/v1 (arquitectura §6.4).
           content:
@@ -17597,6 +17865,54 @@ paths:
         - code: remux_busy
           status: 503
           message: Hay demasiados vídeos preparándose para iPhone a la vez. Cierra alguno y reintenta.
+        - code: engine_unavailable
+          status: 503
+          message: El motor AceStream no responde. Si sigue así, reinícialo desde Ajustes.
+        - code: engine_timeout
+          status: 504
+          message: El motor AceStream no ha respondido a tiempo.
+        - code: source_no_peers
+          status: 504
+          message: Esta señal no tiene pares ahora mismo. Prueba otra fuente.
+        - code: remux_timeout
+          status: 504
+          message: El vídeo para iPhone no ha llegado a tiempo. La señal va lenta.
+        - code: remux_died
+          status: 502
+          message: La conversión del vídeo para iPhone se ha detenido. Vuelve a intentarlo.
+        - code: ffmpeg_missing
+          status: 501
+          message: "Falta ffmpeg en el servidor: no se puede preparar el vídeo para el iPhone."
+        - code: iptv_gone
+          status: 404
+          message: Ese canal ya no está en tu IPTV.
+        - code: iptv_disabled
+          status: 409
+          message: Tu IPTV está en pausa.
+        - code: iptv_removed
+          status: 410
+          message: Has eliminado tu IPTV.
+        - code: iptv_secret_unreadable
+          status: 409
+          message: No se pueden leer los datos guardados de tu IPTV. Vuelve a escribirlos.
+        - code: iptv_busy
+          status: 503
+          message: Tu IPTV ya tiene todas sus conexiones en uso. Cierra la otra reproducción o espera un momento.
+        - code: iptv_auth_failed
+          status: 502
+          message: Tu proveedor de IPTV no acepta ese usuario y contraseña.
+        - code: iptv_account_expired
+          status: 502
+          message: La cuenta de tu IPTV ha caducado o está desactivada.
+        - code: iptv_unreachable
+          status: 502
+          message: Tu proveedor de IPTV no responde.
+        - code: iptv_timeout
+          status: 504
+          message: Tu IPTV no respondió a tiempo.
+        - code: iptv_unsupported
+          status: 422
+          message: Ese canal de tu IPTV usa un formato que no se puede reproducir aquí.
         - code: validation_error
           status: 400
           message: Falta algún dato o no tiene el formato esperado.
@@ -17784,6 +18100,51 @@ paths:
                     - action
                     - positionS
                     - audio
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    token:
+                      type: string
+                      pattern: ^m_[A-Za-z0-9_-]{8,32}\.[A-Za-z0-9_-]{20,64}$
+                    action:
+                      type: string
+                      const: live
+                    live:
+                      type: object
+                      properties:
+                        hash:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        channel:
+                          type: string
+                          minLength: 1
+                          maxLength: 120
+                        source:
+                          type: string
+                          enum:
+                            - engine
+                            - iptv
+                        matchId:
+                          default: null
+                          anyOf:
+                            - type: string
+                              maxLength: 120
+                            - type: "null"
+                        match:
+                          default: null
+                          anyOf:
+                            - type: string
+                              maxLength: 200
+                            - type: "null"
+                      required:
+                        - hash
+                        - channel
+                        - source
+                      additionalProperties: false
+                  required:
+                    - token
+                    - action
+                    - live
                   additionalProperties: false
       responses:
         "200":
@@ -18204,6 +18565,8 @@ paths:
                     - vote
                     - leader
                     - once
+                auto:
+                  type: boolean
               required:
                 - token
               additionalProperties: false

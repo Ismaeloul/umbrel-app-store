@@ -521,14 +521,11 @@ describe('vista Agenda', () => {
       await within(side).findByRole('heading', { name: 'Real Madrid vs Girona' }),
     ).toBeInTheDocument();
     // La ficha del destacado tiene la forma de la del partido: «Marcador»
-    // (tapado), «Ver juntos» (todavía no) y los canales en filas.
+    // (tapado), «Ver juntos» (la sala del partido) y los canales en filas.
     expect(
       await within(side).findByRole('button', { name: 'Ver marcador de Real Madrid vs Girona' }),
     ).toBeInTheDocument();
-    expect(within(side).getByRole('button', { name: 'Ver juntos' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    expect(within(side).getByRole('button', { name: 'Ver juntos' })).toBeEnabled();
     const channelRow = within(side).getByRole('button', { name: /M\+ Liga de Campeones/ });
     // La barra, la misma que con un partido abierto (título y buscador):
     // «Editar mis gustos» y «Actualizar» van al pie del panel.

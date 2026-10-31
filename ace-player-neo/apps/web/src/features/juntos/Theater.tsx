@@ -24,7 +24,10 @@
      esconde; en el ordenador, un clic reproduce o pausa y el doble clic pone
      la pantalla completa.
    - Teclado: espacio o K, reproducir y pausa; ← →, 10 s; F, pantalla
-     completa; M, silencio. */
+     completa; M, silencio.
+   - En directo (§14): ni pausa, ni ±10 s, ni barra de tiempo. Abajo, la
+     píldora roja DIRECTO con el canal que suena y el volumen; arriba, «● En
+     directo». Cambiar de canal va en la pestaña Fuentes. */
 
 import type { PartyRoom } from '@ace/shared';
 import {
@@ -75,6 +78,9 @@ export function Theater({
 }) {
   const view = useSyncExternalStore(player.subscribe, player.getView);
   const control = canControl(room, client.credential.id);
+  const live = room.live;
+  /* En directo nadie pausa ni salta: lo único que se controla es el canal (Fuentes). */
+  const steer = control && !live;
   const playback = room.playback;
   const running = isRunning(playback);
   const duration = room.title.durationS ?? view.durationS ?? 0;
@@ -93,12 +99,12 @@ export function Theater({
 
   const order = useCallback(
     (action: 'play' | 'pause' | 'seek', positionS: number) => {
-      if (!control) return;
+      if (!steer) return;
       void client
         .control({ action, positionS: Math.max(0, positionS) })
         .catch((error: unknown) => notify(describeFailure(error), { tone: 'err' }));
     },
-    [client, control],
+    [client, steer],
   );
   const togglePlay = useCallback(
     () => order(playback.playing ? 'pause' : 'play', position),
@@ -183,6 +189,14 @@ export function Theater({
       {JUNTOS_TEXT.synced}
     </>
   );
+  if (live && !reconnecting) {
+    status = (
+      <>
+        <span className="juntos-chip__dot juntos-chip__dot--live" aria-hidden="true" />
+        {JUNTOS_TEXT.liveStatus}
+      </>
+    );
+  }
   if (reconnecting) status = JUNTOS_TEXT.reconnecting;
   else if (!running && waitingNames.length) {
     status = JUNTOS_TEXT.waitingFor(waitingNames.join(', '));
@@ -245,7 +259,7 @@ export function Theater({
         view={view}
         room={room}
         player={player}
-        control={control}
+        control={steer}
         running={running}
         waitingNames={waitingNames}
         reconnecting={reconnecting}
@@ -261,82 +275,105 @@ export function Theater({
       />
       <UpNext room={room} client={client} selfId={client.credential.id} />
 
-      <div className="juntos-chrome__bottom">
-        <div className={cx('juntos-chrome__bar', !control && 'juntos-chrome__bar--locked')}>
-          {control ? (
-            <VodTimeline
-              vod={{
-                positionS: position,
-                durationS: duration,
-                bufferedEndS: Math.max(position, view.bufferedS),
-              }}
-              onSeek={(seconds) => order('seek', seconds)}
-              onNudge={nudge}
-            />
-          ) : (
-            <ReadOnlyBar position={position} duration={duration} buffered={view.bufferedS} />
-          )}
-        </div>
-        <div className="juntos-chrome__row">
-          {desk ? (
-            <span className="juntos-chrome__time">
-              {clock(position)}
-              <span className="juntos-chrome__dur"> / {clock(duration)}</span>
-            </span>
-          ) : (
+      {live ? (
+        <div className="juntos-chrome__bottom">
+          <div className="juntos-chrome__row">
             <div className="juntos-chrome__group">
-              {control ? (
-                <>
-                  <IconButton
-                    icon={playback.playing ? 'pause' : 'play'}
-                    label={playback.playing ? JUNTOS_TEXT.pause : JUNTOS_TEXT.play}
-                    variant="video"
-                    onClick={() => {
-                      togglePlay();
-                      wake();
-                    }}
-                  />
-                  <IconButton
-                    icon="back"
-                    label={JUNTOS_TEXT.back10}
-                    variant="video"
-                    className="juntos-chrome__nudge"
-                    onClick={() => nudge(-STEP_S)}
-                  />
-                  <IconButton
-                    icon="chev-r"
-                    label={JUNTOS_TEXT.forward10}
-                    variant="video"
-                    className="juntos-chrome__nudge"
-                    onClick={() => nudge(STEP_S)}
-                  />
-                </>
-              ) : null}
+              <span className="juntos-live-pill">
+                <span className="juntos-live-pill__dot" aria-hidden="true" />
+                {JUNTOS_TEXT.liveBadge}
+              </span>
+              <span className="juntos-chrome__channel">{live.channel}</span>
+            </div>
+            <div className="juntos-chrome__group">
+              {video ? <Volume video={video} /> : null}
+              <IconButton
+                icon="full"
+                label={fullscreen ? JUNTOS_TEXT.exitFullscreen : JUNTOS_TEXT.fullscreen}
+                variant="video"
+                onClick={onFullscreen}
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="juntos-chrome__bottom">
+          <div className={cx('juntos-chrome__bar', !control && 'juntos-chrome__bar--locked')}>
+            {control ? (
+              <VodTimeline
+                vod={{
+                  positionS: position,
+                  durationS: duration,
+                  bufferedEndS: Math.max(position, view.bufferedS),
+                }}
+                onSeek={(seconds) => order('seek', seconds)}
+                onNudge={nudge}
+              />
+            ) : (
+              <ReadOnlyBar position={position} duration={duration} buffered={view.bufferedS} />
+            )}
+          </div>
+          <div className="juntos-chrome__row">
+            {desk ? (
               <span className="juntos-chrome__time">
                 {clock(position)}
                 <span className="juntos-chrome__dur"> / {clock(duration)}</span>
               </span>
-            </div>
-          )}
-          <div className="juntos-chrome__group">
-            {!desk && video ? <Volume video={video} /> : null}
-            {audioItems.length > 1 ? (
-              <MenuButton
-                icon="idioma"
-                label={JUNTOS_TEXT.language}
+            ) : (
+              <div className="juntos-chrome__group">
+                {control ? (
+                  <>
+                    <IconButton
+                      icon={playback.playing ? 'pause' : 'play'}
+                      label={playback.playing ? JUNTOS_TEXT.pause : JUNTOS_TEXT.play}
+                      variant="video"
+                      onClick={() => {
+                        togglePlay();
+                        wake();
+                      }}
+                    />
+                    <IconButton
+                      icon="back"
+                      label={JUNTOS_TEXT.back10}
+                      variant="video"
+                      className="juntos-chrome__nudge"
+                      onClick={() => nudge(-STEP_S)}
+                    />
+                    <IconButton
+                      icon="chev-r"
+                      label={JUNTOS_TEXT.forward10}
+                      variant="video"
+                      className="juntos-chrome__nudge"
+                      onClick={() => nudge(STEP_S)}
+                    />
+                  </>
+                ) : null}
+                <span className="juntos-chrome__time">
+                  {clock(position)}
+                  <span className="juntos-chrome__dur"> / {clock(duration)}</span>
+                </span>
+              </div>
+            )}
+            <div className="juntos-chrome__group">
+              {!desk && video ? <Volume video={video} /> : null}
+              {audioItems.length > 1 ? (
+                <MenuButton
+                  icon="idioma"
+                  label={JUNTOS_TEXT.language}
+                  variant="video"
+                  items={audioItems}
+                />
+              ) : null}
+              <IconButton
+                icon="full"
+                label={fullscreen ? JUNTOS_TEXT.exitFullscreen : JUNTOS_TEXT.fullscreen}
                 variant="video"
-                items={audioItems}
+                onClick={onFullscreen}
               />
-            ) : null}
-            <IconButton
-              icon="full"
-              label={fullscreen ? JUNTOS_TEXT.exitFullscreen : JUNTOS_TEXT.fullscreen}
-              variant="video"
-              onClick={onFullscreen}
-            />
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

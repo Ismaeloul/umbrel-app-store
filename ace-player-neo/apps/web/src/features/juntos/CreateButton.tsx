@@ -5,7 +5,7 @@
    que además copia el enlace. Sin chat de voz (fase 2). Si este navegador
    está en una sala, ofrece antes «Proponer en la sala»: va a su Siguiente. */
 
-import type { PartyCreateBody } from '@ace/shared';
+import type { PartyCreateVodBody } from '@ace/shared';
 import { useState, type FormEvent } from 'react';
 import { api, describeFailure, isApiError } from '../../api/index.ts';
 import { useNavigate } from '../../app/router.tsx';
@@ -30,7 +30,7 @@ import { JUNTOS_TEXT } from './texts.ts';
 import './juntos.css';
 
 export type JuntosTarget = Omit<
-  PartyCreateBody,
+  PartyCreateVodBody,
   'name' | 'audio' | 'poster' | 'subtitle' | 'control' | 'coleaders' | 'queueMode'
 > & {
   readonly poster: string | null;

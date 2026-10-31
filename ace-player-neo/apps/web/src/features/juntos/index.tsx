@@ -91,6 +91,7 @@ function JuntosRoom({ code }: { code: string }) {
       onEnter={stopHousePlayer}
       onPropose={toCine}
       header={desk ? <ViewHeader title={JUNTOS_TEXT.open} /> : undefined}
+      liveTools
       exitAction={exitAction}
     />
   );

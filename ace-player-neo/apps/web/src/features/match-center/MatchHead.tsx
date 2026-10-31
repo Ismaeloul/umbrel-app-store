@@ -15,8 +15,9 @@
 
 import type { FootballMatch, LiveScore } from '@ace/shared';
 import { cx } from '../../lib/cx.ts';
-import { Button, LiveDot } from '../../ui/index.ts';
+import { LiveDot } from '../../ui/index.ts';
 import { liveMinute, matchStatus, matchTitle } from '../agenda/domain.ts';
+import { LiveJuntosButton } from '../juntos/LiveCreate.tsx';
 import { ScoreChip, SideMark } from './Scoreboard.tsx';
 
 /** «En directo · 72'», «Descanso», «Final», «En 48 min» o la hora. */
@@ -100,16 +101,8 @@ export function DeskMatchHead({
       </div>
       <div className="mc-dhead__actions">
         <ScoreChip match={match} score={score} now={now} quiet={!active} />
-        {/* La sala del partido en directo llega en otra fase. aria-disabled y
-            no disabled: así el title se ve al pasar el ratón. */}
-        <Button
-          icon="personas"
-          className="mc-dhead__together"
-          aria-disabled="true"
-          title="Pronto: ver el partido con amigos"
-        >
-          Ver juntos
-        </Button>
+        {/* La sala del partido en directo (docs/ver-juntos.md §14). */}
+        <LiveJuntosButton match={match} look={{ className: 'mc-dhead__together', size: 'md' }} />
       </div>
     </header>
   );

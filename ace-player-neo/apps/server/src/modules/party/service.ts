@@ -46,9 +46,13 @@ import {
   type PartyEvent,
   type PartyInterrupted,
   type PartyJoinResponse,
+  type PartyLive,
+  type PartyLiveChoice,
   type PartyMember,
   type PartyPlayback,
   type PartyQueueBody,
+  type PartyStreamQuery,
+  type StreamGrant,
   type PartyQueueItem,
   type PartyQueueTitle,
   type PartyRoom,
@@ -143,6 +147,8 @@ interface Room {
   readonly viewers: Set<string>;
   /** Hasta cuándo un traspaso del mismo título es el cambio de idioma de la sala. */
   audioSwitchUntil: number;
+  /** Sala en directo (§14): el canal que suena para todos; null en pelis y series. */
+  live: PartyLive | null;
   closed: boolean;
 }
 
@@ -294,6 +300,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       settings: room.settings,
       queue: queueView(room),
       upNext: room.upNext,
+      live: room.live,
     };
   }
 
@@ -366,6 +373,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         settings: room.settings,
         queue: queueView(room),
         upNext: room.upNext,
+        live: room.live,
       },
     });
   }
@@ -609,6 +617,52 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     sendRoom(room);
   }
 
+  /** El título de una sala en directo (§14): el partido, o el canal suelto. */
+  function liveTitle(choice: PartyLiveChoice): PartyTitle {
+    return {
+      id: choice.hash,
+      kind: 'live',
+      artId: choice.hash,
+      poster: null,
+      title: choice.match ?? choice.channel,
+      subtitle: choice.match ? choice.channel : null,
+      durationS: null,
+    };
+  }
+
+  /**
+   * En directo (§14), otro canal o fuente para todos: se sueltan las sesiones
+   * de todos (sus traspasos ya no son de la sala) y cada uno vuelve a abrir
+   * (acción `title`). Sin espera: el directo no espera a nadie.
+   */
+  function switchLive(room: Room, choice: PartyLiveChoice, by: Member | null): void {
+    const live = room.live;
+    if (!live) return;
+    const otherMatch = choice.matchId !== live.matchId;
+    room.live = { ...choice, auto: live.auto };
+    room.title = liveTitle(choice);
+    room.interrupted = null;
+    room.waiting.clear();
+    room.viewers.clear();
+    for (const member of room.members.values()) {
+      releaseViewer(member);
+      member.buffering = false;
+      member.bufferingSince = null;
+    }
+    fix(room, 0);
+    room.playback.playing = true;
+    sendRoom(room);
+    sendPlayback(room, 'title', by?.id ?? null);
+    const what =
+      otherMatch && choice.match ? `${choice.match} (${choice.channel})` : choice.channel;
+    say(
+      room,
+      by ? `${by.name} ha cambiado a ${what}.` : `Se ha caído la fuente: ahora, ${what}.`,
+      null,
+    );
+    logger.info({ room: room.code, hash: choice.hash }, 'Ver juntos: otro canal en directo');
+  }
+
   /** Empieza otro título para todos: cada uno vuelve a abrir el vídeo (acción `title`). */
   function switchTo(
     room: Room,
@@ -787,7 +841,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
 
   /** Si alguien lleva cargando más de la gracia con la sala reproduciendo, el reloj se para. */
   function maybeWait(room: Room, member: Member, now: number): void {
-    if (!room.playback.playing || room.interrupted) return;
+    /* En directo nadie espera a nadie (§14): el que carga se pone al día solo. */
+    if (room.live || !room.playback.playing || room.interrupted) return;
     if (!member.buffering || member.bufferingSince === null) return;
     if (room.waiting.has(member.id) || now < member.holdSkipUntil) return;
     if (now - member.bufferingSince < PARTY.bufferingGraceMs) return;
@@ -806,6 +861,54 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   function stopSweep(): void {
     clock.clearInterval(sweepTimer);
     sweepTimer = null;
+  }
+
+  /** El vídeo de una sala en directo (§14): el canal de la sala, por el remux, para cada persona. */
+  async function streamLive(
+    room: Room,
+    member: Member,
+    query: PartyStreamQuery,
+    viewer: ViewerIdentity,
+    signal: AbortSignal,
+  ): Promise<StreamGrant> {
+    const live = room.live;
+    if (!live) throw new AppError('party_not_found');
+    const grant = await playback.acquire(
+      live.hash,
+      {
+        client: query.client,
+        viewer: query.viewer,
+        device: query.device,
+        kind: 'auto',
+        title: live.channel,
+        mode: 'balanced',
+      },
+      viewer,
+      signal,
+      { partyKey: room.code },
+    );
+    const url = `/api/v1/party/${room.code}/v/${member.videoKey}/index.m3u8`;
+    /* Mientras se abría, alguien cambió de canal: este visor ya no es de la sala. */
+    if (room.closed || !room.members.has(member.id) || room.live?.hash !== live.hash) {
+      return { ...grant, url };
+    }
+    room.viewers.add(viewer.viewerId);
+    if (member.viewer && member.viewer.identity.viewerId !== viewer.viewerId) releaseViewer(member);
+    member.viewer = { identity: viewer, sessionId: grant.session.id };
+    /* Quien eligió el canal pudo no saber de dónde sale: lo dice la concesión. */
+    const source = grant.source === 'iptv' ? 'iptv' : 'engine';
+    let changed = false;
+    if (room.live && room.live.source !== source) {
+      room.live = { ...room.live, source };
+      changed = true;
+    }
+    if (room.interrupted) {
+      room.interrupted = null;
+      say(room, 'El vídeo vuelve a estar listo.', null);
+      changed = true;
+    }
+    if (changed) sendRoom(room);
+    return { ...grant, url };
   }
 
   // --- Lo que avisa playback ---
@@ -915,18 +1018,22 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       let code = randomId(12);
       while (rooms.has(code)) code = randomId(12);
       const hostId = `m_${randomId(9)}`;
+      const live = 'live' in body ? body.live : null;
       const room: Room = {
         code,
-        title: {
-          id: body.titleId,
-          kind: body.kind,
-          artId: body.artId,
-          poster: body.poster,
-          title: body.title,
-          subtitle: body.subtitle,
-          durationS: null,
-        },
-        audio: { index: body.audio, tracks: [] },
+        title:
+          'live' in body
+            ? liveTitle(body.live)
+            : {
+                id: body.titleId,
+                kind: body.kind,
+                artId: body.artId,
+                poster: body.poster,
+                title: body.title,
+                subtitle: body.subtitle,
+                durationS: null,
+              },
+        audio: { index: 'live' in body ? null : body.audio, tracks: [] },
         interrupted: null,
         hostId,
         leaderId: hostId,
@@ -934,15 +1041,17 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         settings: {
           control: body.control,
           coleaders: body.coleaders,
-          queueMode: body.queueMode,
+          /* En directo no hay lista (§14): `once`, por si una app vieja lo mira. */
+          queueMode: 'live' in body ? 'once' : body.queueMode,
         },
-        lobby: 'create',
+        /* El directo empieza ya: no hay principio que perderse. */
+        lobby: live ? null : 'create',
         queue: [],
         upNext: null,
         nextEpisode: null,
         createdAt: now,
         members: new Map(),
-        playback: { playing: false, positionS: 0, at: now, rev: 1 },
+        playback: { playing: live !== null, positionS: 0, at: now, rev: 1 },
         waiting: new Map(),
         chat: [],
         nextMessageId: 1,
@@ -950,6 +1059,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         emptySince: null,
         viewers: new Set(),
         audioSwitchUntil: 0,
+        live: live ? { ...live, auto: true } : null,
         closed: false,
       };
       rooms.set(code, room);
@@ -957,7 +1067,10 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       const host = addMember(room, body.name, true, hostId);
       ensureSweep();
       say(room, `${host.member.name} ha creado la sala.`, null);
-      logger.info({ room: code, title: body.titleId }, 'Ver juntos: sala creada');
+      logger.info(
+        { room: code, title: room.title.id, live: live !== null },
+        'Ver juntos: sala creada',
+      );
       return joined(room, host);
     },
 
@@ -992,6 +1105,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     async stream(code, query, viewer, signal) {
       const room = find(code);
       const member = authenticate(room, query.t);
+      if (room.live) return streamLive(room, member, query, viewer, signal);
       const grant = await playback.acquireVod(
         room.title.id,
         {
@@ -1072,6 +1186,14 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       const member = authenticate(room, body.token);
       requireControl(room, member);
       const now = clock.now();
+      /* En directo (§14) solo se cambia de canal: ni pausa, ni saltos, ni idioma. */
+      if (room.live || body.action === 'live') {
+        if (body.action !== 'live' || !room.live) {
+          throw new AppError('validation_error', { detail: 'party_live' });
+        }
+        switchLive(room, body.live, member);
+        return { serverNow: now, rev: room.playback.rev };
+      }
       fix(room, body.positionS, now);
       let action: PartyAction = body.action;
       switch (body.action) {
@@ -1171,10 +1293,23 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     settings(code, body) {
       const room = find(code);
       const member = authenticate(room, body.token);
-      const { control, coleaders, queueMode } = body;
+      const { control, coleaders, queueMode, auto } = body;
       /* Quién controla, solo el líder; la regla de lo siguiente, también los co-líderes (§13). */
       if (control !== undefined || coleaders !== undefined) requireLeader(room, member);
       if (queueMode !== undefined) requireManager(room, member);
+      if (auto !== undefined) {
+        requireControl(room, member);
+        if (room.live && room.live.auto !== auto) {
+          room.live = { ...room.live, auto };
+          say(
+            room,
+            auto
+              ? `${member.name} ha activado el cambio automático si se cae.`
+              : `${member.name} ha quitado el cambio automático.`,
+            null,
+          );
+        }
+      }
       const before = controlRule(room.settings);
       room.settings = {
         ...room.settings,
@@ -1234,7 +1369,10 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
 
     queue(code, body) {
       const room = find(code);
-      queueAction(room, authenticate(room, body.token), body);
+      const member = authenticate(room, body.token);
+      /* Sin lista ni votos en directo (§14). */
+      if (room.live) throw new AppError('validation_error', { detail: 'party_live' });
+      queueAction(room, member, body);
     },
 
     leave(code, token) {

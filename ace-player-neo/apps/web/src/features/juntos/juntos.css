@@ -2108,3 +2108,157 @@
     }
   }
 }
+
+/* --- En directo (docs/ver-juntos.md §14) --- */
+
+/* Abajo, en el vídeo: la píldora roja DIRECTO y el canal que suena. */
+.juntos-live-pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--live);
+  color: #fff;
+  font-size: var(--fs-11, 11px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.juntos-live-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.juntos-chrome__channel {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.juntos-chip__dot.juntos-chip__dot--live {
+  background: var(--live);
+}
+/* Donde va el cartel de una película: un televisor. */
+.juntos-info__live {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+/* Fuentes y Partidos. */
+.juntos-live {
+  display: grid;
+  gap: 14px;
+  padding: 12px 0;
+}
+.juntos-live__group {
+  display: grid;
+  gap: 6px;
+}
+.juntos-live__list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.juntos-live__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+}
+.juntos-live__row[data-here='true'] {
+  border-color: var(--accent-line, var(--accent));
+  background: var(--accent-wash);
+}
+.juntos-live__num {
+  flex: none;
+  width: 22px;
+  color: var(--text-3);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  text-align: center;
+}
+.juntos-live__text {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.juntos-live__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.juntos-live__meta {
+  flex-basis: 100%;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.juntos-live__origin {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-11, 11px);
+  font-weight: 650;
+}
+.juntos-live__origin--iptv {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+.juntos-live__here {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 750;
+}
+.juntos-live__here .juntos-chip__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #35c759;
+}
+.juntos-live__empty {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13.5px;
+}
+.juntos-live__more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}

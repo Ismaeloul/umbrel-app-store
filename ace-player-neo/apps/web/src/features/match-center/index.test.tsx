@@ -240,7 +240,7 @@ describe('centro de partido', () => {
     ).toBeInTheDocument();
   });
 
-  it('escritorio: titular con competición y estado, «Marcador» tapado y «Ver juntos» (pronto)', async () => {
+  it('escritorio: titular con competición y estado, «Marcador» tapado y «Ver juntos»', async () => {
     // El partido, en juego: el reloj en el «ahora» de la agenda de prueba.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(NOW);
@@ -279,10 +279,9 @@ describe('centro de partido', () => {
     expect(within(head!).getByLabelText(/Atlético de Madrid 2, Tottenham 1/)).toBeInTheDocument();
     fireEvent.click(within(head!).getByRole('button', { name: /^Tapar el marcador/ }));
     expect(within(head!).getByRole('button', { name: 'Ver marcador' })).toBeInTheDocument();
-    // «Ver juntos»: a la vista pero sin hacer nada todavía.
-    const together = within(head!).getByRole('button', { name: 'Ver juntos' });
-    expect(together).toHaveAttribute('aria-disabled', 'true');
-    expect(together).toHaveAttribute('title', 'Pronto: ver el partido con amigos');
+    // «Ver juntos»: abre la hoja para crear la sala del partido (docs/ver-juntos.md §14).
+    fireEvent.click(within(head!).getByRole('button', { name: 'Ver juntos' }));
+    expect(await screen.findByRole('dialog', { name: 'Ver el partido juntos' })).toBeInTheDocument();
     // Sin cápsula sobre el vídeo y la lista sin cabecera: «Rebuscar» junto a las pestañas.
     expect(document.querySelector('.mc-scap')).toBeNull();
     expect(

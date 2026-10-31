@@ -50,7 +50,8 @@
     },
     "settings": { "control": "leader", "coleaders": true, "queueMode": "vote" },
     "queue": [],
-    "upNext": null
+    "upNext": null,
+    "live": null
   },
   "member": { "id": "m_AnaInvitada01", "token": "m_AnaInvitada01.c2VjcmV0b0RlRWplbXBsbzAx" },
   "chat": [
