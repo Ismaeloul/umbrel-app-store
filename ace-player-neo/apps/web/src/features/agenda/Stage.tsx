@@ -5,7 +5,9 @@
    canal» / «Buscar canal», atajo O). El marcador va SIEMPRE tapado en la
    agenda: la cápsula «Marcador» de la esquina lo destapa (y lo vuelve a
    tapar) en esa misma cápsula. En escritorio no hay héroe (0.9.0): el panel
-   enseña siempre el elegido.
+   enseña siempre el elegido. En la Agenda de escritorio del rediseño (`desk`)
+   tiene la forma de la ficha: el cartel donde va el vídeo, el titular con
+   «Marcador» y «Ver juntos», y los canales como las filas de fuentes.
 
    Doble clic sobre la tarjeta abre el partido (Intro sobre la tarjeta elegida
    de la lista también, como hoy). Sin goleadores ni estadio: ninguna API que
@@ -24,7 +26,8 @@ import type { FootballMatch, LiveScore } from '@ace/shared';
 import { useCallback, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { cx } from '../../lib/cx.ts';
 import { competitionLogo, teamCrest, teamPalette, teamShort } from '../../lib/teams.ts';
-import { Button, Chip, LiveDot, Num, TeamMark, VersusCard } from '../../ui/index.ts';
+import { Button, Chip, Icon, LiveDot, Num, TeamMark, VersusCard } from '../../ui/index.ts';
+import { statusLine } from '../match-center/MatchHead.tsx';
 import { matchGlow, versusSide, versusWhen } from './cards.ts';
 import { useMatchSignal } from './data.ts';
 import { liveMinute, matchStatus, matchTitle, paintableScore, type ChannelInfo } from './domain.ts';
@@ -47,6 +50,8 @@ export interface AgendaStageProps {
   /** Este dispositivo ya reproduce el partido. */
   watching: boolean;
   onOpen(match: FootballMatch): void;
+  /** La Agenda de escritorio (rediseño, pantalla 1): con la forma de la ficha. */
+  desk?: boolean;
 }
 
 export function AgendaStage({
@@ -58,6 +63,7 @@ export function AgendaStage({
   mine,
   watching,
   onOpen,
+  desk = false,
 }: AgendaStageProps) {
   const titleId = useId();
   const status = matchStatus(match, now, rawScore);
@@ -73,6 +79,136 @@ export function AgendaStage({
     '--ta': done ? 'transparent' : glow.home,
     '--tb': done ? 'transparent' : glow.away,
   } as CSSProperties;
+
+  /* Escritorio: la misma forma que la ficha que se abre al tocarlo. El cartel
+     ocupa el sitio del vídeo (con «Ver canal» abajo a la derecha); debajo el
+     partido en una línea, la competición y el estado, «Marcador» (tapado) y
+     «Ver juntos»; y donde la ficha lista las fuentes, los canales que lo
+     emiten con la señal de la agenda. */
+  if (desk)
+    return (
+      <article
+        className={cx('agenda-stage', 'agenda-stage--desk', phase && `is-${phase}`)}
+        aria-labelledby={titleId}
+      >
+        <div
+          className="agenda-stage__card"
+          title="Doble clic para abrir el partido"
+          onDoubleClick={() => onOpen(match)}
+        >
+          <VersusCard
+            size="lg"
+            home={versusSide(match, 'home')}
+            away={versusSide(match, 'away')}
+            competition={match.competition?.trim() || 'Fútbol'}
+            competitionLogo={competitionLogo(match)}
+            when={versusWhen(match, now, rawScore, today)}
+            mine={mine}
+            watching={watching}
+            className="agenda-stage__versus"
+          />
+          {action || watching ? (
+            <div className="agenda-stage__corner">
+              <Button
+                variant="primary"
+                icon={watching || available ? 'play' : 'buscar'}
+                className="agenda-stage__go"
+                onClick={() => onOpen(match)}
+                aria-label={action ? `${action} para ${match.title}` : undefined}
+                aria-keyshortcuts="O"
+              >
+                {watching ? 'Volver al vídeo' : action}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+        <header className="agenda-stage__dhead">
+          <div className="agenda-stage__titles">
+            <h2 id={titleId} className="agenda-stage__title">
+              <span aria-hidden="true">
+                {match.home}
+                {match.away ? ` – ${match.away}` : ''}
+              </span>
+              <span className="sr-only">{matchTitle(match)}</span>
+            </h2>
+            <p className="agenda-stage__sub">
+              {[match.competition, statusLine(match, rawScore, now)].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+          <div className="agenda-stage__dactions">
+            {score ? (
+              <ScoreToggle
+                match={match}
+                score={score}
+                revealed={revealed}
+                glass={false}
+                className="agenda-stage__score"
+                onReveal={() => revealScore(match.id)}
+                onHide={() => hideScore(match.id)}
+              />
+            ) : null}
+            {/* Como en la ficha: la sala del partido en directo llega en otra fase. */}
+            <Button
+              icon="personas"
+              className="agenda-stage__together"
+              aria-disabled="true"
+              title="Pronto: ver el partido con amigos"
+            >
+              Ver juntos
+            </Button>
+          </div>
+        </header>
+        <section className="agenda-stage__where" aria-label="Dónde se emite">
+          <p className="agenda-stage__signal">
+            {signal ? (
+              <>
+                <SignalCapsule signal={signal} size="sm" glass={false} />
+                <span>{signal.summary.replace(/^Comprobando:\s*/, '')}</span>
+              </>
+            ) : (
+              <span className="agenda-stage__muted">
+                {done
+                  ? 'El partido ha terminado.'
+                  : channels.length === 0
+                    ? 'Sin canal anunciado todavía.'
+                    : 'Se comprueba cerca de la hora del partido.'}
+              </span>
+            )}
+          </p>
+          {channels.length ? (
+            <ul className="agenda-stage__rows">
+              {channels.map((channel, index) => (
+                <li key={channel.name}>
+                  <button
+                    type="button"
+                    className="agenda-stage__row"
+                    title={
+                      channel.inLibrary ? 'Disponible en tu biblioteca' : 'Se buscará al reproducir'
+                    }
+                    onClick={() => onOpen(match)}
+                  >
+                    <span className="agenda-stage__num" aria-hidden="true">
+                      <Num value={index + 1} />
+                    </span>
+                    <span className="agenda-stage__rtext">
+                      <span className="agenda-stage__rname">{channel.name}</span>
+                      <span className="agenda-stage__rmeta">
+                        <span className="agenda-stage__tag">
+                          {channel.inLibrary ? 'En tu biblioteca' : 'Por buscar'}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="agenda-stage__rend" aria-hidden="true">
+                      <Icon name={channel.inLibrary ? 'play' : 'buscar'} size={18} />
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      </article>
+    );
 
   return (
     <article

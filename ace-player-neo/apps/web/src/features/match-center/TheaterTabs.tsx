@@ -176,7 +176,7 @@ export function MatchTabs({
       value: 'fuentes',
       label: 'Fuentes',
       count,
-      content: <SourcesPanel variant={variant} className="mc-sources" />,
+      content: <SourcesPanel variant={variant} bare={variant === 'line'} className="mc-sources" />,
     },
   ];
   if (match)

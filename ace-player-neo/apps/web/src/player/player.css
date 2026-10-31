@@ -67,10 +67,12 @@
     max-width: min(100%, calc(70dvh * 16 / 9));
     margin-inline: auto;
     border-radius: var(--r-xl);
-    /* Sombra larga de Palco: el vídeo flota sobre el negro cine. */
+    /* Sombra de Palco, corta: el escenario va por encima de la vista y una
+       sombra de 80 px velaba el titular de la ficha, pegado al vídeo desde el
+       rediseño (tableta). */
     box-shadow:
       0 0 0 1px rgb(0 0 0 / 0.3),
-      0 20px 60px rgb(0 0 0 / 0.6);
+      0 14px 28px -16px rgb(0 0 0 / 0.6);
   }
   /* Luz ambiental (W5): los colores de los dos clubes, dos radiales tenues al
      22 % que se derraman desde el vídeo y «respiran» despacio (solo opacidad
@@ -81,8 +83,10 @@
     z-index: -1;
     /* A los lados, nunca más que el margen de la vista: en la tableta (768,
        margen de 16 px) más se salía de la pantalla y la página se ensanchaba
-       (revisión visual de la Fase 2). Arriba y abajo, mucha más luz. */
-    inset: -56px calc(-1 * min(32px, var(--gutter))) -72px;
+       (revisión visual de la Fase 2). Arriba, mucha más luz; abajo, nada: el
+       escenario va por encima de la vista y la luz apagaba el titular de la
+       ficha, pegado al vídeo desde el rediseño. */
+    inset: -56px calc(-1 * min(32px, var(--gutter))) 0;
     background:
       radial-gradient(
         46% 62% at 16% 46%,
@@ -989,10 +993,134 @@
     border-radius: 0;
     box-shadow: none;
   }
+  .player[data-presentation='mini'] {
+    position: relative;
+  }
+  /* Arriba la línea de progreso a lo ancho; debajo el texto y la pausa. */
   .player-mini {
-    padding: 4px 2px 4px 6px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-flow: row;
+    padding: 0;
+  }
+  .player-mini__line {
+    display: block;
+    grid-column: 1 / -1;
+    height: 2px;
+    background: var(--line);
+  }
+  .player-mini__line i {
+    display: block;
+    height: 100%;
+    background: var(--live);
+    transform: scaleX(var(--v, 1));
+    transform-origin: left;
+    transition: transform var(--dur-estandar) var(--ease-out);
+  }
+  .player-mini__line[data-tone='vod'] i {
+    background: var(--accent);
+  }
+  .player-mini__info {
+    grid-row: 2;
+    min-height: 0;
+    padding: 8px 4px 8px 10px;
+    border-radius: 0;
+  }
+  .player-mini > .icon-btn {
+    grid-row: 2;
+  }
+  .player-mini__kicker,
+  .player-mini__title,
+  .player-mini__sub,
+  .player-mini__progress {
+    display: none;
+  }
+  .player-mini__side {
+    display: grid;
+    min-width: 0;
+  }
+  .player-mini__side-title,
+  .player-mini__side-sub {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .player-mini__side-title {
+    font-size: 0.78125rem;
+    font-weight: var(--wght-strong);
+  }
+  .player-mini__side-sub {
+    color: var(--live-ink);
+    font-size: var(--fs-11);
+    font-weight: var(--wght-strong);
+  }
+  .player-mini__side-sub[data-tone='vod'] {
+    color: var(--text-2);
+  }
+  .player-mini > .icon-btn:not(.player-mini__stop) {
+    width: 40px;
+    min-width: 40px;
+  }
+  .player-mini > .icon-btn .icon {
+    width: 18px;
+    height: 18px;
+  }
+  /* La pausa de contorno, como los iconos del menú (maqueta 01). */
+  .player-mini > .icon-btn:not(.player-mini__stop) .icon {
+    fill: none;
+  }
+  /* «● Directo» sobre la imagen, arriba a la izquierda. */
+  .player-mini__cap {
+    position: absolute;
+    z-index: 2;
+    top: 6px;
+    left: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 20px;
+    padding: 0 7px 0 2px;
+    border-radius: var(--r-pill);
+    background: rgb(9 12 17 / 0.62);
+    color: #fff;
+    font-size: var(--fs-11);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+  .player-mini__cap .live-dot {
+    --live: #ff3b30;
+  }
+  /* Detener: sobre la imagen, arriba a la derecha, solo al pasar o con el foco. */
+  .player-mini__stop.icon-btn {
+    position: absolute;
+    z-index: 2;
+    top: 4px;
+    right: 4px;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    min-height: 30px;
+    border-radius: 50%;
+    background: rgb(9 12 17 / 0.62);
+    color: #fff;
+    opacity: 0;
+    transition: opacity var(--dur-rapido) var(--ease-out);
+  }
+  .player:hover .player-mini__stop.icon-btn,
+  .player-mini__stop.icon-btn:focus-visible {
+    opacity: 1;
   }
   .player-mini__where:not([data-shared='true']) {
+    display: none;
+  }
+}
+/* Fuera del menú lateral (móvil y tableta) la tarjeta no lleva cápsula, línea
+   ni el texto de escritorio. */
+@media (max-width: 1023px) {
+  .player-mini__cap,
+  .player-mini__line,
+  .player-mini__side {
     display: none;
   }
 }
@@ -1125,8 +1253,8 @@ body:has(.app[data-immersive='true']) .menu {
   pointer-events: none;
 }
 .player-1b__play {
-  width: 72px;
-  height: 72px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   pointer-events: auto;
 }
@@ -1135,39 +1263,159 @@ body:has(.app[data-immersive='true']) .menu {
   align-items: center;
   gap: 12px;
 }
+/* La barra del directo: roja y llena en directo; por detrás, gris hasta donde
+   vas (--pos, de livePosition) con un punto blanco. Solo transform. */
 .player-1b__bar {
+  position: relative;
   flex: 1;
   height: 4px;
-  overflow: hidden;
   border-radius: 2px;
   background: rgb(255 255 255 / 0.25);
 }
 .player-1b__bar i {
   display: block;
   height: 100%;
+  border-radius: inherit;
   background: var(--live);
+  transform: scaleX(var(--pos, 1));
+  transform-origin: left;
+  transition: transform var(--dur-estandar) var(--ease-out);
 }
 .player-1b__bar[data-mode='behind'] i,
 .player-1b__bar[data-mode='resume'] i {
   background: rgb(255 255 255 / 0.7);
-  transform: scaleX(0.85);
-  transform-origin: left;
+}
+/* El punto: una capa del ancho de la barra que se desplaza --pos de su ancho. */
+.player-1b__bar b {
+  position: absolute;
+  inset: 0;
+  transform: translateX(calc(var(--pos, 1) * 100%));
+  transition: transform var(--dur-estandar) var(--ease-out);
+  pointer-events: none;
+}
+.player-1b__bar b::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -6px;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
 }
 .player-1b__live {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
+  min-height: 30px;
   padding: 0 12px;
   border-radius: var(--r-pill);
   background: var(--live);
   color: #fff;
-  font-size: var(--fs-12);
+  font-size: var(--fs-11);
   font-weight: 750;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+.player-1b__live .live-dot {
+  --live: #fff;
 }
 .player-1b__live[data-mode='behind'] {
   background: rgb(120 120 128 / 0.85);
+}
+/* «● En directo» arriba a la izquierda: solo en la ficha junto a la agenda. */
+.player-1b__cap {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  background: rgb(9 12 17 / 0.62);
+  color: #fff;
+  font-size: var(--fs-11);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.player-1b__cap .live-dot {
+  --live: #ff3b30;
+}
+/* Los botones de arriba a la derecha, sueltos y redondos (maqueta 01). */
+.player-1b__top .player-cap {
+  gap: 10px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.player-1b__top .player-cap .icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgb(9 12 17 / 0.62);
+}
+.player-1b__source {
+  min-height: 34px;
+  font-size: var(--fs-12);
+}
+
+/* En la ficha junto a la agenda (desde 1024; rediseño, pantalla 1) el vídeo va
+   a sangre, pegado a la barra de la Agenda: sin esquinas, sombra ni luz, y
+   arriba la cápsula «En directo» en vez de «Volver» y el titular, que ya se
+   leen debajo. */
+@media (min-width: 1024px) {
+  .app[data-column='true'] .player[data-presentation='stage']:not([data-immersive='true']) {
+    background: #000;
+  }
+  .app[data-column='true']
+    .player[data-presentation='stage']:not([data-immersive='true'])
+    .player-frame {
+    max-width: min(100%, calc((100dvh - var(--topbar-h)) * 0.72 * 16 / 9));
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .app[data-column='true'] .player[data-presentation='stage']::before {
+    display: none;
+  }
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__back,
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__title {
+    display: none;
+  }
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__cap {
+    display: inline-flex;
+  }
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__lead {
+    flex: 1;
+    gap: 10px;
+  }
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__source {
+    margin-left: auto;
+  }
+}
+/* Demo con el 1B: el rótulo «reproducción simulada…» va debajo de la pausa,
+   no detrás (el nombre del canal ya lo dice la píldora de la fuente). */
+.player:has(.player-1b__center) .player-demo {
+  top: calc(50% + 40px);
+  transform: translateX(-50%);
+}
+.player:has(.player-1b__center) .player-demo strong {
+  display: none;
+}
+/* La ficha junto a la agenda entre 1024 y 1279 deja el vídeo bajo (unos
+   230 px): pausa de 48 y sin el rótulo de la demo, que chocaba con la
+   cápsula de estado de abajo. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__play {
+    width: 48px;
+    height: 48px;
+  }
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-demo {
+    display: none;
+  }
 }

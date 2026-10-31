@@ -8,7 +8,8 @@
      va arriba, pegado, y se minimiza con la flecha o deslizando.
    - Desde 768 (rediseño de escritorio): menú lateral fijo de 232 px con el
      mini-reproductor abajo; cada vista lleva su barra (título, buscador con
-     Ctrl K) en su ViewHeader.
+     Ctrl K) en su ViewHeader. En el partido la pone el armazón, a lo ancho
+     de la columna de agenda y el vídeo.
    - Tableta (768-1023): menú + la vista.
    - Escritorio (1024-1279): menú + vista + panel lateral de la vista.
    - Ancho (≥ 1280): en el centro de partido, menú + columna de agenda +
@@ -71,6 +72,7 @@ import { playPendingCrossfade } from './viewCrossfade.ts';
 import { installViewTransitionGuard, viewMotion } from './viewTransitionGuard.ts';
 import { useShortcut } from './shortcuts.ts';
 import { openSearch } from './search-open.ts';
+import { ViewHeader } from './ViewHeader.tsx';
 import { AgendaColumn, asideComponent, PlayerDock, viewComponent } from './views.tsx';
 import './shell.css';
 
@@ -337,7 +339,14 @@ export function Shell() {
         >
           Saltar al contenido
         </a>
-        <SideNav route={route} onHelp={() => setHelpOpen(true)} />
+        <SideNav route={route} />
+        {/* La barra de la Agenda sobre la lista y el partido (rediseño,
+            pantalla 1): abrir un partido no cambia de pantalla. */}
+        {columnVisible ? (
+          <div className="app-bar">
+            <ViewHeader title="Agenda" titleAs="p" />
+          </div>
+        ) : null}
         {columnVisible && AgendaColumn ? (
           <aside className="app-column" aria-label="Agenda">
             <ErrorBoundary what="la agenda">

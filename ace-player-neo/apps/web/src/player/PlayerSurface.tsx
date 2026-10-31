@@ -186,6 +186,40 @@ export function LivePill({ state, onPress }: { state: PlayerState; onPress(): vo
   );
 }
 
+/** Lo que se ve de la barra del directo de escritorio: los últimos 2 minutos. */
+export const LIVE_WINDOW_S = 120;
+
+/**
+ * Dónde estás en la barra del directo (0-1): en directo, al final; por
+ * detrás, tantos segundos antes como vayas (sin bajar del 6 %, para que el
+ * punto no se pegue al borde). Solo para pintar: se aplica con transform.
+ */
+export function livePosition(state: PlayerState): number {
+  const mode = liveButton(state).mode;
+  if (mode === 'live' || mode === 'off') return 1;
+  const behind = state.live.available ? Math.max(0, state.live.behindS) : 0;
+  if (!behind) return mode === 'resume' ? 0.94 : 1;
+  return Math.min(0.97, Math.max(0.06, 1 - behind / LIVE_WINDOW_S));
+}
+
+/** La barra fina del directo; por detrás, con el punto donde vas. */
+export function LiveBar({ state }: { state: PlayerState }) {
+  const mode = liveButton(state).mode;
+  const position = livePosition(state);
+  const behind = mode === 'behind' || mode === 'resume';
+  return (
+    <span
+      className="player-1b__bar"
+      data-mode={mode}
+      style={{ '--pos': position } as CSSProperties}
+      aria-hidden="true"
+    >
+      <i />
+      {behind ? <b /> : null}
+    </span>
+  );
+}
+
 /** «YYYY-MM-DD» de hoy en Madrid: la agenda fecha los días con la hora de Madrid (regla 28). */
 export function madridToday(now: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -623,11 +657,20 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
           <>
             <div className="player-chrome__top player-1b__top">
               <div className="player-1b__lead">
+                {/* En la ficha junto a la agenda el partido ya se lee debajo:
+                    arriba solo la cápsula «En directo» (shell.css la cambia
+                    por atrás y el titular en el resto de casos). */}
+                {liveMode !== 'off' ? (
+                  <span className="player-1b__cap">
+                    <LiveDot />
+                    En directo
+                  </span>
+                ) : null}
                 <IconButton
                   icon="chev-l"
                   label="Volver"
                   variant="video"
-                  className="player-round glass--video"
+                  className="player-round player-1b__back glass--video"
                   onClick={actions.minimize}
                 />
                 <p className="player-1b__title">{state.channel?.event ?? state.channel?.title}</p>
@@ -681,7 +724,9 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
             </div>
             {state.phase !== 'error' ? (
               <>
-                <div className="player-1b__center">
+                {/* Con un panel en medio («Conectando», «Reconectando»…) la
+                    pausa no se pinta encima: el panel ya dice qué pasa. */}
+                <div className="player-1b__center" hidden={stageMessage(state) !== null}>
                   <IconButton
                     icon={wantsPlay || connecting ? 'pause' : 'play'}
                     label={connecting ? 'Conectando…' : wantsPlay ? 'Pausar' : 'Reproducir'}
@@ -693,9 +738,7 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
                   />
                 </div>
                 <div className="player-chrome__bottom player-1b__bottom">
-                  <span className="player-1b__bar" data-mode={liveMode} aria-hidden="true">
-                    <i />
-                  </span>
+                  <LiveBar state={state} />
                   <LivePill state={state} onPress={actions.goLive} />
                 </div>
               </>

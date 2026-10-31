@@ -19,11 +19,10 @@
    SIEMPRE de la lista que se pinta (T17), nunca de un 4 fijo. */
 
 import { type CSSProperties, type MouseEvent } from 'react';
-import { useVodActive } from '../api/index.ts';
+import { useAppMode, useEngineSummary, useVodActive } from '../api/index.ts';
 import { useLiveCountToday } from '../features/agenda/live-count.ts';
 import { cx } from '../lib/cx.ts';
 import { BrandMark } from '../ui/BrandMark.tsx';
-import { IconButton } from '../ui/Button.tsx';
 import { Icon } from '../ui/Icon.tsx';
 import type { IconName } from '../ui/icons.ts';
 import { EngineIndicator } from './EngineIndicator.tsx';
@@ -163,13 +162,26 @@ function sideRoute(vista: SideVista): Route {
 }
 
 /**
+ * El motor en el menú lateral, solo si algo falla (ámbar o rojo): con todo en
+ * orden la marca va sola, como en la maqueta. «Comprobando» tampoco se pinta
+ * (dura un instante al abrir).
+ */
+function EngineAlert() {
+  const summary = useEngineSummary();
+  const mode = useAppMode();
+  if (mode === 'demo' || summary.tone === 'ok' || summary.tone === 'idle') return null;
+  return <EngineIndicator className="sidenav__engine" />;
+}
+
+/**
  * Menú lateral fijo de escritorio (desde 768 px; rediseño de escritorio):
  * marca, los destinos con el contador rojo de partidos en directo en Agenda,
  * el hueco del mini-reproductor (lo coloca shell.css: el reproductor no se
- * mueve de sitio en el árbol) y, abajo del todo, el motor y Ajustes. Opaco,
- * sin cristal; el activo lleva fondo `--surface` y la barrita amarilla.
+ * mueve de sitio en el árbol) y, abajo del todo, Ajustes. Opaco, sin cristal;
+ * el activo lleva fondo `--surface` y la barrita amarilla. La ayuda de atajos
+ * no lleva botón (como en la maqueta): la abren «?» y Ajustes.
  */
-export function SideNav({ route, onHelp }: { route: Route; onHelp?: () => void }) {
+export function SideNav({ route }: { route: Route }) {
   const navigate = useNavigate();
   const vod = useVodActive();
   const vistas = sideVistas({ vod });
@@ -226,18 +238,7 @@ export function SideNav({ route, onHelp }: { route: Route; onHelp?: () => void }
           <BrandMark className="sidenav__mark" size={34} />
           <span className="sidenav__name">Ace Neo</span>
         </a>
-        <div className="sidenav__tools">
-          <EngineIndicator className="sidenav__engine" />
-          {onHelp ? (
-            <IconButton
-              icon="ayuda"
-              label="Atajos de teclado"
-              shortcut="?"
-              className="sidenav__help"
-              onClick={onHelp}
-            />
-          ) : null}
-        </div>
+        <EngineAlert />
       </div>
       {vistas.map((vista) => item(vista, vista === 'juntos' ? 'sidenav__item--sep' : undefined))}
       <div className="sidenav__spacer" />

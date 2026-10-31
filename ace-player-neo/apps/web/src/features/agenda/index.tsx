@@ -642,45 +642,38 @@ export default function Agenda({ active }: ViewProps) {
      partido) y a la derecha la ficha del destacado. Tocar un partido abre su
      ficha con el vídeo (el centro de partido), con la lista en su sitio. */
   if (stageVisible) {
+    /* «Editar mis gustos» y «Actualizar» bajan al pie del panel (siguen con E
+       y R): la barra queda igual que con un partido abierto, título y
+       buscador, como en la maqueta. */
+    const deskFoot = (
+      <div className="agenda-desk__foot">
+        {foot}
+        <div className="agenda-desk__tools">
+          <Button size="sm" variant="quiet" icon="pencil" onClick={openPreferences}>
+            Editar mis gustos
+          </Button>
+          <IconButton
+            icon="refresh"
+            label="Actualizar agenda de fútbol"
+            shortcut="R"
+            className="agenda-refresh"
+            busy={schedule.isFetching}
+            onClick={refresh}
+          />
+        </div>
+      </div>
+    );
     return (
       <div className="agenda agenda--desk" data-demo={appMode === 'demo' || undefined}>
-        <ViewHeader
-          title="Agenda"
-          className="agenda-head"
-          subtitle={
-            dayText ? (
-              <span className="agenda-head__lede">
-                {dayText.primary === dayText.long ? '' : `${dayText.primary} · `}
-                {capitalize(dayText.long)}
-              </span>
-            ) : undefined
-          }
-          actions={
-            <>
-              <IconButton
-                icon="pencil"
-                label="Editar mis gustos"
-                shortcut="E"
-                onClick={openPreferences}
-              />
-              <IconButton
-                icon="refresh"
-                label="Actualizar agenda de fútbol"
-                shortcut="R"
-                className="agenda-refresh"
-                busy={schedule.isFetching}
-                onClick={refresh}
-              />
-            </>
-          }
-        />
+        {/* Solo el título, como en la maqueta: el día ya lo dice la tira. */}
+        <ViewHeader title="Agenda" className="agenda-head" />
         {showCard ? (
           <FirstUseCard onCustomize={openPreferences} onSkip={skipFirstUse} busy={save.isPending} />
         ) : null}
         <div className="agenda-desk">
           <DeskList
             className="agenda-desk__list"
-            selectedId={null}
+            selectedId={selected?.id ?? null}
             active={active}
             onOpen={openMatch}
           />
@@ -696,11 +689,14 @@ export default function Agenda({ active }: ViewProps) {
                 mine={isMine(selected, preferences)}
                 watching={watched === selected.id}
                 onOpen={openMatch}
+                desk
               />
+              {deskFoot}
             </aside>
-          ) : null}
+          ) : (
+            <div className="agenda-desk__side">{deskFoot}</div>
+          )}
         </div>
-        {foot}
         <p className="sr-only" role="status" aria-live="polite">
           {announcement}
         </p>

@@ -4,7 +4,13 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlayerState } from './api.ts';
-import { LivePill, sourceNumberOf } from './PlayerSurface.tsx';
+import {
+  LiveBar,
+  LivePill,
+  LIVE_WINDOW_S,
+  livePosition,
+  sourceNumberOf,
+} from './PlayerSurface.tsx';
 
 function stateWith(over: Partial<PlayerState>): PlayerState {
   return {
@@ -53,5 +59,29 @@ describe('reproductor de escritorio (1B)', () => {
   it('sin imagen no hay píldora', () => {
     render(<LivePill state={stateWith({ conn: 'conectando' })} onPress={() => undefined} />);
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('la barra marca dónde vas: al final en directo; por detrás, tantos segundos antes', () => {
+    expect(livePosition(stateWith({}))).toBe(1);
+    const behind = (behindS: number) =>
+      stateWith({ live: { available: true, atLive: false, behindS, delayS: 6 } });
+    expect(livePosition(behind(LIVE_WINDOW_S / 2))).toBeCloseTo(0.5);
+    // Nunca pegado a los bordes: ni al final ni al principio.
+    expect(livePosition(behind(1))).toBeLessThan(1);
+    expect(livePosition(behind(LIVE_WINDOW_S * 10))).toBeGreaterThan(0);
+
+    const { container } = render(<LiveBar state={behind(LIVE_WINDOW_S / 2)} />);
+    const bar = container.querySelector<HTMLElement>('.player-1b__bar');
+    expect(bar).toHaveAttribute('data-mode', 'behind');
+    expect(bar?.style.getPropertyValue('--pos')).toBe('0.5');
+    // El punto solo por detrás; en directo, la barra llena sin punto.
+    expect(bar?.querySelector('b')).not.toBeNull();
+  });
+
+  it('en directo la barra va llena y sin punto', () => {
+    const { container } = render(<LiveBar state={stateWith({})} />);
+    const bar = container.querySelector<HTMLElement>('.player-1b__bar');
+    expect(bar?.style.getPropertyValue('--pos')).toBe('1');
+    expect(bar?.querySelector('b')).toBeNull();
   });
 });

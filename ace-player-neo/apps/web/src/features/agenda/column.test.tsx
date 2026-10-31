@@ -4,6 +4,7 @@ import { resetMode, setMode } from '../../api/mode.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { fixture, mockFetch } from '../../test/fetch.ts';
 import AgendaColumn from './column.tsx';
+import { competitionInitials, competitionTone } from './DeskList.tsx';
 import { resetScoreRevealForTests } from './score-reveal.ts';
 import { resetAgendaUi, setAgendaChip } from './state.ts';
 import { liveScore, matchAt, NOW, renderWithApp, scheduleOf, TODAY } from './test-utils.tsx';
@@ -90,5 +91,44 @@ describe('columna de la agenda junto al vídeo (escritorio)', () => {
       expect(screen.queryByRole('button', { name: /^Betis contra Cádiz/ })).toBeNull(),
     );
     expect(screen.getByRole('button', { name: /^Real Madrid contra Girona/ })).toBeInTheDocument();
+  });
+
+  it('tira de días de la maqueta: «Hoy» y el día de la semana, el elegido marcado', async () => {
+    const { container } = renderColumn();
+    await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    const days = [...container.querySelectorAll('.desk-days__day')];
+    expect(days.map((day) => day.querySelector('.desk-days__name')?.textContent)).toEqual([
+      'Hoy',
+      'Jue',
+    ]);
+    expect(days[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(days[0]).toHaveAccessibleName(/^Hoy, .*: 3 partidos$/);
+    fireEvent.click(days[1]!);
+    await waitFor(() => expect(days[1]).toHaveAttribute('aria-pressed', 'true'));
+  });
+
+  it('cada liga con su insignia de color y «n partidos»', async () => {
+    const { container } = renderColumn();
+    await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    const badge = container.querySelector<HTMLElement>('.desk-comp__badge');
+    expect(badge).toHaveTextContent('LL');
+    expect(badge?.style.getPropertyValue('--bb')).toBe(competitionTone('LaLiga'));
+    expect(container.querySelector('.desk-comp__count')).toHaveTextContent('3 partidos');
+  });
+});
+
+describe('insignias de competición', () => {
+  it('siglas de las ligas conocidas y, si no, las iniciales', () => {
+    expect(competitionInitials('LaLiga EA Sports')).toBe('LL');
+    expect(competitionInitials('Premier League')).toBe('PL');
+    expect(competitionInitials('Serie A')).toBe('SA');
+    expect(competitionInitials('Amistoso')).toBe('AM');
+    expect(competitionInitials('Copa Libertadores')).toBe('CL');
+  });
+
+  it('un color por liga (el de su marca o uno sacado del nombre), siempre el mismo', () => {
+    expect(competitionTone('LaLiga')).not.toBe(competitionTone('Premier League'));
+    expect(competitionTone('Amistoso')).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(competitionTone('Amistoso')).toBe(competitionTone('Amistoso'));
   });
 });

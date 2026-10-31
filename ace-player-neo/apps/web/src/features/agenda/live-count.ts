@@ -1,7 +1,11 @@
 /* Partidos de hoy en directo ahora: el contador rojo de «Agenda» en el menú
    lateral. Usa la misma consulta que la Agenda (no pide nada aparte) y la
-   hora de inicio, sin marcadores: el menú no debe pedir resultados. */
+   hora de inicio, sin marcadores: el menú no debe pedir resultados.
 
+   El menú pinta antes que la Agenda, así que es quien pide la agenda primero:
+   importa demo.ts para que en demo no se quede con el ejemplo del fixture. */
+
+import './demo.ts';
 import { countLive, madridClock } from './domain.ts';
 import { useNow, useSchedule } from './data.ts';
 

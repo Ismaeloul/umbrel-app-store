@@ -41,6 +41,7 @@ import {
   ChannelMark,
   Menu,
   Num,
+  SignalBadge,
   SignalRing,
   useContextMenu,
   type MenuItem,
@@ -254,7 +255,9 @@ export function SourcePoster({ row, inMatch, index, onArrow }: SourcePosterProps
 /**
  * Fila compacta de fuente (rediseño de escritorio, ficha del partido): el
  * número, el canal con su calidad, debajo «AceStream»/«IPTV» y los pares, y a
- * la derecha la señal o, si es la que suena, las barritas. El mismo botón,
+ * la derecha la señal o, si es la que suena, las barritas. La señal es el
+ * glifo de la maqueta (● verde, ▲ ámbar, ✕ rojo…), no el anillo del cartel;
+ * la palabra va en el aria-label de la fila. El mismo botón,
  * menú, aria-label y flechas que el cartel.
  */
 export function SourceLine({ row, inMatch, index, onArrow }: SourcePosterProps) {
@@ -308,7 +311,7 @@ export function SourceLine({ row, inMatch, index, onArrow }: SourcePosterProps) 
           {row.onScreen ? (
             <Equalizer playing />
           ) : (
-            <SignalRing state={ring} word={row.signal.word} size={14} />
+            <SignalBadge state={ring === 'reported' ? 'fail' : ring} compact size="sm" hideWord />
           )}
         </span>
       </button>

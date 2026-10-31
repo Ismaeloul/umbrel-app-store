@@ -472,6 +472,8 @@ export interface MatchSignal {
   label?: string;
   /** Frase para el escenario («3 de 6 fuentes verificadas»). */
   summary: string;
+  /** Fuentes verificadas, si se sabe (el «● 4» de la lista de escritorio). */
+  count?: number;
 }
 
 const PREHEAT_BEFORE_MS = 45 * MINUTE;
@@ -500,13 +502,18 @@ export function signalFromPreheat(preheat: PreheatPublic | null | undefined): Ma
   switch (status) {
     case 'ready':
       return playable > 0
-        ? { state: 'ok', summary: `${playable} de ${sources(total || playable)} verificadas` }
+        ? {
+            state: 'ok',
+            summary: `${playable} de ${sources(total || playable)} verificadas`,
+            count: playable,
+          }
         : { state: 'fail', summary: `Sin señal en ${sources(total)}` };
     case 'scanning':
       return playable > 0
         ? {
             state: 'ok',
             summary: `${playable} de ${sources(total)} verificadas, sigue comprobando`,
+            count: playable,
           }
         : { state: 'checking', summary: `Comprobando: ${checked} de ${sources(total)} probadas` };
     case 'resolving':

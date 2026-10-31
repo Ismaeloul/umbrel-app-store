@@ -687,8 +687,14 @@ describe('mini-reproductor «Sonando»', () => {
     const { handlers } = renderDock('mini');
     setPlayer(playing());
     expect(screen.getByText('Sonando')).toBeInTheDocument();
-    expect(screen.getByText('M+ Liga de Campeones')).toBeInTheDocument();
+    // La banda (móvil y tableta) y la tarjeta del menú lateral (desde 1024; el CSS elige).
+    expect(document.querySelector('.player-mini__title')).toHaveTextContent('M+ Liga de Campeones');
+    expect(document.querySelector('.player-mini__side-title')).toHaveTextContent(
+      'M+ Liga de Campeones',
+    );
     expect(screen.getByText('Fuente 1, Elcano')).toBeInTheDocument();
+    // Un canal en directo: la cápsula «Directo» sobre la imagen y la línea llena.
+    expect(document.querySelector('.player-mini__cap')).toHaveTextContent('Directo');
     fireEvent.click(screen.getByRole('button', { name: 'Volver al vídeo: M+ Liga de Campeones' }));
     expect(handlers.onExpand).toHaveBeenCalled();
     act(() => playerPresence.set({ active: true, route: ROUTE, immersive: false }));
@@ -714,8 +720,13 @@ describe('mini-reproductor «Sonando»', () => {
     setPlayer(playing({ route: { vista: 'partido', id: 'm-1', canal: null } }));
     expect(screen.getByText('Marcador oculto')).toBeInTheDocument();
     expect(screen.getByText('Fuente 1, Elcano')).toBeInTheDocument();
+    // La tarjeta del menú lateral dice el minuto (no es un spoiler) y su línea va al 80 %.
+    expect(document.querySelector('.player-mini__side-sub')).toHaveTextContent("72'");
+    expect(
+      document.querySelector<HTMLElement>('.player-mini__line')?.style.getPropertyValue('--v'),
+    ).toBe(String(72 / 90));
     act(() => revealScore('m-1'));
-    expect(screen.getByText("72'")).toBeInTheDocument();
+    expect(document.querySelector('.player-mini__sub')).toHaveTextContent("72'");
     expect(screen.queryByText(/2.1/)).toBeNull();
   });
 

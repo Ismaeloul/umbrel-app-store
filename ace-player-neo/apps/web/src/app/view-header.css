@@ -106,14 +106,30 @@
   .view-head .view-head__engine {
     display: none;
   }
+  /* Maqueta 01: 24 px, el peso y la anchura de los titulares. */
   .view-head__title {
-    font-size: var(--fs-22);
+    font-size: 1.5rem;
   }
   .view-head__subtitle {
     font-size: var(--fs-12);
   }
+  /* El título no se corta («Cana…» tapado por «Modo demo»): si falta sitio,
+     cede el buscador, que se estrecha hasta 120 px. */
+  .view-head__titles {
+    min-width: auto;
+  }
+  .view-head__title {
+    overflow: visible;
+  }
   .view-head__actions {
     flex-wrap: nowrap;
+  }
+  .view-head__actions > * {
+    flex: none;
+  }
+  .view-head__actions > .view-head__search {
+    flex: 0 1 clamp(180px, 26vw, 340px);
+    min-width: 120px;
   }
   .view-head__search {
     display: inline-flex;
@@ -125,9 +141,9 @@
     padding: 0 8px 0 12px;
     border-radius: var(--r-m);
     background: var(--surface);
-    box-shadow: inset 0 0 0 1px var(--line-soft);
+    box-shadow: inset 0 0 0 1px var(--line);
     color: var(--text-3);
-    font-size: var(--fs-13);
+    font-size: 0.875rem;
     text-align: left;
   }
   .view-head__search-text {

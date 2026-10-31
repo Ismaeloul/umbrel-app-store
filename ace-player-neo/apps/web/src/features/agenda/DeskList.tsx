@@ -5,8 +5,14 @@
 
    - a la izquierda la hora o, en directo, el minuto en mono con su barra;
    - los dos equipos, uno encima del otro, con su escudo o monograma;
-   - a la derecha, la señal (o las barritas si es lo que suena; «Final» si
-     terminó). Nunca el marcador: va tapado en la ficha («Ver marcador»).
+   - a la derecha, las barritas si es lo que suena; en directo, el botón de
+     play; antes, el punto de la señal con las fuentes verificadas («● 4»);
+     «Final» (y los equipos apagados) si terminó. Nunca el marcador: va
+     tapado en la ficha («Marcador»).
+
+   La tira de días es la de la maqueta de escritorio: hasta siete pastillas
+   prietas (el día en mayúsculas pequeñas y el número), la elegida en
+   amarillo. Cada liga lleva su color en la insignia (competitionTone).
 
    Día y chip se comparten con la vista (state.ts): es «la misma agenda»
    antes y después de abrir un partido. */
@@ -16,19 +22,20 @@ import './agenda.css';
 
 import type { FootballMatch, LiveScore } from '@ace/shared';
 import { useMemo, type CSSProperties } from 'react';
+import { hueFromName, oklchToRgb, rgbToHex } from '../../lib/color.ts';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
 import { Equalizer } from '../../player/PlayerSurface.tsx';
-import { Chip, Skeleton } from '../../ui/index.ts';
+import { Chip, Icon, Num, Skeleton } from '../../ui/index.ts';
 import { SignalBadge } from '../../ui/SignalBadge.tsx';
 import { TeamMark } from '../../ui/TeamMark.tsx';
 import { usePreferences } from '../preferences/usePreferences.ts';
 import { versusSide } from './cards.ts';
 import { useMatchSignal, useNow, useSchedule, useScores } from './data.ts';
-import { DayStrip } from './DayStrip.tsx';
 import {
   countLive,
+  dayLabel,
   groupByCompetition,
   isMine,
   liveMinute,
@@ -59,6 +66,106 @@ export function byChip(
 /** Las competiciones del día, en el orden de los grupos (las de más partidos no mandan). */
 function competitionsOf(matches: readonly FootballMatch[]): string[] {
   return [...new Set(matches.map((match) => match.competition).filter(Boolean))];
+}
+
+/* Colores de las ligas que más salen (los de su marca, oscurecidos lo justo
+   para que las siglas en blanco pasen AA); el resto, un tono sacado del nombre. */
+const COMPETITION_TONES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/champions/i, '#0b2e6f'],
+  [/europa league/i, '#b34700'],
+  [/conference/i, '#0f7a4a'],
+  [/premier/i, '#3d195b'],
+  [/hypermotion|segunda/i, '#2f6b2f'],
+  [/laliga|la liga/i, '#d4271e'],
+  [/serie a/i, '#0070ad'],
+  [/bundesliga/i, '#c8102e'],
+  [/ligue 1/i, '#0b3a6b'],
+  [/copa del rey/i, '#8a1538'],
+];
+
+/** Color de la insignia de una competición. */
+export function competitionTone(name: string): string {
+  for (const [pattern, tone] of COMPETITION_TONES) if (pattern.test(name)) return tone;
+  return rgbToHex(oklchToRgb({ l: 0.48, c: 0.12, h: hueFromName(name) }));
+}
+
+const COMPETITION_INITIALS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/champions/i, 'CL'],
+  [/europa league/i, 'EL'],
+  [/conference/i, 'CO'],
+  [/premier/i, 'PL'],
+  [/hypermotion|segunda/i, 'L2'],
+  [/laliga|la liga/i, 'LL'],
+  [/serie a/i, 'SA'],
+  [/bundesliga/i, 'BL'],
+  [/ligue 1/i, 'L1'],
+];
+
+/** Siglas de la insignia: «LL», «PL», «SA»; si no, las iniciales (o las dos primeras letras). */
+export function competitionInitials(name: string): string {
+  for (const [pattern, short] of COMPETITION_INITIALS) if (pattern.test(name)) return short;
+  const words = name.split(/\s+/).filter((word) => /\p{L}/u.test(word));
+  const letters =
+    words.length > 1 ? words.slice(0, 2).map((word) => word.charAt(0)) : [name.slice(0, 2)];
+  return letters.join('').toLocaleUpperCase('es');
+}
+
+const partidos = (n: number) => `${n} ${n === 1 ? 'partido' : 'partidos'}`;
+
+const WEEKDAY = new Intl.DateTimeFormat('es-ES', { weekday: 'short', timeZone: 'UTC' });
+
+/** «Dom», «Lun»… de un «YYYY-MM-DD». */
+function weekdayOf(date: string): string {
+  const when = new Date(`${date}T12:00:00Z`);
+  if (!Number.isFinite(when.getTime())) return date;
+  const text = WEEKDAY.format(when).replace('.', '');
+  return text.charAt(0).toUpperCase() + text.slice(1, 3);
+}
+
+/** La tira de días de escritorio: hasta siete pastillas a lo ancho del panel. */
+function DeskDays({
+  days,
+  selected,
+  today,
+  onSelect,
+}: {
+  days: ReadonlyArray<{ date: string; count: number }>;
+  selected: string | null;
+  today: string;
+  onSelect(date: string): void;
+}) {
+  // Siete como mucho: si la agenda trae más, desde el día antes del elegido.
+  const index = Math.max(
+    0,
+    days.findIndex((day) => day.date === selected),
+  );
+  const start = Math.max(0, Math.min(index - 1, days.length - 7));
+  return (
+    <div className="desk-days" role="group" aria-label="Día">
+      {days.slice(start, start + 7).map((day) => {
+        const label = dayLabel(day.date, today);
+        // «Hoy» y el día de la semana («Dom»); mañana también por su día, como en la maqueta.
+        const short = day.date === today ? 'Hoy' : weekdayOf(day.date);
+        return (
+          <button
+            key={day.date}
+            type="button"
+            className="desk-days__day press"
+            aria-pressed={day.date === selected}
+            aria-label={`${label.primary}, ${label.long}: ${partidos(day.count)}`}
+            onClick={() => onSelect(day.date)}
+          >
+            <span className="desk-days__name" aria-hidden="true">
+              {short}
+            </span>
+            <b className="desk-days__num" aria-hidden="true">
+              {label.number}
+            </b>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export interface DeskRowProps {
@@ -107,7 +214,7 @@ export function DeskRow({ match, now, score, selected, watching, mine, onOpen }:
             </span>
           ) : null}
         </span>
-        <span className="desk-row__teams">
+        <span className={cx('desk-row__teams', done && 'desk-row__teams--done')}>
           {[home, away].map((team, index) => (
             <span key={index} className="desk-row__team">
               <TeamMark
@@ -127,6 +234,15 @@ export function DeskRow({ match, now, score, selected, watching, mine, onOpen }:
             <Equalizer playing />
           ) : done ? (
             <span className="desk-row__final">Final</span>
+          ) : live && signal?.state === 'ok' ? (
+            <span className="desk-row__play" title={signal.summary} aria-hidden="true">
+              <Icon name="play" size={18} />
+            </span>
+          ) : signal?.state === 'ok' && signal.count ? (
+            <span className="desk-row__ok" title={signal.summary}>
+              <i aria-hidden="true" />
+              <Num value={signal.count} />
+            </span>
           ) : signal ? (
             <span title={signal.summary}>
               <SignalBadge state={signal.state} compact size="sm" hideWord />
@@ -201,11 +317,10 @@ export function DeskList({ selectedId, active, onOpen, className }: DeskListProp
   return (
     <div className={cx('desk-agenda', className)}>
       {days.length ? (
-        <DayStrip
+        <DeskDays
           days={dayEntries}
           selected={day}
           today={today}
-          variant="tiles"
           onSelect={(date) => {
             haptic('selection');
             setAgendaDay(date);
@@ -248,11 +363,15 @@ export function DeskList({ selectedId, active, onOpen, className }: DeskListProp
           {groups.map((group) => (
             <section key={group.competition} className="desk-comp" aria-label={group.competition}>
               <h3 className="desk-comp__head">
-                <span className="desk-comp__badge" aria-hidden="true">
-                  {group.competition.slice(0, 2).toLocaleUpperCase('es')}
+                <span
+                  className="desk-comp__badge"
+                  style={{ '--bb': competitionTone(group.competition) } as CSSProperties}
+                  aria-hidden="true"
+                >
+                  {competitionInitials(group.competition)}
                 </span>
                 <span className="desk-comp__name">{group.competition}</span>
-                <span className="desk-comp__count">{group.matches.length}</span>
+                <span className="desk-comp__count">{partidos(group.matches.length)}</span>
               </h3>
               <ul className="desk-comp__rows">
                 {group.matches.map((match) => (
