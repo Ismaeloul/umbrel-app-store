@@ -397,13 +397,16 @@
 /* ---- Escritorio: portada «Lo tuyo arriba, lo técnico abajo» (rediseño, sección 7) ----
    Desde 768 px y sin sección: la tarjeta del Umbrel y grupos de filas como
    los de la maqueta (buscar-ajustes.html). Superficies opacas con borde de
-   1 px; números y versiones en mono. Solo se pinta en escritorio (Overview),
-   así que el móvil no cambia. */
+   1 px; las versiones del pie en mono (en las filas, la letra de la
+   maqueta). Solo se pinta en escritorio (Overview), así que el móvil no
+   cambia. */
+/* La portada y cada sección abierta, con el mismo ancho y alineadas a la
+   izquierda bajo la barra de sección, como el resto de vistas de escritorio. */
 .ajx {
   display: grid;
   gap: var(--s-2);
   width: 100%;
-  max-width: 720px;
+  max-width: 800px;
   min-width: 0;
   padding-bottom: var(--s-8);
 }
@@ -456,10 +459,6 @@
   color: var(--fail-ink);
   font-weight: 650;
 }
-.ajx-mono {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-}
 .ajx-who:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -472,12 +471,12 @@
 }
 /* Rótulo del grupo: versalitas grises, como «AGENDA» en la maqueta. */
 .ajx-hint {
-  margin-top: var(--s-4);
+  margin-top: 14px;
   padding-inline: 4px;
-  color: var(--text-2);
+  color: var(--text-3);
   font-size: var(--fs-12);
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 650;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 .ajx-card {
@@ -549,9 +548,12 @@
   flex: none;
   color: var(--text-3);
 }
-.ajx-row--danger .ajx-row__t b,
-.ajx-row--danger .ajx-row__ic {
+/* Desemparejar: solo el texto en rojo, como la maqueta. */
+.ajx-row--danger .ajx-row__t b {
   color: var(--fail-ink);
+}
+.ajx-row:disabled {
+  cursor: default;
 }
 /* El interruptor de siempre (ui/Field) dentro de la fila: el texto ocupa el
    hueco y toma las medidas de la maqueta. */
@@ -578,10 +580,11 @@
   bottom: 3px;
   left: 3px;
   width: calc((100% - 6px) / var(--n));
+  box-shadow: var(--shadow-1);
 }
 .ajx-segm .seg__item {
   min-height: 30px;
-  padding: 0 12px;
+  padding: 0 10px;
   font-size: var(--fs-12);
   font-weight: 650;
 }
@@ -597,7 +600,7 @@
 .set-one {
   display: grid;
   gap: var(--s-3);
-  max-width: 880px;
+  max-width: 800px;
   min-width: 0;
 }
 .set-back {

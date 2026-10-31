@@ -34,6 +34,7 @@ import {
   selectSource,
   stepSource,
 } from './session.ts';
+import { setAutoSwitch } from '../settings/local-prefs.ts';
 import { INVALID_HASH_TEXT } from './model.ts';
 import { hash, JOB, REPORT_JOB, resolution, scanJob, testMatch } from './test-utils.ts';
 
@@ -313,6 +314,35 @@ describe('política única de cambio de fuente (P16)', () => {
       state: 'weak',
       reason: 'player_dropped',
     });
+  });
+
+  it('«Cambiar de fuente sola» apagado en escritorio: no salta, dice cuántas quedan', async () => {
+    const wide = vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query === '(min-width: 768px)',
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    );
+    setAutoSwitch(false);
+    try {
+      await playingAuto();
+      const reply = notifySourceFailed({
+        channel: getPlayer().channel!,
+        origin: 'auto',
+        outcome: 'fallo',
+        seconds: 0,
+        reason: 'x',
+      });
+      expect(reply.next).toBe(false);
+      expect(reply.message).toMatch(/^Esta señal no responde\. Tienes 2 fuentes más/);
+      expect(getPlayer().channel?.hash).toBe(hash(1));
+    } finally {
+      setAutoSwitch(true);
+      wide.mockRestore();
+    }
   });
 
   it('agotadas mientras sigue comprobando: espera a la siguiente', async () => {

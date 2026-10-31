@@ -81,7 +81,7 @@ import { DirectoriesSection } from '../directories/DirectoriesSection.tsx';
 import { WherePlayingSection } from '../where-playing/WherePlayingSection.tsx';
 import { externalSection, type ExternalSection } from './external.tsx';
 import { ModePicker } from './ModePicker.tsx';
-import { Overview } from './Overview.tsx';
+import { Overview, takeReturnRow } from './Overview.tsx';
 import { PLAYBACK_MODE_HELP, setPlaybackMode, usePlaybackMode } from './playback-mode.ts';
 import { useSecondTap } from './second-tap.ts';
 import './settings.css';
@@ -559,7 +559,10 @@ function useFocusOnSectionChange(current: SectionId | null, active: boolean) {
       let second = 0;
       const first = requestAnimationFrame(() => {
         second = requestAnimationFrame(() => {
-          const row = from ? document.getElementById(`ajustes-fila-${from}`) : null;
+          // La fila que se pulsó (dos pueden abrir la misma sección); si se
+          // llegó de otra forma (un enlace, «atrás»), la de esa sección.
+          const id = takeReturnRow() ?? (from ? `ajustes-fila-${from}` : null);
+          const row = id ? document.getElementById(id) : null;
           row?.focus();
         });
       });

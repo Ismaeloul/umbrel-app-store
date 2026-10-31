@@ -3,24 +3,36 @@
    vez de la primera sección; en el móvil no cambia nada (SettingsView).
 
    - Arriba, a qué Umbrel estás conectado y por dónde (casa, Tailscale o este
-     ordenador, según la dirección de la página) con la versión.
+     ordenador, según la dirección de la página) con la versión. «Tailscale
+     listo» solo sale si la página llega por Tailscale: el servidor no sabe
+     si Tailscale está encendido, y no se inventa. En el modo demo, la línea
+     de la maqueta.
    - Agenda: Mis equipos (abre la hoja de gustos), Marcador oculto (la regla
-     de agenda/score-reveal.ts) y Avisos.
-   - Reproducción: Cambiar de fuente sola e Idioma preferido. Las descargas
-     son solo del móvil: en la web no salen.
+     de agenda/score-reveal.ts) y Avisos (match-alerts.tsx).
+   - Reproducción: Cambiar de fuente sola (sources/session.ts) e Idioma
+     preferido (el de Películas y series, LangRow.tsx). Las descargas son
+     solo del móvil: en la web no salen.
    - Apariencia: tema Claro / Oscuro / Auto (app/theme.ts).
-   - Fuentes y sistema: Listas IPTV, Motor AceStream, Dispositivos y
-     Desemparejar, que abren su sección de siempre.
+   - Fuentes y sistema: Listas IPTV, Motor AceStream y Dispositivos, que
+     abren su sección de siempre, y Desemparejar: un menú con los aparatos
+     emparejados que revoca el que elijas (la web no está emparejada: no
+     tiene nada suyo que desemparejar).
    - Más: el resto de secciones, que no tienen sitio en la maqueta.
-   - Al pie, las versiones.
+   - Al pie, las versiones de la web y del servidor.
 
    Las filas que abren algo son enlaces de verdad (`?vista=ajustes/<sección>`):
    cada sección tiene su dirección, se puede abrir en otra pestaña y «atrás»
-   vuelve aquí. «Cambiar de fuente sola», «Avisos» e «Idioma preferido» aún
-   no los guarda el servidor: van en este navegador (local-prefs.ts). */
+   vuelve aquí (con el foco en la fila de la que se salió, returnRow).
+   «Cambiar de fuente sola» y «Avisos» aún no los guarda el servidor: van en
+   este navegador (local-prefs.ts). */
 
+import type { Device } from '@ace/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import {
+  api,
+  describeFailure,
+  invalidateRoute,
   useApiQuery,
   useAppMode,
   useBootstrap,
@@ -32,22 +44,36 @@ import { searchFor } from '../../app/routes.ts';
 import { setTheme, useTheme, type ThemePreference } from '../../app/theme.ts';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
+import { WEB_VERSION } from '../../lib/version.ts';
+import { notify } from '../../notices/index.ts';
 import { Icon, Menu, Segmented, Switch, type IconName } from '../../ui/index.ts';
 import { setScoreHiding, useScoreHiding } from '../agenda/score-reveal.ts';
-import { originKind } from '../devices/model.ts';
+import { originKind, PLATFORM_ICON, splitDevices } from '../devices/model.ts';
 import {
   ALERT_LEADS,
   alertLeadLabel,
-  LANG_LABEL,
   setAlertLead,
   setAutoSwitch,
-  setPreferredLang,
   useLocalPrefs,
-  type PreferredLang,
 } from './local-prefs.ts';
 
 /* La hoja de gustos (de la vista de preferencias): solo se descarga al pulsar. */
 const PreferencesSheet = lazy(() => import('../preferences/PreferencesSheet.tsx'));
+/* «Idioma preferido» (el de Películas y series): su trozo, con la hoja de cine. */
+const LangRow = lazy(() => import('./LangRow.tsx'));
+
+/* La fila de la que se salió a una sección: al volver, el foco va a ella
+   (SettingsView). Dos filas pueden abrir la misma sección (Dispositivos y
+   Desemparejar, la tarjeta del Umbrel), así que se apunta la fila y no la
+   sección. */
+let returnRow: string | null = null;
+
+/** Id de la fila de la que se salió (y se olvida). */
+export function takeReturnRow(): string | null {
+  const id = returnRow;
+  returnRow = null;
+  return id;
+}
 
 export type OverviewTarget =
   | 'listas'
@@ -77,7 +103,7 @@ function plainClick(event: MouseEvent): boolean {
 function RowIcon({ name }: { name: IconName }) {
   return (
     <span className="ajx-row__ic" aria-hidden="true">
-      <Icon name={name} size={18} />
+      <Icon name={name} size={20} />
     </span>
   );
 }
@@ -104,15 +130,17 @@ function LinkRow({
   danger?: boolean;
   go: OverviewProps['go'];
 }) {
+  const id = `ajustes-fila-${to}${danger ? '-peligro' : ''}`;
   return (
     <a
       className={cx('ajx-row ajx-row--link', danger && 'ajx-row--danger')}
-      id={`ajustes-fila-${to}${danger ? '-peligro' : ''}`}
+      id={id}
       href={searchFor({ vista: 'ajustes', seccion: to })}
       onClick={(event) => {
         if (!plainClick(event)) return;
         event.preventDefault();
         haptic('selection');
+        returnRow = id;
         go(to);
       }}
     >
@@ -235,53 +263,71 @@ function Group({ id, title, children }: { id: string; title: string; children: R
 
 /* ---- Arriba: el Umbrel ---------------------------------------------------- */
 
+/* Por dónde llega esta página. Por Tailscale no se sabe si estás en casa o
+   fuera: se dice solo que Tailscale va. */
 const PLACE: Record<ReturnType<typeof originKind>, string> = {
   lan: 'En casa',
-  tailscale: 'Por Tailscale',
+  tailscale: 'Conectado',
   local: 'En este ordenador',
   other: 'Conectado',
 };
 
+/** Puro: la línea de la tarjeta («● En casa», «Tailscale listo», la versión). */
+export function whoLine(input: {
+  hostname: string;
+  demo: boolean;
+  down: boolean;
+  version: string | undefined;
+}): { place: string; ok: boolean; extra: string[] } {
+  const version = input.version ? [input.version] : [];
+  if (input.down) return { place: 'Sin conexión', ok: false, extra: version };
+  // La demo no tiene Umbrel: enseña la línea de la maqueta.
+  if (input.demo) return { place: 'En casa', ok: true, extra: ['Tailscale listo', ...version] };
+  const kind = originKind(input.hostname);
+  return {
+    place: PLACE[kind],
+    ok: true,
+    extra: kind === 'tailscale' ? ['Tailscale listo', ...version] : version,
+  };
+}
+
 function WhoCard({ go, hasDevices }: Pick<OverviewProps, 'go' | 'hasDevices'>) {
   const boot = useBootstrap();
   const mode = useAppMode();
-  const host = typeof location === 'undefined' ? '' : location.host;
-  const kind = originKind(typeof location === 'undefined' ? '' : location.hostname);
-  const down = boot.isError && !boot.data;
+  const line = whoLine({
+    hostname: typeof location === 'undefined' ? '' : location.hostname,
+    demo: mode === 'demo',
+    down: boot.isError && !boot.data,
+    version: boot.data?.version,
+  });
   const to: OverviewTarget = hasDevices ? 'dispositivos' : 'acerca';
+  const id = 'ajustes-fila-umbrel';
   return (
     <a
       className="ajx-who"
-      id={`ajustes-fila-umbrel`}
+      id={id}
       href={searchFor({ vista: 'ajustes', seccion: to })}
       onClick={(event) => {
         if (!plainClick(event)) return;
         event.preventDefault();
         haptic('selection');
+        returnRow = id;
         go(to);
       }}
     >
       <span className="ajx-who__ic" aria-hidden="true">
-        <Icon name="servidor" size={28} />
+        <Icon name="servidor" size={20} />
       </span>
       <span className="ajx-who__t">
         <b>Umbrel de casa</b>
         <small>
-          <span className={down ? 'ajx-fail' : 'ajx-ok'}>
+          <span className={line.ok ? 'ajx-ok' : 'ajx-fail'}>
             <span aria-hidden="true">● </span>
-            {down ? 'Sin conexión' : PLACE[kind]}
+            {line.place}
           </span>
-          {kind === 'tailscale' ? (
-            <span>· Tailscale listo</span>
-          ) : host ? (
-            <span>· {host}</span>
-          ) : null}
-          {boot.data?.version ? (
-            <span>
-              · <span className="ajx-mono">{boot.data.version}</span>
-              {mode === 'demo' ? ' (demo)' : ''}
-            </span>
-          ) : null}
+          {line.extra.map((text) => (
+            <span key={text}>· {text}</span>
+          ))}
         </small>
       </span>
       <Chevron />
@@ -315,7 +361,7 @@ function TeamsRow() {
           <small>Salen primero y te avisan</small>
         </span>
         <span className="ajx-row__v">
-          {teams === undefined ? null : <span className="ajx-mono">{teams}</span>}
+          {teams}
           <Chevron />
         </span>
       </button>
@@ -349,9 +395,95 @@ const ENGINE_HINT: Record<string, string> = {
   error: 'Sin respuesta',
 };
 
+/**
+ * «Desemparejar» (rojo, sin subtítulo, como la maqueta): un menú con los
+ * aparatos emparejados; elegir uno lo revoca al momento (abrir el menú y
+ * elegir son ya los dos toques de la regla 31). Revocar corta su SSE, sus
+ * visores y sus URLs de vídeo (lo hace el backend).
+ */
+function UnpairRow({ active }: { active: readonly Device[] | undefined }) {
+  const client = useQueryClient();
+  const button = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const revoke = async (device: Device) => {
+    try {
+      await api('deviceRevoke', { params: { id: device.id } });
+      notify(`«${device.name}» ya no puede entrar. Si lo quieres de vuelta, emparéjalo otra vez.`, {
+        tone: 'ok',
+        icon: 'check',
+      });
+    } catch (error) {
+      notify(`No se pudo desemparejar «${device.name}». ${describeFailure(error)}`, {
+        tone: 'err',
+      });
+    } finally {
+      void invalidateRoute('devicesList', client);
+    }
+  };
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        id="ajustes-fila-desemparejar"
+        className="ajx-row ajx-row--link ajx-row--danger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          haptic('selection');
+          setOpen((o) => !o);
+        }}
+      >
+        <RowIcon name="x" />
+        <span className="ajx-row__t">
+          <b>Desemparejar</b>
+        </span>
+      </button>
+      <Menu
+        open={open}
+        anchor={button.current}
+        onClose={() => setOpen(false)}
+        label="Desemparejar un aparato"
+        items={
+          active === undefined
+            ? [
+                {
+                  id: 'cargando',
+                  label: 'Cargando los aparatos…',
+                  disabled: true,
+                  onSelect: () => {},
+                },
+              ]
+            : active.length === 0
+              ? [
+                  {
+                    id: 'ninguno',
+                    label: 'No hay ninguno emparejado',
+                    disabled: true,
+                    onSelect: () => {},
+                  },
+                ]
+              : active.map((device) => ({
+                  id: device.id,
+                  label: device.name,
+                  icon: PLATFORM_ICON[device.platform],
+                  danger: true,
+                  onSelect: () => {
+                    haptic('warning');
+                    void revoke(device);
+                  },
+                }))
+        }
+      />
+    </>
+  );
+}
+
 function DevicesRows({ go }: Pick<OverviewProps, 'go'>) {
   const list = useApiQuery('devicesList');
-  const active = list.data?.devices.filter((d) => !d.revokedAt).length;
+  const devices = list.data?.devices;
+  const active = devices ? splitDevices(devices).active : undefined;
+  const count = active?.length;
   return (
     <>
       <LinkRow
@@ -360,21 +492,14 @@ function DevicesRows({ go }: Pick<OverviewProps, 'go'>) {
         icon="movil"
         title="Dispositivos"
         hint={
-          active === undefined
+          count === undefined
             ? 'iPhone, iPad y Mac emparejados'
-            : active === 0
+            : count === 0
               ? 'Ninguno emparejado'
-              : `${active} ${active === 1 ? 'emparejado' : 'emparejados'}`
+              : `${count} ${count === 1 ? 'emparejado' : 'emparejados'}`
         }
       />
-      <LinkRow
-        go={go}
-        to="dispositivos"
-        icon="x"
-        title="Desemparejar"
-        hint="Quitar el acceso a un iPhone, iPad o Mac"
-        danger
-      />
+      <UnpairRow active={active} />
     </>
   );
 }
@@ -412,11 +537,6 @@ function SystemGroup({ go, hasDevices }: Pick<OverviewProps, 'go' | 'hasDevices'
 
 /* ---- Portada -------------------------------------------------------------- */
 
-const LANG_OPTIONS = (Object.keys(LANG_LABEL) as PreferredLang[]).map((value) => ({
-  value,
-  label: LANG_LABEL[value],
-}));
-
 const LEAD_OPTIONS = ALERT_LEADS.map((value) => ({ value, label: alertLeadLabel(value) }));
 
 export function Overview({ go, hasDevices, hasHealth }: OverviewProps) {
@@ -424,7 +544,6 @@ export function Overview({ go, hasDevices, hasHealth }: OverviewProps) {
   const hiding = useScoreHiding();
   const prefs = useLocalPrefs();
   const boot = useBootstrap();
-  const status = useEngineStatus();
   const mode = useAppMode();
   return (
     <div className="ajx">
@@ -458,14 +577,11 @@ export function Overview({ go, hasDevices, hasHealth }: OverviewProps) {
           checked={prefs.autoSwitch}
           onChange={setAutoSwitch}
         />
-        <ChoiceRow
-          icon="idioma"
-          title="Idioma preferido"
-          label="Idioma preferido"
-          value={prefs.preferredLang}
-          options={LANG_OPTIONS}
-          onSelect={setPreferredLang}
-        />
+        {boot.data?.features.vod ? (
+          <Suspense fallback={null}>
+            <LangRow />
+          </Suspense>
+        ) : null}
       </Group>
 
       <Group id="apariencia" title="Apariencia">
@@ -497,7 +613,7 @@ export function Overview({ go, hasDevices, hasHealth }: OverviewProps) {
         <LinkRow
           go={go}
           to="listas"
-          icon="list"
+          icon="hash"
           title="Listas de AceStream"
           hint="De dónde salen los canales"
         />
@@ -549,9 +665,9 @@ export function Overview({ go, hasDevices, hasHealth }: OverviewProps) {
         <LinkRow go={go} to="acerca" icon="info" title="Acerca de" hint="Versión y atajos" />
       </Group>
 
+      {/* Como la maqueta: «Ace Neo <esta web> · servidor <el del Umbrel>». */}
       <p className="ajx-ver">
-        Ace Neo {boot.data?.version ?? '…'}
-        {status.data?.engineVersion ? ` · motor ${status.data.engineVersion}` : ''}
+        Ace Neo {WEB_VERSION} · servidor {boot.data?.version ?? '…'}
         {mode === 'demo' ? ' · demo' : ''}
       </p>
     </div>

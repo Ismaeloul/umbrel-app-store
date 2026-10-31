@@ -25,6 +25,8 @@
        · Salto de entrada: si se eligió una candidata en «Encontrar canal» y
          el comprobador la da por fallida antes de que se vea, se prueba una
          vez la primera viva (index.html:3645-3658).
+       · «Cambiar de fuente sola» apagado (Ajustes de escritorio): nada de
+         lo de arriba ni el puente IPTV salta solo; todo es como en manual.
    - Detener (o el traspaso a otro dispositivo) apaga todo el automatismo y
      el seguimiento del comprobador (regla 17); la lista se queda para poder
      elegir otra a mano.
@@ -120,6 +122,7 @@ import {
   type SourceFailure,
 } from '../../player/api.ts';
 import { madridHour } from '../agenda/domain.ts';
+import { localPrefs } from '../settings/local-prefs.ts';
 import { setLibraryData } from '../library/data.ts';
 import { registerChannelStarter, takeChannelTap, type TappedChannel } from '../library/play.ts';
 import {
@@ -373,6 +376,16 @@ function glow(name: string): string {
 /** ¿Esta sesión tiene arranque automático y puente? (un partido, o un canal suelto con IPTV). */
 function drives(state: Pick<SessionState, 'kind' | 'iptvBridge'>): boolean {
   return state.kind === 'match' || state.iptvBridge;
+}
+
+/**
+ * «Cambiar de fuente sola» (Ajustes de escritorio, rediseño sección 7): si
+ * está apagado, cuando una fuente se cae no se salta sola a otra (ni la
+ * variante IPTV, ni el puente, ni P16): se dice cuántas quedan, como en
+ * manual. El interruptor solo está desde 768 px; en el móvil, siempre sí.
+ */
+function autoSwitchAllowed(): boolean {
+  return !matches(MEDIA.tablet) || localPrefs.get().autoSwitch;
 }
 
 function libraryNow(): Partial<LibraryView> | undefined {
@@ -1679,13 +1692,14 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
   const effective = effectiveMap(entries, NOTHING_ON_SCREEN, now);
   const finished = scanFinished(state.scan);
   const hasIptv = entries.some(isIptv);
+  const autoSwitch = autoSwitchAllowed();
 
   // §17: si cae una variante IPTV (la 1080p), la siguiente variante IPTV antes
   // que AceStream (4K, 720p, SD…). No cuenta en el tope del puente: cada una se
   // prueba una vez. Un fallo de cuenta, o la IPTV en pausa, vale para todas.
   const iptvDown =
     accountDown || failure.code === 'iptv_disabled' || failure.code === 'iptv_removed';
-  if (isIptv(failed) && !iptvDown && !state.stopped && drives(state)) {
+  if (autoSwitch && isIptv(failed) && !iptvDown && !state.stopped && drives(state)) {
     const next = pickNextIptvVariant(entries, effective, failed, now);
     if (next) {
       const number = entries.findIndex((entry) => entry.id === next.id) + 1;
@@ -1698,7 +1712,13 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
   }
 
   // P16.6, el puente: «si uno no va, va el otro» (también en manual y en canales sueltos).
-  if (hasIptv && !state.stopped && drives(state) && bridgeAllowed(state.bridgeJumps, now)) {
+  if (
+    autoSwitch &&
+    hasIptv &&
+    !state.stopped &&
+    drives(state) &&
+    bridgeAllowed(state.bridgeJumps, now)
+  ) {
     const reply = bridge(state, entries, effective, failed, failure, finished, now);
     if (reply) return reply;
   }
@@ -1706,7 +1726,7 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
   // el reproductor espera al motor como siempre.
   if (engineDown) return undefined;
 
-  if (state.autoVerified && !state.stopped && drives(state)) {
+  if (autoSwitch && state.autoVerified && !state.stopped && drives(state)) {
     // Entre AceStream (P16.2): el puente, o su tope, ya decidió sobre la IPTV.
     const lanes = lanesNow();
     const next = pickAutoSource(entries, effective, finished, { iptv: !hasIptv, lanes });

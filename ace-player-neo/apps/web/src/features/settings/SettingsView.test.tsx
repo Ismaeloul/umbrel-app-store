@@ -12,6 +12,11 @@ import SettingsView, { preferenceSummary } from './SettingsView.tsx';
 import { preferenceSummary as sharedSummary } from '../preferences/model.ts';
 import { setScoreHiding } from '../agenda/score-reveal.ts';
 import { localPrefs, resetLocalPrefsForTests } from './local-prefs.ts';
+import { externalSection } from './external.tsx';
+import { whoLine } from './Overview.tsx';
+import { WEB_VERSION } from '../../lib/version.ts';
+import type { BootstrapResponse, Device, DevicesListResponse } from '@ace/shared';
+import { json } from '../../test/fetch.ts';
 
 // Estas pruebas son de las secciones PROPIAS de Ajustes: se simula que ninguna
 // otra vista aporta Salud ni Dispositivos (que ya existen en src/features/
@@ -19,7 +24,7 @@ import { localPrefs, resetLocalPrefsForTests } from './local-prefs.ts';
 // health/settings-integration.test.tsx). Añadido por el agente de salud.
 vi.mock('./external.tsx', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  externalSection: () => null,
+  externalSection: vi.fn(() => null),
 }));
 
 let net: ReturnType<typeof mockFetch>;
@@ -310,7 +315,8 @@ describe('Ajustes en escritorio', () => {
       '?vista=ajustes/iptv',
     );
     expect(await within(system).findByText('Sin lista: conecta la tuya')).toBeInTheDocument();
-    expect(await screen.findByText(/^Ace Neo 0\.7\.0/)).toBeInTheDocument();
+    // Al pie, como la maqueta: la versión de esta web y la del servidor.
+    expect(await screen.findByText(`Ace Neo ${WEB_VERSION} · servidor 0.7.0`)).toBeInTheDocument();
   });
 
   it('«Marcador oculto», «Cambiar de fuente sola» y el tema se guardan en el navegador', () => {
@@ -334,7 +340,7 @@ describe('Ajustes en escritorio', () => {
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 
-  it('«Avisos» e «Idioma preferido» se eligen en un menú', async () => {
+  it('«Avisos» se elige en un menú', async () => {
     desk();
     fireEvent.click(screen.getByRole('button', { name: /Avisos/ }));
     const menu = await screen.findByRole('menu', { name: 'Avisar antes de empezar' });
@@ -348,10 +354,105 @@ describe('Ajustes en escritorio', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /Avisos/ })).toHaveTextContent('15 min'),
     );
-    fireEvent.click(screen.getByRole('button', { name: /Idioma preferido/ }));
-    const langs = await screen.findByRole('menu', { name: 'Idioma preferido' });
-    fireEvent.click(within(langs).getByRole('menuitemcheckbox', { name: 'Inglés' }));
-    expect(localPrefs.get().preferredLang).toBe('en');
+  });
+
+  it('«Idioma preferido» es el de Películas y series (servidor) y abre su hoja', async () => {
+    const boot = fixture<BootstrapResponse>('bootstrap');
+    setup(
+      '?vista=ajustes',
+      {
+        'GET /api/v1/bootstrap': { ...boot, features: { ...boot.features, vod: true } },
+        'GET /api/v1/vod/languages': {
+          chosen: true,
+          langs: ['castellano'],
+          unknown: false,
+          updatedAt: null,
+        },
+        'GET /api/v1/vod': fixture('vodHome'),
+      },
+      { kind: 'desktop' },
+    );
+    const row = await screen.findByRole('button', { name: /Idioma preferido/ });
+    await waitFor(() => expect(row).toHaveTextContent('Castellano'));
+    fireEvent.click(row);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('sin Películas y series no hay «Idioma preferido»', async () => {
+    desk();
+    await screen.findByText(/^Ace Neo /);
+    expect(screen.queryByRole('button', { name: /Idioma preferido/ })).not.toBeInTheDocument();
+  });
+
+  it('la tarjeta del Umbrel: por dónde llega la página, sin inventarse Tailscale', () => {
+    const base = { demo: false, down: false, version: '0.10.0' };
+    expect(whoLine({ ...base, hostname: 'umbrel.local' })).toEqual({
+      place: 'En casa',
+      ok: true,
+      extra: ['0.10.0'],
+    });
+    expect(whoLine({ ...base, hostname: 'umbrel.tail1234.ts.net' })).toEqual({
+      place: 'Conectado',
+      ok: true,
+      extra: ['Tailscale listo', '0.10.0'],
+    });
+    expect(whoLine({ ...base, hostname: 'localhost' }).place).toBe('En este ordenador');
+    // La demo no tiene Umbrel: la línea de la maqueta.
+    expect(whoLine({ ...base, hostname: 'localhost', demo: true })).toEqual({
+      place: 'En casa',
+      ok: true,
+      extra: ['Tailscale listo', '0.10.0'],
+    });
+    expect(whoLine({ ...base, hostname: 'umbrel.local', down: true })).toMatchObject({
+      place: 'Sin conexión',
+      ok: false,
+    });
+  });
+
+  it('«Desemparejar» revoca el aparato que elijas en su menú', async () => {
+    vi.mocked(externalSection).mockImplementation(((id: string) =>
+      id === 'dispositivos' ? {} : null) as never);
+    try {
+      const iphone = fixture<DevicesListResponse>('devicesList').devices[0] as Device;
+      let devices: Device[] = [iphone];
+      setup(
+        '?vista=ajustes',
+        {
+          'GET /api/v1/devices': () => json({ devices }),
+          ['DELETE /api/v1/devices/' + iphone.id]: () => {
+            devices = [{ ...iphone, revokedAt: new Date().toISOString() }];
+            return json(fixture('deviceRevoke'));
+          },
+        },
+        { kind: 'desktop' },
+      );
+      const system = screen.getByRole('region', { name: 'Fuentes y sistema' });
+      await waitFor(() =>
+        expect(within(system).getByRole('link', { name: /Dispositivos/ })).toHaveTextContent(
+          '1 emparejado',
+        ),
+      );
+      fireEvent.click(within(system).getByRole('button', { name: 'Desemparejar' }));
+      const menu = await screen.findByRole('menu', { name: 'Desemparejar un aparato' });
+      fireEvent.click(within(menu).getByRole('menuitem', { name: iphone.name }));
+      await waitFor(() => expect(net.calls.some((c) => c.method === 'DELETE')).toBe(true));
+      await waitFor(() => expect(toastStore.get().at(-1)?.text).toMatch(/ya no puede entrar/));
+      await waitFor(() =>
+        expect(within(system).getByRole('link', { name: /Dispositivos/ })).toHaveTextContent(
+          'Ninguno emparejado',
+        ),
+      );
+    } finally {
+      vi.mocked(externalSection).mockImplementation(() => null);
+    }
+  });
+
+  it('al volver, el foco va a la fila que se pulsó (también la tarjeta del Umbrel)', async () => {
+    desk();
+    fireEvent.click(screen.getByRole('link', { name: /Umbrel de casa/ }));
+    await waitFor(() => expect(screen.getByTestId('ruta')).toHaveTextContent('ajustes/acerca'));
+    fireEvent.click(screen.getByRole('link', { name: 'Ajustes' }));
+    await waitFor(() => expect(screen.getByRole('link', { name: /Umbrel de casa/ })).toHaveFocus());
   });
 
   it('una fila abre su sección sola y «‹ Ajustes» vuelve a la portada', async () => {
