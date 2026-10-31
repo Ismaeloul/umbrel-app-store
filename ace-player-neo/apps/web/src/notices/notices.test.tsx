@@ -113,6 +113,17 @@ describe('línea de estado (inventario §9)', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Probando la fuente 2');
     expect(screen.getByRole('status')).not.toHaveTextContent('Vas en directo.');
   });
+
+  it('en el escritorio (quietWhenOk) calla el «todo va bien», pero no lo que tiene algo que contar', () => {
+    render(<StatusLineHost quietWhenOk />);
+    act(() => setStatusBase({ text: 'Fuente 2. Vas en directo.', signal: 'ok' }));
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    act(() => setStatusBase({ text: 'Vas por detrás del directo.', signal: 'ok', meta: '−34 s' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Vas por detrás del directo.');
+    act(() => setStatusBase({ text: 'Fuente 2. Vas en directo.', signal: 'ok' }));
+    act(() => showStatus({ text: 'Probando la fuente 3', tone: 'info' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Probando la fuente 3');
+  });
 });
 
 describe('notify(): dónde va cada aviso (regla 7)', () => {

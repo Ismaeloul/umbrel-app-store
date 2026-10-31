@@ -384,7 +384,9 @@ export function Shell() {
               ) : (
                 <StagePlaceholder />
               )}
-              {inStage ? <StatusLineHost className="stage__status" /> : null}
+              {inStage ? (
+                <StatusLineHost className="stage__status" quietWhenOk={kind !== 'mobile'} />
+              ) : null}
             </div>
           ) : null}
           <div className="views">
