@@ -15,11 +15,11 @@ import {
   scoresCache,
   teamSimilarity,
 } from './legacy-exports.js';
-import { computeLiveScores, espnDateRange } from './scores.js';
+import { computeLiveScores, espnDays, scoreLeaguesByPriority } from './scores.js';
 import { createFootball, fixture } from './test-support.js';
 
 const MIN = 60 * 1000;
-const RANGE = '20251231-20260102';
+const RANGE = '20260101';
 const ESPN_UCL = `${ESPN_BASE}/uefa.champions/scoreboard?dates=`;
 const ESPN_UCL_QUAL = `${ESPN_BASE}/uefa.champions_qual/scoreboard?dates=`;
 const ESPN_ESP1 = `${ESPN_BASE}/esp.1/scoreboard?dates=`;
@@ -188,7 +188,7 @@ describe('getLiveScores del servicio (api.md §4.13, B-128, B-130, B-132)', () =
     // "Sevilla FC" contra "Sevilla" y "Rayo Vallecano" igual: acabado
     expect(scores.scores[sevilla!.id]).toMatchObject({ home: 3, away: 3, state: 'post' });
     // la liga que falla (champions_qual, sin ruta) no tumba al resto
-    expect(net.calls.some((call) => call.url === `${ESPN_UCL_QUAL}20251231-20260102`)).toBe(true);
+    expect(net.calls.some((call) => call.url === `${ESPN_UCL_QUAL}${RANGE}`)).toBe(true);
     expect(net.calls.find((call) => call.url.startsWith(ESPN_UCL))?.options).toMatchObject({
       totalTimeoutMs: 6000,
       maxBytes: 512 * 1024,
@@ -276,8 +276,11 @@ describe('getLiveScores del servicio (api.md §4.13, B-128, B-130, B-132)', () =
     await football.stop();
   });
 
-  it('el rango de ESPN va de ayer a mañana en su fecha (UTC)', () => {
-    expect(espnDateRange(Date.UTC(2026, 0, 1, 12))).toBe(RANGE);
+  it('a ESPN se le piden días sueltos (un intervalo da 400): los que toca la ventana', () => {
+    // A mediodía, solo hoy.
+    expect(espnDays(Date.UTC(2026, 0, 1, 12))).toEqual([RANGE]);
+    // De madrugada (UTC), también ayer: lo que empezó anoche y ESPN apunta en su fecha.
+    expect(espnDays(Date.UTC(2026, 0, 2, 1))).toEqual(['20260101', '20260102']);
   });
 
   it('la fachada sin servicio no puede dar marcadores', async () => {
@@ -370,7 +373,7 @@ describe('computeLiveScores: deriva de ±45 min, ancla de 0,6 y tope de 8 ligas 
     expect((await computeLiveScores(justo.ctx, agenda([partido]))).scores).toHaveProperty('m3');
   });
 
-  it('como mucho 8 ligas por consulta, en el orden en que aparecen', async () => {
+  it('como mucho 8 ligas por consulta: primero las grandes, luego las que más traen', async () => {
     const competiciones = [
       'LaLiga',
       'LaLiga Hypermotion',
@@ -394,5 +397,13 @@ describe('computeLiveScores: deriva de ±45 min, ancla de 0,6 y tope de 8 ligas 
     expect(result).toMatchObject({ success: true, leagues: 8 });
     expect(pedidas).toHaveLength(8);
     expect(pedidas.some((url) => url.includes('/ned.1/'))).toBe(false);
+  });
+});
+
+describe('con muchas ligas en juego, las grandes no se quedan fuera', () => {
+  it('LaLiga se pide aunque llegue la última de 50 ligas', () => {
+    const otras = Array.from({ length: 49 }, (_, index) => `otra.${index}`);
+    const orden = scoreLeaguesByPriority([...otras, 'otra.7', 'esp.1', 'eng.1']);
+    expect(orden.slice(0, 3)).toEqual(['esp.1', 'eng.1', 'otra.7']);
   });
 });
