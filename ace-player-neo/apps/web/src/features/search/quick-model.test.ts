@@ -3,6 +3,7 @@ import { resetMemoryStorage } from '../../lib/storage.ts';
 import { matchAt, NOW, TODAY } from '../agenda/test-utils.tsx';
 import {
   addRecent,
+  channelBrand,
   highlightParts,
   logoText,
   highlightRange,
@@ -33,6 +34,12 @@ describe('resaltado sin tildes ni mayúsculas', () => {
   it('sin coincidencia, el texto entero sin marca', () => {
     expect(highlightRange('DAZN 1', 'movistar')).toBeNull();
     expect(highlightParts('DAZN 1', '')).toEqual(['DAZN 1', '', '']);
+  });
+
+  it('también sin espacios ni signos, como casan los canales', () => {
+    expect(highlightParts('DAZN 1 HD', 'dazn1')).toEqual(['', 'DAZN 1', ' HD']);
+    expect(highlightParts('M+ La Liga TV', 'laliga')).toEqual(['M+ ', 'La Liga', ' TV']);
+    expect(highlightRange('DAZN 1', 'zz')).toBeNull();
   });
 });
 
@@ -117,5 +124,15 @@ describe('la pastilla del canal', () => {
     expect(logoText('DAZN LaLiga 1080p')).toBe('DAZN LaLiga');
     expect(logoText('M+ Liga de Campeones 2')).toBe('M+ 2');
     expect(logoText('LaLiga TV Hypermotion')).toBe('LALIGA');
+  });
+
+  it('con el color de su marca si es un canal conocido (los de la maqueta)', () => {
+    expect(channelBrand('Barça TV')).toEqual({ bg: '#a50044', ink: '#fff' });
+    expect(channelBrand('La 1 HD')).toEqual({ bg: '#fff', ink: '#1d5a37' });
+    expect(channelBrand('La 10')).toBeNull();
+    expect(channelBrand('M+ LaLiga TV')?.bg).toBe('#1c2a6b');
+    expect(channelBrand('Movistar+')?.bg).toBe('#00a1e0');
+    expect(channelBrand('DAZN 1')?.ink).toBe('#0c0c0e');
+    expect(channelBrand('Telecinco')).toBeNull();
   });
 });

@@ -42,10 +42,23 @@ export function highlightRange(text: string, query: string): [number, number] | 
     folded += piece;
   }
   const at = folded.indexOf(q);
-  if (at < 0) return null;
-  const start = origin[at]!;
-  const end = origin[at + q.length - 1]! + 1;
-  return [start, end];
+  if (at >= 0) return [origin[at]!, origin[at + q.length - 1]! + 1];
+  // Los canales también casan sin espacios ni signos («dazn1» con «DAZN 1»,
+  // «laliga» con «La Liga»; filterItems usa la clave del canal): se busca
+  // igual, solo con letras y cifras.
+  const bare = q.replace(/[^\p{L}\p{N}]/gu, '');
+  if (bare.length < QUICK_MIN) return null;
+  let compact = '';
+  const where: number[] = [];
+  for (let k = 0; k < folded.length; k += 1) {
+    const ch = folded[k]!;
+    if (!/[\p{L}\p{N}]/u.test(ch)) continue;
+    compact += ch;
+    where.push(origin[k]!);
+  }
+  const found = compact.indexOf(bare);
+  if (found < 0) return null;
+  return [where[found]!, where[found + bare.length - 1]! + 1];
 }
 
 /** Partes para pintar con <mark>: [antes, resaltado, después]. */
@@ -181,4 +194,35 @@ export function logoText(name: string): string {
   if (clean.length <= 12) return clean;
   const dorsal = channelDorsal(clean);
   return /\d/.test(dorsal) ? `${channelAbbrev(clean)} ${dorsal}` : channelAbbrev(clean);
+}
+
+/** Colores de marca de la pastilla: fondo y letra. */
+export interface ChannelBrand {
+  bg: string;
+  ink: string;
+}
+
+/*
+ * Los de la maqueta (01-escritorio.html, Guía, Canales y Buscar), por el
+ * principio del nombre ya plegado. «M+ …» y «Movistar …» son la marca azul
+ * oscuro de los canales de Movistar; «Movistar+» a secas, el azul claro. Los
+ * blancos llevan el borde de 1 px de la pastilla para que no se pierdan en
+ * el tema claro. El nombre va siempre al lado: la pastilla es decorativa.
+ */
+const CHANNEL_BRANDS: ReadonlyArray<[RegExp, ChannelBrand]> = [
+  [/^barca\b/, { bg: '#a50044', ink: '#fff' }],
+  [/^dazn\b/, { bg: '#f8f8f8', ink: '#0c0c0e' }],
+  [/^(?:movistar ?(?:\+|plus))$/, { bg: '#00a1e0', ink: '#fff' }],
+  [/^(?:m\+|movistar\b)/, { bg: '#1c2a6b', ink: '#fff' }],
+  [/^bein\b/, { bg: '#c8102e', ink: '#fff' }],
+  [/^la 1\b/, { bg: '#fff', ink: '#1d5a37' }],
+  [/^eurosport\b/, { bg: '#ff6a00', ink: '#fff' }],
+  [/^cine ?\+/, { bg: '#5b21b6', ink: '#fff' }],
+  [/^gol\b/, { bg: '#111', ink: '#ffd60a' }],
+];
+
+/** El color de marca de un canal conocido; null si no se sabe (entonces, su tono por el nombre). */
+export function channelBrand(name: string): ChannelBrand | null {
+  const key = foldText(stripQualityMarks(name)).replace(/\s+/g, ' ');
+  return CHANNEL_BRANDS.find(([pattern]) => pattern.test(key))?.[1] ?? null;
 }

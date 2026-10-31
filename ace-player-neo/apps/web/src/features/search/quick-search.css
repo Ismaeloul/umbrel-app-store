@@ -90,8 +90,13 @@
 .qs-field__input:focus-visible {
   outline: none;
 }
-/* El campo es lo único que coge el foco al abrir: lo marca el cursor amarillo
-   (caret-color), como en la maqueta, sin anillo ni raya que corten la ventana. */
+/* Foco visible en el campo: la raya de debajo de la fila pasa a amarilla y de
+   2 px (el anillo del resto de la app quedaría recortado por la ventana, que
+   lleva overflow: hidden). Va por dentro: la fila no se mueve. */
+.qs-field:has(.qs-field__input:focus-visible) {
+  box-shadow: inset 0 -1px 0 var(--accent-edge);
+  border-bottom-color: var(--accent-edge);
+}
 .qs-kbd {
   flex: none;
   padding: 2px 6px;
@@ -122,7 +127,6 @@
 .qs-body {
   flex: 1;
   min-height: 0;
-  padding: 0 0 6px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -247,7 +251,8 @@
   color: var(--text-3);
 }
 
-/* La pastilla del canal (52×36, radio 9): su tono y su nombre, en blanco. */
+/* La pastilla del canal (52×36, radio 9): el color de su marca (o su tono) y
+   su nombre, con la letra de la marca (blanca si no se sabe). */
 .qs-logo {
   display: grid;
   flex: none;
@@ -259,7 +264,7 @@
   border-radius: 9px;
   background: var(--qs-logo);
   box-shadow: inset 0 0 0 1px var(--line-soft);
-  color: #fff;
+  color: var(--qs-logo-ink, #fff);
   font-size: var(--fs-11);
   font-stretch: 85%;
   font-weight: 850;

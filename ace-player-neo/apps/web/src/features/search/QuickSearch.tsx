@@ -16,9 +16,11 @@
      la vista Buscar con el texto.
    - Teclado: flechas para moverse (con vuelta), Intro abre, Ctrl+Intro abre
      «Ver juntos» en una película (pide el nombre aquí mismo y crea la sala);
-     en lo demás, igual que Intro. Esc cierra. Pie con las teclas. Un Intro
-     pulsado antes de que se asiente lo escrito espera a esos resultados (no
-     abre los del texto anterior), y un clic dentro de la ventana no le quita
+     en lo demás, igual que Intro (y el pie solo enseña «Ctrl Intro ver
+     juntos» con una película activa). Esc cierra. Pie con las teclas. Un Intro
+     pulsado antes de que se asiente lo escrito, o mientras llegan sus
+     resultados (tu IPTV, el catálogo), espera a ellos (no abre los del texto
+     anterior ni se pierde), y un clic dentro de la ventana no le quita
      el foco al campo: las flechas siguen funcionando.
    - Accesible: role=dialog modal con el foco atrapado y devuelto al cerrar,
      el campo es un combobox con su listbox (aria-activedescendant), grupos
@@ -72,11 +74,12 @@ import { filterItems, findKnownItem, foldText } from '../library/model.ts';
 import { useOnAir } from '../library/on-air.ts';
 import { playChannel } from '../library/play.ts';
 import { pastedTitle } from '../paste-hash/PasteHashSheet.tsx';
-import { registerIptvChannelsDemo } from './demo-register.ts';
+import { registerGuideNowDemo, registerIptvChannelsDemo } from './demo-register.ts';
 import { isHashOrLink } from './model.ts';
 import { goToEngineSearch } from './navigation.ts';
 import {
   addRecent,
+  channelBrand,
   GROUP_TITLE,
   highlightParts,
   logoText,
@@ -93,8 +96,10 @@ import {
   type QuickMatch,
 } from './quick-model.ts';
 
-// En la demo, «En tu IPTV» contesta con los canales de la IPTV de ejemplo.
+// En la demo, «En tu IPTV» contesta con los canales de la IPTV de ejemplo, y su
+// «Ahora: …» sale de una guía inventada.
 registerIptvChannelsDemo();
+registerGuideNowDemo();
 
 /** Espera tras la última tecla: corta, porque casi todo es local (la agenda y la biblioteca ya están). */
 const SETTLE_MS = 160;
@@ -509,9 +514,10 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
     if (boxRef.current) trapTab(event, boxRef.current);
   };
 
-  // El Intro que esperaba: en cuanto lo escrito se asienta (y la agenda está), abre el primero.
+  // El Intro que esperaba: en cuanto lo escrito se asienta y han llegado sus
+  // resultados (la agenda, tu IPTV y el catálogo), abre el primero.
   useEffect(() => {
-    if (pendingEnter.current === null || clean !== query || schedule.isLoading) return;
+    if (pendingEnter.current === null || loading) return;
     const together = pendingEnter.current;
     pendingEnter.current = null;
     choose(options[0], together);
@@ -526,8 +532,9 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
     if (event.key === 'Enter') {
       event.preventDefault();
       const together = event.ctrlKey || event.metaKey;
-      // Lo escrito aún no se ha asentado: las opciones son las del texto anterior.
-      if (typed && !detected && clean !== query) {
+      // Lo escrito aún no se ha asentado (las opciones son las del texto
+      // anterior) o sus resultados siguen llegando: se abre en cuanto estén.
+      if (loading) {
         pendingEnter.current = together;
         return;
       }
@@ -812,9 +819,13 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
               <span>
                 <kbd className="qs-kbd">Intro</kbd>abrir
               </span>
-              <span>
-                <kbd className="qs-kbd">Ctrl Intro</kbd>ver juntos
-              </span>
+              {/* Solo cuando hace algo: «Ver juntos» crea salas de películas
+                  (en lo demás, Ctrl+Intro es Intro). */}
+              {activeOption?.kind === 'titulo' && activeOption.card.kind === 'movie' ? (
+                <span>
+                  <kbd className="qs-kbd">Ctrl Intro</kbd>ver juntos
+                </span>
+              ) : null}
             </div>
           </>
         )}
@@ -832,9 +843,17 @@ interface OptionProps {
   onClick(event: { ctrlKey: boolean; metaKey: boolean }): void;
 }
 
-/** La pastilla de 52×36 del canal (la de la maqueta): su tono y su nombre. Decorativa: el nombre va al lado. */
+/**
+ * La pastilla de 52×36 del canal (la de la maqueta): el color de su marca si
+ * es un canal conocido y, si no, su tono por el nombre; encima, su nombre.
+ * Decorativa: el nombre va al lado.
+ */
 function ChannelLogo({ name }: { name: string }) {
-  const style = { '--qs-logo': oklchCss(channelTone(name)) } as CSSProperties;
+  const brand = channelBrand(name);
+  const style = {
+    '--qs-logo': brand?.bg ?? oklchCss(channelTone(name)),
+    '--qs-logo-ink': brand?.ink ?? '#fff',
+  } as CSSProperties;
   return (
     <span className="qs-logo" style={style} aria-hidden="true">
       {logoText(name)}

@@ -4,11 +4,13 @@
 
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { BootstrapResponse } from '@ace/shared';
 import { resetMode, setMode } from '../../api/mode.ts';
+import { routeKey } from '../../api/query.ts';
 import { closeQuickSearch, openSearch } from '../../app/search-open.ts';
 import { resetMemoryStorage } from '../../lib/storage.ts';
 import { resetToasts } from '../../notices/toasts.ts';
-import { json, mockFetch } from '../../test/fetch.ts';
+import { fixture, json, mockFetch } from '../../test/fetch.ts';
 import { madridClock } from '../agenda/domain.ts';
 import { matchAt, scheduleOf } from '../agenda/test-utils.tsx';
 import { makeLibrary, renderWithApp, resetPlayback } from '../library/test-utils.tsx';
@@ -32,7 +34,7 @@ function wide(on: boolean) {
     }) as unknown as MediaQueryList) as typeof window.matchMedia;
 }
 
-function setup() {
+function setup(extra: Parameters<typeof mockFetch>[0] = {}) {
   const now = Date.now();
   const live = matchAt(-30, { id: 'clasico', home: 'Real Madrid', away: 'Barcelona' }, now);
   const later = matchAt(
@@ -47,8 +49,18 @@ function setup() {
     'GET /api/v1/library': makeLibrary(),
     'GET /api/v1/football': scheduleOf(days),
     'GET /api/v1/scores': () => json({ error: { code: 'x', message: 'x', requestId: 'r' } }, 503),
+    ...extra,
   });
   return renderWithApp(<QuickSearchHost />, { search: '?vista=agenda' });
+}
+
+/** vodBrowse con las dos pelis del ejemplo, filtradas por el texto (sin series). */
+function browse(url: string) {
+  const params = new URL(url, 'http://x').searchParams;
+  const page = fixture<{ items: Array<{ kind: string; title: string }> }>('vodBrowse');
+  const q = (params.get('q') ?? '').toLowerCase();
+  const items = params.get('kind') === 'movie' ? page.items : [];
+  return json({ ...page, items: items.filter((item) => item.title.toLowerCase().includes(q)) });
 }
 
 const dialog = () =>
@@ -88,7 +100,9 @@ describe('Buscar con Ctrl K (escritorio)', () => {
     expect(
       within(list).getByRole('option', { name: /acestream:\/\/ o Content ID/ }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Ctrl Intro')).toBeInTheDocument();
+    expect(screen.getByText('Intro')).toBeInTheDocument();
+    // «Ctrl Intro ver juntos» solo con una película activa (en lo demás no hace nada distinto).
+    expect(screen.queryByText('Ctrl Intro')).not.toBeInTheDocument();
   });
 
   it('busca en la agenda y en tus canales, agrupado, con el directo primero', async () => {
@@ -148,6 +162,61 @@ describe('Buscar con Ctrl K (escritorio)', () => {
     fireEvent.keyDown(field(), { key: 'Enter' });
     await waitFor(() => expect(screen.getByTestId('ruta')).toHaveTextContent('partido/clasico'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('Intro pulsado mientras llega el catálogo no se pierde: abre la peli en cuanto llega', async () => {
+    let release: () => void = () => {};
+    const arrived = new Promise<void>((resolve) => (release = resolve));
+    const view = setup({
+      'GET /api/v1/vod/browse': async (call) => {
+        await arrived;
+        return browse(call.url);
+      },
+    });
+    const boot = fixture<BootstrapResponse>('bootstrap');
+    act(() => {
+      view.client.setQueryData(routeKey('bootstrap'), {
+        ...boot,
+        features: { ...boot.features, vod: true },
+      });
+    });
+    act(() => openSearch(vi.fn()));
+    await waitFor(() => expect(field()).toHaveFocus());
+    fireEvent.change(field(), { target: { value: 'dune' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    // Ya asentado lo escrito, el catálogo aún no ha contestado: la ventana sigue, esperando.
+    await waitFor(() =>
+      expect(net.calls.some((call) => call.url.startsWith('/api/v1/vod/browse'))).toBe(true),
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    release();
+    await waitFor(() =>
+      expect(screen.getByTestId('ruta')).toHaveTextContent(
+        'cine/4b5c6d7e8f9012345678abcdef0123457a8b9c0d',
+      ),
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('con una película activa, el pie enseña «Ctrl Intro ver juntos»', async () => {
+    const view = setup({
+      'GET /api/v1/vod/browse': (call) => {
+        return browse(call.url);
+      },
+    });
+    const boot = fixture<BootstrapResponse>('bootstrap');
+    act(() => {
+      view.client.setQueryData(routeKey('bootstrap'), {
+        ...boot,
+        features: { ...boot.features, vod: true },
+      });
+    });
+    act(() => openSearch(vi.fn()));
+    await waitFor(() => expect(field()).toHaveFocus());
+    fireEvent.change(field(), { target: { value: 'dune' } });
+    const pelis = await screen.findByRole('group', { name: 'Pelis y series' });
+    expect(within(pelis).getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Ctrl Intro')).toBeInTheDocument();
   });
 
   it('un clic dentro de la ventana deja el foco en el campo y las flechas siguen', async () => {
