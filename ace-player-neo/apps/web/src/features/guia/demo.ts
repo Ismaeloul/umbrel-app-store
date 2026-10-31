@@ -94,7 +94,7 @@ registerDemoHandlers({
     await wait(110);
     const response = demoGuide((query ?? {}) as DemoGuideQuery, Date.now(), options);
     const limit = Math.min(1000, Math.max(0, Number(query?.limit ?? 200) || 0));
-    return big ? bigGuide(response, options, limit) : response;
+    return big && !query?.type ? bigGuide(response, options, limit) : response;
   },
   iptvGuideProgrammes: async ({ query: raw }) => {
     const query = raw as DemoGuideProgrammesQuery;

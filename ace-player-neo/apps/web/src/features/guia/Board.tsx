@@ -1,7 +1,9 @@
 /* La parrilla de la Guía TV (investigación §2-§3.3), estilo Movistar+:
-   canales fijos a la izquierda, regla de horas pegada arriba, raya roja de
-   «ahora» y, en PC, la franja del programa elegido debajo (en el móvil, una
-   hoja al tocar).
+   canales fijos a la izquierda, regla de horas pegada arriba y raya de
+   «ahora». Desde 768 es la parrilla del rediseño de escritorio (`desk`):
+   logo y nombre del canal, horas en mono, raya amarilla, los directos de
+   verdad teñidos de rojo y, al pulsar un programa, un popover (`onOpen`); en
+   el móvil, una hoja al tocar.
 
    - UN contenedor con scroll en los dos ejes. Las filas se virtualizan con
      TanStack Virtual; el eje del tiempo no: cada fila pinta solo los tramos
@@ -53,6 +55,7 @@ import {
   rulerMarks,
   segmentAt,
   segmentLabel,
+  SLOT_MS,
   stepSegment,
   TILE_MS,
   tilesBetween,
@@ -62,6 +65,8 @@ import {
   buildSegments,
   dayLabel,
   dayStart,
+  formatSpan,
+  isOnAir,
   type Scale,
   type Segment,
   type Timeline,
@@ -93,8 +98,12 @@ export interface BoardProps {
   scale: Scale;
   now: number;
   active: boolean;
-  /** true en el móvil: tocar abre la hoja; si no, solo elige (la franja de abajo lo enseña). */
+  /** true en el móvil: tocar abre la hoja. */
   touchSheet: boolean;
+  /** Parrilla de escritorio (desde 768): otra piel, el «Ahora» flotante y el popover. */
+  desk: boolean;
+  /** Escritorio: pulsar (o Intro) abre el popover del programa, anclado a su casilla. */
+  onOpen?(picked: Picked, anchor: HTMLElement): void;
   selection: Selection;
   onSelection(next: Selection): void;
   /** Lo elegido ha cambiado (para la franja y la hoja). */
@@ -119,6 +128,8 @@ export function Board({
   now,
   active,
   touchSheet,
+  desk,
+  onOpen,
   selection,
   onSelection,
   onPicked,
@@ -291,7 +302,13 @@ export function Board({
       const node = scrollRef.current;
       if (!node) return;
       const width = Math.max(1, node.clientWidth - scale.colW);
-      const left = Math.max(0, xOf(t, timeline, scale) - width / 4);
+      /* «Ahora» a un cuarto del ancho; en escritorio, empezando en una media
+         hora en punto (como la maqueta: 19:00 a la izquierda con las 19:42). */
+      const quarter = xOf(t, timeline, scale) - width / 4;
+      const left = Math.max(
+        0,
+        desk ? xOf(floorTo(timeAt(quarter, timeline, scale), SLOT_MS), timeline, scale) : quarter,
+      );
       const behavior = smooth && !prefersReducedMotion() ? 'smooth' : 'instant';
       try {
         node.scrollTo({ left, behavior: behavior as ScrollBehavior });
@@ -300,7 +317,7 @@ export function Board({
       }
       readView();
     },
-    [scale, timeline, readView],
+    [scale, timeline, readView, desk],
   );
 
   const ensureVisible = useCallback(
@@ -353,6 +370,9 @@ export function Board({
     scrollToTime(now, false);
     // Solo al abrir: `now` avanza y no debe mover la parrilla.
   }, [openKey]);
+
+  const activeId =
+    selectedSegment && selectedChannel ? cellId(selection.row, selectedSegment) : undefined;
 
   // ---- Teclear un número de canal ----
   const [typed, setTyped] = useState('');
@@ -414,7 +434,10 @@ export function Board({
         controls.current?.goNow();
         break;
       case 'Enter':
-        if (picked) {
+        if (picked && onOpen) {
+          const cell = activeId ? document.getElementById(activeId) : null;
+          if (cell) onOpen(picked, cell);
+        } else if (picked) {
           if (
             picked.segment.kind !== 'prog' ||
             airingOf(picked.segment.start, picked.segment.end, now) === 'live'
@@ -425,7 +448,10 @@ export function Board({
         break;
       case 'i':
       case 'I':
-        if (picked) onInfo(picked);
+        if (picked && onOpen) {
+          const cell = activeId ? document.getElementById(activeId) : null;
+          if (cell) onOpen(picked, cell);
+        } else if (picked) onInfo(picked);
         break;
       default:
         if (/^\d$/.test(event.key)) setTyped((old) => (old + event.key).slice(-4));
@@ -446,8 +472,6 @@ export function Board({
       for (const state of row.values()) if (state.status === 'error') return true;
     return false;
   }, [tileStates]);
-  const activeId =
-    selectedSegment && selectedChannel ? cellId(selection.row, selectedSegment) : undefined;
 
   return (
     <div
@@ -531,7 +555,7 @@ export function Board({
                 aria-rowindex={item.index + 2}
                 style={{ top: item.start, width: contentW }}
               >
-                <ChannelCell channel={channel} version={head.version} wide={scale.stripH > 0} />
+                <ChannelCell channel={channel} version={head.version} desk={desk} />
                 {segments ? (
                   visibleSegments(segments, qFrom, qTo).map((segment) => (
                     <Block
@@ -543,8 +567,9 @@ export function Board({
                         xOf(segment.end, timeline, scale) - xOf(segment.start, timeline, scale)
                       }
                       now={now}
+                      desk={desk}
                       selected={selection.row === item.index && segment === selectedSegment}
-                      onClick={() => {
+                      onClick={(cell) => {
                         select(
                           {
                             row: item.index,
@@ -553,7 +578,8 @@ export function Board({
                           false,
                         );
                         scrollRef.current?.focus({ preventScroll: true });
-                        if (touchSheet && channel) onInfo({ channel, segment });
+                        if (onOpen && channel) onOpen({ channel, segment }, cell);
+                        else if (touchSheet && channel) onInfo({ channel, segment });
                       }}
                       onDoubleClick={() => {
                         if (!channel) return;
@@ -580,7 +606,29 @@ export function Board({
           })}
         </div>
       </div>
-      {nowInRange && !nowVisible ? (
+      {nowInRange && !nowVisible && desk ? (
+        <>
+          {/* El brillo del borde dice hacia dónde queda «ahora» (guia-detalles.html §2). */}
+          <span
+            className={cx(
+              'guia-nowglow',
+              nowX < view.left + scale.colW ? 'guia-nowglow--left' : 'guia-nowglow--right',
+            )}
+            aria-hidden="true"
+          />
+          <Button
+            className="guia-nowfloat"
+            variant="primary"
+            size="sm"
+            icon={nowX < view.left + scale.colW ? 'chev-l' : undefined}
+            trailingIcon={nowX < view.left + scale.colW ? undefined : 'chev-r'}
+            onClick={() => controls.current?.goNow()}
+            aria-label={`Volver a ahora, ${formatTime(now)}`}
+          >
+            Ahora <span className="guia-nowfloat__time">{formatTime(now)}</span>
+          </Button>
+        </>
+      ) : nowInRange && !nowVisible ? (
         <Button
           className="guia-nowpill"
           variant="primary"
@@ -616,11 +664,11 @@ function cellId(row: number, segment: Segment): string {
 function ChannelCell({
   channel,
   version,
-  wide,
+  desk,
 }: {
   channel: IptvGuideChannel | undefined;
   version: string;
-  wide: boolean;
+  desk: boolean;
 }) {
   if (!channel)
     return (
@@ -637,7 +685,7 @@ function ChannelCell({
           <span aria-hidden="true">·</span>
         )}
       </span>
-      {wide ? <ChannelLogo channel={channel} version={version} size={30} /> : null}
+      {desk ? <ChannelLogo channel={channel} version={version} size={32} /> : null}
       <span className="guia-chan__name">
         {channel.name}
         {channel.country ? <small className="guia-chan__country">{channel.country}</small> : null}
@@ -681,6 +729,7 @@ function Block({
   left,
   width,
   now,
+  desk,
   selected,
   onClick,
   onDoubleClick,
@@ -690,11 +739,13 @@ function Block({
   left: number;
   width: number;
   now: number;
+  desk: boolean;
   selected: boolean;
-  onClick(): void;
+  onClick(cell: HTMLElement): void;
   onDoubleClick(): void;
 }) {
   const airing = segment.kind === 'prog' ? airingOf(segment.start, segment.end, now) : null;
+  const onAir = segment.kind === 'prog' && isOnAir(segment.programme, now);
   const label = segmentLabel(segment, now);
   const narrow = width < 44;
   const text =
@@ -716,20 +767,28 @@ function Block({
         'guia-block',
         `guia-block--${segment.kind}`,
         airing && `guia-block--${airing}`,
+        onAir && 'guia-block--onair',
         selected && 'guia-block--selected',
       )}
-      style={{ left, width: Math.max(1, width - 2), '--bx': `${left}px` } as CSSProperties}
-      onClick={onClick}
+      style={
+        { left, width: Math.max(1, width - (desk ? 6 : 2)), '--bx': `${left}px` } as CSSProperties
+      }
+      onClick={(event) => onClick(event.currentTarget)}
       onDoubleClick={onDoubleClick}
     >
       {segment.kind === 'loading' ? (
         <span className="guia-block__shimmer" />
       ) : narrow ? null : (
         <span className="guia-block__label">
-          <span className="guia-block__title">{text}</span>
-          {segment.kind === 'prog' && width >= 140 ? (
+          <span className="guia-block__title">
+            {onAir && desk ? <span className="guia-block__dot" aria-hidden="true" /> : null}
+            {text}
+          </span>
+          {segment.kind === 'prog' && width >= (desk ? 96 : 140) ? (
             <span className="guia-block__time">
-              {formatTime(segment.programme.start)}-{formatTime(segment.programme.end)}
+              {desk
+                ? formatSpan(segment.programme.start, segment.programme.end)
+                : `${formatTime(segment.programme.start)}-${formatTime(segment.programme.end)}`}
             </span>
           ) : null}
         </span>

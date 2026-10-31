@@ -49,13 +49,12 @@
   font-size: var(--fs-13);
 }
 
-/* ---- El tablero: parrilla + franja ---------------------------------------- */
+/* ---- El tablero ----------------------------------------------------------- */
 .guia-board {
   --guia-bottom: calc(var(--safe-bottom) + var(--tabbar-h) + var(--tabbar-gap) + 12px);
   display: flex;
   flex-direction: column;
-  /* Tope, no alto fijo: con pocos canales la parrilla mide lo que tiene y la
-     franja va justo debajo (a 1920×1080 quedaban ~260 px vacíos en medio). */
+  /* Tope, no alto fijo: con pocos canales la parrilla mide lo que tiene. */
   max-height: max(340px, calc(100dvh - var(--guia-top, 200px) - var(--guia-bottom)));
   /* En el móvil, de borde a borde: cada píxel de ancho es tiempo que se ve. */
   margin-inline: calc(-1 * var(--gutter));
@@ -389,94 +388,6 @@
   transform: translate(-50%, -50%);
 }
 
-/* ---- Franja del programa elegido (PC) -------------------------------------- */
-.guia-strip {
-  flex: none;
-  display: grid;
-  grid-template-columns: var(--col-w) minmax(0, 1fr);
-  height: var(--strip-h);
-  background: var(--surface);
-  border-bottom: 1px solid var(--line-soft);
-}
-.guia-strip--empty {
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-}
-.guia-strip__channel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 12px;
-  border-right: 1px solid var(--line-soft);
-  text-align: center;
-}
-.guia-strip__chname {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  font-size: var(--fs-13);
-  font-weight: var(--wght-strong);
-}
-.guia-strip__num {
-  color: var(--text-2);
-  font-size: var(--fs-15);
-}
-.guia-strip__main {
-  display: grid;
-  align-content: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 14px 24px;
-}
-.guia-strip__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-.guia-strip__title {
-  margin: 0;
-  overflow: hidden;
-  font-size: var(--fs-22);
-  font-weight: var(--wght-strong);
-  font-stretch: var(--w-tight);
-  line-height: var(--lh-tight);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.guia-strip__bar {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  max-width: 720px;
-}
-.guia-strip__time {
-  color: var(--text-2);
-  font-size: var(--fs-13);
-  font-variant-numeric: tabular-nums;
-}
-.guia-strip__foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  max-width: 720px;
-}
-.guia-strip__when {
-  color: var(--text-2);
-  font-size: var(--fs-13);
-}
-.guia-strip__actions {
-  display: flex;
-  gap: 8px;
-}
-
 /* ---- Hoja «Más info» ------------------------------------------------------- */
 .guia-sheet__body {
   display: grid;
@@ -568,31 +479,384 @@
   font-size: var(--fs-13);
 }
 
-/* ---- Desde 768: tarjeta con esquinas y sin barra de abajo ------------------- */
-@media (min-width: 768px) {
-  .guia-board {
-    --guia-bottom: calc(var(--safe-bottom) + 20px);
-    margin-inline: 0;
-    border: 1px solid var(--line-soft);
-    border-radius: var(--r-l);
-    overflow: hidden;
-  }
-  .app[data-mini='true'] .guia-board {
-    --guia-bottom: calc(var(--safe-bottom) + var(--mini-h) + 40px);
-  }
-  .guia-board--skeleton {
-    padding-inline: 0;
-    border: 0;
-  }
-  .guia-grid-wrap {
-    border-block: 0;
-    border-bottom: 1px solid var(--line-soft);
-  }
-  .guia-strip {
-    border-bottom: 0;
-  }
-}
 .guia-sheet__num {
   color: var(--text-2);
   font-weight: var(--wght-medium);
+}
+
+/* ==== Desde 768: la Guía del rediseño de escritorio (01-escritorio.html §2) ====
+   Parrilla a lo ancho, de borde a borde de la columna: canales con su logo y
+   su nombre sobre el fondo, programas en tarjetas de 12 px con la hora en
+   mono, los directos de verdad teñidos de rojo con su punto, lo pasado
+   apagado y la raya de «ahora» amarilla con su hora en una píldora. */
+@media (min-width: 768px) {
+  .guia-board {
+    --guia-bottom: calc(var(--safe-bottom) + 0px);
+    margin-inline: calc(-1 * var(--gutter)) calc(-1 * (var(--gutter) + var(--safe-right)));
+  }
+  .app[data-mini='true'] .guia-board {
+    --guia-bottom: calc(var(--safe-bottom) + 0px);
+  }
+  .guia-board--skeleton {
+    padding: var(--s-3) var(--gutter);
+  }
+
+  /* ---- Barra: días y chips (dgbar) ---- */
+  .guia-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px var(--s-3);
+    min-width: 0;
+    padding: 12px 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .guia-bar::-webkit-scrollbar {
+    display: none;
+  }
+  .guia-bar__days {
+    display: flex;
+    flex: none;
+    gap: 6px;
+  }
+  .guia-bar__day {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-width: 78px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 12px;
+    color: var(--text-2);
+    font-size: var(--fs-12);
+    font-weight: 620;
+    white-space: nowrap;
+  }
+  /* Zona de 44 px aunque el dibujo mida 32. */
+  .guia-bar__day::before {
+    content: '';
+    position: absolute;
+    inset: -6px 0;
+  }
+  .guia-bar__day[aria-pressed='true'] {
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: var(--fs-13);
+    font-weight: var(--wght-strong);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .guia-bar__day[aria-pressed='false']:hover {
+      background: var(--line-soft);
+      color: var(--text);
+    }
+  }
+  .guia-bar__chips {
+    display: flex;
+    flex: none;
+    gap: 6px;
+  }
+  .guia-bar__chips .chip {
+    height: 30px;
+  }
+  /* Como la maqueta: el elegido es el velo de acento, sin filo. */
+  .guia-bar__chips .chip[aria-pressed='true'] {
+    box-shadow: none;
+  }
+
+  /* ---- La parrilla, sin tarjeta ---- */
+  .guia--desk .guia-grid-wrap {
+    border-block: 0;
+    background: var(--bg);
+  }
+  .guia--desk .guia-ruler {
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .guia--desk .guia-ruler__corner {
+    background: var(--bg);
+    border-right: 1px solid var(--line);
+  }
+  .guia--desk .guia-ruler__day,
+  .guia--desk .guia-ruler__date {
+    display: none;
+  }
+  .guia--desk .guia-ruler__mark {
+    border-left: 0;
+    padding-left: 0;
+    color: var(--text-3);
+    font-family: var(--mono);
+    font-size: var(--fs-11);
+    font-weight: 400;
+  }
+  .guia--desk .guia-ruler__mark--day {
+    color: var(--text-2);
+    font-weight: var(--wght-strong);
+  }
+  .guia--desk .guia-ruler__label {
+    padding-left: 6px;
+    translate: -6px 0;
+  }
+  .guia--desk .guia-ruler__now {
+    padding: 0 7px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-family: var(--mono);
+    font-size: var(--fs-11);
+    font-weight: var(--wght-strong);
+    /* Tapa la hora de la media hora que tenga debajo (la maqueta: «19:30» y «19:42»). */
+    box-shadow: 0 0 0 3px var(--bg);
+  }
+  .guia--desk .guia-now {
+    background: var(--accent);
+  }
+
+  /* Canales: logo y nombre sobre el fondo, filo a la derecha y debajo. */
+  .guia--desk .guia-chan {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+    padding: 0 10px 0 16px;
+    background: var(--bg);
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .guia--desk .guia-chan__num,
+  .guia--desk .guia-chan__fav {
+    display: none;
+  }
+  .guia--desk .guia-chan__name {
+    font-size: var(--fs-13);
+    font-weight: 650;
+  }
+  .guia--desk .guia-chan .guia-logo,
+  .guia--desk .guia-chan .channel-mark {
+    border-radius: 10px;
+  }
+  .guia--desk .guia-row {
+    border-bottom: 1px solid var(--line);
+    box-sizing: border-box;
+  }
+
+  /* Programas: tarjetas de 12 px con 6 px de aire arriba, abajo y entre ellas. */
+  .guia--desk .guia-block {
+    top: 6px;
+    height: calc(var(--row-h) - 13px);
+    margin-left: 3px;
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+  }
+  .guia--desk .guia-block__label {
+    gap: 3px;
+    padding: 0 10px;
+  }
+  .guia--desk .guia-block__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: var(--fs-13);
+    font-weight: 650;
+    font-stretch: 100%;
+  }
+  .guia--desk .guia-block__time {
+    color: var(--text-3);
+    font-family: var(--mono);
+    font-size: var(--fs-11);
+  }
+  /* Lo que se emite ahora: un punto más de relieve. */
+  .guia--desk .guia-block--live {
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  /* Un directo de verdad (marca de la guía) en emisión: teñido de rojo. */
+  .guia--desk .guia-block--onair {
+    background: color-mix(in oklab, var(--live) 14%, var(--surface));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--live) 22%, transparent);
+  }
+  .guia-block__dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--live);
+  }
+  /* Lo pasado, apagado (como la maqueta: la hora sigue leyéndose). */
+  .guia--desk .guia-block--past {
+    background: var(--surface);
+    opacity: 0.5;
+  }
+  .guia--desk .guia-block--past .guia-block__title {
+    color: var(--text-2);
+    font-weight: 600;
+  }
+  .guia--desk .guia-block--none,
+  .guia--desk .guia-block--loading,
+  .guia--desk .guia-block--error {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .guia--desk .guia-block:hover {
+      background: color-mix(in oklab, var(--surface), var(--text) 6%);
+    }
+    .guia--desk .guia-block--onair:hover {
+      background: color-mix(in oklab, var(--live) 20%, var(--surface));
+    }
+  }
+  /* Lo elegido solo se marca con el teclado o con su popover abierto. */
+  .guia--desk .guia-block--selected,
+  .guia--desk .guia-block--selected:hover {
+    outline: 0;
+  }
+  .guia--desk .guia-block--selected .guia-block__title {
+    color: inherit;
+  }
+  .guia--desk.guia--pop .guia-block--selected,
+  .guia--desk .guia-grid:focus-visible .guia-block--selected {
+    box-shadow: inset 0 0 0 2px var(--accent-edge);
+    opacity: 1;
+  }
+
+  /* ---- «‹ Ahora 19:42» flotante y el brillo del borde ---- */
+  .guia-nowfloat {
+    position: absolute;
+    bottom: 20px;
+    left: calc(var(--col-w) + (100% - var(--col-w)) / 2);
+    z-index: 6;
+    min-height: 44px;
+    padding: 0 18px;
+    font-size: var(--fs-15);
+    translate: -50% 0;
+    box-shadow: var(--shadow-2);
+  }
+  .guia-nowfloat__time {
+    font-family: var(--mono);
+    font-size: var(--fs-12);
+    font-weight: var(--wght-strong);
+  }
+  .guia-nowglow {
+    position: absolute;
+    top: var(--ruler-h);
+    bottom: 0;
+    z-index: 5;
+    width: 28px;
+    pointer-events: none;
+  }
+  .guia-nowglow--left {
+    left: var(--col-w);
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--accent) 34%, transparent),
+      transparent
+    );
+  }
+  .guia-nowglow--right {
+    right: 0;
+    background: linear-gradient(
+      270deg,
+      color-mix(in oklab, var(--accent) 34%, transparent),
+      transparent
+    );
+  }
+}
+
+/* ---- El popover del programa (escritorio) ---------------------------------- */
+.guia-pop {
+  width: 340px;
+}
+.guia-pop__body {
+  display: grid;
+}
+.guia-pop__channel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.guia-pop__chname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.guia-pop__title {
+  margin: 14px 0 0;
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
+  font-stretch: 115%;
+  letter-spacing: var(--tracking-head);
+  line-height: var(--lh-tight);
+  overflow-wrap: anywhere;
+}
+.guia-pop__time {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 8px 0 0;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+.guia-pop__when {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-family: var(--font);
+  font-size: var(--fs-12);
+  font-weight: 650;
+}
+.guia-pop__when--now,
+.guia-pop__when--past {
+  background: var(--line-soft);
+  color: var(--text-2);
+}
+.guia-pop__when--live {
+  background: color-mix(in oklab, var(--live) 14%, transparent);
+  color: var(--live-ink);
+}
+.guia-pop__text {
+  display: -webkit-box;
+  margin: 12px 0 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-text);
+}
+.guia-pop__agenda {
+  margin: 10px 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.guia-pop__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.guia-pop__actions .btn {
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: var(--fs-15);
+}
+/* «Te aviso»: el velo de acento (con la tinta de acento) también sin pulsar. */
+.guia-pop__aviso,
+.guia-pop__aviso[aria-pressed='false'] {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+.guia-pop__note {
+  margin: 10px 0 0;
+  color: var(--text-3);
+  font-size: var(--fs-12);
 }

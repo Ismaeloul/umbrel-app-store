@@ -40,6 +40,7 @@ export {
   type MenuProps,
 } from './Menu.tsx';
 export { Num, splitDigits, type NumProps } from './Num.tsx';
+export { placePopover, Popover, type PopoverProps, type PopoverRect } from './Popover.tsx';
 export { PosterRail, type PosterRailProps } from './PosterRail.tsx';
 export { ProgressBar, type ProgressBarProps } from './ProgressBar.tsx';
 export {

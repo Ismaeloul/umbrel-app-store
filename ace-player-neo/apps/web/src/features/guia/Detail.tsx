@@ -1,20 +1,29 @@
-/* El programa elegido: la franja de abajo en PC (como la del deco de
-   Movistar+: logo, número y nombre del canal; título; barra de progreso con
-   inicio y fin; «Ver» y «Más info») y la hoja «Más info» (en el móvil, la que
-   se abre al tocar), con todo lo que diga la guía: sobre todo la sinopsis,
-   que es lo que trae el proveedor de Isma (Paso 0: 100 % con sinopsis, sin
-   imágenes, géneros ni episodios). */
+/* El programa elegido: el popover de escritorio (rediseño, 01-escritorio.html
+   §2 y guia-detalles.html §1: canal, título entero, horario, «Empieza en X
+   min», «Te aviso» y «Ver ficha» si el partido está en la Agenda) y la hoja
+   «Más info» (en el móvil, la que se abre al tocar), con todo lo que diga la
+   guía: sobre todo la sinopsis, que es lo que trae el proveedor de Isma
+   (Paso 0: 100 % con sinopsis, sin imágenes, géneros ni episodios). */
 
 import type { IptvGuideProgrammeDetail } from '@ace/shared';
-import { Button, Capsule, Num, ProgressBar, Sheet, Skeleton } from '../../ui/index.ts';
+import { useMemo } from 'react';
+import { useNavigate } from '../../app/router.tsx';
+import { askNoticePermission, addAviso, removeAviso, useHasAviso } from '../avisos/store.ts';
+import '../agenda/demo.ts';
+import { useSchedule } from '../agenda/data.ts';
+import { Button, Capsule, Num, Popover, ProgressBar, Sheet, Skeleton } from '../../ui/index.ts';
+import { matchForProgramme } from './agenda-link.ts';
 import { ChannelLogo, type Picked } from './Board.tsx';
 import { useGuideProgramme } from './data.ts';
 import {
   airingOf,
   formatLongDay,
+  formatSpan,
   formatTime,
+  isOnAir,
   progressOf,
   remainingText,
+  startsText,
   type Airing,
 } from './model.ts';
 
@@ -88,76 +97,6 @@ function PlayButton({
     <Button variant={live ? 'primary' : 'quiet'} icon="play" size={size} onClick={onPlay}>
       {live ? 'Ver' : 'Ver el canal'}
     </Button>
-  );
-}
-
-export function Strip({
-  picked,
-  version,
-  now,
-  onPlay,
-  onInfo,
-}: {
-  picked: Picked | null;
-  version: string;
-  now: number;
-  onPlay(): void;
-  onInfo(): void;
-}) {
-  if (!picked)
-    return (
-      <section className="guia-strip guia-strip--empty" aria-label="Programa elegido">
-        <Skeleton width={220} height={20} />
-      </section>
-    );
-  const shown = shownOf(picked, now);
-  const { channel } = picked;
-  const when = whenLine(shown, now);
-  return (
-    <section className="guia-strip" aria-label="Programa elegido">
-      <div className="guia-strip__channel">
-        <ChannelLogo channel={channel} version={version} size={56} />
-        <span className="guia-strip__chname">{channel.name}</span>
-        {channel.number !== null && !nameHasNumber(channel.name, channel.number) ? (
-          <Num
-            className="guia-strip__num"
-            value={channel.number}
-            label={`Canal ${channel.number}`}
-          />
-        ) : null}
-      </div>
-      <div className="guia-strip__main">
-        <div className="guia-strip__head">
-          <h2 className="guia-strip__title">{shown.title}</h2>
-          {shown.real && shown.airing === 'live' ? (
-            <Capsule tone="live" size="sm">
-              En emisión
-            </Capsule>
-          ) : null}
-        </div>
-        <div className="guia-strip__bar">
-          <span className="guia-strip__time">{formatTime(shown.start)}</span>
-          <ProgressBar
-            value={progressOf(shown.start, shown.end, now)}
-            tone={shown.airing === 'live' ? 'live' : 'neutral'}
-            size="thin"
-            label={`De ${formatTime(shown.start)} a ${formatTime(shown.end)}`}
-          />
-          <span className="guia-strip__time">{formatTime(shown.end)}</span>
-        </div>
-        <div className="guia-strip__foot">
-          <span className="guia-strip__when">{when}</span>
-          <div className="guia-strip__actions">
-            <PlayButton shown={shown} onPlay={onPlay} size="sm" />
-            {shown.real ? (
-              <Button variant="quiet" size="sm" icon="info" onClick={onInfo}>
-                Más info
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -296,5 +235,193 @@ export function InfoSheet({
         </div>
       ) : null}
     </Sheet>
+  );
+}
+
+// ---- El popover de escritorio ------------------------------------------------------------
+
+export interface PopoverTarget {
+  picked: Picked;
+  anchor: HTMLElement;
+}
+
+/** El id del aviso de un programa: el mismo programa no se apunta dos veces. */
+export const avisoIdOf = (programmeId: string): string => `guia:${programmeId}`;
+
+export function ProgrammePopover({
+  target,
+  version,
+  now,
+  onClose,
+  onPlay,
+}: {
+  target: PopoverTarget | null;
+  version: string;
+  now: number;
+  onClose(): void;
+  onPlay(): void;
+}) {
+  return (
+    <Popover
+      open={target !== null}
+      anchor={target?.anchor ?? null}
+      onClose={onClose}
+      label={target ? shownOf(target.picked, now).title : 'Programa'}
+      inset={target ? insetFor(target.anchor) : 0}
+      className="guia-pop"
+    >
+      {target ? (
+        <PopoverBody
+          picked={target.picked}
+          version={version}
+          now={now}
+          onClose={onClose}
+          onPlay={onPlay}
+        />
+      ) : null}
+    </Popover>
+  );
+}
+
+/** Un programa ancho: el popover sale un poco metido, sin tapar su título (como la maqueta). */
+function insetFor(anchor: HTMLElement): number {
+  const width = anchor.getBoundingClientRect().width;
+  return width > 360 ? Math.min(160, width / 4) : 0;
+}
+
+function PopoverBody({
+  picked,
+  version,
+  now,
+  onClose,
+  onPlay,
+}: {
+  picked: Picked;
+  version: string;
+  now: number;
+  onClose(): void;
+  onPlay(): void;
+}) {
+  const navigate = useNavigate();
+  const programme = picked.segment.kind === 'prog' ? picked.segment.programme : null;
+  const shown = shownOf(picked, now);
+  const query = useGuideProgramme(programme?.id ?? null, version, programme !== null);
+  const detail = query.data;
+  const schedule = useSchedule().data;
+  const match = useMemo(() => {
+    if (!programme || !schedule) return null;
+    return matchForProgramme(
+      programme,
+      schedule.days.flatMap((day) => day.matches),
+    );
+  }, [programme, schedule]);
+  const avisoId = programme ? avisoIdOf(programme.id) : '';
+  const avisado = useHasAviso(avisoId);
+  const onAir = programme !== null && isOnAir(programme, now);
+  const category = detail?.categories[0];
+  const toggleAviso = () => {
+    if (!programme) return;
+    if (avisado) {
+      removeAviso(avisoId);
+      return;
+    }
+    addAviso({
+      id: avisoId,
+      title: programme.title,
+      channel: picked.channel.name,
+      start: programme.start,
+      end: programme.end,
+      ...(match ? { match: match.id } : {}),
+    });
+    void askNoticePermission();
+  };
+  const openMatch = () => {
+    if (!match) return;
+    onClose();
+    navigate({ vista: 'partido', id: match.id, canal: null });
+  };
+  return (
+    <div className="guia-pop__body">
+      <div className="guia-pop__channel">
+        <ChannelLogo channel={picked.channel} version={version} size={32} />
+        <span className="guia-pop__chname">
+          {picked.channel.name}
+          {category ? ` · ${category}` : ''}
+        </span>
+      </div>
+      <h2 className="guia-pop__title">{shown.title}</h2>
+      <p className="guia-pop__time">
+        <span>{formatSpan(shown.start, shown.end)}</span>
+        {shown.real ? (
+          <span
+            className={
+              shown.airing === 'live'
+                ? onAir
+                  ? 'guia-pop__when guia-pop__when--live'
+                  : 'guia-pop__when guia-pop__when--now'
+                : shown.airing === 'past'
+                  ? 'guia-pop__when guia-pop__when--past'
+                  : 'guia-pop__when'
+            }
+          >
+            {shown.airing === 'live'
+              ? onAir
+                ? `En directo · ${remainingText(shown.end, now).toLowerCase()}`
+                : remainingText(shown.end, now)
+              : shown.airing === 'future'
+                ? startsText(shown.start, now)
+                : 'Ya emitido'}
+          </span>
+        ) : null}
+      </p>
+      {programme && detail?.description ? (
+        <p className="guia-pop__text">{detail.description}</p>
+      ) : null}
+      {match ? (
+        <p className="guia-pop__agenda">
+          Este partido está en tu Agenda
+          {match.channels.length
+            ? ` con ${match.channels.length} ${match.channels.length === 1 ? 'canal' : 'canales'}`
+            : ''}
+          .
+        </p>
+      ) : null}
+      <div className="guia-pop__actions">
+        {shown.airing === 'future' && programme ? (
+          <Button
+            className="guia-pop__aviso"
+            icon={avisado ? 'check' : 'campana'}
+            pressed={avisado}
+            onClick={toggleAviso}
+          >
+            {avisado ? 'Te avisaré' : 'Te aviso'}
+          </Button>
+        ) : (
+          <Button
+            variant={shown.airing === 'live' || !shown.real ? 'primary' : 'quiet'}
+            icon="play"
+            onClick={onPlay}
+          >
+            {shown.airing === 'live' || !shown.real ? 'Ver ahora' : 'Ver el canal'}
+          </Button>
+        )}
+        {match ? (
+          <Button
+            variant={shown.airing === 'future' ? 'primary' : 'quiet'}
+            icon="agenda"
+            onClick={openMatch}
+          >
+            Ver ficha
+          </Button>
+        ) : shown.airing === 'future' ? (
+          <Button variant="quiet" icon="play" onClick={onPlay}>
+            Ver el canal
+          </Button>
+        ) : null}
+      </div>
+      {shown.airing === 'future' && programme ? (
+        <p className="guia-pop__note">Te avisaremos 5 minutos antes</p>
+      ) : null}
+    </div>
   );
 }

@@ -7,9 +7,11 @@
 
 import {
   GUIDE_FLAGS,
+  hasGuideFlag,
   IPTV_GUIDE_API,
   type IptvGuideProgramme,
   type IptvGuideScope,
+  type IptvType,
 } from '@ace/shared';
 
 export const MINUTE = 60_000;
@@ -39,20 +41,22 @@ export interface Scale {
   colW: number;
   rowH: number;
   rulerH: number;
-  /** Franja del programa elegido abajo (0 en el móvil: allí es una hoja). */
-  stripH: number;
 }
 
+/* Desde 768, la parrilla del rediseño de escritorio (01-escritorio.html §2):
+   156 px por media hora (unas 3 h a la vista a 1280), filas de 64 y la
+   columna justa para el logo y el nombre. El programa elegido sale en un
+   popover; en el móvil, en una hoja. */
 export function scaleFor(kind: LayoutKind): Scale {
   switch (kind) {
     case 'wide':
-      return { ppm: 200 / 30, colW: 232, rowH: 56, rulerH: 36, stripH: 148 };
+      return { ppm: 156 / 30, colW: 196, rowH: 64, rulerH: 40 };
     case 'desktop':
-      return { ppm: 180 / 30, colW: 208, rowH: 56, rulerH: 36, stripH: 148 };
+      return { ppm: 156 / 30, colW: 176, rowH: 64, rulerH: 40 };
     case 'tablet':
-      return { ppm: 160 / 30, colW: 184, rowH: 56, rulerH: 36, stripH: 132 };
+      return { ppm: 140 / 30, colW: 160, rowH: 64, rulerH: 40 };
     default:
-      return { ppm: 120 / 30, colW: 96, rowH: 64, rulerH: 32, stripH: 0 };
+      return { ppm: 120 / 30, colW: 96, rowH: 64, rulerH: 32 };
   }
 }
 
@@ -91,6 +95,9 @@ const SHORT_DAY = new Intl.DateTimeFormat('es-ES', {
 export const formatTime = (t: number): string => TIME.format(t);
 export const formatRange = (start: number, end: number): string =>
   `${formatTime(start)}-${formatTime(end)}`;
+/** «18:30–20:25», con la raya de intervalo (la parrilla de escritorio, en mono). */
+export const formatSpan = (start: number, end: number): string =>
+  `${formatTime(start)}–${formatTime(end)}`;
 const clean = (text: string): string => text.replace(/\./g, '');
 /** «sáb 3 oct». */
 export const formatShortDay = (t: number): string => clean(SHORT_DAY.format(t));
@@ -102,6 +109,29 @@ export function dayLabel(start: number, today: number): string {
   if (start === today) return 'Hoy';
   if (start === addDays(today, 1)) return 'Mañana';
   return clean(WEEKDAY.format(start));
+}
+
+/** Los chips de día de escritorio: «Ayer», «Hoy» y luego «Dom 1», «Lun 2» (como la maqueta). */
+export function dayChipLabel(start: number, today: number): string {
+  if (start === today) return 'Hoy';
+  if (start === addDays(today, -1)) return 'Ayer';
+  const text = clean(WEEKDAY.format(start));
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** «Empieza en 18 min», «Empieza en 2 h 5 min» o, otro día, «Mañana a las 20:00». */
+export function startsText(start: number, now: number): string {
+  const minutes = Math.max(1, Math.round((start - now) / MINUTE));
+  if (dayStart(start) !== dayStart(now)) {
+    const today = dayStart(now);
+    const day = dayStart(start);
+    const label = day === addDays(today, 1) ? 'Mañana' : `El ${clean(WEEKDAY.format(start))}`;
+    return `${label} a las ${formatTime(start)}`;
+  }
+  if (minutes < 60) return `Empieza en ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `Empieza en ${hours} h ${rest} min` : `Empieza en ${hours} h`;
 }
 
 /** «Quedan 40 min», «Quedan 1 h 5 min». */
@@ -144,10 +174,22 @@ export interface Coverage {
  * entero como mínimo y pasado mañana como máximo. Los días son los que tienen
  * algo de programación.
  */
-export function buildTimeline(coverage: Coverage, now: number): Timeline {
+export function buildTimeline(
+  coverage: Coverage,
+  now: number,
+  options: { yesterday?: boolean } = {},
+): Timeline {
   const today = dayStart(now);
   const lastEnd = addDays(today, MAX_DAYS);
-  const start = coverage.from !== null ? Math.max(today, floorTo(coverage.from, SLOT_MS)) : today;
+  /* Escritorio (la maqueta): también ayer, si la guía guardada lo tiene bien
+     dentro (no hay catch-up: se ve lo que echaron, el canal suena en directo). */
+  const yesterday = addDays(today, -1);
+  const withYesterday =
+    options.yesterday === true &&
+    coverage.coveredFrom !== null &&
+    coverage.coveredFrom <= today - DAY_WITH_DATA_MS;
+  const first = withYesterday ? yesterday : today;
+  const start = coverage.from !== null ? Math.max(first, floorTo(coverage.from, SLOT_MS)) : first;
   const todayEnd = addDays(today, 1);
   let end = todayEnd;
   if (coverage.coveredTo !== null) {
@@ -157,6 +199,7 @@ export function buildTimeline(coverage: Coverage, now: number): Timeline {
   // Hoy se enseña entero aunque la guía acabe antes: lo que falta es «Sin información».
   end = Math.max(end, todayEnd, start + SLOT_MS);
   const days: GuideDay[] = [];
+  if (withYesterday) days.push({ start: yesterday, label: 'Ayer' });
   for (let index = 0; index < MAX_DAYS; index += 1) {
     const day = addDays(today, index);
     if (day >= end) break;
@@ -346,6 +389,14 @@ export function stepSegment(
 
 export type Airing = 'live' | 'past' | 'future';
 
+/** Un directo de verdad que se está emitiendo (la marca de la guía): va teñido de rojo. */
+export function isOnAir(programme: IptvGuideProgramme, now: number): boolean {
+  return (
+    hasGuideFlag(programme.flags, 'live') &&
+    airingOf(programme.start, programme.end, now) === 'live'
+  );
+}
+
 export function airingOf(start: number, end: number, now: number): Airing {
   if (end <= now) return 'past';
   if (start > now) return 'future';
@@ -379,6 +430,19 @@ export function segmentLabel(segment: Segment, now: number): string {
 
 export const SCOPE_PARAM = 'ambito';
 export const SCOPE_URL: Record<IptvGuideScope, string> = { favorites: 'favoritos', all: 'todos' };
+
+/** Chips de tipo de escritorio (además de «Favoritos» y «Todos»): `&tipo=` en la URL. */
+export const TYPE_PARAM = 'tipo';
+export const GUIDE_TYPES = [
+  { value: 'deportes', label: 'Deportes' },
+  { value: 'cine', label: 'Cine' },
+  { value: 'noticias', label: 'Noticias' },
+] as const satisfies readonly { value: IptvType; label: string }[];
+export type GuideType = (typeof GUIDE_TYPES)[number]['value'];
+
+export function typeFromUrl(value: string | null | undefined): GuideType | null {
+  return GUIDE_TYPES.find((type) => type.value === value)?.value ?? null;
+}
 
 export function scopeFromUrl(value: string | null | undefined): IptvGuideScope | null {
   if (value === SCOPE_URL.all) return 'all';

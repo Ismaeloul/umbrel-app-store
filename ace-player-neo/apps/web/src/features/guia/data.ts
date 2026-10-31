@@ -18,7 +18,7 @@ import type {
   IptvGuideResponse,
   IptvGuideScope,
 } from '@ace/shared';
-import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 import {
   apiQuery,
@@ -28,10 +28,10 @@ import {
   routeUrl,
   useApiQuery,
 } from '../../api/index.ts';
-import { PAGE_ROWS, TILE_MS, type TileState } from './model.ts';
+import { PAGE_ROWS, TILE_MS, type GuideType, type TileState } from './model.ts';
 
-const pageQuery = (scope: IptvGuideScope, page: number) => ({
-  query: { scope, offset: page * PAGE_ROWS, limit: PAGE_ROWS },
+const pageQuery = (scope: IptvGuideScope, page: number, type: GuideType | null) => ({
+  query: { scope, offset: page * PAGE_ROWS, limit: PAGE_ROWS, ...(type ? { type } : {}) },
 });
 
 export interface GuidePages {
@@ -44,19 +44,28 @@ export interface GuidePages {
   row(index: number): IptvGuideChannel | undefined;
 }
 
-/** Las páginas de canales que hacen falta (`pages`), con la primera siempre. */
+/**
+ * Las páginas de canales que hacen falta (`pages`), con la primera siempre.
+ * `type`: solo los canales de ese tipo (los chips de escritorio).
+ */
 export function useGuidePages(
   scope: IptvGuideScope,
   pages: readonly number[],
   enabled: boolean,
+  type: GuideType | null = null,
 ): GuidePages {
-  const first = useApiQuery('iptvGuide', pageQuery(scope, 0), { enabled });
+  /* Al cambiar de chip se sigue viendo la lista de antes hasta que llega la
+     nueva (sin el esqueleto de la carga entre medias). */
+  const first = useApiQuery('iptvGuide', pageQuery(scope, 0, type), {
+    enabled,
+    placeholderData: keepPreviousData,
+  });
   const head = first.data;
   const ready = enabled && head?.state === 'ready' && head.total > PAGE_ROWS;
   const rest = useQueries({
     queries: pages
       .filter((page) => page > 0)
-      .map((page) => ({ ...apiQuery('iptvGuide', pageQuery(scope, page)), enabled: ready })),
+      .map((page) => ({ ...apiQuery('iptvGuide', pageQuery(scope, page, type)), enabled: ready })),
   });
   // Pocas páginas a la vez: se monta en cada render (no merece un useMemo).
   const byPage = new Map<number, readonly IptvGuideChannel[]>();

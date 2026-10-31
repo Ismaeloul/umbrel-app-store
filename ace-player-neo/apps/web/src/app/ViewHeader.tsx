@@ -4,13 +4,15 @@
 
    Desde 768 (rediseño de escritorio) es la barra de la sección: 64 px pegados
    arriba con el título, las acciones y el buscador con Ctrl K; el subtítulo y
-   los hijos (chips, pestañas) van debajo.
+   los hijos (chips, pestañas) van debajo. Al lado del buscador, la campana
+   de avisos (features/avisos: «Te aviso» de la Guía).
 
    El <h1> lleva tabIndex=-1: al navegar, el armazón le pasa el foco para que
    los lectores de pantalla anuncien la vista nueva. */
 
 import type { ReactNode } from 'react';
 import { useAppMode } from '../api/index.ts';
+import { AvisosBell } from '../features/avisos/Bell.tsx';
 import { cx } from '../lib/cx.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { EngineIndicator } from './EngineIndicator.tsx';
@@ -62,6 +64,7 @@ export function ViewHeader({
             <span className="view-head__search-text">Buscar partidos, canales, pelis…</span>
             <kbd>Ctrl K</kbd>
           </button>
+          <AvisosBell />
         </div>
       </div>
       {children}

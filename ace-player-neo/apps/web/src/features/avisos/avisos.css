@@ -1,0 +1,149 @@
+/* La campana de la barra de la sección y su lista de avisos (Bell.tsx). Como
+   el resto de la barra nueva: solo desde 768 (en el móvil no se pinta). */
+.avisos-bell-wrap {
+  position: relative;
+  display: none;
+  flex: none;
+}
+@media (min-width: 768px) {
+  .avisos-bell-wrap {
+    display: inline-flex;
+    margin-left: var(--s-2);
+  }
+}
+/* 40 px como en la maqueta (tbtn): cuadrado redondeado y tenue. */
+.avisos-bell {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--line-soft);
+  color: var(--text-2);
+}
+.avisos-bell .icon {
+  width: 20px;
+  height: 20px;
+}
+.avisos-bell[aria-expanded='true'] {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+@media (hover: hover) and (pointer: fine) {
+  .avisos-bell:hover {
+    color: var(--text);
+  }
+}
+.avisos-bell__count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 0 0 2px var(--bg);
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  font-weight: var(--wght-strong);
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ---- La lista ------------------------------------------------------------- */
+.avisos-pop {
+  width: 360px;
+  padding: 14px 8px 12px;
+}
+.avisos {
+  display: grid;
+  gap: 6px;
+}
+.avisos__title {
+  margin: 0;
+  padding: 0 10px 4px;
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+}
+.avisos__empty {
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-text);
+}
+.avisos__list {
+  display: grid;
+  gap: 2px;
+  max-height: min(420px, 60vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.avisos__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 6px 4px 6px 10px;
+  border-radius: 12px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .avisos__item:hover {
+    background: var(--line-soft);
+  }
+}
+.avisos__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+.avisos__text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.avisos__name {
+  overflow: hidden;
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.avisos__meta {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.avisos__time {
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+}
+.avisos__btn {
+  width: 36px;
+  height: 36px;
+}
+.avisos__btn .icon {
+  width: 18px;
+  height: 18px;
+}
+.avisos__note {
+  margin: 0;
+  padding: 6px 10px 0;
+  border-top: 1px solid var(--line-soft);
+  color: var(--text-3);
+  font-size: var(--fs-12);
+}
