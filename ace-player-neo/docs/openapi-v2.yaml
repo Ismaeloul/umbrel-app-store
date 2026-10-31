@@ -5889,6 +5889,23 @@ paths:
             type: integer
             minimum: 0
             maximum: 1000
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - generalistas
+              - deportes
+              - cine
+              - series
+              - noticias
+              - infantil
+              - documentales
+              - musica
+              - entretenimiento
+              - religion
+              - adultos
       responses:
         "200":
           description: Correcto

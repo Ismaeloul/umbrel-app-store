@@ -1,7 +1,14 @@
 /* Vista «Guía TV» (`?vista=guia`, docs/iptv.md §20; investigación en
    docs/investigacion/guia-tv.md). La parrilla de la IPTV estilo Movistar+:
    «Favoritos | Todos», días con programación, «Ahora», la parrilla (Board)
-   y el programa elegido (franja en PC, hoja en el móvil).
+   y el programa elegido (hoja en el móvil).
+
+   Desde 768, la Guía del rediseño de escritorio (01-escritorio.html §2):
+   barra «Guía» con buscador y campana; debajo, los días (Ayer, Hoy, Dom 1…)
+   y los chips Favoritos (se quita y se pone: sin él, todos los canales),
+   Deportes, Cine y Noticias (`&tipo=`, que se suman a Favoritos); la
+   parrilla a lo ancho (unas 3 h a la vista) y, al pulsar un programa, un
+   popover con «Te aviso» y «Ver ficha». El móvil no cambia.
 
    En la navegación es hija de Canales (se ilumina Canales): se entra con el
    botón «Guía TV» de la cabecera de Canales, que solo sale con IPTV activa.
@@ -21,22 +28,29 @@ import type { ViewProps } from '../../app/contracts.ts';
 import { useNavigate, useSearchParam } from '../../app/router.tsx';
 import { VISTA_TITLE } from '../../app/routes.ts';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
+import { cx } from '../../lib/cx.ts';
 import { useLayoutKind } from '../../lib/media.ts';
 import { readItem, STORAGE_KEYS, writeItem } from '../../lib/storage.ts';
 import { Button, Chip, EmptyState, Segmented, Skeleton } from '../../ui/index.ts';
 import { playChannel } from '../library/play.ts';
 import { Board, type BoardControls, type Picked, type Selection } from './Board.tsx';
 import { useGuidePages } from './data.ts';
-import { InfoSheet, Strip } from './Detail.tsx';
+import { InfoSheet, ProgrammePopover, type PopoverTarget } from './Detail.tsx';
 import {
   buildTimeline,
+  dayChipLabel,
   dayStart,
+  DESK_MAX_DAYS,
   formatLongDay,
+  GUIDE_TYPES,
   pagesBetween,
   scaleFor,
   SCOPE_PARAM,
   SCOPE_URL,
   scopeFromUrl,
+  TYPE_PARAM,
+  typeFromUrl,
+  type GuideType,
 } from './model.ts';
 import './demo.ts';
 import './guia.css';
@@ -68,6 +82,13 @@ function useScope(): [IptvGuideScope, (scope: IptvGuideScope) => void] {
   return [scope, set];
 }
 
+/** El chip de tipo de escritorio (`&tipo=deportes`): filtra dentro del ámbito y no se recuerda. */
+function useType(): [GuideType | null, (type: GuideType | null) => void] {
+  const [param, setParam] = useSearchParam(TYPE_PARAM);
+  const set = useCallback((next: GuideType | null) => setParam(next), [setParam]);
+  return [typeFromUrl(param), set];
+}
+
 const dateTime = new Intl.DateTimeFormat('es-ES', {
   day: 'numeric',
   month: 'short',
@@ -78,11 +99,16 @@ const dateTime = new Intl.DateTimeFormat('es-ES', {
 export default function GuiaView({ active }: ViewProps) {
   const navigate = useNavigate();
   const kind = useLayoutKind();
+  const desk = kind !== 'mobile';
   const scale = scaleFor(kind);
   const now = useNow(active);
-  const [scope, setScope] = useScope();
+  const [chosenScope, setScope] = useScope();
+  const [urlType, setType] = useType();
+  // Los chips de tipo son de escritorio: en el móvil, `&tipo=` no cuenta.
+  const type = desk ? urlType : null;
+  const scope = chosenScope;
   const [pageList, setPageList] = useState<number[]>([0]);
-  const pages = useGuidePages(scope, pageList, active);
+  const pages = useGuidePages(scope, pageList, active, type, desk);
   const head = pages.head;
 
   const onRows = useCallback((first: number, last: number) => {
@@ -93,18 +119,25 @@ export default function GuiaView({ active }: ViewProps) {
   const [selection, setSelection] = useState<Selection>(() => ({ row: 0, at: Date.now() }));
   const [picked, setPicked] = useState<Picked | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [popover, setPopover] = useState<PopoverTarget | null>(null);
   const [viewTime, setViewTime] = useState(() => Date.now());
   const controls = useRef<BoardControls | null>(null);
 
-  // Otro ámbito: de nuevo arriba, a esta hora.
+  // Otro ámbito u otro tipo: de nuevo arriba, a esta hora.
   const shownScope = head?.scope ?? scope;
-  const lastScope = useRef(shownScope);
+  /* Los chips responden al momento: mientras llega la lista nueva (se sigue
+     viendo la de antes), marcan lo pedido; luego, lo que dio el servidor
+     (sin favoritos, «Todos»). */
+  const chipScope = pages.stale ? scope : shownScope;
+  const listKey = `${shownScope}|${type ?? ''}`;
+  const lastList = useRef(listKey);
   useEffect(() => {
-    if (lastScope.current === shownScope) return;
-    lastScope.current = shownScope;
+    if (lastList.current === listKey) return;
+    lastList.current = listKey;
     setSelection({ row: 0, at: Date.now() });
     setPageList([0]);
-  }, [shownScope]);
+    setPopover(null);
+  }, [listKey]);
 
   const timeline = useMemo(
     () =>
@@ -116,14 +149,16 @@ export default function GuiaView({ active }: ViewProps) {
           coveredTo: head?.coveredTo ?? null,
         },
         now,
+        desk ? { yesterday: true, maxDays: DESK_MAX_DAYS } : {},
       ),
     // Basta con recalcularla al cambiar de día o de guía.
-    [head?.from, head?.to, head?.coveredFrom, head?.coveredTo, dayStart(now)],
+    [head?.from, head?.to, head?.coveredFrom, head?.coveredTo, dayStart(now), desk],
   );
 
   const play = useCallback(
     (channel: IptvGuideChannel) => {
       setInfoOpen(false);
+      setPopover(null);
       playChannel(navigate, {
         hash: channel.id,
         title: channel.name,
@@ -139,6 +174,10 @@ export default function GuiaView({ active }: ViewProps) {
   const openInfo = useCallback((next: Picked) => {
     setPicked(next);
     setInfoOpen(true);
+  }, []);
+  const openPopover = useCallback((next: Picked, anchor: HTMLElement) => {
+    setPicked(next);
+    setPopover({ picked: next, anchor });
   }, []);
 
   // El alto de la parrilla: lo que queda de pantalla debajo de la cabecera.
@@ -162,7 +201,9 @@ export default function GuiaView({ active }: ViewProps) {
   ];
   const goIptvSettings = () => navigate({ vista: 'ajustes', seccion: 'iptv' });
 
-  const header = (
+  const header = desk ? (
+    <ViewHeader title="Guía" />
+  ) : (
     <ViewHeader
       title={VISTA_TITLE.guia}
       subtitle={head && head.state === 'ready' ? subtitleOf(head) : undefined}
@@ -268,6 +309,45 @@ export default function GuiaView({ active }: ViewProps) {
           : 'Se vuelve a probar sola dentro de un rato.'}
       </EmptyState>
     );
+  } else if (head.total === 0 && type) {
+    const typeName = GUIDE_TYPES.find((item) => item.value === type)?.label.toLowerCase() ?? type;
+    const inFavorites = shownScope === 'favorites';
+    body = (
+      <>
+        <DeskBar
+          days={[]}
+          viewDay={dayStart(viewTime)}
+          today={dayStart(now)}
+          scope={chipScope}
+          type={type}
+          onDay={() => {}}
+          onScope={setScope}
+          onType={setType}
+        />
+        <EmptyState
+          title={
+            inFavorites
+              ? `Ninguno de tus favoritos es de ${typeName} con guía`
+              : `No hay canales de ${typeName} con guía`
+          }
+          actions={
+            inFavorites ? (
+              <Button variant="quiet" onClick={() => setScope('all')}>
+                Buscar en todos los canales
+              </Button>
+            ) : (
+              <Button variant="quiet" onClick={() => setType(null)}>
+                Ver todos los canales
+              </Button>
+            )
+          }
+        >
+          {inFavorites
+            ? 'Quita «Favoritos» para ver los de todos los canales de tu proveedor.'
+            : 'Tu proveedor no tiene programación de canales de este tipo.'}
+        </EmptyState>
+      </>
+    );
   } else if (head.total === 0) {
     body = (
       <EmptyState
@@ -286,43 +366,61 @@ export default function GuiaView({ active }: ViewProps) {
     const viewDay = dayStart(viewTime);
     const today = dayStart(now);
     const onlyToday = days.length === 1;
+    const goDay = (start: number) =>
+      start === today
+        ? controls.current?.goNow()
+        : controls.current?.goTo(start + (viewTime - viewDay));
     body = (
       <>
-        <div className="guia-toolbar">
-          {onlyToday ? (
-            <p className="guia-toolbar__day">
-              <strong>Hoy</strong> · {formatLongDay(today)}
-              {head.coveredTo !== null ? (
-                <span className="guia-toolbar__hint"> · tu proveedor solo da la guía de hoy</span>
-              ) : null}
-            </p>
-          ) : (
-            <div className="guia-days" role="group" aria-label="Día">
-              {days.map((day) => (
-                <Chip
-                  key={day.start}
-                  pressed={viewDay === day.start}
-                  onClick={() =>
-                    day.start === today
-                      ? controls.current?.goNow()
-                      : controls.current?.goTo(day.start + (viewTime - viewDay))
-                  }
-                >
-                  {day.label}
-                </Chip>
-              ))}
-            </div>
-          )}
-          <Button
-            variant="quiet"
-            size="sm"
-            icon="clock"
-            onClick={() => controls.current?.goNow()}
-            title="Volver a ahora (Inicio)"
-          >
-            Ahora
-          </Button>
-        </div>
+        {desk ? (
+          <DeskBar
+            days={days.map((day) => day.start)}
+            viewDay={viewDay}
+            today={today}
+            scope={chipScope}
+            type={type}
+            onDay={goDay}
+            onScope={setScope}
+            onType={setType}
+            onlyToday={onlyToday && head.coveredTo !== null}
+          />
+        ) : (
+          <div className="guia-toolbar">
+            {onlyToday ? (
+              <p className="guia-toolbar__day">
+                <strong>Hoy</strong> · {formatLongDay(today)}
+                {head.coveredTo !== null ? (
+                  <span className="guia-toolbar__hint"> · tu proveedor solo da la guía de hoy</span>
+                ) : null}
+              </p>
+            ) : (
+              <div className="guia-days" role="group" aria-label="Día">
+                {days.map((day) => (
+                  <Chip
+                    key={day.start}
+                    pressed={viewDay === day.start}
+                    onClick={() =>
+                      day.start === today
+                        ? controls.current?.goNow()
+                        : controls.current?.goTo(day.start + (viewTime - viewDay))
+                    }
+                  >
+                    {day.label}
+                  </Chip>
+                ))}
+              </div>
+            )}
+            <Button
+              variant="quiet"
+              size="sm"
+              icon="clock"
+              onClick={() => controls.current?.goNow()}
+              title="Volver a ahora (Inicio)"
+            >
+              Ahora
+            </Button>
+          </div>
+        )}
         {head.fellBack ? (
           <p className="guia-note">
             Ninguno de tus favoritos tiene guía: te enseño todos los canales.
@@ -339,7 +437,6 @@ export default function GuiaView({ active }: ViewProps) {
           style={
             {
               '--guia-top': `${top}px`,
-              '--strip-h': `${scale.stripH}px`,
               '--col-w': `${scale.colW}px`,
             } as CSSProperties
           }
@@ -352,7 +449,9 @@ export default function GuiaView({ active }: ViewProps) {
             scale={scale}
             now={now}
             active={active}
-            touchSheet={scale.stripH === 0}
+            touchSheet={!desk}
+            desk={desk}
+            {...(desk ? { onOpen: openPopover } : {})}
             selection={selection}
             onSelection={setSelection}
             onPicked={setPicked}
@@ -361,16 +460,16 @@ export default function GuiaView({ active }: ViewProps) {
             onViewTime={setViewTime}
             controls={controls}
           />
-          {scale.stripH > 0 ? (
-            <Strip
-              picked={picked}
-              version={head.version}
-              now={now}
-              onPlay={() => picked && play(picked.channel)}
-              onInfo={() => picked && openInfo(picked)}
-            />
-          ) : null}
         </div>
+        {desk ? (
+          <ProgrammePopover
+            target={popover}
+            version={head.version}
+            now={now}
+            onClose={() => setPopover(null)}
+            onPlay={() => popover && play(popover.picked.channel)}
+          />
+        ) : null}
         <InfoSheet
           picked={picked}
           open={infoOpen}
@@ -384,9 +483,72 @@ export default function GuiaView({ active }: ViewProps) {
   }
 
   return (
-    <div className="guia" data-layout={kind}>
+    <div className={cx('guia', desk && 'guia--desk')} data-layout={kind}>
       {header}
       {body}
+    </div>
+  );
+}
+
+/** La barra de escritorio bajo el título: los días y los chips (Favoritos y por tipo). */
+function DeskBar({
+  days,
+  viewDay,
+  today,
+  scope,
+  type,
+  onDay,
+  onScope,
+  onType,
+  onlyToday = false,
+}: {
+  days: readonly number[];
+  viewDay: number;
+  today: number;
+  scope: IptvGuideScope;
+  type: GuideType | null;
+  onDay(start: number): void;
+  onScope(scope: IptvGuideScope): void;
+  onType(type: GuideType | null): void;
+  /** Solo hay «Hoy» porque el proveedor no da más: se dice (como en el móvil). */
+  onlyToday?: boolean;
+}) {
+  return (
+    <div className="guia-bar">
+      {days.length ? (
+        <div className="guia-bar__days" role="group" aria-label="Día">
+          {days.map((start) => (
+            <button
+              key={start}
+              type="button"
+              className="guia-bar__day"
+              aria-pressed={viewDay === start}
+              aria-current={start === today ? 'date' : undefined}
+              onClick={() => onDay(start)}
+            >
+              {dayChipLabel(start, today)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="guia-bar__chips" role="group" aria-label="Canales">
+        <Chip
+          pressed={scope === 'favorites'}
+          onClick={() => onScope(scope === 'favorites' ? 'all' : 'favorites')}
+        >
+          Favoritos
+        </Chip>
+        {GUIDE_TYPES.map((item) => (
+          <Chip
+            key={item.value}
+            pressed={type === item.value}
+            onClick={() => onType(type === item.value ? null : item.value)}
+          >
+            {item.label}
+          </Chip>
+        ))}
+      </div>
+      {onlyToday ? <p className="guia-bar__hint">Tu proveedor solo da la guía de hoy</p> : null}
     </div>
   );
 }

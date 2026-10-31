@@ -273,6 +273,23 @@ describe('iptvGuide: canales', () => {
     });
   });
 
+  it('«type»: solo los canales de ese tipo dentro del ámbito (los chips de la Guía)', async () => {
+    const r = await rig();
+    const sports = await r.api.channels({ scope: 'all', type: 'deportes' });
+    expect(IptvGuideResponseSchema.parse(sports)).toBeTruthy();
+    expect(sports.channels.map((row) => [row.number, row.name, row.country])).toEqual([
+      [2, 'M+ LaLiga TV', null],
+      [3, 'DAZN 1', null],
+      [5, 'DAZN 1', 'DE'],
+    ]);
+    /* Los recuentos de «Favoritos | Todos» no cambian; el total es el del filtro. */
+    expect(sports).toMatchObject({ scope: 'all', all: 5, total: 3, coveredFrom: at(-2) });
+    expect((await r.api.channels({ scope: 'all', type: 'cine' })).total).toBe(0);
+    r.favorites = [channelOf(r.catalog, 1), channelOf(r.catalog, 7)];
+    const favorites = await r.api.channels({ type: 'deportes' });
+    expect(favorites.channels.map((row) => row.name)).toEqual(['DAZN 1']);
+  });
+
   it('páginas: offset y limit (0 = solo el estado)', async () => {
     const r = await rig();
     const page = await r.api.channels({ scope: 'all', offset: 3, limit: 1 });

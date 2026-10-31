@@ -7,6 +7,7 @@
 
 import './demo.ts';
 import { countLive, madridClock } from './domain.ts';
+import './demo.ts';
 import { useNow, useSchedule } from './data.ts';
 
 export function useLiveCountToday(): number {

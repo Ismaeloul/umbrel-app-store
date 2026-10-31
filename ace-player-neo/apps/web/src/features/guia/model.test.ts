@@ -9,7 +9,10 @@ import {
   blocksBetween,
   buildSegments,
   buildTimeline,
+  dayChipLabel,
   dayStart,
+  DESK_MAX_DAYS,
+  formatSpan,
   GAP_MIN_MS,
   HOUR,
   MINUTE,
@@ -17,12 +20,15 @@ import {
   remainingText,
   rowForNumber,
   scaleFor,
+  isOnAir,
   scopeFromUrl,
   segmentAt,
   segmentLabel,
+  startsText,
   stepSegment,
   TILE_MS,
   tilesBetween,
+  typeFromUrl,
   visibleSegments,
   xOf,
   type TileState,
@@ -85,14 +91,80 @@ describe('línea de tiempo', () => {
     expect(old.end).toBe(addDays(TODAY, 1));
   });
 
-  it('medidas: 200 px cada 30 min en pantallas anchas y 120 en el móvil', () => {
+  it('medidas: 156 px cada 30 min en escritorio (la maqueta: ~3 h a 1280) y 120 en el móvil', () => {
     const timeline = buildTimeline(
       { from: null, to: null, coveredFrom: null, coveredTo: null },
       NOW,
     );
-    expect(xOf(TODAY + 30 * MINUTE, timeline, scaleFor('wide'))).toBeCloseTo(200);
+    expect(xOf(TODAY + 30 * MINUTE, timeline, scaleFor('desktop'))).toBeCloseTo(156);
+    expect(xOf(TODAY + 30 * MINUTE, timeline, scaleFor('wide'))).toBeCloseTo(156);
     expect(xOf(TODAY + 30 * MINUTE, timeline, scaleFor('mobile'))).toBeCloseTo(120);
-    expect(scaleFor('mobile').stripH).toBe(0);
+    expect(scaleFor('desktop').rowH).toBe(64);
+    // La columna de canales de la maqueta: 120 px, solo el logo.
+    expect(scaleFor('desktop').colW).toBe(120);
+    expect(scaleFor('wide').colW).toBe(120);
+  });
+
+  it('escritorio: «Ayer» solo si la guía guardada lo cubre bien; el móvil nunca', () => {
+    const coverage = {
+      from: TODAY - 24 * HOUR,
+      to: TODAY + 80 * HOUR,
+      coveredFrom: TODAY - 20 * HOUR,
+      coveredTo: addDays(TODAY, 2) + 12 * HOUR,
+    };
+    const desk = buildTimeline(coverage, NOW, { yesterday: true });
+    expect(desk.start).toBe(addDays(TODAY, -1));
+    expect(desk.days.map((day) => dayChipLabel(day.start, TODAY)).slice(0, 2)).toEqual([
+      'Ayer',
+      'Hoy',
+    ]);
+    expect(dayChipLabel(addDays(TODAY, 1), TODAY)).toMatch(/^[A-ZÁÉÍÓÚ][a-záéíóú]{2} \d{1,2}$/);
+    expect(buildTimeline(coverage, NOW).start).toBe(TODAY);
+    /* Una guía que empieza a las 3 de esta madrugada: sin «Ayer». */
+    const short = buildTimeline({ ...coverage, coveredFrom: TODAY + 3 * HOUR }, NOW, {
+      yesterday: true,
+    });
+    expect(short.start).toBe(TODAY);
+  });
+
+  it('escritorio: hasta cuatro días desde hoy si la guía llega (el móvil, tres)', () => {
+    const coverage = {
+      from: TODAY - 24 * HOUR,
+      to: TODAY + 80 * HOUR,
+      coveredFrom: TODAY - 20 * HOUR,
+      coveredTo: TODAY + 80 * HOUR,
+    };
+    const desk = buildTimeline(coverage, NOW, { yesterday: true, maxDays: DESK_MAX_DAYS });
+    expect(desk.days.map((day) => day.start)).toEqual([
+      addDays(TODAY, -1),
+      TODAY,
+      addDays(TODAY, 1),
+      addDays(TODAY, 2),
+      addDays(TODAY, 3),
+    ]);
+    expect(buildTimeline(coverage, NOW).days).toHaveLength(3);
+  });
+});
+
+describe('textos del popover de escritorio', () => {
+  it('horario con raya y «Empieza en…»', () => {
+    expect(formatSpan(TODAY + 18.5 * HOUR, TODAY + 20.5 * HOUR)).toBe('18:30–20:30');
+    expect(startsText(NOW + 18 * MINUTE, NOW)).toBe('Empieza en 18 min');
+    expect(startsText(NOW + 65 * MINUTE, NOW)).toBe('Empieza en 1 h 5 min');
+    expect(startsText(addDays(TODAY, 1) + 20 * HOUR, NOW)).toBe('Mañana a las 20:00');
+  });
+
+  it('solo un directo de verdad (la marca de la guía) que se está emitiendo va en rojo', () => {
+    const live = prog(NOW - 30 * MINUTE, 120, 'Real Madrid - Barcelona', GUIDE_FLAGS.live);
+    expect(isOnAir(live, NOW)).toBe(true);
+    expect(isOnAir(prog(NOW - 30 * MINUTE, 120), NOW)).toBe(false);
+    expect(isOnAir(live, NOW + 3 * HOUR)).toBe(false);
+  });
+
+  it('el chip de tipo de la URL', () => {
+    expect(typeFromUrl('deportes')).toBe('deportes');
+    expect(typeFromUrl('adultos')).toBeNull();
+    expect(typeFromUrl(null)).toBeNull();
   });
 });
 

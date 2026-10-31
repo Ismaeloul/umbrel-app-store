@@ -30,6 +30,7 @@ import type {
   IptvGuideScope,
 } from '../api/v1/guide.js';
 import { GUIDE_FLAGS, IPTV_GUIDE_API, IPTV_GUIDE_STORE } from '../constants/guide.js';
+import type { IptvType } from '../constants/iptv.js';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -189,6 +190,20 @@ function demoChannels(): readonly DemoChannel[] {
   }));
   return channelCache;
 }
+
+/** El tipo de §16.4 de cada clase de canal (el filtro `type` de `iptvGuide`). */
+const KIND_TYPE: Readonly<Record<Kind, IptvType>> = {
+  general: 'generalistas',
+  news: 'noticias',
+  sport: 'deportes',
+  football: 'deportes',
+  movies: 'cine',
+  series: 'series',
+  kids: 'infantil',
+  docs: 'documentales',
+  regional: 'generalistas',
+  music: 'musica',
+};
 
 function publicChannel(channel: DemoChannel): IptvGuideChannel {
   return {
@@ -526,6 +541,7 @@ export interface DemoGuideQuery {
   readonly scope?: IptvGuideScope | undefined;
   readonly offset?: number | string | undefined;
   readonly limit?: number | string | undefined;
+  readonly type?: IptvType | undefined;
 }
 
 /** `iptvGuide` de la demo: estado, sello y una página de canales («Favoritos» o «Todos»). */
@@ -547,20 +563,21 @@ export function demoGuide(
     logo: false,
   };
   const scope = query.scope ?? 'favorites';
+  const type = query.type;
+  const ofType = (list: readonly DemoChannel[]) =>
+    type ? list.filter((channel) => KIND_TYPE[channel.kind] === type) : list;
+  const listed = ofType(scope === 'favorites' ? favorites : channels);
+  /* El favorito sin guía no tiene tipo: solo sale sin filtro. */
   const rows: IptvGuideChannel[] =
-    scope === 'favorites'
-      ? [...favorites.map(publicChannel), without]
-      : channels.map(publicChannel);
+    scope === 'favorites' && !type
+      ? [...listed.map(publicChannel), without]
+      : listed.map(publicChannel);
   const offset = Math.max(0, Number(query.offset ?? 0) || 0);
   const limit = Math.min(
     IPTV_GUIDE_API.channelsPageMax,
     Math.max(0, Number(query.limit ?? IPTV_GUIDE_API.channelsPage) || 0),
   );
-  const covered = coverageOf(
-    scope === 'favorites' ? favorites : channels,
-    stamp,
-    cutoffOf(stamp, options),
-  );
+  const covered = coverageOf(listed, stamp, cutoffOf(stamp, options));
   return {
     state: 'ready',
     version: stamp.version,

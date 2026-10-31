@@ -34,11 +34,13 @@ import {
   type IptvGuideQuery,
   type IptvGuideReadiness,
   type IptvGuideResponse,
+  type IptvType,
 } from '@ace/shared';
 import { AppError } from '../../core/errors.js';
 import type { Catalog, CatalogEntry, QualityOf } from './catalog.js';
 import { channelIdOf } from './catalog.js';
 import type { GuideArt, GuideArtReply } from './guide-art.js';
+import { FacetDeriver } from './facets.js';
 import type { GuideChannelInfo, GuideCoverage, GuideGridRow, GuideReader } from './guide-db.js';
 import { planVariants } from './match.js';
 
@@ -80,6 +82,8 @@ export interface GuideSourceStatus {
 interface GuideRow extends IptvGuideChannel {
   /** `channelIdOf`: clave y país. */
   readonly channel: string;
+  /** Tipos de §16.4 de sus variantes (los de la faceta de Canales): el filtro `type`. */
+  readonly types: readonly IptvType[];
 }
 
 interface Rows {
@@ -115,6 +119,9 @@ function parseProgrammeId(id: string): [number, number] | null {
 export class GuideApi {
   private rows: Rows | null = null;
   private building: { key: string; promise: Promise<Rows> } | null = null;
+  private readonly facets = new FacetDeriver();
+  /** La cobertura de «Todos» con un tipo, por filas: se calcula una vez por guía y tipo. */
+  private readonly typeCoverage = new WeakMap<Rows, Map<string, GuideCoverage | null>>();
 
   constructor(private readonly source: GuideApiSource) {}
 
@@ -164,13 +171,25 @@ export class GuideApi {
     const fellBack = asked === 'favorites' && withGuide === 0;
     const scope = fellBack ? 'all' : asked;
     const favoriteSet = new Set(favorites.map((row) => row.channel));
-    const list: readonly GuideRow[] = scope === 'favorites' ? favorites : rows.all;
+    const type = query.type;
+    const scoped: readonly GuideRow[] = scope === 'favorites' ? favorites : rows.all;
+    const list = type ? scoped.filter((row) => row.types.includes(type)) : scoped;
     /* Hasta dónde llega la programación de las filas del ámbito («Todos»: la de toda la guía
        que sale en filas; se calcula una vez por guía en el lector). */
-    const covered =
-      scope === 'favorites'
-        ? reader.coverage(list.flatMap((row) => (row.guide === null ? [] : [row.guide])))
-        : rows.coverage;
+    const coverageOf = () =>
+      reader.coverage(list.flatMap((row) => (row.guide === null ? [] : [row.guide])));
+    let covered: GuideCoverage | null;
+    if (scope === 'favorites') covered = coverageOf();
+    else if (!type) covered = rows.coverage;
+    else {
+      /* «Todos» con un tipo: las mismas filas en cada página, así que se
+         guarda (con las filas: otra guía u otro catálogo, otras filas). */
+      let byType = this.typeCoverage.get(rows);
+      if (!byType) this.typeCoverage.set(rows, (byType = new Map()));
+      const key = `${reader.version}|${type}`;
+      if (!byType.has(key)) byType.set(key, coverageOf());
+      covered = byType.get(key) ?? null;
+    }
     return {
       ...base,
       state: 'ready',
@@ -286,8 +305,20 @@ export class GuideApi {
   ): GuideRow {
     const best = entries[0] as CatalogEntry;
     const plays = planVariants(entries, { qualityOf: this.source.qualityOf })?.posters[0] ?? best;
+    const types = new Set<IptvType>();
+    for (const entry of entries)
+      for (const type of this.facets.derive({
+        title: entry.title,
+        group: entry.group,
+        tvgCountry: entry.tvgCountry,
+        tvgLanguage: entry.tvgLanguage,
+        quality: entry.quality,
+        nameCountry: entry.country,
+      }).types)
+        types.add(type);
     return {
       channel: channelIdOf(best),
+      types: [...types],
       guide: info ? info.g : null,
       id: plays.id,
       number,
