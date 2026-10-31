@@ -81,6 +81,15 @@ describe('columna de la agenda junto al vídeo (escritorio)', () => {
     expect(container.querySelectorAll('.agenda-score .num')).toHaveLength(0);
   });
 
+  it('cada fila dice dónde lo echan (solo el primer canal); sin canal, nada', async () => {
+    const { container } = renderColumn();
+    const row = await screen.findByRole('button', { name: /^Betis contra Cádiz/ });
+    expect(row.querySelector('.desk-row__channel')).toHaveTextContent('M+ LaLiga');
+    const none = screen.getByRole('button', { name: /^Elche contra Eibar/ });
+    expect(none.querySelector('.desk-row__channel')).toBeNull();
+    expect(container.querySelectorAll('.desk-row__channel')).toHaveLength(2);
+  });
+
   it('otro partido se abre aquí al lado; sin canal, avisa', async () => {
     renderColumn();
     fireEvent.click(await screen.findByRole('button', { name: /^Betis contra Cádiz/ }));

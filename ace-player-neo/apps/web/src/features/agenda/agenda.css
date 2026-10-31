@@ -1568,6 +1568,29 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* El canal donde lo echan, bajo los equipos: pequeño y en gris. */
+.desk-row__channel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+.desk-row__channel .icon {
+  flex: none;
+}
+.desk-row__channel-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Con el canal debajo, el resultado se queda a la altura de los equipos. */
+.desk-row__end:has(.desk-row__score) {
+  align-self: start;
+}
 .desk-row__end {
   display: grid;
   justify-items: end;

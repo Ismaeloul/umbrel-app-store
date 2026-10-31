@@ -250,6 +250,7 @@ export function DeskRow({ match, now, score, selected, watching, mine, onOpen }:
   const hidden = useScoreHidden(match.id);
   const final = done && score && !covered && !hidden ? score : null;
   const progress = live ? matchProgressAt(match, now, score) : 0;
+  const channel = match.channels?.[0]?.name?.trim() || null;
   return (
     <li>
       <button
@@ -284,6 +285,13 @@ export function DeskRow({ match, now, score, selected, watching, mine, onOpen }:
               <span className="desk-row__name">{team.name}</span>
             </span>
           ))}
+          {/* Dónde lo echan: el primer canal anunciado (los demás, en la ficha). */}
+          {channel ? (
+            <span className="desk-row__channel">
+              <Icon name="tv" size={16} />
+              <span className="desk-row__channel-name">{channel}</span>
+            </span>
+          ) : null}
         </span>
         <span className="desk-row__end">
           {watching ? (
