@@ -330,3 +330,19 @@ directo y a la vez. Sigue la maqueta `ver-juntos.html` (sala de fútbol).
   partido en la sala, Fuentes y «Poner», y cerrar la sala.
 - **Salir o cerrar** una sala en directo lleva a la Agenda (una de pelis y series, a Pelis y series).
 - **Pendiente**: las apps de iPhone y Android no entienden una sala en directo (esperan una `VodGrant`).
+
+## 15. Salas abiertas: volver o cerrarlas desde casa
+
+Quien se salía sin querer (o creaba la sala en otro aparato) no podía volver a ella ni cerrarla: la portada solo
+ofrecía «Volver a tu sala» con la credencial de ESE navegador, y cerrar pedía la del anfitrión. La sala se quedaba
+abierta hasta caducar (10 min sin nadie, 12 h como mucho).
+
+- **Servidor**: `partyList` (`GET /api/v1/party`) da las salas abiertas (código, título, quién la creó, cuántos hay y
+  cuántos en línea) y `partyEnd` (`POST /api/v1/party/:code/end`) la cierra para todos sin credencial de sala
+  (`party.closed` con `host`). Las dos son solo de la web de casa (`access: 'web'`, detrás del login de Umbrel): la app
+  nativa recibe 403 y el proxy de la sala no las deja pasar (su lista blanca solo admite `/api/v1/party/<código>/…` de
+  los invitados). Lo fija `test/security.test.ts`.
+- **Web**: en la portada de Ver juntos, «Salas abiertas» (`features/juntos/OpenRooms.tsx`, se refresca cada 10 s):
+  cada sala con «Volver» (si este navegador tiene su credencial: vuelves a tu sitio y a tu corona) o «Entrar» (se pide
+  el nombre) y «Cerrar» con segundo toque.
+- **Pruebas**: `modules/party/live.test.ts` y `features/juntos/OpenRooms.test.tsx`.

@@ -21,6 +21,7 @@ import { ViewHeader } from '../../app/ViewHeader.tsx';
 import { useLayoutKind } from '../../lib/media.ts';
 import { forgetCredential, lastRoom, savedCredential } from './client.ts';
 import { Join } from './Join.tsx';
+import { OpenRooms } from './OpenRooms.tsx';
 import { Room } from './Room.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
 import './juntos.css';
@@ -62,6 +63,7 @@ function JuntosHome() {
       >
         {JUNTOS_TEXT.homeHint}
       </EmptyState>
+      <OpenRooms />
     </>
   );
 }

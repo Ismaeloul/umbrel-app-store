@@ -250,6 +250,10 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       /* «Ver juntos»: crear y cerrar una sala ya no es solo web (la app de iPhone
          también, con su token de dispositivo; ver abajo). Las demás son de los
          invitados del proxy (credencial `party`). */
+      /* Las salas abiertas y cerrar una sin su credencial: solo la web de casa
+         (docs/ver-juntos.md §15); el proxy de la sala tampoco las deja pasar. */
+      'partyList',
+      'partyEnd',
     ]);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {

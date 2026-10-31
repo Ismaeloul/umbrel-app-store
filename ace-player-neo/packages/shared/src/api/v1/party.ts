@@ -288,6 +288,27 @@ export const PartyJoinResponseSchema = z.strictObject({
 });
 export type PartyJoinResponse = z.infer<typeof PartyJoinResponseSchema>;
 
+/**
+ * GET /api/v1/party (solo la web de casa): las salas abiertas, para volver a
+ * entrar o cerrarlas aunque se haya perdido la credencial (se salió sin querer,
+ * o se creó en otro aparato).
+ */
+export const PartyListItemSchema = z.strictObject({
+  code: PartyCodeSchema,
+  title: PartyTitleSchema,
+  /** Quien la creó. */
+  host: z.string().max(PARTY.nameMaxChars),
+  members: z.number().int().nonnegative().max(PARTY.maxMembers),
+  online: z.number().int().nonnegative().max(PARTY.maxMembers),
+  createdAt: z.number().int().nonnegative(),
+});
+export type PartyListItem = z.infer<typeof PartyListItemSchema>;
+
+export const PartyListSchema = z.strictObject({
+  rooms: z.array(PartyListItemSchema).max(PARTY.maxRooms),
+});
+export type PartyList = z.infer<typeof PartyListSchema>;
+
 /** GET /api/v1/party/:code: lo que se ve antes de entrar (sin credencial). */
 export const PartyPreviewSchema = z.strictObject({
   code: PartyCodeSchema,

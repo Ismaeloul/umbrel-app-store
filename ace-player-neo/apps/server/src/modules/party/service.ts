@@ -1401,6 +1401,32 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       closeRoom(room, 'host');
     },
 
+    list() {
+      const now = clock.now();
+      return {
+        rooms: [...rooms.values()]
+          .filter((room) => !room.closed)
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .map((room) => {
+            const members = [...room.members.values()];
+            return {
+              code: room.code,
+              title: room.title,
+              host: room.members.get(room.hostId)?.name ?? '',
+              members: members.length,
+              online: members.filter((member) => online(member, now)).length,
+              createdAt: room.createdAt,
+            };
+          }),
+      };
+    },
+
+    end(code) {
+      const room = find(code);
+      logger.info({ room: room.code }, 'Ver juntos: sala cerrada desde casa');
+      closeRoom(room, 'host');
+    },
+
     health() {
       let members = 0;
       for (const room of rooms.values()) members += room.members.size;

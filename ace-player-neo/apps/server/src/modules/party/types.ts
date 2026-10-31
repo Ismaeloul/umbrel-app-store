@@ -16,6 +16,7 @@ import type {
   PartyControlBody,
   PartyCreateBody,
   PartyJoinResponse,
+  PartyList,
   PartyMemberBody,
   PartyPreview,
   PartyQueueBody,
@@ -77,5 +78,9 @@ export interface PartyService extends Lifecycle {
   queue(code: string, body: PartyQueueBody): void;
   leave(code: string, token: string): void;
   close(code: string, token: string): void;
+  /** Las salas abiertas (`partyList`, solo la web de casa). */
+  list(): PartyList;
+  /** Cerrar una sala desde casa, sin su credencial (`partyEnd`). */
+  end(code: string): void;
   health(): PartyHealth;
 }

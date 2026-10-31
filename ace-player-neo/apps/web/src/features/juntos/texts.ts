@@ -26,6 +26,14 @@ export const JUNTOS_TEXT = {
   homeHint:
     'Abre una película o un episodio y pulsa «Ver juntos»: te da un enlace para que entren desde su móvil u ordenador.',
   backToRoom: 'Volver a tu sala',
+  /* Las salas abiertas (docs/ver-juntos.md §15). */
+  openRooms: 'Salas abiertas',
+  openRoomMeta: (host: string, online: number, members: number) =>
+    `Sala de ${host} · ${members} ${members === 1 ? 'persona' : 'personas'}, ${online} en línea`,
+  openRoomBack: 'Volver',
+  openRoomEnter: 'Entrar',
+  openRoomClose: 'Cerrar',
+  roomEnded: 'Sala cerrada para todos',
   copyLink: 'Copiar enlace',
   linkCopied: 'Enlace copiado. Pásaselo a quien quieras.',
   linkCopyManual: 'No se ha podido copiar solo. Copia este enlace y pásaselo a quien quieras:',

@@ -42,6 +42,8 @@ export const V1_ROUTE_IDS: readonly string[] = [
   'partyQueue',
   'partyLeave',
   'partyClose',
+  'partyList',
+  'partyEnd',
 ];
 
 export function registerLegacyRoutes(_router: LegacyRouter, _services: Services): void {}
@@ -98,6 +100,11 @@ export function registerV1Routes(router: V1Router, services: Services): void {
   });
   router.handle('partyLeave', (input) => {
     party.leave(input.params.code, input.body.token);
+    return { ok: true as const };
+  });
+  router.handle('partyList', () => party.list());
+  router.handle('partyEnd', (input) => {
+    party.end(input.params.code);
     return { ok: true as const };
   });
   router.handle('partyClose', (input) => {

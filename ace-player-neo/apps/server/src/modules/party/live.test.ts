@@ -240,3 +240,23 @@ describe('«Ver juntos» en directo (§14)', () => {
     expect(party.join(host.room.code, 'Leo').room.playback.waitingFor).toEqual([]);
   });
 });
+
+describe('«Ver juntos»: las salas abiertas desde casa', () => {
+  it('lista las salas (la más nueva primero) y cierra una sin credencial', async () => {
+    const { party, clock } = setup();
+    const first = party.create(BODY);
+    clock.advance(1_000);
+    const second = party.create({ ...BODY, name: 'Ana' });
+    party.join(second.room.code, 'Leo');
+    const listed = party.list().rooms;
+    expect(listed.map((room) => room.code)).toEqual([second.room.code, first.room.code]);
+    expect(listed[0]).toMatchObject({ host: 'Ana', members: 2, title: { kind: 'live' } });
+    const events = listen(party, first.room.code, first.member.token);
+    party.end(first.room.code);
+    expect(events().some((event) => event.type === 'party.closed')).toBe(true);
+    expect(party.list().rooms.map((room) => room.code)).toEqual([second.room.code]);
+    expect(() => party.end(first.room.code)).toThrow(
+      expect.objectContaining({ code: 'party_not_found' }),
+    );
+  });
+});

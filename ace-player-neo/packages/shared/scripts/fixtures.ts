@@ -110,6 +110,9 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'partyMember',
   'partyQueue',
   'partyLeave',
+  /* Las salas abiertas y cerrarlas desde casa: solo la web de casa. */
+  'partyList',
+  'partyEnd',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 
@@ -1537,6 +1540,19 @@ export const WEB_V1_FIXTURES = {
   partyQueue: { ok: true },
   partyLeave: { ok: true },
   partyClose: { ok: true },
+  partyList: {
+    rooms: [
+      {
+        code: partyJoined('m_IsmaAnfitrion', []).room.code,
+        title: partyJoined('m_IsmaAnfitrion', []).room.title,
+        host: 'Isma',
+        members: 2,
+        online: 1,
+        createdAt: AT_MS,
+      },
+    ],
+  },
+  partyEnd: { ok: true },
 } satisfies { [K in WebFixtureRouteId | AppFromWebFixtureRouteId]: V1ResponseInput<K> };
 
 // --- Variantes (variantes/<ruta>.<caso>.json) ---

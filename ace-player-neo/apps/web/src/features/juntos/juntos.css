@@ -2262,3 +2262,53 @@
   font-weight: 750;
   cursor: pointer;
 }
+
+/* --- Salas abiertas en la portada (docs/ver-juntos.md §15) --- */
+.juntos-open {
+  display: grid;
+  gap: 8px;
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 0 16px 24px;
+}
+.juntos-open__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.juntos-open__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.juntos-open__text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 180px;
+}
+.juntos-open__title {
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.juntos-open__sub {
+  color: var(--text-2);
+  font-weight: 600;
+}
+.juntos-open__meta {
+  color: var(--text-3);
+  font-size: 13px;
+}
+.juntos-open__actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
