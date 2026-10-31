@@ -54,6 +54,25 @@ describe('rutas de «Ver juntos»', () => {
     });
     expect(chat.json()).toEqual({ ok: true });
 
+    /* «Está escribiendo» (§13): ligero y sin error aunque se repita. */
+    for (let i = 0; i < 3; i += 1) {
+      const typing = await app.inject({
+        method: 'POST',
+        url: `/api/v1/party/${code}/typing`,
+        headers: web(),
+        payload: { token: ana.member.token },
+      });
+      expect(typing.json()).toEqual({ ok: true });
+    }
+    /* Las reacciones ya no existen. */
+    const react = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/react`,
+      headers: web(),
+      payload: { token: ana.member.token, emoji: '😂' },
+    });
+    expect(react.statusCode).toBe(404);
+
     const notHost = await app.inject({
       method: 'POST',
       url: `/api/v1/party/${code}/close`,

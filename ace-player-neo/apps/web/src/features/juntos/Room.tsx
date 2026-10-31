@@ -1,12 +1,19 @@
-/* La sala (docs/ver-juntos.md §7, §11 y §12): el reproductor (Theater) y, al
-   lado en el ordenador o debajo en el móvil, las pestañas Chat, Lista y
-   Personas, más Ajustes para el líder.
+/* La sala (docs/ver-juntos.md §7, §11, §12 y §13).
 
-   Pantalla completa: la de verdad sobre el reproductor Y el panel, para que
-   el chat siga a mano (se abre y se cierra con su botón, con los mensajes
-   nuevos en un globo). En el iPhone no hay pantalla completa para un trozo de
-   página (solo la del vídeo, que esconde chat y reacciones): allí la sala
-   ocupa toda la pantalla con CSS. En Android, además, se gira a horizontal. */
+   - Escritorio (desde 1024, como la maqueta): a la izquierda el vídeo con sus
+     controles (Theater), debajo el título con quién controla e «Invitar», y
+     la tarjeta «Cuando acabe»; a la derecha, las caras de la gente y las
+     pestañas Chat, Siguiente y Gente. Entre 768 y 1024, lo mismo apilado.
+   - Móvil (menos de 768): la sala de siempre, sin tocar su aspecto: la
+     cabecera con el título, «Invitar» y «Salir», el vídeo y las pestañas
+     Chat, Lista, Gente y Ajustes (el líder) debajo (Mobile.tsx). Lo que sí
+     cambia es el funcionamiento: sin reacciones, los co-líderes y «Esperando
+     a todos».
+   - Antes de empezar, «Esperando a todos» (Lobby) encima del vídeo, que ya
+     va cargando por debajo.
+   - Pantalla completa: solo el vídeo (sin chat). En el iPhone no hay
+     pantalla completa para un trozo de página: allí el vídeo ocupa toda la
+     pantalla con CSS. En Android, además, se gira a horizontal. */
 
 import type { PartyCloseReason, PartyCredential } from '@ace/shared';
 import {
@@ -22,12 +29,15 @@ import { describeFailure } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
 import { copyText } from '../../player/clipboard.ts';
-import { Button, IconButton } from '../../ui/Button.tsx';
+import { Button } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
 import { Tabs, tabPanelProps } from '../../ui/Segmented.tsx';
+import { Art } from '../cine/Art.tsx';
 import { Chat } from './Chat.tsx';
-import { inviteUrl, PartyClient, rememberRoom } from './client.ts';
-import { People, Queue, Settings } from './Panels.tsx';
+import { canControl, controllers, inviteUrl, PartyClient, rememberRoom, roleOf } from './client.ts';
+import { MEDIA, useMediaQuery } from '../../lib/media.ts';
+import { MobilePeople, MobileQueue, MobileSettings } from './Mobile.tsx';
+import { Faces, joinNames, Lobby, NextCard, NextPanel, People } from './Panels.tsx';
 import { RoomPlayer } from './player.ts';
 import { Theater } from './Theater.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
@@ -41,7 +51,9 @@ const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
   gone: JUNTOS_TEXT.gone,
 };
 
-type SideTab = 'chat' | 'lista' | 'personas' | 'ajustes';
+type SideTab = 'chat' | 'siguiente' | 'gente';
+/* Las del móvil, las de siempre. */
+type MobileTab = 'chat' | 'lista' | 'personas' | 'ajustes';
 
 /** ¿Este navegador sabe poner un elemento cualquiera en pantalla completa? (el iPhone, no). */
 function nativeFullscreen(element: HTMLElement | null): boolean {
@@ -54,6 +66,8 @@ export function Room({
   onForbidden,
   onLeft,
   onEnter,
+  onPropose,
+  header,
   exitAction,
 }: {
   code: string;
@@ -63,19 +77,24 @@ export function Room({
   onLeft(): void;
   /** Al montar el vídeo (en casa, se para el reproductor de la casa: la sala usa la plaza de la IPTV). */
   onEnter?: () => void;
+  /** «Proponer algo de Pelis y series» (solo en casa: el invitado de fuera no tiene catálogo). */
+  onPropose?: () => void;
+  /** La barra de la sección («Ver juntos» con el buscador) en casa, desde 768. */
+  header?: ReactNode;
   /** El botón para irse cuando la sala ya no existe (null en la página del invitado). */
   exitAction: ReactNode;
 }) {
   const client = useMemo(() => new PartyClient(code, credential), [code, credential]);
   const state = useSyncExternalStore(client.subscribe, client.getState);
   const video = useRef<HTMLVideoElement>(null);
-  const body = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
   const [player, setPlayer] = useState<RoomPlayer | null>(null);
   const [tab, setTab] = useState<SideTab>('chat');
-  /* `native`: la del navegador; `page`: la sala a toda pantalla con CSS (iPhone). */
+  const [mobileTab, setMobileTab] = useState<MobileTab>('chat');
+  /* Desde 768, el rediseño; en el móvil, la sala de siempre. */
+  const desk = useMediaQuery(MEDIA.tablet);
+  /* `native`: la del navegador; `page`: el vídeo a toda pantalla con CSS (iPhone). */
   const [fullscreen, setFullscreen] = useState<'native' | 'page' | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [seenMessages, setSeenMessages] = useState(0);
 
   useEffect(() => {
     rememberRoom(code);
@@ -109,15 +128,8 @@ export function Room({
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
 
-  /* Mensajes del chat ya vistos: con el chat a la vista (o fuera de la pantalla completa), todos. */
-  const chatVisible = !fullscreen || chatOpen;
-  const messages = state.chat.filter((message) => message.kind === 'chat').length;
-  useEffect(() => {
-    if (chatVisible) setSeenMessages(messages);
-  }, [chatVisible, messages]);
-
   const toggleFullscreen = useCallback(() => {
-    const element = body.current;
+    const element = stage.current;
     if (fullscreen === 'native') {
       void document.exitFullscreen?.().catch(() => undefined);
       setFullscreen(null);
@@ -127,7 +139,6 @@ export function Room({
       setFullscreen(null);
       return;
     }
-    setChatOpen(false);
     if (element && nativeFullscreen(element)) {
       /* Si el navegador no contesta (algunos marcos no lo dejan y la promesa no acaba), la de la página. */
       const fallback = globalThis.setTimeout(() => setFullscreen('page'), 1_500);
@@ -153,15 +164,24 @@ export function Room({
   }
 
   const room = state.room;
-  const isHost = room?.hostId === credential.id;
-  const isLeader = room?.leaderId === credential.id;
-  const shownTab: SideTab = tab === 'ajustes' && !isLeader ? 'chat' : tab;
-  const tabs: { value: SideTab; label: string; count?: number }[] = [
-    { value: 'chat', label: JUNTOS_TEXT.tabChat },
-    { value: 'lista', label: JUNTOS_TEXT.tabQueue, count: room?.queue.length ?? 0 },
-    { value: 'personas', label: JUNTOS_TEXT.tabPeople, count: room?.members.length ?? 0 },
-    ...(isLeader ? [{ value: 'ajustes' as const, label: JUNTOS_TEXT.tabSettings }] : []),
-  ];
+  const selfId = credential.id;
+  const isHost = room?.hostId === selfId;
+  const isLeader = room?.leaderId === selfId;
+  const control = canControl(room, selfId);
+  const role = roleOf(room, selfId);
+  const leaderName = room?.members.find((member) => member.id === room.leaderId)?.name ?? '';
+  const hostName = room?.members.find((member) => member.id === room.hostId)?.name ?? leaderName;
+  const lobby = !!room?.playback.lobby;
+  const names = room ? (controllers(room) ?? []) : [];
+  const whoControls = !room
+    ? ''
+    : room.settings.control === 'everyone'
+      ? JUNTOS_TEXT.everyoneControls(lobby)
+      : role === 'leader'
+        ? JUNTOS_TEXT.youControl(lobby)
+        : role === 'coleader' && control
+          ? JUNTOS_TEXT.coleaderControls(leaderName)
+          : JUNTOS_TEXT.guestOf(hostName, joinNames(names), names.length > 1);
 
   /* La web de casa va por http: sin la API del portapapeles, `copyText` tira del
      respaldo. Si tampoco puede, el enlace sale en una ventana para copiarlo a mano
@@ -189,82 +209,194 @@ export function Room({
     onLeft();
   };
 
+  const stageContent = (
+    <div ref={stage} className="juntos__stage" data-fullscreen={fullscreen ? 'true' : 'false'}>
+      <video ref={video} className="juntos__video" playsInline preload="auto" />
+      {player && room ? (
+        <Theater
+          player={player}
+          client={client}
+          room={room}
+          state={state}
+          video={video.current}
+          fullscreen={fullscreen !== null}
+          onFullscreen={toggleFullscreen}
+          desk={desk}
+        />
+      ) : null}
+      {room?.playback.lobby && !fullscreen ? (
+        <Lobby
+          room={room}
+          client={client}
+          selfId={selfId}
+          onGesture={() => {
+            /* «Toca para empezar» queda debajo: este toque ya desbloquea el sonido. */
+            if (player?.getView().phase === 'blocked') player.unlock();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+
+  if (!desk) {
+    /* Móvil: la sala de siempre. */
+    const shownTab: MobileTab = mobileTab === 'ajustes' && !isLeader ? 'chat' : mobileTab;
+    const mobileTabs: { value: MobileTab; label: string; count?: number }[] = [
+      { value: 'chat', label: JUNTOS_TEXT.tabChat },
+      { value: 'lista', label: JUNTOS_TEXT.tabQueue, count: room?.queue.length ?? 0 },
+      { value: 'personas', label: JUNTOS_TEXT.tabPeople, count: room?.members.length ?? 0 },
+      ...(isLeader ? [{ value: 'ajustes' as const, label: JUNTOS_TEXT.tabSettings }] : []),
+    ];
+    return (
+      <div className={cx('juntos', fullscreen === 'page' && 'juntos--page-fs')}>
+        {header}
+        <header className="juntos__head">
+          <div className="juntos__heading">
+            <h1 className="juntos__title">{room?.title.title ?? JUNTOS_TEXT.connecting}</h1>
+            {room?.title.subtitle ? <p className="juntos__sub">{room.title.subtitle}</p> : null}
+          </div>
+          <div className="juntos__actions">
+            <Button size="sm" variant="primary" icon="link" onClick={() => void copyLink()}>
+              {JUNTOS_TEXT.invite}
+            </Button>
+            <Button
+              size="sm"
+              variant={isHost ? 'danger' : 'quiet'}
+              icon="x"
+              onClick={() => void leave()}
+            >
+              {isHost ? JUNTOS_TEXT.closeRoom : JUNTOS_TEXT.leave}
+            </Button>
+          </div>
+        </header>
+        <div className="juntos__body" data-fullscreen={fullscreen ? 'true' : 'false'}>
+          {stageContent}
+          <aside className="juntos__side">
+            <div className="juntos__side-head">
+              <Tabs
+                label={JUNTOS_TEXT.people}
+                idPrefix="juntos"
+                block
+                items={mobileTabs}
+                value={shownTab}
+                onChange={setMobileTab}
+              />
+            </div>
+            <div className="juntos__panel" {...tabPanelProps('juntos', shownTab)}>
+              {shownTab === 'chat' ? (
+                <Chat
+                  messages={state.chat}
+                  room={room}
+                  selfId={selfId}
+                  onSend={(text) => client.chat(text)}
+                  onTyping={() => client.typing()}
+                />
+              ) : !room ? null : shownTab === 'lista' ? (
+                <MobileQueue room={room} client={client} selfId={selfId} />
+              ) : shownTab === 'personas' ? (
+                <MobilePeople room={room} client={client} selfId={selfId} />
+              ) : (
+                <MobileSettings room={room} client={client} />
+              )}
+            </div>
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
+  const tabs: { value: SideTab; label: string; count?: number }[] = [
+    { value: 'chat', label: JUNTOS_TEXT.tabChat },
+    { value: 'siguiente', label: JUNTOS_TEXT.tabNext, count: room?.queue.length ?? 0 },
+    { value: 'gente', label: JUNTOS_TEXT.tabPeople },
+  ];
+  /* Como la maqueta: quien creó la sala, solo «Invitar» («Cerrar sala» va al
+     final de Gente); los demás, «Salir» (e «Invitar» si controlan). */
+  const deskActions = (
+    <>
+      {control || isHost ? (
+        <Button variant="primary" icon="link" onClick={() => void copyLink()}>
+          {JUNTOS_TEXT.invite}
+        </Button>
+      ) : null}
+      {isHost ? null : (
+        <Button variant="quiet" icon="salir" onClick={() => void leave()}>
+          {JUNTOS_TEXT.leave}
+        </Button>
+      )}
+    </>
+  );
+
   return (
-    <div className={cx('juntos', fullscreen === 'page' && 'juntos--page-fs')}>
-      <header className="juntos__head">
-        <div className="juntos__heading">
-          <h1 className="juntos__title">{room?.title.title ?? JUNTOS_TEXT.connecting}</h1>
-          {room?.title.subtitle ? <p className="juntos__sub">{room.title.subtitle}</p> : null}
-        </div>
-        <div className="juntos__actions">
-          <Button size="sm" variant="primary" icon="link" onClick={() => void copyLink()}>
-            {JUNTOS_TEXT.invite}
-          </Button>
-          <Button
-            size="sm"
-            variant={isHost ? 'danger' : 'quiet'}
-            icon="x"
-            onClick={() => void leave()}
-          >
-            {isHost ? JUNTOS_TEXT.closeRoom : JUNTOS_TEXT.leave}
-          </Button>
-        </div>
-      </header>
-      <div
-        ref={body}
-        className="juntos__body"
-        data-fullscreen={fullscreen ? 'true' : 'false'}
-        data-chat={chatOpen ? 'open' : 'closed'}
-      >
-        <div className="juntos__stage">
-          <video ref={video} className="juntos__video" playsInline preload="auto" />
-          {player && room ? (
-            <Theater
-              player={player}
-              client={client}
-              room={room}
-              state={state}
-              video={video.current}
-              fullscreen={fullscreen !== null}
-              onFullscreen={toggleFullscreen}
-              chatOpen={chatOpen}
-              onChat={() => setChatOpen((open) => !open)}
-              unread={Math.max(0, messages - seenMessages)}
-            />
-          ) : null}
+    <div
+      className={cx(
+        'juntos',
+        !!header && 'juntos--house',
+        fullscreen === 'page' && 'juntos--page-fs',
+      )}
+    >
+      {header}
+      <div className="juntos__body" data-fullscreen={fullscreen ? 'true' : 'false'}>
+        <div className="juntos__main">
+          {stageContent}
+          {room ? (
+            <div className="juntos-info">
+              <Art
+                id={room.title.artId}
+                art="poster"
+                v={room.title.poster}
+                title={room.title.title}
+                className="juntos-poster juntos-info__poster"
+              />
+              <div className="juntos-info__text">
+                <h1 className="juntos-info__title">
+                  {room.title.title}
+                  {room.title.subtitle ? (
+                    <span className="juntos-info__sub"> · {room.title.subtitle}</span>
+                  ) : null}
+                </h1>
+                <p className="juntos-info__who">{whoControls}</p>
+              </div>
+              <div className="juntos-info__actions">{deskActions}</div>
+            </div>
+          ) : (
+            <h1 className="juntos-info__title">{JUNTOS_TEXT.connecting}</h1>
+          )}
+          {room ? <NextCard room={room} onSeeList={() => setTab('siguiente')} /> : null}
         </div>
         <aside className="juntos__side">
+          {room ? <Faces room={room} selfId={selfId} /> : null}
           <div className="juntos__side-head">
             <Tabs
               label={JUNTOS_TEXT.people}
               idPrefix="juntos"
               block
               items={tabs}
-              value={shownTab}
+              value={tab}
               onChange={setTab}
             />
-            {fullscreen ? (
-              <IconButton
-                icon="x"
-                label={JUNTOS_TEXT.closePanel}
-                variant="quiet"
-                onClick={() => setChatOpen(false)}
-              />
-            ) : null}
           </div>
-          <div className="juntos__panel" {...tabPanelProps('juntos', shownTab)}>
-            {shownTab === 'chat' ? (
+          <div className="juntos__panel" {...tabPanelProps('juntos', tab)}>
+            {tab === 'chat' ? (
               <Chat
                 messages={state.chat}
-                selfId={credential.id}
+                room={room}
+                selfId={selfId}
+                desk
+                typing={state.typing}
                 onSend={(text) => client.chat(text)}
+                onTyping={() => client.typing()}
+                onExpireTyping={() => client.expireTyping()}
               />
-            ) : !room ? null : shownTab === 'lista' ? (
-              <Queue room={room} client={client} selfId={credential.id} />
-            ) : shownTab === 'personas' ? (
-              <People room={room} client={client} selfId={credential.id} />
+            ) : !room ? null : tab === 'siguiente' ? (
+              <NextPanel room={room} client={client} selfId={selfId} onPropose={onPropose} />
             ) : (
-              <Settings room={room} client={client} />
+              <People
+                room={room}
+                client={client}
+                selfId={selfId}
+                onCloseRoom={isHost ? () => void leave() : undefined}
+              />
             )}
           </div>
         </aside>

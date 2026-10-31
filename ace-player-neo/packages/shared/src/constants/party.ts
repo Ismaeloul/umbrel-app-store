@@ -41,10 +41,10 @@ export const PARTY = {
   queueMax: 30,
   /** Al acabar, lo siguiente empieza tras esta cuenta atrás (el líder la puede cancelar). */
   upNextMs: 10_000,
-  /** Reacciones por persona en `reactionWindowMs`. */
-  reactionsPerWindow: 10,
-  reactionWindowMs: 10_000,
+  /** Entre dos avisos de «está escribiendo» de la misma persona (los de en medio no salen). */
+  typingIntervalMs: 2_000,
+  /** Lo que se ve «Ana está escribiendo…» tras su último aviso. */
+  typingShowMs: 4_000,
+  /** En «Esperando a todos» (§13), segundos de vídeo por delante que cuentan como «listo» (el 100 %). */
+  lobbyBufferS: 8,
 } as const;
-
-/** Las reacciones que se pueden lanzar sobre el vídeo (§11). */
-export const PARTY_REACTIONS = ['😂', '❤️', '😮', '😢', '👏', '🔥', '😱', '👍'] as const;

@@ -200,7 +200,7 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'partyControl',
       'partyStatus',
       'partyChat',
-      'partyReact',
+      'partyTyping',
       'partySettings',
       'partyMember',
       'partyQueue',

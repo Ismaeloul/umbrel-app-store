@@ -173,7 +173,6 @@ import {
   PartyParamsSchema,
   PartyPreviewSchema,
   PartyQueueBodySchema,
-  PartyReactBodySchema,
   PartySettingsBodySchema,
   PartyStatusBodySchema,
   PartyStatusResponseSchema,
@@ -1680,7 +1679,8 @@ export const V1_ROUTES = {
     module: 'party',
     summary: 'Tiempo real de la sala por SSE: estado, personas y chat',
     description:
-      'Empieza con `party.snapshot` y luego manda `party.playback`, `party.room`, `party.chat` y `party.closed`. ' +
+      'Empieza con `party.snapshot` y luego manda `party.playback`, `party.room`, `party.chat`, `party.typing` y ' +
+      '`party.closed`. ' +
       'Con la conexión abierta la persona cuenta como presente.',
     params: PartyParamsSchema,
     query: PartyEventsQuerySchema,
@@ -1777,20 +1777,23 @@ export const V1_ROUTES = {
     errors: [...PARTY_MEMBER_ERRORS, 'rate_limited'],
     legacyTwin: null,
   }),
-  partyReact: defineRoute({
+  partyTyping: defineRoute({
     method: 'POST',
-    path: '/api/v1/party/:code/react',
+    path: '/api/v1/party/:code/typing',
     access: 'any',
     credential: 'party',
     module: 'party',
-    summary: 'Lanzar una reacción que sube por encima del vídeo de todos',
+    summary: 'Avisar de que se está escribiendo en el chat («Ana está escribiendo…»)',
+    description:
+      'Ligero y sin error por frecuencia: el servidor reenvía como mucho uno cada `PARTY.typingIntervalMs` por ' +
+      'persona (`party.typing`) y descarta los demás.',
     params: PartyParamsSchema,
-    body: PartyReactBodySchema,
+    body: PartyTokenBodySchema,
     response: PartyOkSchema,
     status: 200,
     content: 'json',
     sideEffects: true,
-    errors: [...PARTY_MEMBER_ERRORS, 'rate_limited'],
+    errors: PARTY_MEMBER_ERRORS,
     legacyTwin: null,
   }),
   partySettings: defineRoute({
@@ -1799,7 +1802,8 @@ export const V1_ROUTES = {
     access: 'any',
     credential: 'party',
     module: 'party',
-    summary: 'Ajustes de la sala: quién controla y qué pasa al acabar (solo el líder)',
+    summary:
+      'Ajustes de la sala: quién controla (el líder) y qué pasa al acabar (el líder y los co-líderes)',
     params: PartyParamsSchema,
     body: PartySettingsBodySchema,
     response: PartyOkSchema,
@@ -1815,7 +1819,7 @@ export const V1_ROUTES = {
     access: 'any',
     credential: 'party',
     module: 'party',
-    summary: 'Echar a alguien o darle el liderazgo (solo el líder)',
+    summary: 'Echar a alguien, darle el liderazgo o hacerle co-líder (solo el líder)',
     params: PartyParamsSchema,
     body: PartyMemberBodySchema,
     response: PartyOkSchema,

@@ -24,7 +24,10 @@
      Lo que hace el navegador por su cuenta (pausar al bloquear el iPhone, un
      vídeo silenciado que no se ve) no para a los demás.
    - El primer play necesita un toque (los navegadores no dejan sonar un
-     vídeo solo): hasta entonces, «Toca para empezar». */
+     vídeo solo): hasta entonces, «Toca para empezar».
+   - «Esperando a todos» (§13): con la sala en espera, cada latido dice cuánto
+     vídeo hay cargado por delante (`PARTY.lobbyBufferS` es el 100 %) y si ya
+     puede empezar; la sala arranca sola cuando todos lo están. */
 
 import type { PartyRoom, VodGrant } from '@ace/shared';
 import { api, getDeviceId, getViewerId, isApiError } from '../../api/index.ts';
@@ -33,7 +36,7 @@ import { chooseEngine, detectPlatform, streamClient } from '../../player/engines
 import { absoluteUrl } from '../../player/engines/types.ts';
 import { canPlayHevc } from '../cine/play.ts';
 import { canControl, type PartyClient } from './client.ts';
-import { correction, isRunning, targetPosition } from './sync.ts';
+import { correction, isRunning, lobbyReport, targetPosition } from './sync.ts';
 import { JUNTOS_TEXT } from './texts.ts';
 
 const TICK_MS = 500;
@@ -390,7 +393,19 @@ export class RoomPlayer {
       }
     } catch {}
     this.set({ positionS: video.currentTime || 0, durationS, bufferedS, buffering });
-    this.client.report(video.currentTime || 0, buffering);
+    this.client.report(
+      video.currentTime || 0,
+      buffering,
+      room?.playback.lobby
+        ? lobbyReport(
+            ready || phase === 'blocked',
+            video.currentTime || 0,
+            video.readyState,
+            bufferedS,
+            durationS,
+          )
+        : null,
+    );
     if (!room || !ready) return;
     const running = isRunning(room.playback);
     const target = targetPosition(room.playback, this.client.serverNow(), durationS);

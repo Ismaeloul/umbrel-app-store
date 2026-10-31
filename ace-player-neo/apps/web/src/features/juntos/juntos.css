@@ -1,788 +1,362 @@
-/* «Ver juntos» (docs/ver-juntos.md §7): la sala y la entrada con el enlace. */
+/* «Ver juntos» (docs/ver-juntos.md §7, §12 y §13): la sala y la entrada con
+   el enlace, en tres bloques:
+   - Lo común (cualquier ancho): la pantalla completa, el rótulo, el cartel y
+     las caras, «Quién controla», «Esperando a todos», crear la sala desde la
+     ficha y entrar con el enlace.
+   - Móvil (menos de 768): la sala de siempre (cabecera, vídeo y las pestañas
+     Chat, Lista, Gente y Ajustes debajo), sin reacciones.
+   - Escritorio (desde 768): el rediseño de la maqueta 01-escritorio, pantalla
+     5. Sin cristal: superficies opacas con su borde de 1 px.
+   Room.tsx pinta un marcado distinto a cada lado de 768 (useMediaQuery). */
 
 .juntos {
-  display: grid;
-  gap: var(--s-4, 16px);
-  padding: 16px var(--gutter, 16px) 24px;
-  max-width: 1400px;
-}
-.juntos__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-.juntos__heading {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.juntos__title {
-  margin: 0;
-  font-size: var(--fs-22, 22px);
-  font-weight: var(--wght-head, 760);
-  letter-spacing: -0.01em;
-  overflow-wrap: anywhere;
-}
-.juntos__sub {
-  margin: 0;
-  color: var(--text-2);
-  font-size: var(--fs-15, 15px);
-}
-.juntos__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.juntos__body {
-  display: grid;
-  gap: var(--s-4, 16px);
-  grid-template-columns: minmax(0, 1fr);
-}
-@media (min-width: 1024px) {
-  .juntos__body {
-    grid-template-columns: minmax(0, 1fr) 380px;
-    align-items: start;
-  }
+  /* El escudo del co-líder: azul que pasa AA en los dos temas. */
+  --juntos-blue: light-dark(#2457d6, #8fb0ff);
+  --juntos-blue-bg: light-dark(#2457d6, #2f5fe0);
 }
 
-/* El reproductor (Theater.tsx, docs/ver-juntos.md §12): el vídeo con todo
-   encima, como en el reproductor de casa. Los controles se esconden solos. */
-.juntos__stage {
-  position: relative;
-  overflow: hidden;
-  border-radius: var(--r-l, 16px);
-  background: #000;
-  color: var(--on-video, #fff);
-  aspect-ratio: 16 / 9;
-  isolation: isolate;
-}
-.juntos__video {
-  position: absolute;
-  inset: 0;
+/* Pantalla completa: solo el vídeo. La del navegador va sobre `.juntos__stage`;
+   la de la página (iPhone), con CSS. */
+.juntos__stage:fullscreen {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  background: #000;
-}
-/* En el móvil en vertical, el vídeo de lado a lado y arriba del todo. */
-@media (max-width: 719px) {
-  .juntos {
-    gap: 12px;
-    padding-top: 8px;
-  }
-  /* Cabecera en una fila: el título (cortado) y los botones. */
-  .juntos__head {
-    flex-wrap: nowrap;
-    align-items: center;
-  }
-  .juntos__title {
-    overflow: hidden;
-    font-size: var(--fs-17, 17px);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .juntos__sub {
-    font-size: var(--fs-13, 13px);
-  }
-  .juntos__actions {
-    flex-wrap: nowrap;
-  }
-}
-@media (max-width: 479px) {
-  /* Solo los iconos: el texto queda para el lector de pantalla. */
-  .juntos__actions .btn__label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-  .juntos__stage {
-    margin: 0 calc(-1 * var(--gutter, 16px));
-    border-radius: 0;
-  }
-}
-
-.juntos-chrome {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-.juntos-chrome[data-visible='false'] {
-  cursor: none;
-}
-/* La superficie que recibe toques y clics (debajo de los controles). */
-.juntos-chrome__surface {
-  position: absolute;
-  inset: 0;
-}
-.juntos-chrome__top,
-.juntos-chrome__bottom {
-  position: relative;
-  z-index: 2;
-  transition:
-    opacity var(--dur-rapido) var(--ease-estandar),
-    translate var(--dur-rapido) var(--ease-estandar);
-}
-.juntos-chrome[data-visible='false'] .juntos-chrome__top,
-.juntos-chrome[data-visible='false'] .juntos-chrome__bottom {
-  opacity: 0;
-  pointer-events: none;
-}
-.juntos-chrome[data-visible='false'] .juntos-chrome__top {
-  translate: 0 -8px;
-}
-.juntos-chrome[data-visible='false'] .juntos-chrome__bottom {
-  translate: 0 8px;
-}
-
-/* Arriba: título y quién manda, sobre un degradado. */
-.juntos-chrome__top {
-  grid-row: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px 28px;
-  background: linear-gradient(to bottom, rgb(0 0 0 / 0.7), rgb(0 0 0 / 0));
-  pointer-events: none;
-}
-.juntos-chrome__heading {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
-}
-.juntos-chrome__title {
-  overflow: hidden;
-  font-size: var(--fs-17, 17px);
-  font-weight: var(--wght-head, 760);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.juntos-chrome__sub {
-  color: var(--on-video-2, rgb(255 255 255 / 0.76));
-  font-size: var(--fs-13, 13px);
-}
-.juntos-chrome__chips {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-}
-.juntos-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: var(--r-pill, 999px);
-  background: var(--glass-video, rgb(10 12 16 / 0.62));
-  font-size: var(--fs-13, 13px);
-  font-weight: 650;
-  white-space: nowrap;
-  backdrop-filter: blur(12px);
-}
-/* La sala y la cabecera ya dicen el título fuera de la pantalla completa en escritorio. */
-@media (min-width: 720px) {
-  .juntos__body[data-fullscreen='false'] .juntos-chrome__heading {
-    visibility: hidden;
-  }
-}
-
-/* Centro: botón grande, «cargando», avisos. */
-.juntos-center {
-  grid-row: 2;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  padding: 8px 16px;
-  pointer-events: none;
-}
-.juntos-center > * {
-  pointer-events: auto;
-}
-.juntos-center__big-btn {
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 72px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--glass-video, rgb(10 12 16 / 0.62));
-  color: var(--on-video, #fff);
-  backdrop-filter: blur(12px);
-  cursor: pointer;
-  transition:
-    opacity var(--dur-rapido) var(--ease-estandar),
-    scale var(--dur-rapido) var(--ease-rapido);
-}
-.juntos-center__big-btn:active {
-  scale: 0.92;
-}
-.juntos-center__big-btn:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 3px;
-}
-.juntos-chrome[data-visible='false'] .juntos-center__big-btn--toggle {
-  opacity: 0;
-  pointer-events: none;
-}
-.juntos-center__tap {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-.juntos-center__tap .juntos-center__big-btn {
-  background: var(--accent);
-  color: var(--on-accent, #000);
-}
-.juntos-center__card {
-  display: grid;
-  justify-items: center;
-  gap: 12px;
-  max-width: 420px;
-  padding: 18px 22px;
-  border-radius: var(--r-l, 16px);
-  background: var(--glass-video, rgb(10 12 16 / 0.62));
-  text-align: center;
-  backdrop-filter: blur(12px);
-}
-.juntos-center__text {
-  font-size: var(--fs-17, 17px);
-  font-weight: var(--wght-strong, 700);
-  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
-}
-.juntos-center__hint {
-  color: var(--on-video-2, rgb(255 255 255 / 0.76));
-  font-size: var(--fs-13, 13px);
-}
-.juntos-spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid rgb(255 255 255 / 0.25);
-  border-top-color: var(--on-video, #fff);
-  border-radius: 50%;
-  animation: juntos-spin calc(var(--dur-heroe) * 1.2) linear infinite;
-}
-.juntos-spinner--bare {
-  width: 48px;
-  height: 48px;
-}
-@keyframes juntos-spin {
-  to {
-    rotate: 1turn;
-  }
-}
-
-/* Abajo: la barra de tiempo y la fila de botones, sobre un degradado. */
-.juntos-chrome__bottom {
-  grid-row: 3;
-  display: grid;
-  gap: 2px;
-  padding: 28px 8px 6px;
-  background: linear-gradient(to top, rgb(0 0 0 / 0.75), rgb(0 0 0 / 0));
-}
-.juntos-chrome__bar--locked {
-  pointer-events: none;
-}
-.juntos-chrome__bar--locked .vod-bar__thumb {
-  display: none;
-}
-.juntos-chrome__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  min-width: 0;
-}
-.juntos-chrome__group {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-}
-.juntos-chrome__time {
-  padding: 0 8px;
-  font-family: var(--mono);
-  font-size: var(--fs-13, 13px);
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  white-space: nowrap;
-  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
-}
-.juntos-chrome__dur {
-  color: var(--on-video-2, rgb(255 255 255 / 0.76));
-}
-.juntos-chrome__badge-wrap {
-  position: relative;
-  display: inline-flex;
-}
-.juntos-chrome__badge {
-  position: absolute;
-  top: 4px;
-  right: 2px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: var(--r-pill, 999px);
-  background: var(--accent);
-  color: var(--on-accent, #000);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 18px;
-  text-align: center;
-  pointer-events: none;
-}
-/* Volumen: el deslizador solo con ratón (en el móvil manda el botón del teléfono). */
-.juntos-volume {
-  display: inline-flex;
-  align-items: center;
-}
-.juntos-volume__slider {
-  width: 0;
-  opacity: 0;
-  accent-color: var(--on-video, #fff);
-  transition: opacity var(--dur-rapido) var(--ease-estandar);
-}
-.juntos-volume:hover .juntos-volume__slider,
-.juntos-volume:focus-within .juntos-volume__slider {
-  width: 84px;
-  opacity: 1;
-}
-@media (pointer: coarse) {
-  .juntos-volume__slider {
-    display: none;
-  }
-}
-/* Las reacciones, encima de la barra al pulsar el emoji (como en Rave). */
-.juntos-tray {
-  display: flex;
-  justify-self: end;
-  gap: 2px;
-  margin: 0 6px 4px;
-  padding: 4px;
-  border-radius: var(--r-pill, 999px);
-  background: var(--glass-video, rgb(10 12 16 / 0.62));
-  backdrop-filter: blur(12px);
-}
-.juntos-tray__btn {
-  width: 40px;
-  height: 40px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  transition: scale var(--dur-rapido) var(--ease-rapido);
-}
-.juntos-tray__btn:hover {
-  background: rgb(255 255 255 / 0.12);
-}
-.juntos-tray__btn:active {
-  scale: 1.3;
-}
-/* Sin vídeo (preparando, error, interrumpida) la barra no sirve y en el móvil taparía el aviso. */
-.juntos-chrome:is(
-    [data-phase='preparing'],
-    [data-phase='idle'],
-    [data-phase='error'],
-    [data-phase='interrupted']
-  )
-  .juntos-chrome__bottom {
-  display: none;
-}
-@media (max-width: 479px) {
-  /* El título ya está en la cabecera y el vídeo es bajito: fuera lo que sobra. */
-  .juntos-chrome__heading,
-  .juntos-chrome__nudge {
-    display: none;
-  }
-  .juntos-chrome__top {
-    justify-content: flex-end;
-  }
-  .juntos-center__card {
-    gap: 8px;
-    padding: 10px 14px;
-  }
-  .juntos-center__text {
-    font-size: var(--fs-15, 15px);
-  }
-  .juntos-center .btn {
-    min-height: 36px;
-  }
-  .juntos-tray {
-    justify-self: stretch;
-    justify-content: space-between;
-  }
-  .juntos-tray__btn {
-    width: 34px;
-    height: 34px;
-    font-size: 20px;
-  }
-  .juntos-chrome__top {
-    padding: 10px 12px 20px;
-  }
-  .juntos-chrome__bottom {
-    padding: 20px 4px 2px;
-  }
-  .juntos-center__big-btn {
-    width: 60px;
-    height: 60px;
-  }
-}
-
-/* Pantalla completa: la del navegador (sobre `.juntos__body`) o la de la página (iPhone). */
-.juntos__body[data-fullscreen='true'] {
-  position: relative;
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: #000;
-}
-.juntos--page-fs {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  padding: 0;
-  max-width: none;
-  background: #000;
-}
-.juntos--page-fs .juntos__head {
-  display: none;
-}
-.juntos--page-fs .juntos__body {
-  position: absolute;
-  inset: 0;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
-}
-.juntos__body[data-fullscreen='true'] .juntos__stage {
-  width: 100%;
-  height: 100%;
-  margin: 0;
   border-radius: 0;
   aspect-ratio: auto;
 }
-/* El panel (chat, lista…) como cajón a la derecha, de cristal; se abre con el botón del chat. */
-.juntos__body[data-fullscreen='true'] .juntos__side {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  bottom: 12px;
-  z-index: 5;
-  width: min(420px, calc(100% - 24px));
-  padding: 10px;
-  border-radius: var(--r-l, 16px);
-  background: rgb(14 16 20 / 0.86);
-  backdrop-filter: blur(16px);
+.juntos--page-fs .juntos__stage {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  margin: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  border-radius: 0;
+  aspect-ratio: auto;
+}
+
+/* Rótulo en versalitas («CUANDO ACABE», «QUIÉN CONTROLA»). */
+.juntos-kicker {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--fs-11, 11px);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.juntos-kicker--accent {
+  color: var(--accent-ink);
+}
+/* El cartel pequeño de un título. */
+/* Con `.cine-art` delante: cine.css puede cargarse después y su ancho del 100 % ganaría. */
+.cine-art.juntos-poster {
+  display: block;
+  flex: none;
+  width: 44px;
+  aspect-ratio: 2 / 3;
   overflow: hidden;
-  transition:
-    translate var(--dur-estandar) var(--ease-estandar),
-    opacity var(--dur-rapido) var(--ease-estandar);
+  border-radius: 8px;
+  background: var(--surface-2);
 }
-.juntos__body[data-fullscreen='true'][data-chat='closed'] .juntos__side {
-  translate: calc(100% + 24px) 0;
-  opacity: 0;
-  pointer-events: none;
+/* Tan pequeño, el nombre del relleno no cabe: basta el color. */
+.cine-art.juntos-poster .cine-art__name {
+  display: none;
 }
-.juntos__body[data-fullscreen='true'] .juntos-chat {
-  height: 100%;
+
+/* --- Caras --- */
+.juntos-av {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--av, #2457d6);
+  color: #fff;
+  font-size: var(--fs-13, 13px);
+  font-weight: 800;
+  font-stretch: var(--w-tight);
+  letter-spacing: 0.02em;
 }
-.juntos__body[data-fullscreen='true'] .juntos__side {
-  grid-template-rows: auto minmax(0, 1fr);
+.juntos-av--sm {
+  width: 28px;
+  height: 28px;
+  font-size: var(--fs-11, 11px);
 }
-.juntos__body[data-fullscreen='true'] .juntos__panel {
+.juntos-av--off {
+  background: var(--line-strong);
+}
+.juntos-av__crown {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  display: inline-flex;
+  color: var(--accent);
+  transform: translateX(-50%);
+}
+.juntos-av__crown svg {
+  fill: var(--accent);
+  stroke: light-dark(var(--accent-edge), var(--accent));
+}
+.juntos-av__shield {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--juntos-blue-bg);
+  color: #fff;
+  box-shadow: 0 0 0 2px var(--bg-sunk);
+}
+
+/* «Quién controla»: tres baldosas con el icono encima. */
+.juntos-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-m, 14px);
+  background: var(--surface-2);
+}
+.juntos-tile {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-height: 56px;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-12, 12px);
+  font-weight: 750;
+  line-height: var(--lh-snug);
+  text-align: center;
+  cursor: pointer;
+}
+.juntos-tile[aria-checked='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.juntos-tile:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 2px;
+}
+
+/* --- «Esperando a todos» (§13): encima del vídeo, que carga por debajo. --- */
+/* Mientras se espera, el vídeo (aún parado) deja sitio a la lista. */
+.juntos__stage:has(> .juntos-lobby) {
+  height: max(360px, 56.25cqw);
+  aspect-ratio: auto;
+}
+.juntos-lobby {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: safe center;
+  gap: 22px;
+  padding: 18px 24px;
   overflow-y: auto;
+  background:
+    radial-gradient(60% 70% at 70% 40%, rgb(232 165 74 / 0.28), transparent 70%),
+    linear-gradient(160deg, #2b1f0b, #0b0907);
+  color: #fff;
+  container-type: inline-size;
 }
-/* Con el cajón abierto en una pantalla ancha, los controles no quedan debajo. */
-@media (min-width: 900px) {
-  .juntos__body[data-fullscreen='true'][data-chat='open'] .juntos__stage {
-    width: calc(100% - 444px);
+.juntos-lobby > .juntos-poster {
+  width: clamp(96px, 22%, 150px);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.08);
+}
+.juntos-lobby__body {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  align-content: safe center;
+  min-width: 0;
+  max-width: 420px;
+}
+.juntos-lobby .juntos-kicker--accent {
+  color: var(--accent);
+}
+.juntos-lobby__title {
+  margin: 0;
+  font-size: var(--fs-22, 22px);
+  font-weight: 800;
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  line-height: var(--lh-tight);
+}
+.juntos-lobby__meta {
+  margin: 0;
+  color: rgb(255 255 255 / 0.78);
+  font-size: var(--fs-13, 13px);
+}
+.juntos-lobby__list {
+  display: grid;
+  margin: 6px 0;
+  padding: 4px 12px;
+  list-style: none;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.07);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+.juntos-lobby__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  font-size: var(--fs-13, 13px);
+  font-weight: 750;
+}
+.juntos-lobby__row--off {
+  color: rgb(255 255 255 / 0.7);
+}
+.juntos-lobby__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.juntos-lobby__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgb(255 255 255 / 0.8);
+  font-size: var(--fs-12, 12px);
+  font-weight: 750;
+}
+.juntos-lobby__state--ok {
+  gap: 4px;
+  color: #4ade80;
+}
+.juntos-lobby__bar {
+  display: block;
+  width: 56px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.2);
+}
+.juntos-lobby__bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left center;
+  transition: transform var(--dur-rapido) var(--ease-estandar);
+}
+.juntos-lobby__pct {
+  min-width: 5ch;
+  font-family: var(--mono);
+  text-align: right;
+}
+.juntos-lobby__start {
+  justify-self: start;
+}
+.juntos-lobby__hint {
+  margin: 0;
+  color: rgb(255 255 255 / 0.75);
+  font-size: var(--fs-12, 12px);
+}
+@container (max-width: 520px) {
+  .juntos-lobby > .juntos-poster {
+    display: none;
+  }
+  .juntos-lobby__title {
+    font-size: var(--fs-17, 17px);
+  }
+  .juntos-lobby__row {
+    min-height: 30px;
+  }
+}
+@media (max-width: 767px) {
+  .juntos-lobby {
+    padding: 12px 14px;
   }
 }
 
-/* Al lado (o debajo en el móvil): quién está y el chat. */
-.juntos__side {
+/* Crear la sala desde la ficha (§13): quién entra, quién controla y votar. */
+.juntos-create {
   display: grid;
+  gap: 16px;
+}
+/* La cabecera de la hoja es la nuestra (cartel y título): la X de cerrar se
+   queda en su sitio, encima, a la derecha. */
+.juntos-sheet .sheet__head--hidden {
+  position: relative;
+  z-index: 1;
+  margin-bottom: -44px;
+  pointer-events: none;
+}
+.juntos-sheet .sheet__head--hidden .btn {
+  pointer-events: auto;
+}
+.juntos-create__head {
+  display: flex;
+  padding-right: 40px;
+  align-items: center;
   gap: 12px;
   min-width: 0;
 }
-/* Pestañas (Chat, Lista, Personas, Ajustes) y su panel, de la altura del chat. */
-.juntos__panel {
-  min-height: 0;
+.juntos-create__head .juntos-create__poster {
+  width: 44px;
 }
-.juntos__panel:focus-visible {
-  outline: 2px solid var(--focus-ring, var(--accent));
-  outline-offset: 2px;
-  border-radius: var(--r-l, 16px);
-}
-
-/* Personas: una fila cada una con su inicial, la corona del líder y «⋯» (o pulsación larga). */
-.juntos-people__list {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 8px;
-  list-style: none;
-  border: 1px solid var(--line);
-  border-radius: var(--r-l, 16px);
-  background: var(--surface);
-}
-.juntos-people__item {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 4px 6px;
-  border-radius: var(--r-m, 12px);
-  font-size: var(--fs-15, 15px);
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-.juntos-people__avatar {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--on-accent, #fff);
-  font-weight: var(--wght-strong, 700);
-}
-.juntos-people__name {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.juntos-people__item--self .juntos-people__name {
-  font-weight: var(--wght-strong, 700);
-}
-.juntos-people__leader {
-  display: inline-flex;
-  color: var(--warn, #e0a100);
-}
-.juntos-people__item--off {
-  color: var(--text-3);
-}
-.juntos-people__item--off .juntos-people__avatar {
-  background: var(--idle);
-}
-.juntos-people__tag {
-  color: var(--text-2);
-  font-size: var(--fs-13, 13px);
-}
-
-/* Lista de la sala: título, quién lo añadió, votos y «Poner ya». */
-.juntos-queue {
-  display: grid;
-  gap: 10px;
-  justify-items: start;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-l, 16px);
-  background: var(--surface);
-}
-.juntos-queue__empty p {
-  margin: 0;
-}
-.juntos-queue__hint {
-  margin-top: 4px !important;
-  color: var(--text-2);
-  font-size: var(--fs-13, 13px);
-}
-.juntos-queue__list {
-  display: grid;
-  gap: 6px;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.juntos-queue__item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border-radius: var(--r-m, 12px);
-  background: var(--surface-2);
-}
-.juntos-queue__text {
+.juntos-create__heading {
   display: grid;
   gap: 2px;
   min-width: 0;
-}
-.juntos-queue__title {
-  font-weight: var(--wght-strong, 700);
-  overflow-wrap: anywhere;
-}
-.juntos-queue__sub,
-.juntos-queue__by {
   color: var(--text-2);
-  font-size: var(--fs-13, 13px);
+  font-size: var(--fs-15, 15px);
 }
-.juntos-queue__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 4px;
+.juntos-create__heading b {
+  color: var(--text);
+  font-size: var(--fs-17, 17px);
+  font-weight: var(--wght-head, 760);
 }
-.juntos-vote {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 36px;
-  padding: 4px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill, 999px);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: var(--fs-13, 13px);
-  cursor: pointer;
-}
-.juntos-vote--on {
-  border-color: var(--accent);
-  background: var(--accent-soft, rgba(80, 120, 255, 0.15));
-  color: var(--accent-ink);
-}
-
-/* Ajustes del líder. */
-.juntos-settings {
-  display: grid;
-  gap: 16px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-l, 16px);
-  background: var(--surface);
-}
-.juntos-settings__group {
+.juntos-create__group {
   display: grid;
   gap: 8px;
 }
-.juntos-settings__label {
-  margin: 0;
-  font-weight: var(--wght-strong, 700);
-}
-.juntos-settings__modes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-.juntos-settings__mode {
-  min-height: 44px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-m, 12px);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-.juntos-settings__mode--on {
-  border-color: var(--accent);
-  background: var(--accent-soft, rgba(80, 120, 255, 0.15));
-  color: var(--accent-ink);
-  font-weight: var(--wght-strong, 700);
-}
-.juntos-settings__hint {
-  margin: 0;
-  color: var(--text-2);
-  font-size: var(--fs-13, 13px);
-}
-
-/* Las reacciones que suben por encima del vídeo. */
-.juntos-floats {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  /* Por delante de los avisos y de «A continuación»: una reacción siempre se ve. */
-  z-index: 4;
-}
-.juntos-floats__item {
-  position: absolute;
-  bottom: 0;
-  display: grid;
-  justify-items: center;
-  /* Unos 3 s subiendo: lo bastante para verla sin tapar la película. */
-  animation: juntos-float calc(var(--dur-heroe) * 4) var(--ease-out) forwards;
-}
-.juntos-floats__emoji {
-  font-size: 34px;
-  line-height: 1;
-}
-.juntos-floats__name {
-  font-size: var(--fs-11, 11px);
-  text-shadow: 0 1px 2px #000;
-}
-@keyframes juntos-float {
-  0% {
-    transform: translateY(0) scale(0.6);
-    opacity: 0;
-  }
-  12% {
-    transform: translateY(-12%) scale(1.1);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(-260%) scale(1);
-    opacity: 0;
-  }
-}
-
-/* «A continuación»: tarjeta en la esquina del vídeo con la cuenta atrás. */
-.juntos-upnext {
-  position: absolute;
-  right: 12px;
-  bottom: 104px;
-  z-index: 3;
-  display: grid;
-  gap: 4px;
-  max-width: min(320px, calc(100% - 24px));
-  padding: 12px 14px;
-  border-radius: var(--r-m, 12px);
-  background: var(--glass-video-solid, rgba(0, 0, 0, 0.82));
-}
-.juntos-upnext__kicker,
-.juntos-upnext__in {
-  color: var(--on-video-2, rgba(255, 255, 255, 0.75));
-  font-size: var(--fs-13, 13px);
-}
-.juntos-upnext__title {
-  font-weight: var(--wght-strong, 700);
-}
-.juntos-upnext__sub {
-  font-size: var(--fs-13, 13px);
-}
-.juntos-upnext__actions {
+.juntos-create__only {
   display: flex;
-  gap: 6px;
-  margin-top: 4px;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--r-m, 14px);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1.5px var(--accent-edge);
+}
+.juntos-create__only > span {
+  display: grid;
+  gap: 1px;
+}
+.juntos-create__hint {
+  color: var(--text-3);
+  font-size: var(--fs-12, 12px);
+}
+.juntos-create__switch {
+  padding: 10px 14px;
+  border-radius: var(--r-m, 14px);
+  background: var(--surface-2);
+}
+.juntos-create__submit {
+  flex: 1;
+  width: 100%;
 }
 
-/* «Añadir a la sala» en la ficha. */
+/* «Proponer en la sala» en la ficha. */
 .juntos-add {
   display: grid;
   gap: 6px;
   justify-items: start;
-  margin-bottom: 16px;
 }
 .juntos-add__hint,
 .juntos-add__or {
@@ -794,77 +368,6 @@
   margin-top: 8px;
   font-weight: var(--wght-strong, 700);
   color: var(--text);
-}
-.juntos-chat {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  height: min(60vh, 520px);
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--r-l, 16px);
-  background: var(--surface);
-}
-.juntos-chat__list {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  margin: 0;
-  padding: 12px;
-  overflow-y: auto;
-  list-style: none;
-  overscroll-behavior: contain;
-}
-.juntos-chat__empty {
-  color: var(--text-3);
-  font-size: var(--fs-13, 13px);
-}
-.juntos-chat__msg {
-  display: grid;
-  gap: 2px;
-  font-size: var(--fs-15, 15px);
-  overflow-wrap: anywhere;
-}
-.juntos-chat__msg--system {
-  color: var(--text-3);
-  font-size: var(--fs-13, 13px);
-}
-.juntos-chat__who {
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-  color: var(--accent-ink);
-  font-size: var(--fs-13, 13px);
-  font-weight: var(--wght-strong, 700);
-}
-.juntos-chat__msg--self .juntos-chat__who {
-  color: var(--text-2);
-}
-.juntos-chat__time {
-  color: var(--text-3);
-  font-weight: var(--wght-text, 450);
-  font-size: var(--fs-11, 11px);
-}
-.juntos-chat__form {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 8px;
-  border-top: 1px solid var(--line);
-}
-.juntos-chat__input {
-  flex: 1;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill, 999px);
-  background: var(--bg-sunk);
-  color: var(--text);
-  font: inherit;
-  font-size: 16px; /* 16 px: el iPhone no hace zoom al escribir. */
-}
-.juntos-chat__input:focus-visible {
-  outline: 2px solid var(--focus-ring, var(--accent));
-  outline-offset: 1px;
 }
 
 /* Entrar con el enlace. */
@@ -921,28 +424,1665 @@
   color: var(--fail-ink);
 }
 
-/* Cabecera del panel: las pestañas y, en pantalla completa, cerrar. */
-.juntos__side-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.juntos__side-head > :first-child {
-  flex: 1;
-  min-width: 0;
-}
-/* En vertical (móvil), el cajón es la mitad de abajo: el vídeo sigue a la vista. */
-@media (max-aspect-ratio: 1 / 1) {
-  .juntos__body[data-fullscreen='true'] .juntos__side {
-    top: auto;
-    left: 8px;
-    right: 8px;
-    bottom: calc(8px + env(safe-area-inset-bottom));
-    width: auto;
-    height: 52%;
+/* --- Móvil (menos de 768): la sala como estaba. --- */
+@media (max-width: 767px) {
+  .juntos {
+    display: grid;
+    gap: var(--s-4, 16px);
+    padding: 16px var(--gutter, 16px) 24px;
+    max-width: 1400px;
   }
-  .juntos__body[data-fullscreen='true'][data-chat='closed'] .juntos__side {
-    translate: 0 calc(100% + 24px);
+  .juntos__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .juntos__heading {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .juntos__title {
+    margin: 0;
+    font-size: var(--fs-22, 22px);
+    font-weight: var(--wght-head, 760);
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+  }
+  .juntos__sub {
+    margin: 0;
+    color: var(--text-2);
+    font-size: var(--fs-15, 15px);
+  }
+  .juntos__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .juntos__body {
+    display: grid;
+    gap: var(--s-4, 16px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* El reproductor (Theater.tsx, docs/ver-juntos.md §12): el vídeo con todo
+   encima, como en el reproductor de casa. Los controles se esconden solos. */
+  .juntos__stage {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--r-l, 16px);
+    background: #000;
+    color: var(--on-video, #fff);
+    aspect-ratio: 16 / 9;
+    isolation: isolate;
+  }
+  .juntos__video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+  }
+  /* En el móvil en vertical, el vídeo de lado a lado y arriba del todo. */
+  @media (max-width: 719px) {
+    .juntos {
+      gap: 12px;
+      padding-top: 8px;
+    }
+    /* Cabecera en una fila: el título (cortado) y los botones. */
+    .juntos__head {
+      flex-wrap: nowrap;
+      align-items: center;
+    }
+    .juntos__title {
+      overflow: hidden;
+      font-size: var(--fs-17, 17px);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .juntos__sub {
+      font-size: var(--fs-13, 13px);
+    }
+    .juntos__actions {
+      flex-wrap: nowrap;
+    }
+  }
+  @media (max-width: 479px) {
+    /* Solo los iconos: el texto queda para el lector de pantalla. */
+    .juntos__actions .btn__label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .juntos__stage {
+      margin: 0 calc(-1 * var(--gutter, 16px));
+      border-radius: 0;
+    }
+  }
+
+  .juntos-chrome {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  .juntos-chrome[data-visible='false'] {
+    cursor: none;
+  }
+  /* La superficie que recibe toques y clics (debajo de los controles). */
+  .juntos-chrome__surface {
+    position: absolute;
+    inset: 0;
+  }
+  .juntos-chrome__top,
+  .juntos-chrome__bottom {
+    position: relative;
+    z-index: 2;
+    transition:
+      opacity var(--dur-rapido) var(--ease-estandar),
+      translate var(--dur-rapido) var(--ease-estandar);
+  }
+  .juntos-chrome[data-visible='false'] .juntos-chrome__top,
+  .juntos-chrome[data-visible='false'] .juntos-chrome__bottom {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .juntos-chrome[data-visible='false'] .juntos-chrome__top {
+    translate: 0 -8px;
+  }
+  .juntos-chrome[data-visible='false'] .juntos-chrome__bottom {
+    translate: 0 8px;
+  }
+
+  /* Arriba: título y quién manda, sobre un degradado. */
+  .juntos-chrome__top {
+    grid-row: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px 28px;
+    background: linear-gradient(to bottom, rgb(0 0 0 / 0.7), rgb(0 0 0 / 0));
+    pointer-events: none;
+  }
+  .juntos-chrome__heading {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+  }
+  .juntos-chrome__title {
+    overflow: hidden;
+    font-size: var(--fs-17, 17px);
+    font-weight: var(--wght-head, 760);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .juntos-chrome__sub {
+    color: var(--on-video-2, rgb(255 255 255 / 0.76));
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-chrome__chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  .juntos-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: var(--r-pill, 999px);
+    background: var(--glass-video, rgb(10 12 16 / 0.62));
+    font-size: var(--fs-13, 13px);
+    font-weight: 650;
+    white-space: nowrap;
+    backdrop-filter: blur(12px);
+  }
+  /* La sala y la cabecera ya dicen el título fuera de la pantalla completa en escritorio. */
+  @media (min-width: 720px) {
+    .juntos__body[data-fullscreen='false'] .juntos-chrome__heading {
+      visibility: hidden;
+    }
+  }
+
+  /* Centro: botón grande, «cargando», avisos. */
+  .juntos-center {
+    grid-row: 2;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    padding: 8px 16px;
+    pointer-events: none;
+  }
+  .juntos-center > * {
+    pointer-events: auto;
+  }
+  .juntos-center__big-btn {
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--glass-video, rgb(10 12 16 / 0.62));
+    color: var(--on-video, #fff);
+    backdrop-filter: blur(12px);
+    cursor: pointer;
+    transition:
+      opacity var(--dur-rapido) var(--ease-estandar),
+      scale var(--dur-rapido) var(--ease-rapido);
+  }
+  .juntos-center__big-btn:active {
+    scale: 0.92;
+  }
+  .juntos-center__big-btn:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .juntos-chrome[data-visible='false'] .juntos-center__big-btn--toggle {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .juntos-center__tap {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .juntos-center__tap .juntos-center__big-btn {
+    background: var(--accent);
+    color: var(--on-accent, #000);
+  }
+  .juntos-center__card {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    max-width: 420px;
+    padding: 18px 22px;
+    border-radius: var(--r-l, 16px);
+    background: var(--glass-video, rgb(10 12 16 / 0.62));
+    text-align: center;
+    backdrop-filter: blur(12px);
+  }
+  .juntos-center__text {
+    font-size: var(--fs-17, 17px);
+    font-weight: var(--wght-strong, 700);
+    text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+  }
+  .juntos-center__hint {
+    color: var(--on-video-2, rgb(255 255 255 / 0.76));
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgb(255 255 255 / 0.25);
+    border-top-color: var(--on-video, #fff);
+    border-radius: 50%;
+    animation: juntos-spin calc(var(--dur-heroe) * 1.2) linear infinite;
+  }
+  .juntos-spinner--bare {
+    width: 48px;
+    height: 48px;
+  }
+  @keyframes juntos-spin {
+    to {
+      rotate: 1turn;
+    }
+  }
+
+  /* Abajo: la barra de tiempo y la fila de botones, sobre un degradado. */
+  .juntos-chrome__bottom {
+    grid-row: 3;
+    display: grid;
+    gap: 2px;
+    padding: 28px 8px 6px;
+    background: linear-gradient(to top, rgb(0 0 0 / 0.75), rgb(0 0 0 / 0));
+  }
+  .juntos-chrome__bar--locked {
+    pointer-events: none;
+  }
+  .juntos-chrome__bar--locked .vod-bar__thumb {
+    display: none;
+  }
+  .juntos-chrome__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    min-width: 0;
+  }
+  .juntos-chrome__group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+  }
+  .juntos-chrome__time {
+    padding: 0 8px;
+    font-family: var(--mono);
+    font-size: var(--fs-13, 13px);
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    white-space: nowrap;
+    text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+  }
+  .juntos-chrome__dur {
+    color: var(--on-video-2, rgb(255 255 255 / 0.76));
+  }
+  /* Volumen: el deslizador solo con ratón (en el móvil manda el botón del teléfono). */
+  .juntos-volume {
+    display: inline-flex;
+    align-items: center;
+  }
+  .juntos-volume__slider {
+    width: 0;
+    opacity: 0;
+    accent-color: var(--on-video, #fff);
+    transition: opacity var(--dur-rapido) var(--ease-estandar);
+  }
+  .juntos-volume:hover .juntos-volume__slider,
+  .juntos-volume:focus-within .juntos-volume__slider {
+    width: 84px;
+    opacity: 1;
+  }
+  @media (pointer: coarse) {
+    .juntos-volume__slider {
+      display: none;
+    }
+  }
+  /* Sin vídeo (preparando, error, interrumpida) la barra no sirve y en el móvil taparía el aviso. */
+  .juntos-chrome:is(
+      [data-phase='preparing'],
+      [data-phase='idle'],
+      [data-phase='error'],
+      [data-phase='interrupted']
+    )
+    .juntos-chrome__bottom {
+    display: none;
+  }
+  @media (max-width: 479px) {
+    /* El título ya está en la cabecera y el vídeo es bajito: fuera lo que sobra. */
+    .juntos-chrome__heading,
+    .juntos-chrome__nudge {
+      display: none;
+    }
+    .juntos-chrome__top {
+      justify-content: flex-end;
+    }
+    .juntos-center__card {
+      gap: 8px;
+      padding: 10px 14px;
+    }
+    .juntos-center__text {
+      font-size: var(--fs-15, 15px);
+    }
+    .juntos-center .btn {
+      min-height: 36px;
+    }
+    .juntos-chrome__top {
+      padding: 10px 12px 20px;
+    }
+    .juntos-chrome__bottom {
+      padding: 20px 4px 2px;
+    }
+    .juntos-center__big-btn {
+      width: 60px;
+      height: 60px;
+    }
+  }
+
+  /* Al lado (o debajo en el móvil): quién está y el chat. */
+  .juntos__side {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+  }
+  /* Pestañas (Chat, Lista, Personas, Ajustes) y su panel, de la altura del chat. */
+  .juntos__panel {
+    min-height: 0;
+  }
+  .juntos__panel:focus-visible {
+    outline: 2px solid var(--focus-ring, var(--accent));
+    outline-offset: 2px;
+    border-radius: var(--r-l, 16px);
+  }
+
+  /* Personas: una fila cada una con su inicial, la corona del líder y «⋯» (o pulsación larga). */
+  .juntos-people__list {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 8px;
+    list-style: none;
+    border: 1px solid var(--line);
+    border-radius: var(--r-l, 16px);
+    background: var(--surface);
+  }
+  .juntos-people__item {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 4px 6px;
+    border-radius: var(--r-m, 12px);
+    font-size: var(--fs-15, 15px);
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+  .juntos-people__avatar {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--on-accent, #fff);
+    font-weight: var(--wght-strong, 700);
+  }
+  .juntos-people__name {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .juntos-people__item--self .juntos-people__name {
+    font-weight: var(--wght-strong, 700);
+  }
+  .juntos-people__leader {
+    display: inline-flex;
+    color: var(--warn, #e0a100);
+  }
+  .juntos-people__item--off {
+    color: var(--text-3);
+  }
+  .juntos-people__item--off .juntos-people__avatar {
+    background: var(--idle);
+  }
+  .juntos-people__tag {
+    color: var(--text-2);
+    font-size: var(--fs-13, 13px);
+  }
+
+  /* Lista de la sala: título, quién lo añadió, votos y «Poner ya». */
+  .juntos-queue {
+    display: grid;
+    gap: 10px;
+    justify-items: start;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-l, 16px);
+    background: var(--surface);
+  }
+  .juntos-queue__empty p {
+    margin: 0;
+  }
+  .juntos-queue__hint {
+    margin-top: 4px !important;
+    color: var(--text-2);
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-queue__list {
+    display: grid;
+    gap: 6px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .juntos-queue__item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border-radius: var(--r-m, 12px);
+    background: var(--surface-2);
+  }
+  .juntos-queue__text {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .juntos-queue__title {
+    font-weight: var(--wght-strong, 700);
+    overflow-wrap: anywhere;
+  }
+  .juntos-queue__sub,
+  .juntos-queue__by {
+    color: var(--text-2);
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-queue__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+  }
+  .juntos-vote {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 36px;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill, 999px);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: var(--fs-13, 13px);
+    cursor: pointer;
+  }
+  .juntos-vote--on {
+    border-color: var(--accent);
+    background: var(--accent-soft, rgba(80, 120, 255, 0.15));
+    color: var(--accent-ink);
+  }
+
+  /* Ajustes del líder. */
+  .juntos-settings {
+    display: grid;
+    gap: 16px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-l, 16px);
+    background: var(--surface);
+  }
+  .juntos-settings__group {
+    display: grid;
+    gap: 8px;
+  }
+  .juntos-settings__label {
+    margin: 0;
+    font-weight: var(--wght-strong, 700);
+  }
+  .juntos-settings__modes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .juntos-settings__mode {
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-m, 12px);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .juntos-settings__mode--on {
+    border-color: var(--accent);
+    background: var(--accent-soft, rgba(80, 120, 255, 0.15));
+    color: var(--accent-ink);
+    font-weight: var(--wght-strong, 700);
+  }
+  .juntos-settings__hint {
+    margin: 0;
+    color: var(--text-2);
+    font-size: var(--fs-13, 13px);
+  }
+
+  /* «A continuación»: tarjeta en la esquina del vídeo con la cuenta atrás. */
+  .juntos-upnext {
+    position: absolute;
+    right: 12px;
+    bottom: 104px;
+    z-index: 3;
+    display: grid;
+    gap: 4px;
+    max-width: min(320px, calc(100% - 24px));
+    padding: 12px 14px;
+    border-radius: var(--r-m, 12px);
+    background: var(--glass-video-solid, rgba(0, 0, 0, 0.82));
+  }
+  .juntos-upnext__kicker,
+  .juntos-upnext__in {
+    color: var(--on-video-2, rgba(255, 255, 255, 0.75));
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-upnext__title {
+    font-weight: var(--wght-strong, 700);
+  }
+  .juntos-upnext__sub {
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-upnext__actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .juntos-chat {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    height: min(60vh, 520px);
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--r-l, 16px);
+    background: var(--surface);
+  }
+  .juntos-chat__list {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    margin: 0;
+    padding: 12px;
+    overflow-y: auto;
+    list-style: none;
+    overscroll-behavior: contain;
+  }
+  .juntos-chat__empty {
+    color: var(--text-3);
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-chat__msg {
+    display: grid;
+    gap: 2px;
+    font-size: var(--fs-15, 15px);
+    overflow-wrap: anywhere;
+  }
+  .juntos-chat__msg--system {
+    color: var(--text-3);
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-chat__who {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    color: var(--accent-ink);
+    font-size: var(--fs-13, 13px);
+    font-weight: var(--wght-strong, 700);
+  }
+  .juntos-chat__msg--self .juntos-chat__who {
+    color: var(--text-2);
+  }
+  .juntos-chat__time {
+    color: var(--text-3);
+    font-weight: var(--wght-text, 450);
+    font-size: var(--fs-11, 11px);
+  }
+  .juntos-chat__form {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .juntos-chat__input {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill, 999px);
+    background: var(--bg-sunk);
+    color: var(--text);
+    font: inherit;
+    font-size: 16px; /* 16 px: el iPhone no hace zoom al escribir. */
+  }
+  .juntos-chat__input:focus-visible {
+    outline: 2px solid var(--focus-ring, var(--accent));
+    outline-offset: 1px;
+  }
+  /* Cabecera del panel: las pestañas y, en pantalla completa, cerrar. */
+  .juntos__side-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .juntos__side-head > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* --- Escritorio (desde 768): la maqueta 01-escritorio, pantalla 5. --- */
+@media (min-width: 768px) {
+  .juntos {
+    display: grid;
+    gap: var(--s-4, 16px);
+    padding: 16px var(--gutter, 16px) 24px;
+    max-width: 1400px;
+  }
+  .juntos__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .juntos__heading {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .juntos__title {
+    margin: 0;
+    font-size: var(--fs-22, 22px);
+    font-weight: var(--wght-head, 760);
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+  }
+  .juntos__sub {
+    margin: 0;
+    color: var(--text-2);
+    font-size: var(--fs-15, 15px);
+  }
+  .juntos__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .juntos__body {
+    display: grid;
+    gap: var(--s-4, 16px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .juntos__main {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    min-width: 0;
+    container-type: inline-size;
+  }
+
+  /* El reproductor (Theater.tsx, docs/ver-juntos.md §12): el vídeo con todo
+   encima, como en el reproductor de casa. Los controles se esconden solos. */
+  .juntos__stage {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--r-l, 16px);
+    background: #000;
+    color: var(--on-video, #fff);
+    aspect-ratio: 16 / 9;
+    isolation: isolate;
+  }
+  .juntos__video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+  }
+
+  .juntos-chrome {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  .juntos-chrome[data-visible='false'] {
+    cursor: none;
+  }
+  /* La superficie que recibe toques y clics (debajo de los controles). */
+  .juntos-chrome__surface {
+    position: absolute;
+    inset: 0;
+  }
+  .juntos-chrome__top,
+  .juntos-chrome__bottom,
+  .juntos-center__controls {
+    transition:
+      opacity var(--dur-rapido) var(--ease-estandar),
+      transform var(--dur-rapido) var(--ease-estandar);
+  }
+  .juntos-chrome__top,
+  .juntos-chrome__bottom {
+    position: relative;
+    z-index: 2;
+  }
+  .juntos-chrome[data-visible='false'] :is(.juntos-chrome__top, .juntos-chrome__bottom),
+  .juntos-chrome[data-visible='false'] .juntos-center__controls {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .juntos-chrome[data-visible='false'] .juntos-chrome__top {
+    transform: translateY(-8px);
+  }
+  .juntos-chrome[data-visible='false'] .juntos-chrome__bottom {
+    transform: translateY(8px);
+  }
+
+  /* Arriba: «Sala de Ismael · 4» y «● Sincronizados», sobre un degradado. */
+  .juntos-chrome__top {
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px 28px;
+    background: linear-gradient(to bottom, rgb(0 0 0 / 0.6), rgb(0 0 0 / 0));
+    pointer-events: none;
+  }
+  .juntos-chrome__title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--fs-15, 15px);
+    font-weight: var(--wght-head, 760);
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+  }
+  .juntos-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 26px;
+    padding: 3px 10px;
+    border-radius: var(--r-pill, 999px);
+    border: 1px solid rgb(255 255 255 / 0.1);
+    background: rgb(22 22 26 / 0.72);
+    font-size: var(--fs-11, 11px);
+    font-weight: 750;
+    font-stretch: var(--w-tight);
+    white-space: nowrap;
+  }
+  .juntos-chip__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #35c759;
+  }
+
+  /* Centro: −10 s, pausa y +10 s para quien controla; «cargando» y avisos. */
+  .juntos-center {
+    grid-row: 2;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    padding: 8px 16px;
+    pointer-events: none;
+  }
+  .juntos-center > * {
+    pointer-events: auto;
+  }
+  .juntos-center__controls {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+  }
+  .juntos-center__nudge {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    border-radius: 50%;
+    background: rgb(22 22 26 / 0.72);
+    color: var(--on-video, #fff);
+    cursor: pointer;
+    transition: transform var(--dur-rapido) var(--ease-rapido);
+  }
+  .juntos-center__big-btn {
+    display: grid;
+    place-items: center;
+    width: 60px;
+    height: 60px;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    border-radius: 50%;
+    background: rgb(22 22 26 / 0.72);
+    color: var(--on-video, #fff);
+    cursor: pointer;
+    transition:
+      opacity var(--dur-rapido) var(--ease-estandar),
+      transform var(--dur-rapido) var(--ease-rapido);
+  }
+  .juntos-center__big-btn:active,
+  .juntos-center__nudge:active {
+    transform: scale(0.92);
+  }
+  .juntos-center__big-btn:focus-visible,
+  .juntos-center__nudge:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .juntos-center__tap {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .juntos-center__tap .juntos-center__big-btn {
+    width: 72px;
+    height: 72px;
+    background: var(--accent);
+    color: var(--on-accent, #000);
+  }
+  .juntos-center__card {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    max-width: 420px;
+    padding: 18px 22px;
+    border-radius: var(--r-l, 16px);
+    background: var(--glass-video-solid, #0f1218);
+    text-align: center;
+  }
+  .juntos-center__text {
+    font-size: var(--fs-17, 17px);
+    font-weight: var(--wght-strong, 700);
+  }
+  .juntos-center__hint {
+    color: var(--on-video-2, rgb(255 255 255 / 0.76));
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgb(255 255 255 / 0.25);
+    border-top-color: var(--on-video, #fff);
+    border-radius: 50%;
+    animation: juntos-spin calc(var(--dur-heroe) * 1.2) linear infinite;
+  }
+  .juntos-spinner--bare {
+    width: 48px;
+    height: 48px;
+  }
+  @keyframes juntos-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  /* Abajo: la barra de tiempo y la fila (tiempo, volumen, idioma, pantalla completa). */
+  .juntos-chrome__bottom {
+    grid-row: 3;
+    display: grid;
+    gap: 2px;
+    padding: 28px 8px 6px;
+    background: linear-gradient(to top, rgb(0 0 0 / 0.75), rgb(0 0 0 / 0));
+  }
+  /* Quien no controla: la barra sin tirador y sin tocarla. */
+  .juntos-chrome__bar--locked {
+    pointer-events: none;
+  }
+  .juntos-chrome__bar--locked .vod-bar__thumb {
+    display: none;
+  }
+  .juntos-chrome__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    min-width: 0;
+  }
+  .juntos-chrome__group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+  }
+  .juntos-chrome__time {
+    padding: 0 8px;
+    font-family: var(--mono);
+    font-size: var(--fs-12, 12px);
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    white-space: nowrap;
+    text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+  }
+  .juntos-chrome__dur {
+    color: var(--on-video, #fff);
+  }
+  /* Volumen: el deslizador solo con ratón (en el móvil manda el botón del teléfono). */
+  .juntos-volume {
+    display: inline-flex;
+    align-items: center;
+  }
+  .juntos-volume__slider {
+    width: 0;
+    opacity: 0;
+    accent-color: var(--on-video, #fff);
+    transition: opacity var(--dur-rapido) var(--ease-estandar);
+  }
+  .juntos-volume:hover .juntos-volume__slider,
+  .juntos-volume:focus-within .juntos-volume__slider {
+    width: 84px;
+    opacity: 1;
+  }
+  @media (pointer: coarse) {
+    .juntos-volume__slider {
+      display: none;
+    }
+  }
+  /* Sin vídeo (preparando, error, interrumpida) o esperando el primer toque, la barra no sirve
+   y en el móvil taparía el aviso. */
+  .juntos-chrome:is(
+      [data-phase='blocked'],
+      [data-phase='preparing'],
+      [data-phase='idle'],
+      [data-phase='error'],
+      [data-phase='interrupted']
+    )
+    .juntos-chrome__bottom {
+    display: none;
+  }
+
+  /* Las pestañas (Chat, Siguiente, Gente) y su panel. */
+  .juntos__side {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+  }
+  .juntos__panel {
+    min-height: 0;
+  }
+  .juntos__panel:focus-visible {
+    outline: 2px solid var(--accent-edge);
+    outline-offset: 2px;
+    border-radius: var(--r-l, 16px);
+  }
+  .juntos__side-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .juntos__side-head > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  /* «Siguiente 3»: el número en su pastilla amarilla, como en la maqueta. */
+  .juntos__side-head .seg__item {
+    gap: 5px;
+    padding-inline: 2px;
+    font-weight: 750;
+  }
+  .juntos__side-head .seg__count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--r-pill, 999px);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: var(--fs-11, 11px);
+    font-weight: 800;
+  }
+
+  .juntos-faces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .juntos-faces__item {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    width: 50px;
+  }
+  .juntos-faces__name {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--text-2);
+    font-size: var(--fs-11, 11px);
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* --- Chat: solo texto. Los demás a la izquierda con su cara; tú, en amarillo. --- */
+  .juntos-chat {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    height: min(60vh, 520px);
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--r-l, 16px);
+    background: var(--surface);
+  }
+  .juntos-chat__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 12px;
+    overflow-y: auto;
+    list-style: none;
+    overscroll-behavior: contain;
+  }
+  .juntos-chat__empty {
+    color: var(--text-3);
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-chat__msg {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    max-width: 88%;
+  }
+  .juntos-chat__msg--self {
+    align-self: flex-end;
+  }
+  .juntos-chat__bubble {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: 8px 12px;
+    border-radius: 14px;
+    background: var(--surface-2);
+    font-size: var(--fs-15, 15px);
+    line-height: var(--lh-snug);
+    overflow-wrap: anywhere;
+  }
+  .juntos-chat__msg--self .juntos-chat__bubble {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  .juntos-chat__who {
+    color: var(--text-2);
+    font-size: var(--fs-11, 11px);
+    font-weight: 750;
+  }
+  .juntos-chat__msg--system {
+    display: block;
+    align-self: center;
+    max-width: 100%;
+    color: var(--text-3);
+    font-size: var(--fs-12, 12px);
+    text-align: center;
+  }
+  .juntos-chat__msg--system b {
+    color: var(--text-2);
+    font-weight: 750;
+  }
+  .juntos-chat__typing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 22px;
+    margin: 0;
+    padding: 0 14px;
+    color: var(--text-3);
+    font-size: var(--fs-12, 12px);
+  }
+  .juntos-chat__dots {
+    display: inline-flex;
+    gap: 3px;
+  }
+  .juntos-chat__dots i {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: juntos-dot var(--dur-latido) var(--ease-estandar) infinite;
+  }
+  .juntos-chat__dots i:nth-child(2) {
+    animation-delay: calc(var(--dur-latido) / 6);
+  }
+  .juntos-chat__dots i:nth-child(3) {
+    animation-delay: calc(var(--dur-latido) / 3);
+  }
+  @keyframes juntos-dot {
+    0%,
+    60%,
+    100% {
+      opacity: 0.35;
+    }
+    30% {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .juntos-chat__dots i {
+      animation: none;
+    }
+  }
+  .juntos-chat__form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 10px 10px;
+    padding: 5px 5px 5px 16px;
+    border-radius: var(--r-pill, 999px);
+    background: var(--bg-sunk);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .juntos-chat__form:focus-within {
+    box-shadow:
+      inset 0 0 0 1px var(--line),
+      0 0 0 2px var(--accent-edge);
+  }
+  .juntos-chat__input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 16px; /* 16 px: el iPhone no hace zoom al escribir. */
+    outline: none;
+  }
+  .juntos-chat__input::placeholder {
+    color: var(--text-3);
+  }
+  .juntos-chat__send {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--on-accent);
+    cursor: pointer;
+  }
+  .juntos-chat__send:disabled {
+    /* Como en la maqueta, la flecha amarilla siempre está; vacía, apagada. */
+    opacity: 0.55;
+    cursor: default;
+  }
+  .juntos-chat__send:focus-visible {
+    outline: 2px solid var(--accent-edge);
+    outline-offset: 2px;
+  }
+
+  /* --- Siguiente: «Cuando acabe», la regla y lo propuesto con sus votos. --- */
+  .juntos-next,
+  .juntos-people {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+  }
+  .juntos-next__up,
+  .juntos-nextcard {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--accent-edge);
+    border-radius: var(--r-l, 18px);
+    background: var(--surface);
+  }
+  .juntos-next__up .juntos-poster,
+  .juntos-nextcard .juntos-poster {
+    width: 56px;
+    border-radius: 10px;
+  }
+  .juntos-nextcard__text {
+    display: grid;
+    flex: 1;
+    gap: 3px;
+    min-width: 0;
+  }
+  .juntos-nextcard__title {
+    overflow: hidden;
+    font-size: var(--fs-17, 17px);
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .juntos-nextcard__sub {
+    color: var(--text-2);
+    font-weight: var(--wght-medium);
+  }
+  .juntos-nextcard__line {
+    color: var(--text-3);
+    font-size: var(--fs-13, 13px);
+  }
+  /* El anillo de «Cuando acabe»: la cuenta atrás (con sus segundos) o lo que queda de película. */
+  .juntos-ring {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    color: var(--text-2);
+    font-family: var(--mono);
+    font-size: var(--fs-15, 15px);
+    font-weight: 700;
+  }
+  .juntos-ring__svg {
+    position: absolute;
+    inset: 0;
+    transform: rotate(-90deg);
+  }
+  .juntos-ring__svg circle {
+    fill: none;
+    stroke-width: 4;
+  }
+  .juntos-ring__track {
+    stroke: var(--line);
+  }
+  .juntos-ring__done {
+    stroke: var(--accent-edge);
+    stroke-linecap: round;
+  }
+  .juntos-next__rules {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .juntos-rule-chip {
+    min-height: 32px;
+    padding: 4px 12px;
+    border: 0;
+    border-radius: var(--r-pill, 999px);
+    background: var(--surface-2);
+    color: var(--text-2);
+    font: inherit;
+    font-size: var(--fs-12, 12px);
+    font-weight: 750;
+    cursor: pointer;
+  }
+  .juntos-rule-chip[aria-checked='true'] {
+    background: var(--accent-wash);
+    color: var(--accent-ink);
+  }
+  .juntos-rule-chip:disabled {
+    cursor: default;
+  }
+  .juntos-rule-chip:focus-visible {
+    outline: 2px solid var(--accent-edge);
+    outline-offset: 2px;
+  }
+  .juntos-next__empty p {
+    margin: 0;
+    font-weight: var(--wght-strong);
+  }
+  .juntos-next__empty .juntos-next__hint {
+    margin-top: 4px;
+    color: var(--text-2);
+    font-size: var(--fs-13, 13px);
+    font-weight: var(--wght-text);
+  }
+  .juntos-next__list,
+  .juntos-people__list {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    list-style: none;
+    border: 1px solid var(--line);
+    border-radius: var(--r-l, 18px);
+    background: var(--surface);
+  }
+  .juntos-next__item,
+  .juntos-people__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 60px;
+    padding: 10px 12px;
+  }
+  .juntos-next__item + .juntos-next__item,
+  .juntos-people__item + .juntos-people__item {
+    border-top: 1px solid var(--line);
+  }
+  .juntos-next__item .juntos-poster {
+    width: 36px;
+    border-radius: 6px;
+  }
+  .juntos-next__text,
+  .juntos-people__text {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+    min-width: 0;
+  }
+  .juntos-next__title {
+    overflow: hidden;
+    font-size: var(--fs-15, 15px);
+    font-weight: 750;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .juntos-next__by,
+  .juntos-people__tag {
+    color: var(--text-3);
+    font-size: var(--fs-12, 12px);
+  }
+  .juntos-vote {
+    display: grid;
+    flex: none;
+    justify-items: center;
+    width: 40px;
+    min-height: 48px;
+    padding: 4px 0;
+    border: 0;
+    border-radius: 12px;
+    background: var(--surface-2);
+    color: var(--text-2);
+    font: inherit;
+    cursor: pointer;
+  }
+  .juntos-vote[aria-pressed='true'] {
+    background: var(--accent-wash);
+    color: var(--accent-ink);
+  }
+  .juntos-vote:focus-visible {
+    outline: 2px solid var(--accent-edge);
+    outline-offset: 2px;
+  }
+  .juntos-vote__n {
+    font-family: var(--mono);
+    font-size: var(--fs-12, 12px);
+    font-weight: 700;
+  }
+  .juntos-propose {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 14px;
+    border: 1.5px dashed var(--line-strong);
+    border-radius: var(--r-l, 18px);
+    background: transparent;
+    color: var(--text-2);
+    font: inherit;
+    font-weight: 750;
+    cursor: pointer;
+  }
+  .juntos-propose:hover {
+    color: var(--text);
+  }
+  .juntos-propose:focus-visible {
+    outline: 2px solid var(--accent-edge);
+    outline-offset: 2px;
+  }
+
+  /* --- Gente: caras, papel y el menú del líder (pulsación larga o «⋯»). --- */
+  .juntos-people__item,
+  .juntos-next__item {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+  .juntos-people__close {
+    justify-self: start;
+  }
+  .juntos-people__name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: var(--fs-15, 15px);
+    font-weight: 750;
+    overflow-wrap: anywhere;
+  }
+  .juntos-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 8px 1px 5px;
+    border-radius: var(--r-pill, 999px);
+    background: color-mix(in srgb, var(--juntos-blue) 14%, transparent);
+    color: var(--juntos-blue);
+    font-size: var(--fs-11, 11px);
+    font-weight: 750;
+  }
+  .juntos-note {
+    display: flex;
+    gap: 10px;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-l, 18px);
+    background: var(--surface);
+    color: var(--text-2);
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-note svg {
+    flex: none;
+    margin-top: 1px;
+  }
+  .juntos-rule {
+    display: grid;
+    gap: 8px;
+  }
+
+  /* «A continuación»: tarjeta en la esquina del vídeo con la cuenta atrás. */
+  .juntos-upnext {
+    position: absolute;
+    right: 12px;
+    bottom: 96px;
+    z-index: 3;
+    display: grid;
+    gap: 4px;
+    max-width: min(320px, calc(100% - 24px));
+    padding: 12px 14px;
+    border-radius: var(--r-m, 12px);
+    background: var(--glass-video-solid, #0f1218);
+  }
+  .juntos-upnext__kicker,
+  .juntos-upnext__in {
+    color: var(--on-video-2, rgb(255 255 255 / 0.76));
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-upnext__title {
+    font-weight: var(--wght-strong, 700);
+  }
+  .juntos-upnext__sub {
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-upnext__actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .juntos {
+    gap: 0;
+    padding: 0;
+    max-width: none;
+  }
+  /* En casa, de borde a borde bajo la barra de la sección. */
+  .juntos--house {
+    margin-inline: calc(-1 * var(--gutter)) calc(-1 * (var(--gutter) + var(--safe-right)));
+    margin-bottom: calc(-1 * (var(--safe-bottom) + 32px));
+  }
+  .juntos--house > .view-head {
+    margin-inline: 0;
+  }
+  .juntos__head {
+    display: none;
+  }
+  .juntos__main {
+    padding: 16px 20px 20px;
+  }
+  .juntos__side {
+    padding: 0 20px 20px;
+  }
+  .juntos-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .juntos-info .juntos-info__poster {
+    width: 44px;
+  }
+  .juntos-info__text {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+    min-width: 0;
+  }
+  .juntos-info__title {
+    margin: 0;
+    overflow: hidden;
+    font-size: 1.125rem;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .juntos-info__sub {
+    color: var(--text-2);
+    font-weight: var(--wght-medium);
+  }
+  .juntos-info__who {
+    margin: 0;
+    color: var(--text-3);
+    font-size: var(--fs-13, 13px);
+  }
+  .juntos-info__actions {
+    display: flex;
+    flex: none;
+    gap: 8px;
+  }
+  .juntos-info__actions .btn {
+    min-height: 44px;
+    padding-inline: 18px;
+  }
+
+  /* Desde 1024: vídeo y control a la izquierda; la gente y el chat a la derecha. */
+  @media (min-width: 1024px) {
+    .juntos__body {
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 0;
+      height: calc(100dvh - 120px);
+      min-height: 520px;
+    }
+    .juntos--house .juntos__body {
+      height: calc(100dvh - var(--safe-top) - var(--topbar-h));
+    }
+    .juntos__main {
+      overflow-y: auto;
+    }
+    .juntos__side {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-height: 0;
+      padding: 0;
+      border-left: 1px solid var(--line);
+      background: var(--bg-sunk);
+    }
+    .juntos-faces {
+      padding: 18px 16px 0;
+    }
+    .juntos__side-head {
+      margin: 14px 12px 10px;
+    }
+    .juntos__panel {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .juntos-chat {
+      flex: 1;
+      height: auto;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    .juntos-chat__list {
+      padding: 4px 14px 8px;
+    }
+    .juntos-chat__bubble {
+      background: var(--surface);
+      box-shadow: inset 0 0 0 1px var(--line);
+    }
+    .juntos-chat__msg--self .juntos-chat__bubble {
+      box-shadow: none;
+    }
+    .juntos-chat__form {
+      margin: 6px 14px 14px;
+      background: var(--surface);
+    }
+    .juntos-next,
+    .juntos-people {
+      flex: 1;
+      min-height: 0;
+      padding: 2px 14px 14px;
+      overflow-y: auto;
+    }
   }
 }

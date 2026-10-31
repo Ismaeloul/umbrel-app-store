@@ -102,6 +102,16 @@ export const ICONS = {
     '<rect x="4" y="4.5" width="16" height="6.5" rx="2"/><rect x="4" y="13" width="16" height="6.5" rx="2"/><path d="M7.6 7.75h.01M7.6 16.25h.01" stroke-width="2.6"/>',
   /* Flecha de las filas que abren algo (Ajustes); girada, la de «volver». */
   chevron: '<path d="M9.5 5.5 16 12l-6.5 6.5"/>',
+  /* «Ver juntos» (rediseño de escritorio): el co-líder (no es un escudo de
+     equipo), ±10 s, mandar al chat, salir de la sala y «Con enlace». */
+  colider:
+    '<path d="M12 3.5 5 6v5.5c0 4.2 3 7.6 7 9 4-1.4 7-4.8 7-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/>',
+  'atras-10': '<path d="M11.5 6.5 6 12l5.5 5.5M18 6.5 12.5 12l5.5 5.5"/>',
+  'adelante-10': '<path d="M12.5 6.5 18 12l-5.5 5.5M6 6.5 11.5 12 6 17.5"/>',
+  enviar: '<path d="M5 12h12M12.5 6.5 18 12l-5.5 5.5"/>',
+  salir: '<path d="M14 5h4a1.5 1.5 0 0 1 1.5 1.5v11A1.5 1.5 0 0 1 18 19h-4M10 8l-4 4 4 4M6 12h9"/>',
+  candado:
+    '<rect x="5.5" y="10.5" width="13" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
   /* Avisos: la campana de la barra de cada sección. */
   campana:
     '<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/>',
