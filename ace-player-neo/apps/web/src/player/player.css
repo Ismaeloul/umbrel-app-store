@@ -1068,3 +1068,106 @@ body:has(.app[data-immersive='true']) .menu {
     animation-duration: 200ms;
   }
 }
+
+/* ---- Controles mínimos de escritorio, «1B» (rediseño, pantalla 2) ---------------
+   Arriba atrás, el partido, la píldora de la fuente y PiP; en medio la pausa;
+   abajo una barra fina y una sola píldora DIRECTO (roja en directo, gris con la
+   flecha si vas por detrás). */
+.player-1b__top {
+  align-items: center;
+}
+.player-1b__lead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.player-1b__title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--on-video);
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.6);
+}
+.player-1b__source {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  color: var(--on-video);
+  font-size: var(--fs-13);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.player-1b__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--weak);
+}
+.player-1b__dot[data-tone='ok'] {
+  background: var(--ok);
+}
+.player-1b__dot[data-tone='fail'] {
+  background: var(--fail);
+}
+.player-1b__center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.player-1b__play {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  pointer-events: auto;
+}
+.player-1b__bottom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.player-1b__bar {
+  flex: 1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.25);
+}
+.player-1b__bar i {
+  display: block;
+  height: 100%;
+  background: var(--live);
+}
+.player-1b__bar[data-mode='behind'] i,
+.player-1b__bar[data-mode='resume'] i {
+  background: rgb(255 255 255 / 0.7);
+  transform: scaleX(0.85);
+  transform-origin: left;
+}
+.player-1b__live {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  background: var(--live);
+  color: #fff;
+  font-size: var(--fs-12);
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.player-1b__live[data-mode='behind'] {
+  background: rgb(120 120 128 / 0.85);
+}

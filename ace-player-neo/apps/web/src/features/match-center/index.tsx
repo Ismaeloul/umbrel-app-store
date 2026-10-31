@@ -45,6 +45,7 @@ import { ChannelCenter } from './ChannelCenter.tsx';
 import { findMatch } from './find.ts';
 import { MatchHead } from './MatchHead.tsx';
 import { Scoreboard } from './Scoreboard.tsx';
+import { SourcesSheet } from './SourcesSheet.tsx';
 import { MatchTabs } from './TheaterTabs.tsx';
 import './match-center.css';
 
@@ -55,6 +56,7 @@ function MatchSheets({ inMatch }: { inMatch: boolean }) {
   const pasteOpen = useSession((state) => state.pasteOpen);
   return (
     <>
+      <SourcesSheet />
       <ResolverSheet />
       <ReportSheet />
       {inMatch ? (
@@ -122,6 +124,7 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
 
   if (!match && schedule.isPending) return <MatchSkeleton />;
 
+  const desktop = layout.kind === 'desktop' || layout.kind === 'wide';
   const tabs = layout.asideVisible ? null : (
     <MatchTabs
       match={match}
@@ -129,7 +132,7 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
       now={now}
       channels={channels}
       today={today}
-      variant={layout.kind === 'desktop' || layout.kind === 'wide' ? 'line' : 'list'}
+      variant={desktop ? 'line' : 'list'}
       className="mc-tabs--view"
       extra={
         layout.asideAvailable ? (
@@ -188,12 +191,19 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
       data-layout={layout.kind}
       data-aside={layout.asideVisible ? 'true' : 'false'}
     >
-      {active ? (
+      {/* En escritorio el vídeo va limpio (rediseño, pantalla 2): el marcador,
+          tapado como siempre, va junto al titular. */}
+      {active && !desktop ? (
         <ScoreCapsuleSlot>
           <Scoreboard key={match.id} match={match} score={score} now={now} />
         </ScoreCapsuleSlot>
       ) : null}
       <MatchHead match={match} score={score} now={now} />
+      {active && desktop ? (
+        <div className="mc-scap-desk">
+          <Scoreboard key={match.id} match={match} score={score} now={now} />
+        </div>
+      ) : null}
       {tabs}
       <MatchSheets inMatch />
     </div>

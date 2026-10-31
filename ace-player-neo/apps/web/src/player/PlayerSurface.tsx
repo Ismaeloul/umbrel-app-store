@@ -58,6 +58,7 @@ import {
 import { usePlayerContext, type PlayerContextValue } from './context.ts';
 import { useZapBanner } from './favorite-zap.ts';
 import { NerdPanel } from './NerdPanel.tsx';
+import { setSourcePanelOpen } from './source-panel.ts';
 import { stageSlotStore } from './stage-slot.ts';
 import { liveButton, stageMessage } from './status.ts';
 import { VodEndCards } from './vod/NextUp.tsx';
@@ -150,6 +151,37 @@ export function LiveButton({ state, onPress }: { state: PlayerState; onPress(): 
         {live.prefix ? <span className="player-live__prefix">{live.prefix}</span> : null}
         {live.text}
       </span>
+    </button>
+  );
+}
+
+/** El número de la fuente que suena, sacado de «Fuente 2, Elcano» (null si no lo dice). */
+export function sourceNumberOf(subtitle: string | null | undefined): number | null {
+  const match = /Fuente (\d+)/.exec(subtitle ?? '');
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * La píldora DIRECTO del reproductor de escritorio (rediseño, pantalla 2): una
+ * sola, sin contador. En directo, roja con su punto; si vas por detrás (o en
+ * pausa), gris con la flecha, y tocarla vuelve al directo.
+ */
+export function LivePill({ state, onPress }: { state: PlayerState; onPress(): void }) {
+  const live = liveButton(state);
+  if (live.mode === 'off') return null;
+  const atLive = live.mode === 'live';
+  return (
+    <button
+      type="button"
+      className="player-1b__live press"
+      data-mode={atLive ? 'live' : 'behind'}
+      aria-label={atLive ? 'En directo' : live.label}
+      title={atLive ? 'En directo' : live.label}
+      aria-disabled={atLive || undefined}
+      onClick={atLive ? undefined : onPress}
+    >
+      {atLive ? <LiveDot /> : <Icon name="directo" size={16} />}
+      Directo
     </button>
   );
 }
@@ -508,6 +540,13 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
     (state.conn === 'arrancando' && state.phase !== 'bloqueado');
   const canBack = state.conn === 'activa' && state.started && !state.demo;
   const volume = state.muted ? 0 : state.volume;
+  /* Escritorio con un directo (rediseño, pantalla 2, «1B»): controles mínimos.
+     Arriba atrás, el partido, la píldora de la fuente (abre el panel de
+     fuentes) y PiP; en medio la pausa; abajo la barra y una píldora DIRECTO.
+     Marcador, minuto, idioma y volumen quedan fuera del vídeo. */
+  const minimal = !ctx.compact && !vod && hasChannel;
+  const liveMode = liveButton(state).mode;
+  const sourceNumber = sourceNumberOf(state.channel?.subtitle);
 
   return (
     <>
@@ -580,150 +619,236 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
           wake();
         }}
       >
-        <div className="player-chrome__top">
-          <div className="player-chrome__lead">
-            {ctx.compact ? (
-              <IconButton
-                icon="chev-d"
-                label="Minimizar el reproductor"
-                variant="video"
-                className="player-round glass--video"
-                onClick={actions.minimize}
-              />
-            ) : hasChannel ? (
-              <p className="player-now glass--video">
-                <Equalizer playing={playing} />
-                <span className="player-now__title">{state.channel?.title}</span>
-                {state.channel?.subtitle ? (
-                  <small className="player-now__sub">{state.channel.subtitle}</small>
-                ) : null}
-              </p>
-            ) : null}
-            {/* Aquí proyecta el centro de partido la cápsula del marcador. */}
-            <div className="player-slot" ref={publishStageSlot} />
-          </div>
-          {hasChannel ? (
-            <div className="player-cap glass--video">
-              {vod ? null : (
+        {minimal ? (
+          <>
+            <div className="player-chrome__top player-1b__top">
+              <div className="player-1b__lead">
                 <IconButton
-                  icon="star"
-                  pressedIcon="star-f"
-                  pressed={ctx.isFavorite}
-                  label={ctx.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
-                  shortcut="G"
+                  icon="chev-l"
+                  label="Volver"
                   variant="video"
-                  onClick={actions.toggleFavorite}
+                  className="player-round glass--video"
+                  onClick={actions.minimize}
                 />
-              )}
-              {ctx.canPip ? (
-                <IconButton
-                  icon="pip"
-                  pressed={ctx.pip}
-                  label="Imagen dentro de imagen"
-                  shortcut="P"
-                  variant="video"
-                  onClick={actions.togglePip}
-                />
-              ) : null}
-              <MenuButton
-                icon="more"
-                label="Más opciones"
-                menuLabel="Opciones del reproductor"
-                variant="video"
-                items={ctx.menuItems}
-              />
-            </div>
-          ) : null}
-        </div>
-        {/* En error no hay nada que reproducir, pausar ni adelantar: fuera los
-            controles de abajo, que en el móvil apretaban el panel con
-            «Reintentar» (Detener sigue en «Más opciones»). */}
-        {hasChannel && state.phase !== 'error' && vod ? (
-          <VodControls state={state} ctx={ctx} />
-        ) : hasChannel && state.phase !== 'error' ? (
-          <div className="player-chrome__bottom">
-            <div className="player-chrome__group">
-              {/* Pausa grande: el botón que más se usa, relleno y aparte. */}
-              <IconButton
-                icon={wantsPlay || connecting ? 'pause' : 'play'}
-                label={connecting ? 'Conectando…' : wantsPlay ? 'Pausar' : 'Reproducir'}
-                shortcut="Espacio"
-                variant="video"
-                className="player-play"
-                data-fill="true"
-                disabled={connecting}
-                onClick={actions.toggle}
-              />
-              <div className="player-cap glass--video">
-                {ctx.compact ? null : (
-                  <IconButton
-                    icon="stop"
-                    label="Detener"
-                    variant="video"
-                    className="player-stop"
-                    onClick={actions.stop}
-                  />
-                )}
+                <p className="player-1b__title">{state.channel?.event ?? state.channel?.title}</p>
                 <button
                   type="button"
-                  className="player-back press"
-                  aria-label="Retroceder 30 segundos"
-                  title="Retroceder 30 s (J)"
-                  disabled={!canBack}
-                  onClick={actions.back}
+                  className="player-1b__source glass--video press"
+                  aria-haspopup="dialog"
+                  aria-label={`Suena ${state.channel?.title ?? ''}${sourceNumber ? `, fuente ${sourceNumber}` : ''}. Ver todas las fuentes`}
+                  onClick={() => setSourcePanelOpen(true)}
                 >
-                  <Icon name="back" size={18} />
-                  <Num value="30" />
+                  <span className="player-1b__source-text">
+                    {state.channel?.title}
+                    {sourceNumber ? ` · F${sourceNumber}` : ''}
+                  </span>
+                  <span
+                    className="player-1b__dot"
+                    data-tone={playing ? 'ok' : state.phase === 'error' ? 'fail' : 'weak'}
+                    aria-hidden="true"
+                  />
                 </button>
-                <IconButton
-                  icon={state.muted || state.volume === 0 ? 'mute' : 'vol'}
-                  label={state.muted ? 'Activar sonido' : 'Silenciar'}
-                  shortcut="M"
-                  variant="video"
-                  onClick={actions.toggleMute}
-                />
-                {ctx.finePointer && !ctx.compact ? (
-                  <label className="player-vol">
-                    <span className="sr-only">Volumen</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={volume}
-                      style={{ '--v': volume } as CSSProperties}
-                      onChange={(event) => actions.setVolume(Number(event.currentTarget.value))}
-                    />
-                  </label>
+              </div>
+              <div className="player-cap glass--video">
+                {ctx.canPip ? (
+                  <IconButton
+                    icon="pip"
+                    pressed={ctx.pip}
+                    label="Imagen dentro de imagen"
+                    shortcut="P"
+                    variant="video"
+                    onClick={actions.togglePip}
+                  />
                 ) : null}
+                {ctx.canFullscreen ? (
+                  <IconButton
+                    icon="full"
+                    label={ctx.fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+                    shortcut="F"
+                    pressed={ctx.fullscreen}
+                    variant="video"
+                    onClick={actions.toggleFullscreen}
+                  />
+                ) : null}
+                <MenuButton
+                  icon="more"
+                  label="Más opciones"
+                  menuLabel="Opciones del reproductor"
+                  variant="video"
+                  items={ctx.menuItems}
+                />
               </div>
             </div>
-            <div className="player-cap glass--video">
-              <LiveButton state={state} onPress={actions.goLive} />
-              {ctx.canFullscreen ? (
-                <IconButton
-                  icon="full"
-                  label={ctx.fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-                  shortcut="F"
-                  pressed={ctx.fullscreen}
-                  variant="video"
-                  onClick={actions.toggleFullscreen}
-                />
-              ) : ctx.compact ? null : (
-                // Sin pantalla completa en este navegador (escritorio): el modo
-                // teatro llena la ventana con el vídeo (lo mismo que F).
-                <IconButton
-                  icon="pantalla"
-                  label={ctx.theater ? 'Salir del modo teatro' : 'Modo teatro'}
-                  shortcut="F"
-                  pressed={ctx.theater}
-                  variant="video"
-                  onClick={actions.toggleTheater}
-                />
-              )}
+            {state.phase !== 'error' ? (
+              <>
+                <div className="player-1b__center">
+                  <IconButton
+                    icon={wantsPlay || connecting ? 'pause' : 'play'}
+                    label={connecting ? 'Conectando…' : wantsPlay ? 'Pausar' : 'Reproducir'}
+                    shortcut="Espacio"
+                    variant="video"
+                    className="player-1b__play glass--video"
+                    disabled={connecting}
+                    onClick={actions.toggle}
+                  />
+                </div>
+                <div className="player-chrome__bottom player-1b__bottom">
+                  <span className="player-1b__bar" data-mode={liveMode} aria-hidden="true">
+                    <i />
+                  </span>
+                  <LivePill state={state} onPress={actions.goLive} />
+                </div>
+              </>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <div className="player-chrome__top">
+              <div className="player-chrome__lead">
+                {ctx.compact ? (
+                  <IconButton
+                    icon="chev-d"
+                    label="Minimizar el reproductor"
+                    variant="video"
+                    className="player-round glass--video"
+                    onClick={actions.minimize}
+                  />
+                ) : hasChannel ? (
+                  <p className="player-now glass--video">
+                    <Equalizer playing={playing} />
+                    <span className="player-now__title">{state.channel?.title}</span>
+                    {state.channel?.subtitle ? (
+                      <small className="player-now__sub">{state.channel.subtitle}</small>
+                    ) : null}
+                  </p>
+                ) : null}
+                {/* Aquí proyecta el centro de partido la cápsula del marcador. */}
+                <div className="player-slot" ref={publishStageSlot} />
+              </div>
+              {hasChannel ? (
+                <div className="player-cap glass--video">
+                  {vod ? null : (
+                    <IconButton
+                      icon="star"
+                      pressedIcon="star-f"
+                      pressed={ctx.isFavorite}
+                      label={ctx.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
+                      shortcut="G"
+                      variant="video"
+                      onClick={actions.toggleFavorite}
+                    />
+                  )}
+                  {ctx.canPip ? (
+                    <IconButton
+                      icon="pip"
+                      pressed={ctx.pip}
+                      label="Imagen dentro de imagen"
+                      shortcut="P"
+                      variant="video"
+                      onClick={actions.togglePip}
+                    />
+                  ) : null}
+                  <MenuButton
+                    icon="more"
+                    label="Más opciones"
+                    menuLabel="Opciones del reproductor"
+                    variant="video"
+                    items={ctx.menuItems}
+                  />
+                </div>
+              ) : null}
             </div>
-          </div>
-        ) : null}
+            {/* En error no hay nada que reproducir, pausar ni adelantar: fuera los
+            controles de abajo, que en el móvil apretaban el panel con
+            «Reintentar» (Detener sigue en «Más opciones»). */}
+            {hasChannel && state.phase !== 'error' && vod ? (
+              <VodControls state={state} ctx={ctx} />
+            ) : hasChannel && state.phase !== 'error' ? (
+              <div className="player-chrome__bottom">
+                <div className="player-chrome__group">
+                  {/* Pausa grande: el botón que más se usa, relleno y aparte. */}
+                  <IconButton
+                    icon={wantsPlay || connecting ? 'pause' : 'play'}
+                    label={connecting ? 'Conectando…' : wantsPlay ? 'Pausar' : 'Reproducir'}
+                    shortcut="Espacio"
+                    variant="video"
+                    className="player-play"
+                    data-fill="true"
+                    disabled={connecting}
+                    onClick={actions.toggle}
+                  />
+                  <div className="player-cap glass--video">
+                    {ctx.compact ? null : (
+                      <IconButton
+                        icon="stop"
+                        label="Detener"
+                        variant="video"
+                        className="player-stop"
+                        onClick={actions.stop}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      className="player-back press"
+                      aria-label="Retroceder 30 segundos"
+                      title="Retroceder 30 s (J)"
+                      disabled={!canBack}
+                      onClick={actions.back}
+                    >
+                      <Icon name="back" size={18} />
+                      <Num value="30" />
+                    </button>
+                    <IconButton
+                      icon={state.muted || state.volume === 0 ? 'mute' : 'vol'}
+                      label={state.muted ? 'Activar sonido' : 'Silenciar'}
+                      shortcut="M"
+                      variant="video"
+                      onClick={actions.toggleMute}
+                    />
+                    {ctx.finePointer && !ctx.compact ? (
+                      <label className="player-vol">
+                        <span className="sr-only">Volumen</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={volume}
+                          style={{ '--v': volume } as CSSProperties}
+                          onChange={(event) => actions.setVolume(Number(event.currentTarget.value))}
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="player-cap glass--video">
+                  <LiveButton state={state} onPress={actions.goLive} />
+                  {ctx.canFullscreen ? (
+                    <IconButton
+                      icon="full"
+                      label={ctx.fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+                      shortcut="F"
+                      pressed={ctx.fullscreen}
+                      variant="video"
+                      onClick={actions.toggleFullscreen}
+                    />
+                  ) : ctx.compact ? null : (
+                    // Sin pantalla completa en este navegador (escritorio): el modo
+                    // teatro llena la ventana con el vídeo (lo mismo que F).
+                    <IconButton
+                      icon="pantalla"
+                      label={ctx.theater ? 'Salir del modo teatro' : 'Modo teatro'}
+                      shortcut="F"
+                      pressed={ctx.theater}
+                      variant="video"
+                      onClick={actions.toggleTheater}
+                    />
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
       <Menu {...contextMenu.menu} label="Opciones del reproductor" items={ctx.menuItems} />
     </>

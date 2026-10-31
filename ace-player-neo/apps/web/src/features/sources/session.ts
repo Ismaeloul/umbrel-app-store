@@ -1561,6 +1561,11 @@ function playEntry(entry: SourceEntry, origin: PlayOrigin): void {
       // El tipo que declara la lista o el buscador (B-010); el pegado, `auto` (B-009).
       kind: kindFromIh(entry.ih),
       ...(subtitle ? { subtitle } : {}),
+      ...(match && match.home && match.away
+        ? { event: `${match.home} – ${match.away}` }
+        : match?.title
+          ? { event: match.title }
+          : {}),
       ...(leadFor(number, effective, state) ? { lead: leadFor(number, effective, state) } : {}),
       source: presentation.short.slice(0, 60),
       ...(entry.listaId ? { listaId: entry.listaId } : {}),
@@ -1710,6 +1715,13 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
       haptic('warning');
       markAutoTried(next.id);
       playEntry(next, 'auto');
+      // Con «Deshacer» (rediseño de escritorio, pantalla 2): vuelve a la que se cortó.
+      const nextNumber = entries.findIndex((entry) => entry.id === next.id) + 1;
+      toast(`La fuente ${index + 1} se ha cortado: seguimos por la ${nextNumber}`, {
+        tone: 'warn',
+        icon: 'tv',
+        action: { label: 'Deshacer', onAction: () => selectSource(failed.id) },
+      });
       return { next: true };
     }
     // Las que quedan las está viendo otro dispositivo (D35): se dice y se espera a que quede libre.

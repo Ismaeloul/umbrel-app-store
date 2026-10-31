@@ -800,3 +800,9 @@
     animation: ace-funde var(--dur-estandar) var(--ease-out) both;
   }
 }
+
+/* Escritorio: el marcador (tapado) junto al titular, no sobre el vídeo. */
+.mc-scap-desk {
+  display: flex;
+  margin-top: calc(-1 * var(--s-2));
+}
