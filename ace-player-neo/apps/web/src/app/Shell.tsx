@@ -29,6 +29,7 @@
 
 import {
   Activity,
+  lazy,
   Suspense,
   useEffect,
   useLayoutEffect,
@@ -76,6 +77,11 @@ import { openSearch } from './search-open.ts';
 import { ViewHeader } from './ViewHeader.tsx';
 import { AgendaColumn, asideComponent, PlayerDock, viewComponent } from './views.tsx';
 import './shell.css';
+
+/* «Avisos» de Ajustes (rediseño, sección 7): solo en escritorio y en su trozo de JS. */
+const MatchAlerts = lazy(() =>
+  import('../features/settings/match-alerts.tsx').then((m) => ({ default: m.MatchAlerts })),
+);
 
 const WHAT: Record<Vista, string> = {
   agenda: 'la agenda',
@@ -416,6 +422,11 @@ export function Shell() {
         <div className="bottom-veil" aria-hidden="true" hidden={!tabbarVisible} />
         <TabBar route={route} hidden={!tabbarVisible} />
         <Toaster bottomOffset={toastBottom} />
+        {kind === 'mobile' ? null : (
+          <Suspense fallback={null}>
+            <MatchAlerts />
+          </Suspense>
+        )}
         <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
         <QuickSearchHost />
       </div>

@@ -10,7 +10,9 @@
    `../agenda/score-reveal.ts`, así los cuatro sitios comparten el mismo
    «destapado». Qué partido se ve lo dice el armazón (playerPresence). */
 
+import { useLayout } from '../../app/layout.tsx';
 import { playerPresence, type PlayerPresence } from '../../app/player-presence.ts';
+import { readItem, STORAGE_KEYS, writeItem } from '../../lib/storage.ts';
 import { createStore, useStore } from '../../lib/store.ts';
 
 interface RevealState {
@@ -21,6 +23,13 @@ interface RevealState {
   /** Partidos que TAPASTE a mano en la agenda (cápsula «Marcador» o menú):
       la tira «En directo», que enseña el resultado, tampoco lo enseña. */
   covered: ReadonlySet<string>;
+  /** «Marcador oculto» de Ajustes (rediseño, sección 7): apagado, todo se ve. */
+  hiding: boolean;
+}
+
+/** «Marcador oculto» guardado en este navegador; sin nada guardado, encendido. */
+function readHiding(): boolean {
+  return readItem(STORAGE_KEYS.scoreHiding) !== 'visible';
 }
 
 /** Id del partido que se está viendo, o null (un canal suelto no es un partido). */
@@ -34,6 +43,7 @@ const store = createStore<RevealState>({
   watched: watchedMatchOf(playerPresence.get()),
   revealed: new Set(),
   covered: new Set(),
+  hiding: readHiding(),
 });
 
 /* Cambiar de partido o detener vuelve a tapar: el destapado era para ESA
@@ -90,19 +100,71 @@ export function hideScore(matchId: string): void {
    estás viendo (regla 29, `useScoreHidden`) y salvo los que hayas tapado a
    mano (`useScoreCovered`). */
 
+/* «Marcador oculto» apagado: la agenda recibe, en vez del conjunto de
+   destapados, una marca que vale por «todo destapado menos lo tapado a mano»
+   (sin tocar a quien la usa: «Tapar el marcador» sigue tapando). Una marca
+   por cada conjunto de tapados, para que la referencia no cambie mientras no
+   cambien ellos. */
+const COVERED_OF = new WeakMap<ReadonlySet<string>, ReadonlySet<string>>();
+const MARK_OF = new WeakMap<ReadonlySet<string>, ReadonlySet<string>>();
+
+function allBut(covered: ReadonlySet<string>): ReadonlySet<string> {
+  let mark = MARK_OF.get(covered);
+  if (!mark) {
+    mark = new Set<string>();
+    MARK_OF.set(covered, mark);
+    COVERED_OF.set(mark, covered);
+  }
+  return mark;
+}
+
+/** Puro: ¿destapado según «Marcador oculto»? Apagado, lo está todo menos lo tapado a mano. */
+function revealedNow(state: RevealState, matchId: string): boolean {
+  return state.hiding ? state.revealed.has(matchId) : !state.covered.has(matchId);
+}
+
+/* El interruptor solo está en el escritorio: en el móvil (menos de 768 px)
+   el marcador se tapa siempre, como antes, aunque se apagara en esta misma
+   pestaña con la ventana ancha. Por eso cada hook lee las dos cosas y elige
+   con el tipo de pantalla (así no se queda nada viejo al estrechar). */
+function useMobile(): boolean {
+  return useLayout().kind === 'mobile';
+}
+
 /** Puro: ¿este partido está destapado? */
 export function isScoreRevealed(revealed: ReadonlySet<string>, matchId: string): boolean {
-  return revealed.has(matchId);
+  const covered = COVERED_OF.get(revealed);
+  return covered ? !covered.has(matchId) : revealed.has(matchId);
 }
 
 /** Los partidos destapados (la agenda lo lee una vez para sus menús contextuales). */
 export function useRevealedScores(): ReadonlySet<string> {
-  return useStore(store, (state) => state.revealed);
+  const mobile = useMobile();
+  const always = useStore(store, (state) => state.revealed);
+  const now = useStore(store, (state) => (state.hiding ? state.revealed : allBut(state.covered)));
+  return mobile ? always : now;
 }
 
 /** ¿Este partido está destapado en la agenda? */
 export function useScoreRevealed(matchId: string): boolean {
-  return useStore(store, (state) => isScoreRevealed(state.revealed, matchId));
+  const mobile = useMobile();
+  const always = useStore(store, (state) => state.revealed.has(matchId));
+  const now = useStore(store, (state) => revealedNow(state, matchId));
+  return mobile ? always : now;
+}
+
+/** ¿Está encendido «Marcador oculto»? (Ajustes → Agenda.) */
+export function useScoreHiding(): boolean {
+  return useStore(store, (state) => state.hiding);
+}
+
+/** Enciende o apaga «Marcador oculto» y lo guarda en este navegador. Lo
+    tapado a mano se olvida: el interruptor manda sobre todos los partidos. */
+export function setScoreHiding(hiding: boolean): void {
+  writeItem(STORAGE_KEYS.scoreHiding, hiding ? 'oculto' : 'visible');
+  store.set((state) =>
+    state.hiding === hiding ? state : { ...state, hiding, covered: new Set() },
+  );
 }
 
 /** Vuelve a tapar (el reproductor lo puede llamar al cambiar de fuente o de canal). */
@@ -127,8 +189,10 @@ export function useWatchedMatch(): string | null {
  */
 export function useScoreHidden(matchId: string, alsoWatched = false): boolean {
   const watched = useWatchedMatch();
-  const revealed = useStore(store, (state) => state.revealed.has(matchId));
-  return (alsoWatched || watched === matchId) && !revealed;
+  const mobile = useMobile();
+  const always = useStore(store, (state) => state.revealed.has(matchId));
+  const now = useStore(store, (state) => revealedNow(state, matchId));
+  return (alsoWatched || watched === matchId) && !(mobile ? always : now);
 }
 
 /** Solo para los tests. */
@@ -137,5 +201,6 @@ export function resetScoreRevealForTests(): void {
     watched: watchedMatchOf(playerPresence.get()),
     revealed: new Set(),
     covered: new Set(),
+    hiding: readHiding(),
   });
 }

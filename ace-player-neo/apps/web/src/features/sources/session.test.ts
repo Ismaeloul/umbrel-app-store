@@ -34,6 +34,7 @@ import {
   selectSource,
   stepSource,
 } from './session.ts';
+import { setAutoSwitch } from '../settings/local-prefs.ts';
 import { INVALID_HASH_TEXT } from './model.ts';
 import { hash, JOB, REPORT_JOB, resolution, scanJob, testMatch } from './test-utils.ts';
 
@@ -313,6 +314,32 @@ describe('política única de cambio de fuente (P16)', () => {
       state: 'weak',
       reason: 'player_dropped',
     });
+  });
+
+  it('«Cambiar de fuente sola» apagado: no salta, dice cuántas quedan y tampoco arranca otra después', async () => {
+    setAutoSwitch(false);
+    try {
+      await playingAuto();
+      const reply = notifySourceFailed({
+        channel: getPlayer().channel!,
+        origin: 'auto',
+        outcome: 'fallo',
+        seconds: 0,
+        reason: 'x',
+      });
+      expect(reply.next).toBe(false);
+      expect(reply.message).toMatch(/^Esta señal no responde\. Tienes 2 fuentes más/);
+      expect(getPlayer().channel?.hash).toBe(hash(1));
+      // La sesión pasa a manual: el siguiente cambio del comprobador, con nada
+      // en pantalla, no arranca la otra verificada por la puerta de atrás.
+      expect(getSession()).toMatchObject({ autoVerified: false, manualChosen: true });
+      playerStore.set((state) => ({ ...state, channel: null, phase: 'idle', started: false }));
+      scan = scanJob(['failed', 'working', 'working']);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(getPlayer().channel).toBeNull();
+    } finally {
+      setAutoSwitch(true);
+    }
   });
 
   it('agotadas mientras sigue comprobando: espera a la siguiente', async () => {
@@ -671,6 +698,27 @@ describe('inventario: salto de entrada, rebúsqueda con IA y fallos de las accio
     scan = scanJob(['failed', 'failed', 'working']);
     await vi.advanceTimersByTimeAsync(1500);
     expect(getPlayer().channel?.hash).toBe(hash(2));
+  });
+
+  it('salto de entrada con «Cambiar de fuente sola» apagado: no salta', async () => {
+    setAutoSwitch(false);
+    try {
+      install({
+        'GET /api/v1/football/resolve': () =>
+          json(resolution(3, { status: 'choices', candidate: null })),
+      });
+      enterMatch(testMatch());
+      await flush();
+      await chooseCandidate({ id: hash(1), title: 'x', ih: false, source: 'm3u' }, false);
+      scan = scanJob(['failed', 'working', 'checking']);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(getPlayer().channel?.hash).toBe(hash(1));
+      expect(toasts()).not.toContain(
+        'La señal inicial no responde; probamos automáticamente la fuente 2',
+      );
+    } finally {
+      setAutoSwitch(true);
+    }
   });
 
   it('salto de entrada: si la elegida ya suena, no salta aunque el comprobador la dé por caída', async () => {
