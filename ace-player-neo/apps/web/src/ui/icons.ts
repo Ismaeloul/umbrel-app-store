@@ -91,6 +91,10 @@ export const ICONS = {
   chat: '<path d="M4.5 5.5h15a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V17.5h-1A1.5 1.5 0 0 1 3 16V7a1.5 1.5 0 0 1 1.5-1.5z"/><path d="M7.5 10h9M7.5 13.5h6"/>',
   emoji:
     '<circle cx="12" cy="12" r="8.5"/><path d="M8.3 14.2a4.6 4.6 0 0 0 7.4 0"/><circle cx="9.2" cy="9.8" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.8" cy="9.8" r="1.1" fill="currentColor" stroke="none"/>',
+  /* Buscar (Ctrl K): los atajos «Mis equipos» (una camiseta) y «Mi lista» (marcapáginas con su visto). */
+  camiseta: '<path d="M8.5 4 4 6.5l1.8 4 2-.9V20h8.4V9.6l2 .9 1.8-4L15.5 4a3.5 3.5 0 0 1-7 0z"/>',
+  milista:
+    '<path d="M7 4.5h10a1 1 0 0 1 1 1v14l-6-3.6L6 19.5v-14a1 1 0 0 1 1-1z"/><path d="M9.3 11.2l1.9 1.9 3.6-3.8"/>',
   /* Avisos: la campana de la barra de cada sección. */
   campana:
     '<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/>',
