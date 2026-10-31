@@ -182,7 +182,7 @@ propósito: D20), **arreglado** (faltaba algo y se hizo aquí). `web/` es
 | Rebuffer sin saltar al directo, vigilante, 3/1 reintentos | `web/player/runtime.ts:1082-1160` | `runtime.test.ts` › "vigilante y rebuffer", "reconexiones y paso de fuente" | ok |
 | Traspaso entre dispositivos | SSE `playback.handoff` + latido (`runtime.ts:1308`, `:1416`) | `runtime.test.ts`; `sse.test.ts`; E2E sesiones ×4 | ok·≠ (D5: el mismo canal se comparte) |
 | Detener y `pagehide` sueltan todo | `runtime.ts:225`, `:1366` | `runtime.test.ts`; `data.test.ts`; rec. D19 | ok |
-| «Abrir en…» y copias | `web/features/library/actions.ts:61`, `player/index.tsx:412` | `ChannelDetail.test.tsx`, `PlayerDock.test.tsx`, `status.test.ts` › "«Abrir en…» (D7)"; rec. D7, D13 | ok (rótulo unificado aquí) |
+| «Abrir en…» y copias | `web/features/library/actions.ts:61`, `player/index.tsx:412` | `channel-menu.test.tsx`, `PlayerDock.test.tsx`, `status.test.ts` › "«Abrir en…» (D7)"; rec. D7, D13 | ok (rótulo unificado aquí) |
 | Línea de estado bajo el vídeo (una a la vez, ×n, 4,5 s + 320 ms) | `web/notices/statusLine.ts:50`, `notify.ts:53` | `notices.test.tsx` › "línea de estado (inventario §9)"; rec. D11 | ok |
 | Toasts (máx. 2, 2,8 s, ×n, Deshacer, nunca sobre el vídeo, posición) | `web/notices/toasts.ts:90`, `notices.css` | `notices.test.tsx`; `Shell.test.tsx` › "inmersivo…"; rec. D7, M6 | ok |
 | Panel técnico (motor, pares, bajada, subida, hash) | `web/player/NerdPanel.tsx:96` (o el del centro de partido) | `PlayerDock.test.tsx`; `status.test.ts`; rec. D16 | ok |
@@ -195,7 +195,7 @@ propósito: D20), **arreglado** (faltaba algo y se hizo aquí). `web/` es
 | Reiniciar el motor con segundo toque (Ajustes y Salud) | `web/features/settings/SettingsView.tsx:93`, `health/engine.ts` | `SettingsView.test.tsx`, `HealthSection.test.tsx`; E2E motor | ok·≠ (no para antes: D20) |
 | Pestañas con contador y pestaña inicial | `web/features/library/model.ts:45`, `LibraryView.tsx` | `LibraryView.test.tsx`, `library/model.test.ts`; rec. D6, D8 | ok |
 | Buscador local (140 ms) y «Buscar «q» en el motor…» | `LibraryView.tsx:315` | `LibraryView.test.tsx`; rec. D6 | ok |
-| Tarjeta: dorsal, subtítulo, canal caído, «En pantalla» sin repintar, acciones | `web/features/library/ChannelRow.tsx:214`, `useChannelActions.tsx:51` | `LibraryView.test.tsx` (B-273), `ChannelDetail.test.tsx` | ok |
+| Tarjeta: dorsal, subtítulo, canal caído, «En pantalla» sin repintar, acciones | `web/features/library/ChannelRow.tsx:214`, `useChannelActions.tsx:51` | `LibraryView.test.tsx` (B-273), `channel-menu.test.tsx` | ok |
 | Acordeones por categoría (todos abiertos con texto) | `LibraryView.tsx` | `LibraryView.test.tsx` › "listas por categorías" | ok |
 | Estados vacíos con su salida | `LibraryView.tsx:375-433` | `LibraryView.test.tsx` › "estados vacíos con su salida" | ok |
 | Favoritos: guardar con nombre, quitar, restaurar si falla | `web/features/library/sheets.tsx`, `data.ts` | `LibraryView.test.tsx`, `data.test.ts`; rec. D8 | ok·≠ (quitar también se deshace, §29.25) |
@@ -328,7 +328,7 @@ reloj de Madrid), §29.20 (marcadores solo con partidos en su ventana), §29.23
 | Qué | Dónde está | Cómo se comprobó | Estado |
 |---|---|---|---|
 | Ajustes → Dispositivos: emparejar con código + QR, listar, revocar | `web/features/devices/DevicesSection.tsx:139`, `PairingPanel.tsx`, `usePairing.ts:113` | `DevicesSection.test.tsx` (9 tests), `devices/model.test.ts`; E2E dispositivos; rec. D21 | ok |
-| «Abrir en…» (D7): app de AceStream, URL del stream para VLC, copias | `web/features/library/actions.ts:61`, `player/index.tsx:412`, `sources/SourceInspector.tsx:47` | `ChannelDetail.test.tsx`, `PlayerDock.test.tsx`, `status.test.ts`; rec. D7, D13 | ok |
+| «Abrir en…» (D7): app de AceStream, URL del stream para VLC, copias | `web/features/library/actions.ts:61`, `player/index.tsx:412`, `sources/SourceInspector.tsx:47` | `channel-menu.test.tsx`, `PlayerDock.test.tsx`, `status.test.ts`; rec. D7, D13 | ok |
 | Ayuda de atajos «?» (teclado y gestos) | `web/app/Shell.tsx:165`, `features/help/panel.tsx:87` | `Shell.test.tsx`, `help/panel.test.tsx`; rec. D16 | ok |
 | Media Session con acciones | `web/player/media-session.ts:34` | `PlayerDock.test.tsx`; rec. D14 | ok |
 | PiP | `web/player/screen.ts:96` | `PlayerDock.test.tsx`, **nuevo** `screen.test.ts`; rec. D15 | ok |

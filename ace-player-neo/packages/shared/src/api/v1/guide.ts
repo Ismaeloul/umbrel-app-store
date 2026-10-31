@@ -236,7 +236,11 @@ export type IptvGuideProgrammeDetail = z.infer<typeof IptvGuideProgrammeDetailSc
 // --- iptvGuideNow: «ahora / después» para Canales ---
 
 export const IptvGuideNowQuerySchema = z.strictObject({
-  /** Ids IPTV de §4.1 separados por comas (100 como mucho): los de las filas de la pestaña IPTV. */
+  /**
+   * Ids separados por comas (100 como mucho): ids IPTV de §4.1 y también ids
+   * AceStream de tu biblioteca, que se emparejan por nombre con un canal de
+   * tu IPTV (≥ 92) para la tabla de Canales.
+   */
   ids: z
     .string()
     .regex(
@@ -253,6 +257,8 @@ export const IptvGuideNowItemSchema = z.strictObject({
   /** Lo que se emite ahora y lo siguiente; null si la guía no lo sabe. */
   now: IptvGuideProgrammeSchema.nullable(),
   next: IptvGuideProgrammeSchema.nullable(),
+  /** El canal de la guía tiene logo (`iptvGuideArt` con `c<guide>`); sin guía, no viene. */
+  logo: z.boolean().optional(),
 });
 export type IptvGuideNowItem = z.infer<typeof IptvGuideNowItemSchema>;
 

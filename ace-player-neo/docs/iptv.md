@@ -2678,7 +2678,7 @@ AceStream.
 **Menú «Más» de una fila IPTV** (fila de «En tu IPTV» o id IPTV de la biblioteca): «Ver canal», «Añadir a favoritos» /
 «Quitar de favoritos», «Copiar nombre», y en la biblioteca «Renombrar» y «Eliminar». **Sin** «Abrir en la app de
 AceStream», «Copiar URL del stream (VLC)», «Copiar enlace acestream://» ni «Copiar hash» (`channelMenuItems` gana
-`iptv: true`). La ficha de escritorio (`ChannelDetail`) de un id IPTV no enseña el hash.
+`iptv: true`). La tabla de Canales de escritorio (`DeskChannels`) tampoco enseña el hash de un id IPTV.
 
 **Sesión de un canal tocado que es un id IPTV:**
 
@@ -2750,7 +2750,7 @@ por id: nada que guardar) y, a los que lo son, por `classify`: `owned` → `ok`,
 | módulo de la biblioteca en el servidor (donde se monta `LibraryView`) | `iptvIds` |
 | `apps/server/test/fake-iptv/provider.ts` | canal nuevo «ES: Telecinco HD» (id 110, categoría 2), que no está en el motor falso ni en la biblioteca E2E, y un grupo «XXX» con un canal |
 | `apps/web/src/features/search/{SearchView.tsx, iptv.ts (nuevo), model.ts, demo.ts, search.css}` | sección «En tu IPTV», mezcla, textos |
-| `apps/web/src/features/library/{LibraryView, ChannelRow, ChannelDetail, actions, useChannelActions, play, model}.ts(x)` | sección en el filtro, distintivo, subtítulos de `iptvIds`, menú sin hash, `PlayRequest.iptv` |
+| `apps/web/src/features/library/{LibraryView, ChannelRow, DeskChannels, actions, useChannelActions, play, model}.ts(x)` | sección en el filtro, distintivo, subtítulos de `iptvIds`, menú sin hash, `PlayRequest.iptv` |
 | `apps/web/src/features/sources/session.ts` | `iptv` en la primera llamada, búsqueda inversa y mezcla, textos de §14.4 y §14.5, Recientes del canal tocado |
 | `apps/web/src/api/{client.ts, query.ts, demo/**}` | `TIMEOUTS.iptvChannels`, invalidaciones, demo |
 | `apps/web/e2e/iptv.spec.ts` | casos de §14.9 |

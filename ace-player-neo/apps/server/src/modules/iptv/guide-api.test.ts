@@ -127,6 +127,8 @@ interface Rig {
   readonly catalog: Catalog;
   readonly art: GuideArt;
   favorites: string[];
+  /** Ids de tu biblioteca que no son de la IPTV → su canal de la IPTV (por nombre). */
+  library: Map<string, string>;
   status: GuideSourceStatus;
   active: boolean;
   withReader: boolean;
@@ -162,6 +164,7 @@ async function rig(extra: readonly GuideProgrammeInput[] = []): Promise<Rig> {
     catalog: current,
     art,
     favorites: [],
+    library: new Map(),
     status: {
       enabled: true,
       providerName: 'Casa',
@@ -178,6 +181,10 @@ async function rig(extra: readonly GuideProgrammeInput[] = []): Promise<Rig> {
     reader: () => (state.withReader ? reader : null),
     status: () => state.status,
     favoriteChannels: () => state.favorites,
+    libraryChannels: (ids) =>
+      new Map(
+        ids.flatMap((id) => (state.library.has(id) ? [[id, state.library.get(id) as string]] : [])),
+      ),
     qualityOf: nameQuality,
     now: () => NOW,
     art,
@@ -517,6 +524,24 @@ describe('iptvGuideNow', () => {
     ]);
     r.active = false;
     expect(r.api.now({ ids: id(2) })).toEqual({ available: false, version: '', items: [] });
+  });
+
+  it('un canal AceStream de tu biblioteca: el «ahora» del canal de la IPTV que es por su nombre', async () => {
+    const r = await rig();
+    const id = (n: number) => n.toString(16).padStart(40, 'a');
+    const ace = 'c'.repeat(40);
+    const lost = 'd'.repeat(40);
+    r.library.set(ace, channelOf(r.catalog, 2));
+    const now = r.api.now({ ids: [ace, lost, id(2)].join(',') });
+    expect(IptvGuideNowResponseSchema.parse(now)).toBeTruthy();
+    expect(
+      now.items.map((item) => [item.id, item.now?.title ?? null, item.next?.title ?? null]),
+    ).toEqual([
+      [ace, 'la1.es ahora', 'la1.es después'],
+      [lost, null, null],
+      [id(2), 'la1.es ahora', 'la1.es después'],
+    ]);
+    expect(now.items[0]?.guide).toBe(now.items[2]?.guide);
   });
 });
 
