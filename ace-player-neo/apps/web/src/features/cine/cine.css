@@ -1517,6 +1517,23 @@
     font-size: var(--fs-22);
   }
 }
+/* Hasta 1119 px (tableta y portátil pequeño, con el menú lateral ancho desde
+   1024) las pestañas no caben junto al título y el buscador:
+   bajan a su propia línea, debajo, en vez de deslizarse. */
+@media (min-width: 768px) and (max-width: 1119px) {
+  .view-head.cine-deskhead {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+  .cine-deskhead .view-head__actions {
+    margin-left: auto;
+  }
+  .view-head.cine-deskhead > .cine-tabs {
+    order: 3;
+    flex-basis: 100%;
+    padding-top: 0;
+  }
+}
 .cine-tabs {
   display: flex;
   align-items: center;
@@ -1582,10 +1599,6 @@
   background:
     linear-gradient(90deg, #0b0d11 28%, rgb(11 13 17 / 0.55) 52%, rgb(11 13 17 / 0) 78%),
     linear-gradient(to top, rgb(11 13 17 / 0.7), rgb(11 13 17 / 0) 55%);
-}
-.cine-esc-hero__blur .cine-art__img {
-  filter: blur(28px) saturate(1.3) brightness(0.85);
-  transform: scale(1.3);
 }
 .cine-esc-hero__in {
   display: grid;
@@ -1664,12 +1677,15 @@
 .cine-esc-hero :focus-visible {
   outline-color: var(--accent);
 }
-/* Las otras cosas a medias, en miniatura a la derecha: la elegida, con el filo amarillo. */
+/* Las otras cosas a medias, en miniatura a la derecha: la elegida, con el filo amarillo.
+   Tres carteles enteros de 60 × 90 caben en los 300 px del destacado (286 con los
+   huecos): la columna va de arriba abajo y las miniaturas no se encogen (antes el
+   flex las dejaba en 81 px de alto y el cartel salía cortado por abajo). */
 .cine-esc-hero__side {
   position: absolute;
-  top: var(--s-5);
+  top: 0;
   right: var(--s-5);
-  bottom: var(--s-5);
+  bottom: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1677,7 +1693,8 @@
 }
 .cine-esc-hero__thumb {
   display: block;
-  width: 62px;
+  flex: none;
+  width: 60px;
   border-radius: var(--r-s);
   overflow: hidden;
   opacity: 0.72;
@@ -1686,6 +1703,12 @@
 .cine-esc-hero__thumb[aria-pressed='true'] {
   opacity: 1;
   box-shadow: 0 0 0 2px var(--accent);
+}
+/* El foco, distinto de la selección: un anillo blanco separado del filo amarillo. */
+.cine-esc-hero .cine-esc-hero__thumb:focus-visible {
+  opacity: 1;
+  outline: 2px solid #fff;
+  outline-offset: 3px;
 }
 @media (hover: hover) and (pointer: fine) {
   .cine-esc-hero__thumb:hover {
@@ -1833,33 +1856,23 @@
   }
 }
 
-/* «Mi lista» del escaparate: el cartel con el título dentro, abajo (como la maqueta). */
+/* «Mi lista» del escaparate: el cartel con el título dentro, abajo (como la maqueta).
+   El título lo pone siempre el cartel: el de la imagen o, sin imagen, el nombre del
+   relleno (.cine-art__name), con la misma geometría que los carteles de verdad.
+   Así todos salen al mismo tamaño en la fila (antes, sin imagen, iba un título
+   blanco de 12 px y se mezclaba con los grandes). El de la tarjeta queda solo
+   para el lector de pantalla. */
 .cine-esc-poster.cine-card {
   position: relative;
 }
-.cine-esc-poster:not(:has(.cine-art[data-state='image'])) .cine-card__poster::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(to top, rgb(0 0 0 / 0.8), rgb(0 0 0 / 0) 45%);
-  pointer-events: none;
-}
-.cine-esc-poster .cine-art__name {
-  visibility: hidden;
-}
 .cine-esc-poster .cine-card__title {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 10px;
-  margin: 0;
-  color: #fff;
-  font-size: var(--fs-12);
-  -webkit-line-clamp: 2;
-}
-.cine-esc-poster:has(.cine-art[data-state='image']) .cine-card__title {
-  visibility: hidden;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .cine-esc-poster .cine-card__meta,
 .cine-esc-poster .cine-card__note,
@@ -1875,21 +1888,30 @@
   gap: var(--s-3);
   padding-top: var(--s-4);
 }
+/* Es el filtro de la rejilla (busca dentro de la categoría, §12.5), no el buscador
+   global de la barra: más corto, para que no parezca un segundo Ctrl K. */
 .cine-desk-tools .cine-head__search {
-  flex: 1 1 320px;
-  max-width: 520px;
+  flex: 0 1 360px;
 }
 .cine-browse--desk .cine-desk-tools {
   padding-top: 0;
+}
+/* Sin la flecha, el título se alinea con el filtro y los chips (el −4 px es para
+   cuadrar la flecha con el borde). */
+.cine-browse--desk .cine-browse__head:not(:has(> button)) {
+  margin-left: 0;
 }
 .cine-browse--desk .cine-browse__title {
   font-size: var(--fs-22);
 }
 
 /* ---- Ficha: Mi lista / Ver juntos / Tráiler / Compartir (icono encima del nombre) -- */
+/* Repartidos a lo ancho, como la maqueta (.tf__icons): los iconos en el color del
+   texto y solo el activo («En mi lista») en amarillo. */
 .cine-icons {
   display: flex;
   flex-wrap: wrap;
+  justify-content: space-around;
   gap: var(--s-2);
 }
 .cine-icons .cine-icons__btn.btn {
@@ -1908,12 +1930,15 @@
 .cine-icons .cine-icons__btn .icon {
   width: 22px;
   height: 22px;
-  color: var(--accent-ink);
+  color: var(--text);
 }
 .cine-icons .cine-icons__btn.btn[aria-pressed='true'] {
   background: transparent;
   box-shadow: none;
   color: var(--text);
+}
+.cine-icons .cine-icons__btn.btn[aria-pressed='true'] .icon {
+  color: var(--accent-ink);
 }
 .cine-icons .cine-icons__btn.btn:disabled .icon {
   color: var(--text-3);
@@ -1929,8 +1954,14 @@
 .cine-episode__lead {
   color: var(--accent-ink);
 }
+/* La fila compacta de la maqueta (.ep): miniatura de 120 px con su barra, el título
+   y los datos, y la sinopsis en una sola línea. */
 @media (min-width: 768px) {
   .cine-episode__play {
-    grid-template-columns: 180px minmax(0, 1fr);
+    grid-template-columns: 120px minmax(0, 1fr);
+    align-items: center;
+  }
+  .cine-episode__plot {
+    -webkit-line-clamp: 1;
   }
 }

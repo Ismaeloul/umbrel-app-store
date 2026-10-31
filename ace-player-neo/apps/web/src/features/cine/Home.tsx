@@ -298,7 +298,8 @@ export type DeskTab = 'inicio' | 'movie' | 'series' | 'lista';
 /**
  * Inicio / Películas / Series / Mi lista · N (escritorio): Inicio es el
  * escaparate; las otras abren la rejilla (con su entrada en el historial, como
- * «Ver todo»: Atrás vuelve al escaparate).
+ * «Ver todo»: Atrás vuelve al escaparate). Ir de una a otra cambia la rejilla
+ * sin sumar entradas: desde cualquiera, un solo Atrás vuelve a Inicio.
  */
 export function DeskTabs({ value, active }: { value: DeskTab; active: boolean }) {
   const list = useVodList(active);

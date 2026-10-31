@@ -153,7 +153,10 @@ function Hero({ entry, side, posters, onPick }: HeroProps) {
   const link = useTitleLink(titleId);
   const ratio = entry.isNext ? null : progressRatio(entry);
   const line = heroLine(entry);
-  const art = entry.art;
+  /* Detrás va el fondo panorámico o el fotograma; un cartel suelto no (habría que
+     estirarlo y difuminarlo): entonces, solo el degradado del color del título,
+     como la maqueta. */
+  const art = entry.art && entry.art.art !== 'poster' ? entry.art : null;
   const poster = posters.get(titleId) ?? seenCard(titleId)?.poster ?? null;
   const style = { '--hero-fill': artFill(entry.title) } as CSSProperties;
   const kind = entry.kind === 'episode' ? CINE_TEXT.seriesKicker : CINE_TEXT.movieKicker;
@@ -174,7 +177,6 @@ function Hero({ entry, side, posters, onPick }: HeroProps) {
             title={entry.title}
             eager
             bare
-            className={art.art === 'poster' ? 'cine-esc-hero__blur' : undefined}
           />
         ) : null}
       </div>
