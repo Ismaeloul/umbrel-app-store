@@ -885,6 +885,16 @@
   display: grid;
   justify-items: end;
 }
+/* La que suena: las barras de la maqueta, 3 px y 12 de alto, en amarillo. */
+.src-line__end .player-eq {
+  gap: 2px;
+  width: 13px;
+  height: 12px;
+  color: var(--accent-ink);
+}
+.src-line__end .player-eq i {
+  width: 3px;
+}
 .src-line[data-state='fail'] .src-line__title {
   color: var(--text-3);
 }

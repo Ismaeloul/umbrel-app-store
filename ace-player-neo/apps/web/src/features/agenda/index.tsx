@@ -689,6 +689,7 @@ export default function Agenda({ active }: ViewProps) {
                 mine={isMine(selected, preferences)}
                 watching={watched === selected.id}
                 onOpen={openMatch}
+                desk
               />
               {foot}
             </aside>

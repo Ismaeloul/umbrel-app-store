@@ -499,6 +499,16 @@ describe('vista Agenda', () => {
     expect(
       await within(side).findByRole('heading', { name: 'Real Madrid vs Girona' }),
     ).toBeInTheDocument();
+    // La ficha del destacado tiene la forma de la del partido: «Marcador»
+    // (tapado), «Ver juntos» (todavía no) y los canales en filas.
+    expect(
+      await within(side).findByRole('button', { name: 'Ver marcador de Real Madrid vs Girona' }),
+    ).toBeInTheDocument();
+    expect(within(side).getByRole('button', { name: 'Ver juntos' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    const channelRow = within(side).getByRole('button', { name: /M\+ Liga de Campeones/ });
     // Filas compactas agrupadas por competición, sin cifras de marcador.
     expect(
       await screen.findByRole('button', { name: /^Real Madrid contra Girona, en directo/ }),
@@ -514,6 +524,9 @@ describe('vista Agenda', () => {
     expect(
       await screen.findByRole('button', { name: /^Arsenal contra Chelsea/ }),
     ).toBeInTheDocument();
+    // Tocar un canal del destacado abre su ficha, como «Ver canal».
+    fireEvent.click(channelRow);
+    await waitFor(() => expect(location.search).toContain(`vista=partido/${LIVE.id}`));
   });
 
   it('escritorio: tocar un partido abre su ficha con el vídeo; sin canal, avisa y no navega', async () => {

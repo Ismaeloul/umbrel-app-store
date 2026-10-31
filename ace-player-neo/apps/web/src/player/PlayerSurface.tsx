@@ -724,7 +724,9 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
             </div>
             {state.phase !== 'error' ? (
               <>
-                <div className="player-1b__center">
+                {/* Con un panel en medio («Conectando», «Reconectando»…) la
+                    pausa no se pinta encima: el panel ya dice qué pasa. */}
+                <div className="player-1b__center" hidden={stageMessage(state) !== null}>
                   <IconButton
                     icon={wantsPlay || connecting ? 'pause' : 'play'}
                     label={connecting ? 'Conectando…' : wantsPlay ? 'Pausar' : 'Reproducir'}

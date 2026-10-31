@@ -113,8 +113,23 @@
   .view-head__subtitle {
     font-size: var(--fs-12);
   }
+  /* El título no se corta («Cana…» tapado por «Modo demo»): si falta sitio,
+     cede el buscador, que se estrecha hasta 120 px. */
+  .view-head__titles {
+    min-width: auto;
+  }
+  .view-head__title {
+    overflow: visible;
+  }
   .view-head__actions {
     flex-wrap: nowrap;
+  }
+  .view-head__actions > * {
+    flex: none;
+  }
+  .view-head__actions > .view-head__search {
+    flex: 0 1 clamp(180px, 26vw, 340px);
+    min-width: 120px;
   }
   .view-head__search {
     display: inline-flex;

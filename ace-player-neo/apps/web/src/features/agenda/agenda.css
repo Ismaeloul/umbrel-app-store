@@ -1610,3 +1610,194 @@
     margin: var(--s-4) 20px 0;
   }
 }
+
+/* ---- El elegido con la forma de la ficha (AgendaStage `desk`) ----------------------
+   Maqueta 01, pantalla 1: el cartel en el sitio del vídeo, sin los nombres
+   (van en el titular de debajo) y con «Ver canal» en su esquina; el titular
+   en una línea con «Marcador» y «Ver juntos»; y los canales en filas como
+   las fuentes de la ficha (número, nombre y etiqueta). */
+@media (min-width: 1024px) {
+  .agenda-stage--desk {
+    container: agenda-side / inline-size;
+  }
+  .agenda-stage--desk .versus__names,
+  .agenda-stage--desk .versus__competition {
+    display: none;
+  }
+  .agenda-stage--desk .agenda-stage__corner {
+    right: 16px;
+    bottom: 16px;
+  }
+  .agenda-stage__go.btn {
+    min-height: 40px;
+    padding-inline: 16px 18px;
+    border-radius: var(--r-pill);
+    font-size: 0.875rem;
+  }
+  .agenda-stage__dhead {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 6px 20px 0;
+  }
+  .agenda-stage__titles {
+    display: grid;
+    flex: 1;
+    gap: 3px;
+    min-width: 0;
+  }
+  .agenda-stage__title {
+    overflow: hidden;
+    font-size: 1.1875rem;
+    font-weight: var(--wght-head);
+    font-stretch: 110%;
+    letter-spacing: -0.01em;
+    line-height: var(--lh-tight);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .agenda-stage__sub {
+    overflow: hidden;
+    color: var(--text-3);
+    font-size: var(--fs-12);
+    font-weight: var(--wght-medium);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .agenda-stage__dactions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+  }
+  /* «Marcador» como el de la ficha: 32 px, gris, sin cristal. */
+  .agenda-stage__score.agenda-score.capsule {
+    height: 32px;
+    padding-inline: 12px;
+    border: 0;
+    background: var(--line-soft);
+    box-shadow: none;
+    color: var(--text-2);
+    font-size: var(--fs-12);
+  }
+  .agenda-stage__score.agenda-score.is-shown.capsule {
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: var(--fs-15);
+  }
+  .agenda-stage__together.btn {
+    min-height: 40px;
+    padding-inline: 16px;
+    border-radius: var(--r-pill);
+    background: var(--line-soft);
+    color: var(--text);
+    font-size: 0.875rem;
+  }
+  .agenda-stage__together[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .agenda-stage__where {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    padding-inline: 20px;
+  }
+  .agenda-stage--desk .agenda-stage__signal {
+    color: var(--text-2);
+    font-size: var(--fs-13);
+  }
+  .agenda-stage__rows {
+    display: grid;
+    overflow: hidden;
+    border-radius: var(--r-l);
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+  }
+  .agenda-stage__rows li + li .agenda-stage__row {
+    border-top: 1px solid var(--line-soft);
+  }
+  .agenda-stage__row {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 60px;
+    padding: 8px 14px;
+    text-align: left;
+  }
+  .agenda-stage__row:focus-visible {
+    outline-offset: -3px;
+  }
+  .agenda-stage__num {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text-2);
+    font-family: var(--mono);
+    font-size: var(--fs-12);
+    font-weight: 700;
+  }
+  .agenda-stage__rtext {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+  .agenda-stage__rname {
+    overflow: hidden;
+    font-size: var(--fs-15);
+    font-weight: 650;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .agenda-stage__rmeta {
+    display: flex;
+  }
+  .agenda-stage__tag {
+    padding: 1px 7px;
+    border-radius: var(--r-pill);
+    background: var(--line-soft);
+    color: var(--text-2);
+    font-size: var(--fs-11);
+    font-weight: 650;
+  }
+  .agenda-stage__rend {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent-wash);
+    color: var(--accent-ink);
+  }
+  /* Las barras de «sonando» de la maqueta: 3 px, 12 de alto, en amarillo. */
+  .desk-row__end .player-eq {
+    gap: 2px;
+    width: 13px;
+    height: 12px;
+    color: var(--accent-ink);
+  }
+  .desk-row__end .player-eq i {
+    width: 3px;
+  }
+}
+/* Panel estrecho (a 1024 se queda en unos 410 px): como en la ficha, los
+   botones bajan bajo el titular. */
+@container agenda-side (max-width: 539px) {
+  .agenda-stage__dhead {
+    flex-wrap: wrap;
+  }
+  .agenda-stage__titles {
+    flex-basis: 100%;
+  }
+}
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .agenda-stage__row:hover {
+    background: var(--line-soft);
+  }
+}

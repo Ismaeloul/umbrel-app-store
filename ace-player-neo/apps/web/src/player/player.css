@@ -67,10 +67,12 @@
     max-width: min(100%, calc(70dvh * 16 / 9));
     margin-inline: auto;
     border-radius: var(--r-xl);
-    /* Sombra larga de Palco: el vídeo flota sobre el negro cine. */
+    /* Sombra de Palco, corta: el escenario va por encima de la vista y una
+       sombra de 80 px velaba el titular de la ficha, pegado al vídeo desde el
+       rediseño (tableta). */
     box-shadow:
       0 0 0 1px rgb(0 0 0 / 0.3),
-      0 20px 60px rgb(0 0 0 / 0.6);
+      0 14px 28px -16px rgb(0 0 0 / 0.6);
   }
   /* Luz ambiental (W5): los colores de los dos clubes, dos radiales tenues al
      22 % que se derraman desde el vídeo y «respiran» despacio (solo opacidad
@@ -81,8 +83,10 @@
     z-index: -1;
     /* A los lados, nunca más que el margen de la vista: en la tableta (768,
        margen de 16 px) más se salía de la pantalla y la página se ensanchaba
-       (revisión visual de la Fase 2). Arriba y abajo, mucha más luz. */
-    inset: -56px calc(-1 * min(32px, var(--gutter))) -72px;
+       (revisión visual de la Fase 2). Arriba, mucha más luz; abajo, nada: el
+       escenario va por encima de la vista y la luz apagaba el titular de la
+       ficha, pegado al vídeo desde el rediseño. */
+    inset: -56px calc(-1 * min(32px, var(--gutter))) 0;
     background:
       radial-gradient(
         46% 62% at 16% 46%,
