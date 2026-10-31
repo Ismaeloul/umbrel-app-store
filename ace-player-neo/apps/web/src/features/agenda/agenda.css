@@ -1400,6 +1400,50 @@
   border-radius: 50%;
   background: var(--live);
 }
+/* «Más ligas»: las que no caben en chips, en una lista con su insignia y
+   cuántos partidos trae cada una. */
+.desk-leagues-pop {
+  width: 320px;
+  padding: 8px;
+}
+.desk-leagues {
+  display: grid;
+  gap: 2px;
+  max-height: min(440px, 60vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.desk-leagues__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  color: var(--text);
+  font-size: var(--fs-13);
+  font-weight: 600;
+  text-align: left;
+}
+@media (hover: hover) and (pointer: fine) {
+  .desk-leagues__item:hover {
+    background: var(--line-soft);
+  }
+}
+.desk-leagues__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.desk-leagues__count {
+  color: var(--text-2);
+  font-size: var(--fs-12);
+}
 .desk-agenda__loading,
 .desk-agenda__groups {
   display: grid;

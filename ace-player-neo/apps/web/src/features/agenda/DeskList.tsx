@@ -1,6 +1,6 @@
 /* La Agenda de escritorio (rediseño, pantalla 1): el panel izquierdo de unos
    380 px que se ve igual en la Agenda y junto al vídeo del partido (la
-   columna del armazón). Tira de días, chips (Todo, Directo y una por liga) y
+   columna del armazón). Tira de días, chips (Todo, Directo, tres ligas y «Más ligas») y
    tarjetas por competición con filas compactas:
 
    - a la izquierda la hora o, en directo, el minuto en mono con su barra;
@@ -20,14 +20,14 @@
 import './demo.ts';
 import './agenda.css';
 
-import type { FootballMatch, LiveScore } from '@ace/shared';
-import { useMemo, type CSSProperties } from 'react';
+import { LEAGUE_ALIASES, leagueMatches, type FootballMatch, type LiveScore } from '@ace/shared';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { hueFromName, oklchToRgb, rgbToHex } from '../../lib/color.ts';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
 import { Equalizer } from '../../player/PlayerSurface.tsx';
-import { Chip, Icon, Num, Skeleton } from '../../ui/index.ts';
+import { Chip, Icon, Num, Popover, Skeleton } from '../../ui/index.ts';
 import { SignalBadge } from '../../ui/SignalBadge.tsx';
 import { TeamMark } from '../../ui/TeamMark.tsx';
 import { usePreferences } from '../preferences/usePreferences.ts';
@@ -66,6 +66,42 @@ export function byChip(
 /** Las competiciones del día, en el orden de los grupos (las de más partidos no mandan). */
 function competitionsOf(matches: readonly FootballMatch[]): string[] {
   return [...new Set(matches.map((match) => match.competition).filter(Boolean))];
+}
+
+/** Ligas con chip propio; las demás van en «Más ligas». */
+export const LEAGUE_CHIPS = 3;
+
+/** Las grandes, en el orden de LEAGUE_ALIASES (LaLiga, Champions, Premier…); -1 si no lo es. */
+function bigLeagueRank(competition: string): number {
+  return Object.keys(LEAGUE_ALIASES).findIndex((league) => leagueMatches(league, competition));
+}
+
+/**
+ * Con datos reales un día trae 50 ligas: solo tres llevan chip. Primero las
+ * que tienen algo tuyo (`mine`), luego las grandes y después el resto, cada
+ * tramo en el orden de los bloques. La elegida desde «Más ligas» se queda a
+ * la vista mientras esté elegida.
+ */
+export function splitLeagueChips(
+  competitions: readonly string[],
+  chip: string | null,
+  mine: ReadonlySet<string> = new Set(),
+): { shown: string[]; more: string[] } {
+  const tier = (name: string): number => {
+    if (mine.has(name)) return 0;
+    const rank = bigLeagueRank(name);
+    return rank < 0 ? 100 : 1 + rank;
+  };
+  const ordered = competitions
+    .map((name, index) => ({ name, index, tier: tier(name) }))
+    .sort((a, b) => a.tier - b.tier || a.index - b.index)
+    .map((item) => item.name);
+  const shown = ordered.slice(0, LEAGUE_CHIPS);
+  const rest = ordered.slice(LEAGUE_CHIPS);
+  if (chip !== null && rest.includes(chip)) {
+    return { shown: [...shown, chip], more: rest.filter((name) => name !== chip) };
+  }
+  return { shown, more: rest };
 }
 
 /* Colores de las ligas que más salen (los de su marca, oscurecidos lo justo
@@ -285,6 +321,19 @@ export function DeskList({ selectedId, active, onOpen, className }: DeskListProp
   );
   const chip =
     ui.chip !== null && ui.chip !== 'live' && !competitions.includes(ui.chip) ? null : ui.chip;
+  const leagues = useMemo(() => {
+    const mine = new Set(
+      all.filter((match) => isMine(match, preferences)).map((match) => match.competition),
+    );
+    return splitLeagueChips(competitions, chip, mine);
+  }, [all, competitions, chip, preferences]);
+  const countByCompetition = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const match of all)
+      counts.set(match.competition, (counts.get(match.competition) ?? 0) + 1);
+    return counts;
+  }, [all]);
+  const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const shown = useMemo(() => byChip(all, chip, now, scores), [all, chip, now, scores]);
   const groups = useMemo(
     () => groupByCompetition(shown, now, scores, preferences),
@@ -337,12 +386,57 @@ export function DeskList({ selectedId, active, onOpen, className }: DeskListProp
             Directo
           </Chip>
         ) : null}
-        {competitions.map((name) => (
+        {leagues.shown.map((name) => (
           <Chip key={name} pressed={chip === name} onClick={() => pick(name)}>
             {name}
           </Chip>
         ))}
+        {leagues.more.length ? (
+          <Chip
+            count={leagues.more.length}
+            pressed={moreAnchor !== null}
+            label={`Más ligas: ${leagues.more.length}`}
+            onClick={(event) => {
+              const target = event.currentTarget;
+              setMoreAnchor((current) => (current ? null : target));
+            }}
+          >
+            Más ligas
+          </Chip>
+        ) : null}
       </div>
+      <Popover
+        open={moreAnchor !== null}
+        anchor={moreAnchor}
+        onClose={() => setMoreAnchor(null)}
+        label="Más ligas"
+        className="desk-leagues-pop"
+      >
+        <ul className="desk-leagues">
+          {leagues.more.map((name) => (
+            <li key={name}>
+              <button
+                type="button"
+                className="desk-leagues__item press"
+                onClick={() => {
+                  setMoreAnchor(null);
+                  pick(name);
+                }}
+              >
+                <span
+                  className="desk-comp__badge"
+                  style={{ '--bb': competitionTone(name) } as CSSProperties}
+                  aria-hidden="true"
+                >
+                  {competitionInitials(name)}
+                </span>
+                <span className="desk-leagues__name">{name}</span>
+                <Num className="desk-leagues__count" value={countByCompetition.get(name) ?? 0} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Popover>
       {schedule.isPending ? (
         <div className="desk-agenda__loading" role="status" aria-busy="true">
           <span className="sr-only">Cargando partidos</span>

@@ -1,10 +1,10 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { fixture, mockFetch } from '../../test/fetch.ts';
 import AgendaColumn from './column.tsx';
-import { competitionInitials, competitionTone } from './DeskList.tsx';
+import { competitionInitials, competitionTone, splitLeagueChips } from './DeskList.tsx';
 import { resetScoreRevealForTests } from './score-reveal.ts';
 import { resetAgendaUi, setAgendaChip } from './state.ts';
 import { liveScore, matchAt, NOW, renderWithApp, scheduleOf, TODAY } from './test-utils.tsx';
@@ -130,5 +130,71 @@ describe('insignias de competición', () => {
     expect(competitionTone('LaLiga')).not.toBe(competitionTone('Premier League'));
     expect(competitionTone('Amistoso')).toMatch(/^#[0-9a-f]{6}$/i);
     expect(competitionTone('Amistoso')).toBe(competitionTone('Amistoso'));
+  });
+});
+
+describe('«Más ligas»', () => {
+  it('tres ligas con chip y el resto aparte; la elegida del resto se queda a la vista', () => {
+    const all = ['A', 'B', 'C', 'D', 'E'];
+    expect(splitLeagueChips(all, null)).toEqual({ shown: ['A', 'B', 'C'], more: ['D', 'E'] });
+    expect(splitLeagueChips(all, 'E')).toEqual({ shown: ['A', 'B', 'C', 'E'], more: ['D'] });
+    expect(splitLeagueChips(all, 'B')).toEqual({ shown: ['A', 'B', 'C'], more: ['D', 'E'] });
+    expect(splitLeagueChips(['A', 'B'], null)).toEqual({ shown: ['A', 'B'], more: [] });
+  });
+
+  it('primero las tuyas, luego las grandes (no sus primas de otros países) y después el resto', () => {
+    const day = [
+      '3. Liga',
+      'Premier League Ucrania',
+      'Serie A Italiana',
+      'Eredivisie',
+      'La Liga EA Sports',
+      'Premier League',
+    ];
+    expect(splitLeagueChips(day, null).shown).toEqual([
+      'La Liga EA Sports',
+      'Premier League',
+      'Serie A Italiana',
+    ]);
+    expect(splitLeagueChips(day, null, new Set(['Eredivisie'])).shown).toEqual([
+      'Eredivisie',
+      'La Liga EA Sports',
+      'Premier League',
+    ]);
+  });
+
+  it('con muchas ligas el resto sale en una lista y se elige desde ella', async () => {
+    net.restore();
+    const names = ['LaLiga', 'Premier League', 'Serie A', 'Bundesliga', 'Ligue 1', 'Eredivisie'];
+    net = mockFetch({
+      'GET /api/v1/football': scheduleOf({
+        [TODAY]: [
+          CURRENT,
+          ...names.slice(1).map((competition, index) =>
+            matchAt(30 + index * 10, {
+              home: `Local ${index}`,
+              away: `Visita ${index}`,
+              competition,
+            }),
+          ),
+        ],
+      }),
+      'GET /api/v1/preferences': fixture('preferencesGet'),
+      'GET /api/v1/library': fixture('libraryGet'),
+    });
+    renderColumn();
+    const group = await screen.findByRole('group', { name: 'Filtrar partidos' });
+    const more = await within(group).findByRole('button', { name: 'Más ligas: 3' });
+    expect(within(group).queryByRole('button', { name: 'Eredivisie' })).toBeNull();
+    fireEvent.click(more);
+    const list = await screen.findByRole('dialog', { name: 'Más ligas' });
+    fireEvent.click(within(list).getByRole('button', { name: /Eredivisie/ }));
+    await waitFor(() =>
+      expect(within(group).getByRole('button', { name: 'Eredivisie' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(within(group).getByRole('button', { name: 'Más ligas: 2' })).toBeInTheDocument();
   });
 });
