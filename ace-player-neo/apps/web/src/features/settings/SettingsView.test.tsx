@@ -353,7 +353,7 @@ describe('Ajustes en escritorio', () => {
 
   it('«Avisos» se elige en un menú', async () => {
     desk();
-    fireEvent.click(screen.getByRole('button', { name: /Avisos/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Avisos.+min/ }));
     const menu = await screen.findByRole('menu', { name: 'Avisar antes de empezar' });
     expect(within(menu).getByRole('menuitemcheckbox', { name: '5 min' })).toHaveAttribute(
       'aria-checked',
@@ -361,9 +361,9 @@ describe('Ajustes en escritorio', () => {
     );
     fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: '15 min' }));
     expect(localPrefs.get().alertLead).toBe(15);
-    expect(localStorage.getItem('aceneo-avisos')).toBe('15');
+    expect(localStorage.getItem('aceneo-avisos-antes')).toBe('15');
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Avisos/ })).toHaveTextContent('15 min'),
+      expect(screen.getByRole('button', { name: /^Avisos.+min/ })).toHaveTextContent('15 min'),
     );
   });
 
