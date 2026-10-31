@@ -350,6 +350,7 @@ export class IptvServiceImpl implements IptvService {
       reader: () => this.fullGuide.current(),
       status: () => this.guideSourceStatus(),
       favoriteChannels: () => this.guideFavoriteChannels(),
+      libraryChannels: (ids) => this.guideLibraryChannels(ids),
       qualityOf: (entry) => this.qualityOf(entry),
       now: () => deps.clock.now(),
       art: new GuideArt({
@@ -771,6 +772,33 @@ export class IptvServiceImpl implements IptvService {
         return entry ? channelIdOf(entry) : null;
       },
     }).map(({ group }) => group.channel);
+  }
+
+  /**
+   * «Ahora / después» de los canales AceStream en la tabla de Canales
+   * (rediseño de escritorio): el canal de tu IPTV que es cada id de tu
+   * biblioteca que no es de la IPTV, por su nombre (≥ 92, como el buscador).
+   */
+  private guideLibraryChannels(ids: readonly string[]): Map<string, string> {
+    const out = new Map<string, string>();
+    const catalog = this.catalog;
+    if (!catalog || !this.active() || !ids.length) return out;
+    const wanted = new Set(ids);
+    const keys = this.ensureKeys();
+    const state = this.deps.state.get();
+    const titles = new Map<string, string>();
+    for (const item of [...state.favorites, ...state.history, ...state.web]) {
+      if (!wanted.has(item.id) || titles.has(item.id) || !item.title) continue;
+      if (isIptvId(keys, item.id)) continue;
+      titles.set(item.id, item.title);
+    }
+    if (!titles.size) return out;
+    const bestFor = this.bestGroupFinder();
+    for (const [id, title] of titles) {
+      const group = bestFor(title);
+      if (group) out.set(id, group.channel);
+    }
+    return out;
   }
 
   private providerView(): IptvProviderView | null {

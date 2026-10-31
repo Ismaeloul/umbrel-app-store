@@ -55,6 +55,13 @@ export interface GuideApiSource {
   status(): GuideSourceStatus;
   /** Canales (`channelIdOf`) de tus favoritos que son de la IPTV, en su orden. */
   favoriteChannels(): readonly string[];
+  /**
+   * Para `iptvGuideNow`: el canal de la IPTV (`channelIdOf`) de cada id de tu
+   * biblioteca que NO es de la IPTV (un canal AceStream de favoritos,
+   * recientes o tus listas), emparejado por nombre (≥ 92, el mismo del
+   * buscador). Los que no casan no están.
+   */
+  libraryChannels?(ids: readonly string[]): ReadonlyMap<string, string>;
   /** La calidad que manda de una variante (la medida o la del nombre). */
   readonly qualityOf: QualityOf;
   now(): number;
@@ -89,6 +96,16 @@ interface Rows {
   readonly byChannel: ReadonlyMap<string, GuideRow>;
   /** Hasta dónde llega la programación de «Todos». */
   readonly coverage: GuideCoverage | null;
+}
+
+/** Las variantes de un canal (`channelIdOf`: clave y país), o ninguna si ya no está. */
+function channelEntries(catalog: Catalog, channel: string): readonly CatalogEntry[] {
+  const cut = channel.indexOf('\u0000');
+  if (cut < 0) return [];
+  const bucket = channel.slice(cut + 1);
+  return (
+    catalog.buckets(channel.slice(0, cut)).find((item) => item.bucket === bucket)?.entries ?? []
+  );
 }
 
 function iso(ms: number): string {
@@ -387,21 +404,26 @@ export class GuideApi {
     }
     const channels = reader.channels();
     const now = this.source.now();
-    const seen = new Set<string>();
+    const ids = [...new Set(query.ids.split(',').map((raw) => raw.toLowerCase()))];
+    /* Los que no son de la IPTV: canales AceStream de tu biblioteca, por su nombre. */
+    const foreign = ids.filter((id) => !catalog.get(id));
+    const linked = foreign.length ? (this.source.libraryChannels?.(foreign) ?? null) : null;
     const items: IptvGuideNowItem[] = [];
-    for (const raw of query.ids.split(',')) {
-      const id = raw.toLowerCase();
-      if (seen.has(id)) continue;
-      seen.add(id);
+    for (const id of ids) {
       const entry = catalog.get(id);
+      const channel = entry ? null : linked?.get(id);
+      /* La variante tocada y, si no tiene guía, las demás de su canal; un
+         canal de tu lista, las variantes del canal de la IPTV que es. */
+      const variants = entry
+        ? [entry, ...catalog.channelOf(entry)]
+        : channel
+          ? channelEntries(catalog, channel)
+          : [];
       let info: GuideChannelInfo | undefined;
-      if (entry) {
-        /* La variante tocada y, si no tiene guía, las demás de su canal. */
-        for (const variant of [entry, ...catalog.channelOf(entry)]) {
-          const tvg = variant.tvgId.trim().toLowerCase();
-          info = tvg ? channels.get(tvg) : undefined;
-          if (info) break;
-        }
+      for (const variant of variants) {
+        const tvg = variant.tvgId.trim().toLowerCase();
+        info = tvg ? channels.get(tvg) : undefined;
+        if (info) break;
       }
       if (!info) {
         items.push({ id, guide: null, now: null, next: null });
@@ -413,6 +435,7 @@ export class GuideApi {
         guide: info.g,
         now: around.now ? programmeOf(info.g, around.now) : null,
         next: around.next ? programmeOf(info.g, around.next) : null,
+        logo: info.hasIcon,
       });
     }
     return { available: true, version: reader.version, items };

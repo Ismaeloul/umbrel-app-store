@@ -858,6 +858,7 @@ export const V1_ROUTES = {
     summary: 'Guía TV: «ahora / después» de unos canales IPTV (para Canales)',
     description:
       'Para cada id IPTV pedido (los de las filas de la pestaña IPTV o del buscador), lo que echa ahora y lo siguiente según la guía (docs/iptv.md §20.6). ' +
+      'Un id AceStream de tu biblioteca (favoritos, recientes o tus listas) vale el canal de tu IPTV que es por su nombre (≥ 92, como el buscador). ' +
       'Sin guía o sin IPTV activa, 200 con `available: false`: no es un error.',
     query: IptvGuideNowQuerySchema,
     response: IptvGuideNowResponseSchema,
