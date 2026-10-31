@@ -2,6 +2,17 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.10.0 (2026-10-31)
+
+Rediseño de escritorio (primera parte): menu lateral con la Agenda, los
+Canales, la Guia, Pelis y series y Ver juntos, logo nuevo y buscador con
+Ctrl K. La Agenda va en dos paneles: los partidos por competicion a la
+izquierda y, al tocar uno, su ficha con el video y las fuentes en filas al
+lado. El reproductor del ordenador queda limpio: el partido, la fuente que
+suena (tocala para ver todas), pausa y una sola pildora DIRECTO; si la
+fuente se corta salta a la siguiente con un aviso para deshacerlo. En el
+movil no cambia nada.
+
 ## 0.9.15 (2026-10-30)
 
 Reproductor nuevo en Ver juntos: los controles van encima del video y se
