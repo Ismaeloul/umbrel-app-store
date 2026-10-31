@@ -76,6 +76,28 @@ export function correction(localS: number, targetS: number, running: boolean): C
   return { kind: 'rate', rate: 1 };
 }
 
+/**
+ * «Esperando a todos» (docs/ver-juntos.md §13): cuánto lleva cargado este
+ * aparato (el 100 % son `PARTY.lobbyBufferS` por delante, o hasta el final si
+ * queda menos) y si ya puede empezar. Sin vídeo abierto, 0 y no listo.
+ */
+export function lobbyReport(
+  hasVideo: boolean,
+  positionS: number,
+  readyState: number,
+  bufferedS: number,
+  durationS: number | null,
+): { ready: boolean; progress: number } {
+  if (!hasVideo) return { ready: false, progress: 0 };
+  const left = durationS !== null ? Math.max(0, durationS - positionS) : PARTY.lobbyBufferS;
+  const target = Math.max(0.5, Math.min(PARTY.lobbyBufferS, left));
+  const ahead = Math.max(0, bufferedS - positionS);
+  const progress = Math.min(100, Math.floor((ahead / target) * 100));
+  /* HAVE_ENOUGH_DATA: el navegador cree que puede seguir sin parar. */
+  const ready = progress >= 100 || readyState >= 4;
+  return { ready, progress: ready ? 100 : progress };
+}
+
 /** «43:12» o «1:05:09» (el mismo formato que los avisos del servidor). */
 export function clock(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds));

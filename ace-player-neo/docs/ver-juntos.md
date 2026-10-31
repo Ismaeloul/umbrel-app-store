@@ -12,6 +12,7 @@ mismo a la vez y chatean. Pausar, avanzar o cambiar el idioma pasa para todos.
 | 2b | La app del iPhone (Ace Neo) crea, entra y cierra salas (§10) | 0.9.6 |
 | 3 | Como Rave (§11): líder, echar, reacciones, lista con votos, siguiente episodio para todos | 0.9.13 (web) |
 | 3c | Reproductor nuevo: controles sobre el vídeo, pantalla completa con chat (§12) | 0.9.15 (web) |
+| 3d | Rediseño de escritorio: co-líderes, «Esperando a todos», «está escribiendo», sin reacciones (§13) | 0.10.x (web y servidor) |
 | 3b | Lo mismo en la app del iPhone; chat de voz; que los invitados busquen y añadan títulos | ideas |
 
 Descartado para la fase 2: Cloudflare Tunnel (sus condiciones no quieren mucho vídeo y Isma quiere algo que no dependa
@@ -50,6 +51,7 @@ de terceros) y Tailscale (el invitado tendría que instalar algo).
 | `partyControl` | `POST /api/v1/party/:code/control` | `play`, `pause`, `seek` o `audio` para todos |
 | `partyStatus` | `POST /api/v1/party/:code/status` | latido de cada uno: posición y si carga |
 | `partyChat` | `POST /api/v1/party/:code/chat` | un mensaje |
+| `partyTyping` | `POST /api/v1/party/:code/typing` | «está escribiendo» (uno cada 2 s por persona; §13) |
 | `partyLeave` | `POST /api/v1/party/:code/leave` | salir |
 | `partyClose` | `POST /api/v1/party/:code/close` | cerrar (solo el anfitrión) |
 
@@ -178,8 +180,7 @@ no haya que aprender nada. Lo que se sabe de Rave sale de fuentes públicas (no 
   recuperarlo cuando quiera («Ser líder otra vez»).
 - **Echar** (`partyMember` con `kick`): solo el líder, no a sí mismo ni a quien creó la sala. A quien echan le llega
   `party.closed` con `kicked` y su credencial deja de valer; con el enlace puede volver a entrar (como en Rave).
-- **Reacciones** (`partyReact`): 😂 ❤️ 😮 😢 👏 🔥 😱 👍, 10 cada 10 s por persona. Llegan a todos como
-  `party.reaction` y suben unos 3 s por encima del vídeo con el nombre de quien la lanza. No van al chat.
+- **Reacciones**: quitadas en la fase 3d (§13). Ya no existen `partyReact` ni `party.reaction`.
 - **Lista** (`partyQueue`): `add` (cualquiera; en «Elige el líder», solo él), `remove` (quien lo añadió o el líder),
   `vote` (cada uno, uno por título, se quita pulsando otra vez), `play` (poner ya), `next` y `cancel`. Hasta 30.
   Desde fuera no se ve el catálogo de casa: se añade desde la ficha de una película o un episodio («Ver juntos» →
@@ -226,3 +227,50 @@ de casa y como Rave: todo encima del vídeo y escondiéndose solo.
 - **Móvil:** el vídeo de lado a lado, la cabecera en una fila (Invitar y Cerrar, solo con icono por debajo de
   480 px) y la pestaña «Gente» (antes «Personas», que no cabía).
 - **Pruebas:** `Theater.test.tsx` y a mano en el PC (ordenador y móvil, sin vídeo: sin ffmpeg no hay muestras).
+
+## 13. Rediseño de escritorio: co-líderes y «Esperando a todos» (fase 3d)
+
+La sala de escritorio sigue la maqueta 01-escritorio (sección 5) y las de móvil `ver-juntos*.html`: el vídeo y el
+control a la izquierda; a la derecha las caras de la gente y las pestañas Chat, Siguiente y Gente. Por debajo de
+768 px la sala del móvil no cambia de sitio las cosas.
+
+- **Papeles** (`member.role`): `leader` (la corona), `coleader` (el escudo azul) y `guest`. El booleano `leader` se
+  mantiene igual que antes (las apps de iPhone y Android solo leen ese). El líder hace co-líder a quien quiera y se lo
+  quita (`partyMember` con `coleader` / `guest`). El co-líder controla como el líder, pero no echa ni pasa ni quita la
+  corona. Quien pasa la corona se queda de co-líder.
+- **Quién controla**, sin romper las apps viejas (que solo conocen `leader` y `everyone`):
+
+  | En la web | `settings.control` | `settings.coleaders` |
+  |---|---|---|
+  | Solo yo | `leader` | `false` |
+  | Yo y co-líderes (por defecto) | `leader` | `true` |
+  | Todos | `everyone` | (da igual) |
+
+  Una sala sin `coleaders` (una app vieja que crea con lo de siempre) se queda con `true`: si no hay co-líderes,
+  es lo mismo que «Solo yo». `partyCreate` acepta `control`, `coleaders` y `queueMode`; `partySettings`, lo mismo
+  (solo el líder).
+- **Sin control** (invitado, o co-líder con «Solo yo»): ni pausa ni ±10 s, y la barra sin tirador. En Gente, «Solo
+  Ismael y Yassin pueden pausar o cambiar lo que se ve. Tú puedes chatear y proponer lo siguiente.». En pelis y
+  series los invitados SÍ proponen y votan lo siguiente (también en «Elijo yo»); quitar lo de otro, el líder o los
+  co-líderes.
+- **Siguiente** («Cuando acabe»): la regla En orden / Por votos / Elijo yo es `queueMode` `autoplay` / `vote` /
+  `leader` (`once` sigue valiendo para las apps viejas, pero la web no lo ofrece). En series, sin nada propuesto,
+  sigue solo el siguiente episodio. Bajo el vídeo, la tarjeta «Cuando acabe · Por votos» con «Ver la lista».
+- **«Esperando a todos»** (`playback.lobby`): cada título empieza parado y arranca solo cuando todos los conectados
+  están listos (al crear, en cuanto entra el segundo), o cuando quien controla pulsa «Empezar para todos». Cada uno
+  manda en `partyStatus` `ready` y `progress` (0-100, lo cargado); sin ellos (una app vieja), cuenta como lista al
+  abrir el vídeo y no estar cargando. La web enseña quién está listo y a quién le falta, con su %.
+- **«X está escribiendo…»**: `partyTyping` y el evento `party.typing` (`memberId`, `name`). El cliente lo manda como
+  mucho cada `PARTY.typingIntervalMs` (2 s) y el servidor ignora, sin error, lo que llegue más deprisa; se enseña
+  `PARTY.typingShowMs` (4 s) y se quita al llegar un mensaje de esa persona.
+- **Fuera las reacciones**: ni bandeja ni emojis encima del vídeo; tampoco `partyReact`, `party.reaction`, su
+  límite ni la ruta en la lista blanca del Caddyfile del proxy. El chat es solo texto (los emojis, del teclado).
+- **Pantalla completa**: solo el vídeo, sin chat encima.
+- **Crear sala** (desde la ficha): tu nombre, «Quién entra» solo «Con enlace» (no hay amigos ni sala pública),
+  «Quién controla», «Votar lo siguiente» (interruptor: `vote` o `autoplay`) y «Crear sala e invitar». Sin chat de
+  voz: queda para otra fase y no se pinta nada de él (ni micros en las caras).
+- **Pruebas:** `modules/party/service.test.ts` y `routes.test.ts` (papeles, permisos del co-líder, lobby, typing y
+  que `react` ya no existe), `test/security.test.ts`, y en la web `Panels.test.tsx`, `Theater.test.tsx`,
+  `sync.test.ts` y `cine/Ficha.test.tsx`.
+- **Pendiente:** la sala en directo de fútbol (otra fase); las apps de iPhone y Android aún no enseñan co-líderes,
+  lobby ni «está escribiendo» (siguen funcionando con `leader` y sin `ready`/`progress`).

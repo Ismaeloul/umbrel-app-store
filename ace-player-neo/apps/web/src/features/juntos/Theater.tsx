@@ -1,24 +1,25 @@
-/* El reproductor de la sala (docs/ver-juntos.md §12): los controles van ENCIMA
-   del vídeo, como en Rave y en el reproductor de casa, y se esconden solos.
+/* El reproductor de la sala (docs/ver-juntos.md §12 y §13): los controles van
+   ENCIMA del vídeo, como en Rave y en el reproductor de casa, y se esconden
+   solos.
 
-   - Arriba, sobre un degradado: el título y quién manda («Controla Ana»).
-   - En el centro: el botón grande de reproducir o pausar (si puedes mandar),
-     «Esperando a Ana…» o el aviso del momento («Toca para empezar», un error).
-   - Abajo: la barra de tiempo del reproductor de casa (`VodTimeline`: arrastrar
-     con el dedo, tiempo flotante y salto al soltar), y la fila: reproducir,
-     ±10 s, el tiempo, reacciones, volumen, idioma, chat (en pantalla completa)
-     y pantalla completa.
+   - Arriba: «Sala de Ismael · 4» y «● Sincronizados» (o «Esperando a Ana…»,
+     «Reconectando…»).
+   - En el centro, para quien controla: −10 s, reproducir o pausar y +10 s; o
+     el aviso del momento («Toca para empezar», un error).
+   - Abajo: la barra de tiempo del reproductor de casa (`VodTimeline`: arrastrar,
+     tiempo flotante y salto al soltar; sin tirador para quien no controla), el
+     tiempo en mono y volumen, idioma y pantalla completa.
+   - Sin reacciones ni chat encima: en pantalla completa, solo el vídeo.
    - El tiempo y la barra son los de la SALA (su reloj), no los de este vídeo:
-     así todos ven el mismo minuto aunque este aparato vaya cargando o un
-     reproductor cuente desde otro sitio (lo que le pasó a un invitado).
+     así todos ven el mismo minuto aunque este aparato vaya cargando.
    - Se esconden a los 3 s sin tocar nada si está reproduciendo; vuelven al
      mover el ratón o tocar. En el móvil, un toque en el vídeo los enseña o
      esconde; en el ordenador, un clic reproduce o pausa y el doble clic pone
      la pantalla completa.
    - Teclado: espacio o K, reproducir y pausa; ← →, 10 s; F, pantalla
-     completa; M, silencio; C, el chat en pantalla completa. */
+     completa; M, silencio. */
 
-import { PARTY_REACTIONS, type PartyReactBody, type PartyRoom } from '@ace/shared';
+import type { PartyRoom } from '@ace/shared';
 import {
   useCallback,
   useEffect,
@@ -36,7 +37,7 @@ import { Button, IconButton } from '../../ui/Button.tsx';
 import { Icon } from '../../ui/Icon.tsx';
 import { MenuButton } from '../../ui/Menu.tsx';
 import { canControl, type PartyClient, type PartyState } from './client.ts';
-import { ReactionLayer, UpNext } from './Panels.tsx';
+import { UpNext } from './Panels.tsx';
 import type { PlayerView, RoomPlayer } from './player.ts';
 import { clock, isRunning, targetPosition } from './sync.ts';
 import { JUNTOS_TEXT } from './texts.ts';
@@ -52,9 +53,6 @@ export function Theater({
   video,
   fullscreen,
   onFullscreen,
-  chatOpen,
-  onChat,
-  unread,
 }: {
   player: RoomPlayer;
   client: PartyClient;
@@ -63,10 +61,6 @@ export function Theater({
   video: HTMLVideoElement | null;
   fullscreen: boolean;
   onFullscreen(): void;
-  chatOpen: boolean;
-  onChat(): void;
-  /** Mensajes nuevos sin ver mientras el chat está cerrado (pantalla completa). */
-  unread: number;
 }) {
   const view = useSyncExternalStore(player.subscribe, player.getView);
   const control = canControl(room, client.credential.id);
@@ -75,13 +69,14 @@ export function Theater({
   const duration = room.title.durationS ?? view.durationS ?? 0;
   /* La posición de la sala «ahora» (se repinta con cada tic del reproductor, cada 500 ms). */
   const position = targetPosition(playback, client.serverNow(), duration || null);
-  const leaderName = room.members.find((member) => member.leader)?.name ?? '';
+  const hostName = room.members.find((member) => member.id === room.hostId)?.name ?? '';
+  const online = room.members.filter((member) => member.online).length;
   const waitingNames = room.members
     .filter((member) => playback.waitingFor.includes(member.id))
     .map((member) => member.name);
+  const reconnecting = state.connection === 'reconnecting';
 
   const [visible, setVisible] = useState(true);
-  const [tray, setTray] = useState(false);
   const hideTimer = useRef<number | null>(null);
 
   const order = useCallback(
@@ -103,13 +98,13 @@ export function Theater({
     [order, position, duration],
   );
 
-  /* Enseñar los controles y programar que se escondan (solo si suena y nadie mira un menú). */
+  /* Enseñar los controles y programar que se escondan. */
   const wake = useCallback(() => {
     setVisible(true);
     if (hideTimer.current !== null) globalThis.clearTimeout(hideTimer.current);
     hideTimer.current = globalThis.setTimeout(() => setVisible(false), HIDE_AFTER_MS);
   }, []);
-  const keepVisible = !running || tray || view.phase !== 'ready';
+  const keepVisible = !running || view.phase !== 'ready';
   const shown = visible || keepVisible;
   useEffect(
     () => () => {
@@ -138,8 +133,6 @@ export function Theater({
         onFullscreen();
       } else if (key === 'm' && video) {
         video.muted = !video.muted;
-      } else if (key === 'c' && fullscreen) {
-        onChat();
       } else {
         return;
       }
@@ -147,7 +140,7 @@ export function Theater({
     };
     globalThis.addEventListener('keydown', onKey);
     return () => globalThis.removeEventListener('keydown', onKey);
-  }, [togglePlay, nudge, onFullscreen, onChat, fullscreen, video, wake]);
+  }, [togglePlay, nudge, onFullscreen, video, wake]);
 
   const onSurface = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
@@ -161,13 +154,6 @@ export function Theater({
     else wake();
   };
 
-  const react = (emoji: PartyReactBody['emoji']) => {
-    void client
-      .react(emoji)
-      .catch((error: unknown) => notify(describeFailure(error), { tone: 'err' }));
-    wake();
-  };
-
   const audioItems = room.audio.tracks.map((track) => ({
     id: String(track.index),
     label: track.label,
@@ -179,16 +165,27 @@ export function Theater({
         .catch((error: unknown) => notify(describeFailure(error), { tone: 'err' })),
   }));
 
+  let status: ReactNode = (
+    <>
+      <span className="juntos-chip__dot" aria-hidden="true" />
+      {JUNTOS_TEXT.synced}
+    </>
+  );
+  if (reconnecting) status = JUNTOS_TEXT.reconnecting;
+  else if (!running && waitingNames.length) {
+    status = JUNTOS_TEXT.waitingFor(waitingNames.join(', '));
+  }
+
   return (
     <div
       className="juntos-chrome"
       data-visible={shown ? 'true' : 'false'}
       data-phase={view.phase}
+      data-lobby={playback.lobby ? 'true' : 'false'}
       onPointerMove={(event) => {
         if (event.pointerType === 'mouse') wake();
       }}
     >
-      <ReactionLayer reactions={state.reactions} client={client} />
       <div
         className="juntos-chrome__surface"
         onPointerUp={onSurface}
@@ -199,24 +196,14 @@ export function Theater({
       />
 
       <div className="juntos-chrome__top">
-        <div className="juntos-chrome__heading">
-          <span className="juntos-chrome__title">{room.title.title}</span>
-          {room.title.subtitle ? (
-            <span className="juntos-chrome__sub">{room.title.subtitle}</span>
-          ) : null}
-        </div>
-        <div className="juntos-chrome__chips">
-          <span className="juntos-chip">
-            <Icon name="personas" size={16} />
-            {room.members.filter((member) => member.online).length}
-          </span>
-          {!control && leaderName ? (
-            <span className="juntos-chip">
-              <Icon name="corona" size={16} />
-              {JUNTOS_TEXT.leaderControls(leaderName)}
-            </span>
-          ) : null}
-        </div>
+        <span className="juntos-chip">
+          <Icon name="personas" size={16} />
+          {JUNTOS_TEXT.roomOf(hostName, online)}
+        </span>
+        {fullscreen ? <span className="juntos-chrome__title">{room.title.title}</span> : null}
+        <span className="juntos-chip" role="status">
+          {status}
+        </span>
       </div>
 
       <Center
@@ -226,29 +213,19 @@ export function Theater({
         control={control}
         running={running}
         waitingNames={waitingNames}
-        reconnecting={state.connection === 'reconnecting'}
+        reconnecting={reconnecting}
         onToggle={() => {
           togglePlay();
+          wake();
+        }}
+        onNudge={(delta) => {
+          nudge(delta);
           wake();
         }}
       />
       <UpNext room={room} client={client} selfId={client.credential.id} />
 
       <div className="juntos-chrome__bottom">
-        {tray ? (
-          <div className="juntos-tray" role="group" aria-label={JUNTOS_TEXT.react}>
-            {PARTY_REACTIONS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                className="juntos-tray__btn"
-                onClick={() => react(emoji)}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        ) : null}
         <div className={cx('juntos-chrome__bar', !control && 'juntos-chrome__bar--locked')}>
           <VodTimeline
             vod={{
@@ -261,47 +238,11 @@ export function Theater({
           />
         </div>
         <div className="juntos-chrome__row">
+          <span className="juntos-chrome__time">
+            {clock(position)}
+            <span className="juntos-chrome__dur"> / {clock(duration)}</span>
+          </span>
           <div className="juntos-chrome__group">
-            {control ? (
-              <>
-                <IconButton
-                  icon={playback.playing ? 'pause' : 'play'}
-                  label={playback.playing ? JUNTOS_TEXT.pause : JUNTOS_TEXT.play}
-                  variant="video"
-                  onClick={() => {
-                    togglePlay();
-                    wake();
-                  }}
-                />
-                <IconButton
-                  icon="back"
-                  label={JUNTOS_TEXT.back10}
-                  variant="video"
-                  className="juntos-chrome__nudge"
-                  onClick={() => nudge(-STEP_S)}
-                />
-                <IconButton
-                  icon="chev-r"
-                  label={JUNTOS_TEXT.forward10}
-                  variant="video"
-                  className="juntos-chrome__nudge"
-                  onClick={() => nudge(STEP_S)}
-                />
-              </>
-            ) : null}
-            <span className="juntos-chrome__time">
-              {clock(position)}
-              <span className="juntos-chrome__dur"> / {clock(duration)}</span>
-            </span>
-          </div>
-          <div className="juntos-chrome__group">
-            <IconButton
-              icon="emoji"
-              label={JUNTOS_TEXT.react}
-              variant="video"
-              aria-pressed={tray}
-              onClick={() => setTray((open) => !open)}
-            />
             {video ? <Volume video={video} /> : null}
             {audioItems.length > 1 ? (
               <MenuButton
@@ -310,20 +251,6 @@ export function Theater({
                 variant="video"
                 items={audioItems}
               />
-            ) : null}
-            {fullscreen ? (
-              <span className="juntos-chrome__badge-wrap">
-                <IconButton
-                  icon="chat"
-                  label={JUNTOS_TEXT.tabChat}
-                  variant="video"
-                  aria-pressed={chatOpen}
-                  onClick={onChat}
-                />
-                {unread > 0 && !chatOpen ? (
-                  <span className="juntos-chrome__badge">{unread > 9 ? '9+' : unread}</span>
-                ) : null}
-              </span>
             ) : null}
             <IconButton
               icon="full"
@@ -338,7 +265,7 @@ export function Theater({
   );
 }
 
-/** Lo del centro: el aviso del momento o el botón grande. */
+/** Lo del centro: el aviso del momento o −10 s, reproducir o pausar y +10 s. */
 function Center({
   view,
   room,
@@ -348,6 +275,7 @@ function Center({
   waitingNames,
   reconnecting,
   onToggle,
+  onNudge,
 }: {
   view: PlayerView;
   room: PartyRoom;
@@ -357,6 +285,7 @@ function Center({
   waitingNames: readonly string[];
   reconnecting: boolean;
   onToggle(): void;
+  onNudge(delta: number): void;
 }) {
   let body: ReactNode = null;
   if (view.phase === 'blocked') {
@@ -384,6 +313,9 @@ function Center({
         </Button>
       </div>
     );
+  } else if (room.playback.lobby) {
+    /* «Esperando a todos» lo cuenta la tarjeta de la sala (Lobby). */
+    body = null;
   } else if (view.phase === 'preparing' || view.phase === 'idle' || reconnecting) {
     body = (
       <div className="juntos-center__card" role="status">
@@ -406,14 +338,32 @@ function Center({
     body = <span className="juntos-spinner juntos-spinner--bare" aria-hidden="true" />;
   } else if (control) {
     body = (
-      <button
-        type="button"
-        className="juntos-center__big-btn juntos-center__big-btn--toggle"
-        aria-label={room.playback.playing ? JUNTOS_TEXT.pause : JUNTOS_TEXT.play}
-        onClick={onToggle}
-      >
-        <Icon name={room.playback.playing ? 'pause' : 'play'} size={32} />
-      </button>
+      <div className="juntos-center__controls">
+        <button
+          type="button"
+          className="juntos-center__nudge"
+          aria-label={JUNTOS_TEXT.back10}
+          onClick={() => onNudge(-STEP_S)}
+        >
+          <Icon name="atras-10" size={24} />
+        </button>
+        <button
+          type="button"
+          className="juntos-center__big-btn juntos-center__big-btn--toggle"
+          aria-label={room.playback.playing ? JUNTOS_TEXT.pause : JUNTOS_TEXT.play}
+          onClick={onToggle}
+        >
+          <Icon name={room.playback.playing ? 'pause' : 'play'} size={28} />
+        </button>
+        <button
+          type="button"
+          className="juntos-center__nudge"
+          aria-label={JUNTOS_TEXT.forward10}
+          onClick={() => onNudge(STEP_S)}
+        >
+          <Icon name="adelante-10" size={24} />
+        </button>
+      </div>
     );
   }
   return body ? <div className="juntos-center">{body}</div> : null;

@@ -6,6 +6,7 @@ import {
   clock,
   correction,
   isRunning,
+  lobbyReport,
   offsetSample,
   targetPosition,
 } from './sync.ts';
@@ -16,6 +17,7 @@ const playback = (over: Partial<PartyPlayback> = {}): PartyPlayback => ({
   at: 1_000_000,
   rev: 2,
   waitingFor: [],
+  lobby: false,
   ...over,
 });
 
@@ -57,5 +59,20 @@ describe('«Ver juntos»: sincronización (docs/ver-juntos.md §6)', () => {
     expect(clock(0)).toBe('0:00');
     expect(clock(2_000)).toBe('33:20');
     expect(clock(3_909)).toBe('1:05:09');
+  });
+
+  it('«Esperando a todos»: el % es lo cargado por delante sobre lobbyBufferS; sin vídeo, 0', () => {
+    expect(lobbyReport(false, 0, 4, 100, null)).toEqual({ ready: false, progress: 0 });
+    expect(lobbyReport(true, 10, 2, 10 + PARTY.lobbyBufferS / 2, null)).toEqual({
+      ready: false,
+      progress: 50,
+    });
+    expect(lobbyReport(true, 10, 2, 10 + PARTY.lobbyBufferS, null)).toEqual({
+      ready: true,
+      progress: 100,
+    });
+    /* El navegador dice que tiene de sobra (HAVE_ENOUGH_DATA), o queda menos que el colchón. */
+    expect(lobbyReport(true, 0, 4, 1, null).ready).toBe(true);
+    expect(lobbyReport(true, 99, 2, 100, 100).ready).toBe(true);
   });
 });

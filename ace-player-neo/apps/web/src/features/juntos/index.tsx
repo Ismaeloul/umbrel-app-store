@@ -18,6 +18,7 @@ import { stop as stopHousePlayer } from '../../player/api.ts';
 import { Button } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
+import { useLayoutKind } from '../../lib/media.ts';
 import { forgetCredential, lastRoom, savedCredential } from './client.ts';
 import { Join } from './Join.tsx';
 import { Room } from './Room.tsx';
@@ -73,6 +74,8 @@ function JuntosRoom({ code }: { code: string }) {
     setCredential(null);
   }, [code]);
   const toCine = useCallback(() => navigate({ vista: 'cine', id: null }), [navigate]);
+  /* Desde 768, la barra de la sección; en el móvil la sala sigue como estaba. */
+  const desk = useLayoutKind() !== 'mobile';
   const exitAction = (
     <Button variant="primary" onClick={toCine}>
       {JUNTOS_TEXT.backToCine}
@@ -86,6 +89,8 @@ function JuntosRoom({ code }: { code: string }) {
       onForbidden={forbidden}
       onLeft={toCine}
       onEnter={stopHousePlayer}
+      onPropose={toCine}
+      header={desk ? <ViewHeader title={JUNTOS_TEXT.open} /> : undefined}
       exitAction={exitAction}
     />
   );

@@ -1,4 +1,4 @@
-/* El reproductor de la sala (docs/ver-juntos.md §12). Lo que le pasó a un
+/* El reproductor de la sala (docs/ver-juntos.md §12 y §13). Lo que le pasó a un
    invitado: iba sincronizado, pero su contador decía 0:10 con la sala en el
    minuto 10. El tiempo y la barra salen del reloj de la sala, no del vídeo. */
 
@@ -42,7 +42,7 @@ function setup(selfId: string, over: Partial<PartyRoom> = {}) {
   const room: PartyRoom = {
     ...(joined.room as PartyRoom),
     title: { ...(joined.room as PartyRoom).title, durationS: 6516 },
-    playback: { playing: true, positionS: 600, at: NOW, rev: 3, waitingFor: [] },
+    playback: { playing: true, positionS: 600, at: NOW, rev: 3, waitingFor: [], lobby: false },
     ...over,
   };
   const state = { ...client.getState(), room } as PartyState;
@@ -55,9 +55,6 @@ function setup(selfId: string, over: Partial<PartyRoom> = {}) {
       video={null}
       fullscreen={false}
       onFullscreen={() => undefined}
-      chatOpen={false}
-      onChat={() => undefined}
-      unread={0}
     />,
   );
 }
@@ -69,19 +66,33 @@ describe('«Ver juntos»: el reproductor', () => {
     expect(screen.queryByText('0:10')).toBeNull();
   });
 
-  it('quien no manda no tiene reproducir ni ±10 s y ve quién controla', () => {
+  it('el invitado no tiene pausa ni ±10 s, y su barra va sin tirador', () => {
     setup(ANA);
     expect(screen.queryByRole('button', { name: 'Pausar' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Avanzar 10 segundos' })).toBeNull();
-    expect(screen.getByText('Controla Isma (líder)')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Reaccionar' })).toBeTruthy();
+    expect(document.querySelector('.juntos-chrome__bar--locked')).toBeTruthy();
+    expect(screen.getByText('Sala de Isma · 2')).toBeTruthy();
+    expect(screen.getByText('Sincronizados')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Pantalla completa' })).toBeTruthy();
+    /* Sin reacciones ni chat encima del vídeo. */
+    expect(screen.queryByRole('button', { name: 'Reaccionar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chat' })).toBeNull();
+  });
+
+  it('un co-líder controla como el líder', () => {
+    setup(ANA, {
+      members: (joined.room as PartyRoom).members.map((m) =>
+        m.id === ANA ? { ...m, role: 'coleader' as const } : m,
+      ),
+    });
+    expect(screen.getByRole('button', { name: 'Avanzar 10 segundos' })).toBeTruthy();
+    expect(document.querySelector('.juntos-chrome__bar--locked')).toBeNull();
   });
 
   it('el líder tiene los controles', () => {
     setup(HOST);
     expect(screen.getAllByRole('button', { name: 'Pausar' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Avanzar 10 segundos' })).toBeTruthy();
-    expect(screen.queryByText(/^Controla /)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Retroceder 10 segundos' })).toBeTruthy();
   });
 });
