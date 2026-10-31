@@ -104,4 +104,6 @@ export const STORAGE_KEYS = {
   autoSwitch: 'aceneo-cambio-fuente',
   /** Ajustes → «Avisos»: minutos antes de empezar (`0`, `5`, `10`, `15`, `30`) o `no`. */
   alertLead: 'aceneo-avisos',
+  /** Ajustes → «Idioma preferido» de los partidos: `es` (por defecto), `en` u `original`. */
+  playbackLang: 'aceneo-idioma',
 } as const;

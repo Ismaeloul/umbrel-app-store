@@ -316,16 +316,7 @@ describe('política única de cambio de fuente (P16)', () => {
     });
   });
 
-  it('«Cambiar de fuente sola» apagado en escritorio: no salta, dice cuántas quedan', async () => {
-    const wide = vi.spyOn(window, 'matchMedia').mockImplementation(
-      (query: string) =>
-        ({
-          matches: query === '(min-width: 768px)',
-          media: query,
-          addEventListener: () => {},
-          removeEventListener: () => {},
-        }) as unknown as MediaQueryList,
-    );
+  it('«Cambiar de fuente sola» apagado: no salta, dice cuántas quedan y tampoco arranca otra después', async () => {
     setAutoSwitch(false);
     try {
       await playingAuto();
@@ -339,9 +330,15 @@ describe('política única de cambio de fuente (P16)', () => {
       expect(reply.next).toBe(false);
       expect(reply.message).toMatch(/^Esta señal no responde\. Tienes 2 fuentes más/);
       expect(getPlayer().channel?.hash).toBe(hash(1));
+      // La sesión pasa a manual: el siguiente cambio del comprobador, con nada
+      // en pantalla, no arranca la otra verificada por la puerta de atrás.
+      expect(getSession()).toMatchObject({ autoVerified: false, manualChosen: true });
+      playerStore.set((state) => ({ ...state, channel: null, phase: 'idle', started: false }));
+      scan = scanJob(['failed', 'working', 'working']);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(getPlayer().channel).toBeNull();
     } finally {
       setAutoSwitch(true);
-      wide.mockRestore();
     }
   });
 
@@ -701,6 +698,27 @@ describe('inventario: salto de entrada, rebúsqueda con IA y fallos de las accio
     scan = scanJob(['failed', 'failed', 'working']);
     await vi.advanceTimersByTimeAsync(1500);
     expect(getPlayer().channel?.hash).toBe(hash(2));
+  });
+
+  it('salto de entrada con «Cambiar de fuente sola» apagado: no salta', async () => {
+    setAutoSwitch(false);
+    try {
+      install({
+        'GET /api/v1/football/resolve': () =>
+          json(resolution(3, { status: 'choices', candidate: null })),
+      });
+      enterMatch(testMatch());
+      await flush();
+      await chooseCandidate({ id: hash(1), title: 'x', ih: false, source: 'm3u' }, false);
+      scan = scanJob(['failed', 'working', 'checking']);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(getPlayer().channel?.hash).toBe(hash(1));
+      expect(toasts()).not.toContain(
+        'La señal inicial no responde; probamos automáticamente la fuente 2',
+      );
+    } finally {
+      setAutoSwitch(true);
+    }
   });
 
   it('salto de entrada: si la elegida ya suena, no salta aunque el comprobador la dé por caída', async () => {

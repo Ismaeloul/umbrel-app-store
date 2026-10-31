@@ -552,6 +552,26 @@
 .ajx-row--danger .ajx-row__t b {
   color: var(--fail-ink);
 }
+/* Armada (primer toque hecho): fondo de error suave hasta el segundo toque o los 5 s. */
+.ajx-row--armed {
+  background: color-mix(in srgb, var(--fail) 10%, var(--surface));
+}
+/* «Más ajustes»: el chevron mira abajo al desplegar (solo transform). */
+.ajx-more .ajx-row__chev {
+  transition: transform var(--dur-rapido) var(--ease-rapido);
+}
+.ajx-more[aria-expanded='true'] .ajx-row__chev {
+  transform: rotate(90deg);
+}
+.ajx-more__list {
+  display: grid;
+}
+.ajx-more__list[hidden] {
+  display: none;
+}
+.ajx-more__list > .ajx-row {
+  border-top: 1px solid var(--line);
+}
 .ajx-row:disabled {
   cursor: default;
 }

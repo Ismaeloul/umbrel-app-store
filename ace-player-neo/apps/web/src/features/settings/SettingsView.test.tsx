@@ -15,7 +15,7 @@ import { localPrefs, resetLocalPrefsForTests } from './local-prefs.ts';
 import { externalSection } from './external.tsx';
 import { whoLine } from './Overview.tsx';
 import { WEB_VERSION } from '../../lib/version.ts';
-import type { BootstrapResponse, Device, DevicesListResponse } from '@ace/shared';
+import type { Device, DevicesListResponse } from '@ace/shared';
 import { json } from '../../test/fetch.ts';
 
 // Estas pruebas son de las secciones PROPIAS de Ajustes: se simula que ninguna
@@ -294,7 +294,18 @@ describe('Ajustes en escritorio', () => {
       '?vista=ajustes/acerca',
     );
     const groups = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
-    expect(groups).toEqual(['Agenda', 'Reproducción', 'Apariencia', 'Fuentes y sistema', 'Más']);
+    expect(groups).toEqual(['Agenda', 'Reproducción', 'Apariencia', 'Fuentes y sistema']);
+    // Lo que no sale en la maqueta, plegado bajo «Más ajustes».
+    const more = screen.getByRole('button', { name: /Más ajustes/ });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('link', { name: /Copia de seguridad/ })).not.toBeInTheDocument();
+    fireEvent.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('link', { name: /Copia de seguridad/ })).toHaveAttribute(
+      'href',
+      '?vista=ajustes/copia',
+    );
+    fireEvent.click(more);
     const agenda = screen.getByRole('region', { name: 'Agenda' });
     expect(within(agenda).getByRole('button', { name: /Mis equipos/ })).toBeInTheDocument();
     await waitFor(() =>
@@ -315,7 +326,7 @@ describe('Ajustes en escritorio', () => {
       '?vista=ajustes/iptv',
     );
     expect(await within(system).findByText('Sin lista: conecta la tuya')).toBeInTheDocument();
-    // Al pie, como la maqueta: la versión de esta web y la del servidor.
+    // Al pie, como la maqueta: la versión de esta web y la del servidor (sin «· demo»).
     expect(await screen.findByText(`Ace Neo ${WEB_VERSION} · servidor 0.7.0`)).toBeInTheDocument();
   });
 
@@ -356,32 +367,17 @@ describe('Ajustes en escritorio', () => {
     );
   });
 
-  it('«Idioma preferido» es el de Películas y series (servidor) y abre su hoja', async () => {
-    const boot = fixture<BootstrapResponse>('bootstrap');
-    setup(
-      '?vista=ajustes',
-      {
-        'GET /api/v1/bootstrap': { ...boot, features: { ...boot.features, vod: true } },
-        'GET /api/v1/vod/languages': {
-          chosen: true,
-          langs: ['castellano'],
-          unknown: false,
-          updatedAt: null,
-        },
-        'GET /api/v1/vod': fixture('vodHome'),
-      },
-      { kind: 'desktop' },
-    );
-    const row = await screen.findByRole('button', { name: /Idioma preferido/ });
-    await waitFor(() => expect(row).toHaveTextContent('Castellano'));
-    fireEvent.click(row);
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-  });
-
-  it('sin Películas y series no hay «Idioma preferido»', async () => {
+  it('«Idioma preferido» es el de los partidos: Español por defecto, sin subtítulo, en el navegador', async () => {
     desk();
-    await screen.findByText(/^Ace Neo /);
-    expect(screen.queryByRole('button', { name: /Idioma preferido/ })).not.toBeInTheDocument();
+    const play = screen.getByRole('region', { name: 'Reproducción' });
+    const row = within(play).getByRole('button', { name: /Idioma preferido/ });
+    expect(row).toHaveTextContent(/^Idioma preferidoEspañol$/);
+    fireEvent.click(row);
+    const menu = await screen.findByRole('menu', { name: 'Idioma preferido de los partidos' });
+    fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Inglés' }));
+    expect(localPrefs.get().lang).toBe('en');
+    expect(localStorage.getItem('aceneo-idioma')).toBe('en');
+    await waitFor(() => expect(row).toHaveTextContent('Inglés'));
   });
 
   it('la tarjeta del Umbrel: por dónde llega la página, sin inventarse Tailscale', () => {
@@ -409,7 +405,7 @@ describe('Ajustes en escritorio', () => {
     });
   });
 
-  it('«Desemparejar» revoca el aparato que elijas en su menú', async () => {
+  it('«Desemparejar»: elegir el aparato arma la fila y el segundo toque lo revoca', async () => {
     vi.mocked(externalSection).mockImplementation(((id: string) =>
       id === 'dispositivos' ? {} : null) as never);
     try {
@@ -435,6 +431,13 @@ describe('Ajustes en escritorio', () => {
       fireEvent.click(within(system).getByRole('button', { name: 'Desemparejar' }));
       const menu = await screen.findByRole('menu', { name: 'Desemparejar un aparato' });
       fireEvent.click(within(menu).getByRole('menuitem', { name: iphone.name }));
+      // Elegirlo no revoca: arma la fila (regla 31).
+      const armed = await within(system).findByRole('button', {
+        name: new RegExp(`¿Desemparejar «${iphone.name}»`),
+      });
+      expect(armed).toHaveTextContent('Pulsa otra vez para confirmar');
+      expect(net.calls.some((c) => c.method === 'DELETE')).toBe(false);
+      fireEvent.click(armed);
       await waitFor(() => expect(net.calls.some((c) => c.method === 'DELETE')).toBe(true));
       await waitFor(() => expect(toastStore.get().at(-1)?.text).toMatch(/ya no puede entrar/));
       await waitFor(() =>

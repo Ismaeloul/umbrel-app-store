@@ -26,7 +26,10 @@
          el comprobador la da por fallida antes de que se vea, se prueba una
          vez la primera viva (index.html:3645-3658).
        · «Cambiar de fuente sola» apagado (Ajustes de escritorio): nada de
-         lo de arriba ni el puente IPTV salta solo; todo es como en manual.
+         lo de arriba salta solo, ni el salto de entrada ni el puente IPTV
+         (que en manual sí salta): al caerse una fuente se dice cuántas
+         quedan y la sesión pasa a manual, para que tampoco arranque otra
+         sola en el siguiente cambio del comprobador.
    - Detener (o el traspaso a otro dispositivo) apaga todo el automatismo y
      el seguimiento del comprobador (regla 17); la lista se queda para poder
      elegir otra a mano.
@@ -380,12 +383,14 @@ function drives(state: Pick<SessionState, 'kind' | 'iptvBridge'>): boolean {
 
 /**
  * «Cambiar de fuente sola» (Ajustes de escritorio, rediseño sección 7): si
- * está apagado, cuando una fuente se cae no se salta sola a otra (ni la
- * variante IPTV, ni el puente, ni P16): se dice cuántas quedan, como en
- * manual. El interruptor solo está desde 768 px; en el móvil, siempre sí.
+ * está apagado, nunca se salta solo a otra fuente (ni la variante IPTV, ni
+ * el puente, ni P16, ni el salto de entrada): se dice cuántas quedan. El
+ * interruptor solo se ve desde 768 px, pero lo guardado vale en este
+ * navegador a cualquier ancho (estrechar la ventana no lo vuelve a
+ * encender); quien no lo ha tocado lo tiene encendido.
  */
 function autoSwitchAllowed(): boolean {
-  return !matches(MEDIA.tablet) || localPrefs.get().autoSwitch;
+  return localPrefs.get().autoSwitch;
 }
 
 function libraryNow(): Partial<LibraryView> | undefined {
@@ -1498,7 +1503,7 @@ function markAutoTried(hash: string): void {
 
 function maybeInitialSwitch(): void {
   const state = sessionStore.get();
-  if (!state.switchArmed || state.stopped) return;
+  if (!state.switchArmed || state.stopped || !autoSwitchAllowed()) return;
   const next = pickInitialSwitch(state.entries, state.activeHash, screenNow(), clock());
   if (!next) return;
   patch({ switchArmed: false });
@@ -1693,6 +1698,11 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
   const finished = scanFinished(state.scan);
   const hasIptv = entries.some(isIptv);
   const autoSwitch = autoSwitchAllowed();
+  // Apagado: desde aquí todo es manual. Sin esto, con nada en pantalla, el
+  // siguiente cambio del comprobador (tryAutoStart) o un comprobador mudo
+  // arrancarían otra fuente sola por la puerta de atrás.
+  if (!autoSwitch && !state.stopped && drives(state))
+    patch({ autoVerified: false, switchArmed: false, manualChosen: true });
 
   // §17: si cae una variante IPTV (la 1080p), la siguiente variante IPTV antes
   // que AceStream (4K, 720p, SD…). No cuenta en el tope del puente: cada una se

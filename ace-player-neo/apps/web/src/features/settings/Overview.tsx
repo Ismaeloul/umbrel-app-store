@@ -10,25 +10,28 @@
    - Agenda: Mis equipos (abre la hoja de gustos), Marcador oculto (la regla
      de agenda/score-reveal.ts) y Avisos (match-alerts.tsx).
    - Reproducción: Cambiar de fuente sola (sources/session.ts) e Idioma
-     preferido (el de Películas y series, LangRow.tsx). Las descargas son
-     solo del móvil: en la web no salen.
+     preferido de los partidos (local-prefs.ts; el de Películas y series es
+     otro y se elige en su cabecera). Las descargas son solo del móvil: en
+     la web no salen.
    - Apariencia: tema Claro / Oscuro / Auto (app/theme.ts).
    - Fuentes y sistema: Listas IPTV, Motor AceStream y Dispositivos, que
      abren su sección de siempre, y Desemparejar: un menú con los aparatos
-     emparejados que revoca el que elijas (la web no está emparejada: no
-     tiene nada suyo que desemparejar).
-   - Más: el resto de secciones, que no tienen sitio en la maqueta.
+     emparejados; el elegido se revoca con un segundo toque en la fila
+     (regla 31), como en Dispositivos. La web no está emparejada: no tiene
+     nada suyo que desemparejar.
+   - Más ajustes: el resto de secciones, que no tienen sitio en la maqueta,
+     plegadas bajo una fila para que la portada mida lo que la maqueta.
    - Al pie, las versiones de la web y del servidor.
 
    Las filas que abren algo son enlaces de verdad (`?vista=ajustes/<sección>`):
    cada sección tiene su dirección, se puede abrir en otra pestaña y «atrás»
    vuelve aquí (con el foco en la fila de la que se salió, returnRow).
-   «Cambiar de fuente sola» y «Avisos» aún no los guarda el servidor: van en
-   este navegador (local-prefs.ts). */
+   «Cambiar de fuente sola», «Avisos» e «Idioma preferido» aún no los guarda
+   el servidor: van en este navegador (local-prefs.ts). */
 
 import type { Device } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useId, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import {
   api,
   describeFailure,
@@ -52,21 +55,25 @@ import { originKind, PLATFORM_ICON, splitDevices } from '../devices/model.ts';
 import {
   ALERT_LEADS,
   alertLeadLabel,
+  PLAYBACK_LANGS,
   setAlertLead,
   setAutoSwitch,
+  setPlaybackLang,
   useLocalPrefs,
 } from './local-prefs.ts';
+import { useSecondTap } from './second-tap.ts';
 
 /* La hoja de gustos (de la vista de preferencias): solo se descarga al pulsar. */
 const PreferencesSheet = lazy(() => import('../preferences/PreferencesSheet.tsx'));
-/* «Idioma preferido» (el de Películas y series): su trozo, con la hoja de cine. */
-const LangRow = lazy(() => import('./LangRow.tsx'));
 
 /* La fila de la que se salió a una sección: al volver, el foco va a ella
    (SettingsView). Dos filas pueden abrir la misma sección (Dispositivos y
-   Desemparejar, la tarjeta del Umbrel), así que se apunta la fila y no la
-   sección. */
+   la tarjeta del Umbrel), así que se apunta la fila y no la sección. */
 let returnRow: string | null = null;
+
+/* «Más ajustes» desplegado: dura lo que la pestaña, para que al volver de
+   una de sus secciones la fila siga ahí y reciba el foco. */
+let moreOpen = false;
 
 /** Id de la fila de la que se salió (y se olvida). */
 export function takeReturnRow(): string | null {
@@ -395,16 +402,23 @@ const ENGINE_HINT: Record<string, string> = {
   error: 'Sin respuesta',
 };
 
+/** Segundo toque para desemparejar: 5 s, como Revocar en Dispositivos. */
+const CONFIRM_UNPAIR_MS = 5000;
+
 /**
  * «Desemparejar» (rojo, sin subtítulo, como la maqueta): un menú con los
- * aparatos emparejados; elegir uno lo revoca al momento (abrir el menú y
- * elegir son ya los dos toques de la regla 31). Revocar corta su SSE, sus
- * visores y sus URLs de vídeo (lo hace el backend).
+ * aparatos emparejados. Elegir uno solo arma la fila («¿Desemparejar…?
+ * Pulsa otra vez») durante 5 s; el segundo toque lo revoca (regla 31, sin
+ * confirm() nativo). Si pasa el tiempo, la fila vuelve sola. Revocar corta
+ * su SSE, sus visores y sus URLs de vídeo (lo hace el backend).
  */
 function UnpairRow({ active }: { active: readonly Device[] | undefined }) {
   const client = useQueryClient();
   const button = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const confirm = useSecondTap(CONFIRM_UNPAIR_MS);
+  const [picked, setPicked] = useState<Device | null>(null);
+  const armed = picked && confirm.armed === picked.id ? picked : null;
   const revoke = async (device: Device) => {
     try {
       await api('deviceRevoke', { params: { id: device.id } });
@@ -426,17 +440,23 @@ function UnpairRow({ active }: { active: readonly Device[] | undefined }) {
         ref={button}
         type="button"
         id="ajustes-fila-desemparejar"
-        className="ajx-row ajx-row--link ajx-row--danger"
-        aria-haspopup="menu"
-        aria-expanded={open}
+        className={cx('ajx-row ajx-row--link ajx-row--danger', armed && 'ajx-row--armed')}
+        aria-haspopup={armed ? undefined : 'menu'}
+        aria-expanded={armed ? undefined : open}
         onClick={() => {
+          if (armed) {
+            haptic('warning');
+            confirm.tap(armed.id, () => void revoke(armed));
+            return;
+          }
           haptic('selection');
           setOpen((o) => !o);
         }}
       >
         <RowIcon name="x" />
-        <span className="ajx-row__t">
-          <b>Desemparejar</b>
+        <span className="ajx-row__t" aria-live="polite">
+          <b>{armed ? `¿Desemparejar «${armed.name}»?` : 'Desemparejar'}</b>
+          {armed ? <small>Pulsa otra vez para confirmar</small> : null}
         </span>
       </button>
       <Menu
@@ -469,8 +489,10 @@ function UnpairRow({ active }: { active: readonly Device[] | undefined }) {
                   icon: PLATFORM_ICON[device.platform],
                   danger: true,
                   onSelect: () => {
-                    haptic('warning');
-                    void revoke(device);
+                    haptic('selection');
+                    setPicked(device);
+                    // Primer toque: arma la fila; el segundo, en ella, revoca.
+                    if (confirm.armed !== device.id) confirm.tap(device.id, () => {});
                   },
                 }))
         }
@@ -535,6 +557,44 @@ function SystemGroup({ go, hasDevices }: Pick<OverviewProps, 'go' | 'hasDevices'
   );
 }
 
+/* ---- Más ajustes ---------------------------------------------------------- */
+
+/** Las secciones que no salen en la maqueta, plegadas bajo una fila. */
+function MoreGroup({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(moreOpen);
+  const list = useId();
+  return (
+    <section className="ajx-group" aria-label="Más ajustes">
+      <div className="ajx-card">
+        <button
+          type="button"
+          id="ajustes-fila-mas"
+          className="ajx-row ajx-row--link ajx-more"
+          aria-expanded={open}
+          aria-controls={list}
+          onClick={() => {
+            haptic('selection');
+            moreOpen = !open;
+            setOpen(!open);
+          }}
+        >
+          <RowIcon name="ajustes" />
+          <span className="ajx-row__t">
+            <b>Más ajustes</b>
+            <small>Copia, registro, salud, modo de reproducción…</small>
+          </span>
+          <span className="ajx-row__v">
+            <Chevron />
+          </span>
+        </button>
+        <div id={list} className="ajx-more__list" hidden={!open}>
+          {children}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ---- Portada -------------------------------------------------------------- */
 
 const LEAD_OPTIONS = ALERT_LEADS.map((value) => ({ value, label: alertLeadLabel(value) }));
@@ -544,7 +604,6 @@ export function Overview({ go, hasDevices, hasHealth }: OverviewProps) {
   const hiding = useScoreHiding();
   const prefs = useLocalPrefs();
   const boot = useBootstrap();
-  const mode = useAppMode();
   return (
     <div className="ajx">
       <WhoCard go={go} hasDevices={hasDevices} />
@@ -577,11 +636,14 @@ export function Overview({ go, hasDevices, hasHealth }: OverviewProps) {
           checked={prefs.autoSwitch}
           onChange={setAutoSwitch}
         />
-        {boot.data?.features.vod ? (
-          <Suspense fallback={null}>
-            <LangRow />
-          </Suspense>
-        ) : null}
+        <ChoiceRow
+          icon="idioma"
+          title="Idioma preferido"
+          label="Idioma preferido de los partidos"
+          value={prefs.lang}
+          options={PLAYBACK_LANGS}
+          onSelect={setPlaybackLang}
+        />
       </Group>
 
       <Group id="apariencia" title="Apariencia">
@@ -609,7 +671,7 @@ export function Overview({ go, hasDevices, hasHealth }: OverviewProps) {
 
       <SystemGroup go={go} hasDevices={hasDevices} />
 
-      <Group id="mas" title="Más">
+      <MoreGroup>
         <LinkRow
           go={go}
           to="listas"
@@ -663,12 +725,11 @@ export function Overview({ go, hasDevices, hasHealth }: OverviewProps) {
           hint="Descargar los logs si algo falla"
         />
         <LinkRow go={go} to="acerca" icon="info" title="Acerca de" hint="Versión y atajos" />
-      </Group>
+      </MoreGroup>
 
       {/* Como la maqueta: «Ace Neo <esta web> · servidor <el del Umbrel>». */}
       <p className="ajx-ver">
         Ace Neo {WEB_VERSION} · servidor {boot.data?.version ?? '…'}
-        {mode === 'demo' ? ' · demo' : ''}
       </p>
     </div>
   );
