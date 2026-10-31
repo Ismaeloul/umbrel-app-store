@@ -954,3 +954,20 @@
     animation: none;
   }
 }
+/* Táctil desde 768: «Ver marcador» (32), su «Ocultar» (32) y «Ver juntos» (40),
+   con la zona invisible hasta 44. Con ratón no cambia nada. */
+@media (min-width: 768px) and (pointer: coarse) {
+  .mc-schip:is(button)::before,
+  .mc-schip__hide.icon-btn::before,
+  .mc-dhead__together.btn::before {
+    content: '';
+    position: absolute;
+    inset: -6px 0;
+  }
+  .mc-schip__hide.icon-btn::before {
+    inset: -6px;
+  }
+  .mc-dhead__together.btn::before {
+    inset: -2px 0;
+  }
+}

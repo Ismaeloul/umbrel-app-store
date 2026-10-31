@@ -135,9 +135,38 @@ async function passCineLanguages(page) {
   await page.mouse.move(0, 0);
 }
 
-/** Abre la primera película de la portada y le da a reproducir: la sala (`sala/<id>`). */
+/** La portada de Películas y series, lista: en el móvil sus filas (`.cine-row`);
+    desde 768 (rediseño de escritorio) el escaparate (`.cine-esc`), con su
+    destacado (`.cine-esc-hero`) si hay algo a medias. */
+const CINE_HOME = '.cine-row .cine-card, .cine-esc-hero, .cine-esc .cine-card';
+
+/** ¿Pelis y series de escritorio? Desde 768 de ancho (también el móvil en
+    horizontal): la barra lleva las pestañas Inicio / Películas / Series / Mi lista. */
+async function isCineDesk(page) {
+  return (await page.locator('.cine-deskhead').count()) > 0;
+}
+
+/** Escritorio: abre la rejilla de una pestaña (Películas o Series). */
+async function openCineTab(page, name) {
+  await page.locator('.cine-tabs').getByRole('button', { name, exact: true }).click();
+  await page.waitForSelector('.cine-grid .cine-card', { timeout: 10_000 });
+}
+
+/** Abre la ficha del primer título: en el móvil, el primero de la portada; en
+    escritorio (el escaparate mezcla películas y series), el primero de la
+    rejilla de su pestaña. */
+async function openFirstTitle(page, kind) {
+  if (await isCineDesk(page)) {
+    await openCineTab(page, kind === 'series' ? 'Series' : 'Películas');
+    await page.locator('.cine-grid .cine-card').first().click();
+  } else {
+    await page.locator('.cine-row .cine-card').first().click();
+  }
+}
+
+/** Abre la primera película y le da a reproducir: la sala (`sala/<id>`). */
 async function openSala(page) {
-  await page.locator('.cine-row .cine-card').first().click();
+  await openFirstTitle(page, 'movie');
   await page.waitForSelector('.cine-hero__title', { timeout: 10_000 });
   await page
     .getByRole('button', { name: /^(Reproducir|Seguir viendo|Continuar|Ver T)/ })
@@ -230,7 +259,11 @@ const VIEWS = [
     routes: DEMO ? null : NO_FAVORITES,
     prepare: async (page) => {
       if (DEMO) {
-        await page.locator('.lib input').first().fill('zzzz');
+        // Escritorio (`.lib--desk`): el filtro va plegado en una lupa (el
+        // <input> mide 0 hasta tener el foco); se enfoca y crece.
+        const filter = page.locator('.lib input').first();
+        if ((await page.locator('.lib--desk').count()) > 0) await filter.focus();
+        await filter.fill('zzzz');
         await page.waitForTimeout(500);
       }
       await page.waitForSelector('.empty', { timeout: 10_000 }).catch(() => {});
@@ -249,10 +282,17 @@ const VIEWS = [
     search: '?vista=biblioteca',
     ready: '.lib',
     prepare: async (page) => {
-      await page
-        .getByRole('button', { name: /^Pegar un Content ID/ })
-        .first()
-        .click();
+      if ((await page.locator('.lib--desk').count()) > 0) {
+        // Escritorio: «Pegar un hash o enlace» va en «Más opciones» de Canales.
+        await page.getByRole('button', { name: 'Más opciones de Canales' }).click();
+        await page.getByRole('menuitem', { name: /^Pegar un hash/ }).click();
+      } else {
+        // Móvil: el botón de la cabecera.
+        await page
+          .getByRole('button', { name: /^Pegar un Content ID/ })
+          .first()
+          .click();
+      }
       await dialogOpen(page);
       await page
         .locator('[role="dialog"] input')
@@ -311,22 +351,33 @@ const VIEWS = [
   },
   { name: 'sistema', search: '?vista=sistema&flag=sistema' },
   // Películas y series (docs/vod.md §12.11): sin interruptor desde la 0.9.0; en vivo solo
-  // salen si el servidor ya tiene películas y series. La portada va en filas
-  // (`.cine-row`); la rejilla (`.cine-grid`) es otra pantalla.
+  // salen si el servidor ya tiene películas y series. En el móvil la portada va en
+  // filas (`.cine-row`); desde 768, el escaparate (`.cine-esc`) y las pestañas
+  // Inicio / Películas / Series / Mi lista. La rejilla (`.cine-grid`) es otra pantalla.
   // La primera vez, el selector de idiomas (antes de pasarlo).
   { name: 'cine-idiomas', search: '?vista=cine', ready: '.cine-welcome' },
-  { name: 'cine', search: '?vista=cine', cine: true, ready: '.cine-row .cine-card' },
+  { name: 'cine', search: '?vista=cine', cine: true, ready: CINE_HOME },
   {
     name: 'cine-categoria',
     cine: true,
     search: '?vista=cine',
-    ready: '.cine-row .cine-card',
+    ready: CINE_HOME,
     prepare: async (page) => {
-      // «Ver todo» de la fila de la categoría: abre su rejilla.
-      await page
-        .getByRole('button', { name: /^Ver todo: 4K/ })
-        .first()
-        .click();
+      if (await isCineDesk(page)) {
+        // Escritorio: la pestaña Películas y, en su rejilla, el chip de la categoría.
+        await openCineTab(page, 'Películas');
+        await page
+          .locator('.cine-browse__cats')
+          .getByRole('button', { name: /^4K/ })
+          .first()
+          .click();
+      } else {
+        // Móvil: «Ver todo» de la fila de la categoría: abre su rejilla.
+        await page
+          .getByRole('button', { name: /^Ver todo: 4K/ })
+          .first()
+          .click();
+      }
       await page.waitForSelector('.cine-grid .cine-card', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
@@ -341,9 +392,9 @@ const VIEWS = [
     name: 'cine-pelicula',
     cine: true,
     search: '?vista=cine',
-    ready: '.cine-row .cine-card',
+    ready: CINE_HOME,
     prepare: async (page) => {
-      await page.locator('.cine-row .cine-card').first().click();
+      await openFirstTitle(page, 'movie');
       await page.waitForSelector('.cine-hero__title', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
@@ -352,9 +403,9 @@ const VIEWS = [
     name: 'cine-serie',
     cine: true,
     search: '?vista=cine&cine=series',
-    ready: '.cine-row .cine-card',
+    ready: CINE_HOME,
     prepare: async (page) => {
-      await page.locator('.cine-row .cine-card').first().click();
+      await openFirstTitle(page, 'series');
       await page.waitForSelector('.cine-episodes', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
@@ -364,7 +415,7 @@ const VIEWS = [
     name: 'sala',
     search: '?vista=cine',
     cine: true,
-    ready: '.cine-row .cine-card',
+    ready: CINE_HOME,
     player: true,
     prepare: openSala,
   },

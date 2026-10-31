@@ -649,3 +649,9 @@
     color: var(--text);
   }
 }
+/* Táctil desde 768: el Tema (Claro / Oscuro / Auto) mide 30; su zona, 44. */
+@media (min-width: 768px) and (pointer: coarse) {
+  .ajx-segm .seg__item::after {
+    inset: -7px 0;
+  }
+}

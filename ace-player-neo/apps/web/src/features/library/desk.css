@@ -92,8 +92,10 @@
   padding: 0;
   cursor: pointer;
 }
-/* Plegado, el <input> transparente tapa la lupa: el clic lo enfoca y lo abre. */
-.ctab-filter:not(:focus-within, .ctab-filter--open) .field__input {
+/* Plegado, el <input> transparente tapa la lupa: el clic lo enfoca y lo abre.
+   Con .ctab-bar delante para ganar al «width: 0» de más abajo: con él, el
+   campo medía 0 px, el clic caía en la lupa y el filtro no se abría. */
+.ctab-bar .ctab-filter:not(:focus-within, .ctab-filter--open) .field__input {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -276,11 +278,16 @@
   font-size: 13.5px;
   font-weight: 560;
 }
+/* El programa: hasta dos líneas y «…» en la segunda. A 1024 la columna de
+   «Ahora» se queda en unos 110 px y «Goles de la jornada» no cabía en una. */
 .ctab-row__text {
+  display: -webkit-box;
   min-width: 0;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 /* Lo que lleva emitido: 3 px; gris, o rojo si es en directo. */
 .ctab-row__bar {
@@ -386,5 +393,41 @@
   .ctab-row__fav,
   .ctab-row__more {
     transition: none;
+  }
+}
+/* ---- Táctil desde 768 (tableta, móvil en horizontal): zonas de 44 ----------
+   El dibujo es el de la maqueta (pestañas y chips de 30, iconos de 36); solo
+   crece la zona invisible. Con ratón (pointer: fine) no cambia nada. */
+@media (min-width: 768px) and (pointer: coarse) {
+  .ctab-tabs .seg__item::after {
+    inset: -7px 0;
+  }
+  /* El filtro abierto: 44 de alto para el dedo. */
+  .ctab-bar .ctab-filter .field__input {
+    height: 44px;
+  }
+  /* La fila de chips se desliza (overflow): sitio arriba y abajo para que no
+     recorte la zona de los chips, sin mover la barra. */
+  .ctab-chips {
+    margin-block: -7px;
+    padding-block: 7px;
+  }
+  .ctab-more::before,
+  .ctab-row__acts .icon-btn::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+  }
+  /* El nombre del canal: su ::after ya cubre la fila; el enlace mismo, alto
+     como el contenido de la fila (64 − 2 × 10) y de 44 de ancho aunque el
+     nombre sea corto («DAZN»), para contar como objetivo. */
+  .ctab-row__link {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .ctab-row__link .ctab-row__title {
+    min-width: 0;
   }
 }

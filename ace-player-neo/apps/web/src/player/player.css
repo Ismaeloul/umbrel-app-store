@@ -1091,8 +1091,11 @@
   .player-mini__cap .live-dot {
     --live: #ff3b30;
   }
-  /* Detener: sobre la imagen, arriba a la derecha, solo al pasar o con el foco. */
+  /* Detener: sobre la imagen, arriba a la derecha, solo al pasar o con el foco.
+     Sin fila de rejilla: con la fila 2 de los demás botones, Chrome lo
+     colocaba en la fila del texto (encima de la pausa) en vez de en la imagen. */
   .player-mini__stop.icon-btn {
+    grid-row: auto;
     position: absolute;
     z-index: 2;
     top: 4px;
@@ -1113,6 +1116,28 @@
   }
   .player-mini__where:not([data-shared='true']) {
     display: none;
+  }
+}
+/* En táctil (tableta en horizontal o portátil con pantalla táctil) no hay
+   «pasar el ratón»: Detener se ve siempre y cada objetivo llega a 44 px. Con
+   ratón la tarjeta queda igual. Detener sigue pintándose a 30 px: lo que
+   crece es la zona de toque (::before; el ::after es el velo de .press). */
+@media (min-width: 1024px) and (pointer: coarse) {
+  .player-mini__stop.icon-btn {
+    opacity: 1;
+  }
+  .player-mini__stop.icon-btn::before {
+    content: '';
+    position: absolute;
+    inset: -7px;
+    border-radius: 50%;
+  }
+  .player-mini__info {
+    min-height: var(--tap);
+  }
+  .player-mini > .icon-btn:not(.player-mini__stop) {
+    width: var(--tap);
+    min-width: var(--tap);
   }
 }
 /* Fuera del menú lateral (móvil y tableta) la tarjeta no lleva cápsula, línea
@@ -1220,9 +1245,12 @@ body:has(.app[data-immersive='true']) .menu {
   text-overflow: ellipsis;
   text-shadow: 0 1px 8px rgb(0 0 0 / 0.6);
 }
+/* La píldora se acorta con «…» antes de pisar los botones de la derecha
+   (en la ficha a 1024 el canal largo llegaba a PiP). */
 .player-1b__source {
   display: inline-flex;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   align-items: center;
   gap: 8px;
   min-height: 36px;
@@ -1233,7 +1261,13 @@ body:has(.app[data-immersive='true']) .menu {
   font-weight: 650;
   white-space: nowrap;
 }
+.player-1b__source-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .player-1b__dot {
+  flex: none;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -1420,5 +1454,40 @@ body:has(.app[data-immersive='true']) .menu {
   }
   .app[data-column='true'] .player:not([data-immersive='true']) .player-demo {
     display: none;
+  }
+  /* Arriba, con el vídeo a unos 410 px, «En directo», la píldora de la fuente
+     y los tres botones van más juntos para que un nombre corto quepa entero
+     (si no cabe, la píldora se acorta con «…»). */
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__lead {
+    gap: 8px;
+  }
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__cap {
+    padding: 0 8px;
+  }
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__source {
+    gap: 6px;
+    padding: 0 10px;
+  }
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__top .player-cap {
+    gap: 6px;
+  }
+}
+/* En táctil, los controles del 1B (botones de 38, píldoras de 34 y 30)
+   llegan a 44 con una zona invisible (::before; el ::after es el velo de
+   .press). El dibujo no cambia. */
+@media (min-width: 768px) and (pointer: coarse) {
+  .player-1b__top .player-cap .icon-btn::before,
+  .player-1b__source::before,
+  .player-1b__live::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: var(--r-pill);
+  }
+  .player-1b__source::before {
+    inset: -5px 0;
+  }
+  .player-1b__live::before {
+    inset: -7px 0;
   }
 }

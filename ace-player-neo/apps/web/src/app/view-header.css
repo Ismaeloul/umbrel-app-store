@@ -167,3 +167,15 @@
     color: var(--text-2);
   }
 }
+/* Tableta y móvil en horizontal (táctil desde 768): el buscador mide 40, su
+   zona invisible llega a 44 sin mover la barra. Con ratón no cambia nada. */
+@media (min-width: 768px) and (pointer: coarse) {
+  .view-head__search {
+    position: relative;
+  }
+  .view-head__search::before {
+    content: '';
+    position: absolute;
+    inset: -2px 0;
+  }
+}
