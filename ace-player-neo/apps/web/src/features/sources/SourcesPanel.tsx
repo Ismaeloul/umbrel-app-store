@@ -272,6 +272,13 @@ export function SourcesPanel({
 
   // Modo canal sin hermanas: sin selector (§7.1), solo el inspector.
   const hideHeader = !inMatch && !rows.length;
+  /* Filas de escritorio (la ficha del partido): la lista va directa bajo las
+     pestañas, como en la maqueta; el título queda para los lectores de
+     pantalla, «Rebuscar» va junto a las pestañas y el progreso solo se ve
+     mientras se comprueba. */
+  const bare = variant === 'line' && inMatch;
+  const scanning =
+    state.phase === 'resolving' || (state.scan !== null && state.scan.status !== 'complete');
 
   return (
     <section
@@ -280,7 +287,11 @@ export function SourcesPanel({
       aria-labelledby={hideHeader ? undefined : headingId}
       aria-label={hideHeader ? 'Acciones del canal' : undefined}
     >
-      {hideHeader ? null : (
+      {hideHeader ? null : bare ? (
+        <h2 id={headingId} className="sr-only">
+          Fuentes
+        </h2>
+      ) : (
         <header className="src__head">
           <h2 id={headingId} className="src__title">
             {inMatch ? 'Fuentes' : 'Otras fuentes'}
@@ -304,7 +315,7 @@ export function SourcesPanel({
           </div>
         </header>
       )}
-      {showProgress ? (
+      {showProgress && (!bare || scanning) ? (
         <div className="src__progress" aria-live="polite">
           <ProgressBar
             value={state.phase === 'resolving' ? 0 : scanProgress(state.scan, state.entries)}

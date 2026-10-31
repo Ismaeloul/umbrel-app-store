@@ -242,6 +242,60 @@ export function Scoreboard({ match, score: rawScore, now }: ScoreboardProps) {
 }
 
 /**
+ * El marcador de la ficha de escritorio (rediseño, pantalla 1): una píldora
+ * junto al titular, tapada por defecto («Marcador», con el ojo). Un toque la
+ * destapa (mismo estado que la cápsula: score-reveal.ts) y el ojo tachado la
+ * vuelve a tapar. Sin marcador que pintar (antes de empezar o sin datos de
+ * ESPN), no se pinta.
+ */
+export function ScoreChip({ match, score: rawScore, now }: ScoreboardProps) {
+  const done = matchStatus(match, now, rawScore)?.phase === 'done';
+  const score = paintableScore(rawScore);
+  const hidden = useScoreHidden(match.id, true) && score !== null;
+  const [justRevealed, setJustRevealed] = useState(false);
+  const scorer = useGoalMoment(score, hidden);
+  useEffect(() => {
+    if (scorer) haptic('success');
+  }, [scorer]);
+  if (!score) return null;
+  if (hidden)
+    return (
+      <button
+        type="button"
+        className="mc-schip press"
+        aria-label="Ver marcador"
+        title="Tu emisión va por detrás del directo"
+        onClick={() => {
+          haptic('light');
+          setJustRevealed(true);
+          revealScore(match.id);
+        }}
+      >
+        <Icon name="eye" size={16} />
+        Marcador
+      </button>
+    );
+  return (
+    <span className={cx('mc-schip', 'is-open', scorer && 'is-goal')} aria-live="polite">
+      <span className="mc-schip__digits" aria-label={scoreLabel(match, score, done)}>
+        <FlipDigit value={score.home} spin={justRevealed} />
+        <span aria-hidden="true">–</span>
+        <FlipDigit value={score.away} spin={justRevealed} />
+      </span>
+      <IconButton
+        icon="eye-off"
+        label="Tapar el marcador (tu emisión va por detrás)"
+        className="mc-schip__hide"
+        onClick={() => {
+          setJustRevealed(false);
+          resetScoreReveal();
+        }}
+      />
+    </span>
+  );
+}
+
+/**
  * Marcador grande de la pestaña «Partido»: los dos escudos con su nombre y,
  * en medio, las cifras (destapado), las barras de censura (tapado, con
  * «Destapar») o la hora; debajo, el minuto o cuánto falta.

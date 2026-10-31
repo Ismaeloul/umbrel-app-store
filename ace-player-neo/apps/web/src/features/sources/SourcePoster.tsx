@@ -308,7 +308,7 @@ export function SourceLine({ row, inMatch, index, onArrow }: SourcePosterProps) 
           {row.onScreen ? (
             <Equalizer playing />
           ) : (
-            <SignalRing state={ring} word={row.signal.word} size={14} />
+            <SignalRing state={ring} word={row.signal.word} size={14} hideWord />
           )}
         </span>
       </button>

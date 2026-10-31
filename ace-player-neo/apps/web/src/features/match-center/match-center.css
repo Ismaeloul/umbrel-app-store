@@ -801,8 +801,139 @@
   }
 }
 
-/* Escritorio: el marcador (tapado) junto al titular, no sobre el vídeo. */
-.mc-scap-desk {
+/* ---- Ficha de escritorio (rediseño, pantalla 1) ---------------------------------
+   Desde 768: el partido en una línea con la competición y el estado debajo y,
+   a la derecha, «Marcador» (tapado) y «Ver juntos»; las pestañas, prietas y a
+   la izquierda, y la lista de fuentes directa debajo. Junto a la agenda (la
+   columna, desde 1024) el vídeo va a sangre y esto, con 20 px a los lados. */
+.mc-dhead {
   display: flex;
-  margin-top: calc(-1 * var(--s-2));
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.mc-dhead__titles {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+.mc-dhead__title {
+  overflow: hidden;
+  font-size: 1.1875rem;
+  font-weight: var(--wght-head);
+  font-stretch: 110%;
+  letter-spacing: -0.01em;
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mc-dhead__sub {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: var(--fs-12);
+  font-weight: var(--wght-medium);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mc-dhead__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+}
+.mc-schip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  font-weight: var(--wght-strong);
+  white-space: nowrap;
+}
+.mc-schip.is-open {
+  padding-right: 0;
+  color: var(--text);
+}
+.mc-schip__digits {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: var(--fs-15);
+  font-weight: 700;
+}
+.mc-schip__hide.icon-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  color: var(--text-3);
+}
+.mc-schip.is-goal {
+  animation: mc-rebote var(--dur-heroe) var(--ease-out);
+}
+.mc-dhead__together.btn {
+  min-height: 40px;
+  padding-inline: 16px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+.mc-dhead__together[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* Ficha estrecha (la columna a 1024): los botones bajan bajo el titular. */
+@container mc (max-width: 539px) {
+  .mc-dhead {
+    flex-wrap: wrap;
+  }
+  .mc-dhead__titles {
+    flex-basis: 100%;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .mc-schip:is(button):hover {
+    color: var(--text);
+  }
+}
+@media (min-width: 768px) {
+  .mc-tabs--view {
+    gap: 10px;
+  }
+  .mc-tabs--view .mc-tabs__bar {
+    justify-content: space-between;
+  }
+  .mc-tabs--view .mc-tabs__list {
+    flex: none;
+    display: inline-grid;
+    width: auto;
+  }
+  .mc-tabs--view .mc-tabs__list .seg__item {
+    min-height: 36px;
+    padding-inline: 16px;
+  }
+  .mc-tabs--view .mc-tabs__panel {
+    min-height: 0;
+  }
+  .mc-tabs__research.icon-btn {
+    color: var(--text-3);
+  }
+}
+@media (min-width: 1024px) {
+  .app[data-column='true'] .mc {
+    max-width: none;
+    gap: 14px;
+    padding: 14px 20px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mc-schip.is-goal {
+    animation: none;
+  }
 }

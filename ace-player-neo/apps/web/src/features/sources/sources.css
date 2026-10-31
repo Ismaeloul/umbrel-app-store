@@ -827,9 +827,9 @@
   padding: 8px 14px;
   text-align: left;
 }
+/* La que suena: solo el velo amarillo y su número en amarillo (maqueta 01). */
 .src-line.is-onscreen {
   background: var(--accent-wash);
-  box-shadow: inset 3px 0 0 var(--accent-edge);
 }
 .src-line:focus-visible {
   outline-offset: -3px;
