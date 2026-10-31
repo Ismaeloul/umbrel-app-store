@@ -22,6 +22,9 @@
         "name": "Isma",
         "host": true,
         "leader": true,
+        "role": "leader",
+        "ready": true,
+        "progress": 100,
         "online": true,
         "buffering": false
       }
@@ -31,9 +34,10 @@
       "positionS": 0,
       "at": 1790188200000,
       "rev": 1,
-      "waitingFor": []
+      "waitingFor": [],
+      "lobby": true
     },
-    "settings": { "control": "leader", "queueMode": "autoplay" },
+    "settings": { "control": "leader", "coleaders": true, "queueMode": "vote" },
     "queue": [],
     "upNext": null
   },

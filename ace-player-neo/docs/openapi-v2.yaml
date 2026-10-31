@@ -16028,6 +16028,23 @@ paths:
                   minLength: 1
                   maxLength: 24
                   pattern: ^[^\p{Cc}\p{Cf}]+$
+                control:
+                  default: leader
+                  type: string
+                  enum:
+                    - leader
+                    - everyone
+                coleaders:
+                  default: true
+                  type: boolean
+                queueMode:
+                  default: autoplay
+                  type: string
+                  enum:
+                    - autoplay
+                    - vote
+                    - leader
+                    - once
               required:
                 - titleId
                 - kind
@@ -16160,6 +16177,23 @@ paths:
                               type: boolean
                             leader:
                               type: boolean
+                            role:
+                              default: guest
+                              type: string
+                              enum:
+                                - leader
+                                - coleader
+                                - guest
+                            ready:
+                              default: false
+                              type: boolean
+                            progress:
+                              default: null
+                              anyOf:
+                                - type: integer
+                                  minimum: 0
+                                  maximum: 100
+                                - type: "null"
                             online:
                               type: boolean
                             buffering:
@@ -16169,6 +16203,9 @@ paths:
                             - name
                             - host
                             - leader
+                            - role
+                            - ready
+                            - progress
                             - online
                             - buffering
                           additionalProperties: false
@@ -16195,12 +16232,16 @@ paths:
                             items:
                               type: string
                               pattern: ^m_[A-Za-z0-9_-]{8,32}$
+                          lobby:
+                            default: false
+                            type: boolean
                         required:
                           - playing
                           - positionS
                           - at
                           - rev
                           - waitingFor
+                          - lobby
                         additionalProperties: false
                       settings:
                         type: object
@@ -16210,6 +16251,9 @@ paths:
                             enum:
                               - leader
                               - everyone
+                          coleaders:
+                            default: true
+                            type: boolean
                           queueMode:
                             type: string
                             enum:
@@ -16219,6 +16263,7 @@ paths:
                               - once
                         required:
                           - control
+                          - coleaders
                           - queueMode
                         additionalProperties: false
                       queue:
@@ -16743,6 +16788,23 @@ paths:
                               type: boolean
                             leader:
                               type: boolean
+                            role:
+                              default: guest
+                              type: string
+                              enum:
+                                - leader
+                                - coleader
+                                - guest
+                            ready:
+                              default: false
+                              type: boolean
+                            progress:
+                              default: null
+                              anyOf:
+                                - type: integer
+                                  minimum: 0
+                                  maximum: 100
+                                - type: "null"
                             online:
                               type: boolean
                             buffering:
@@ -16752,6 +16814,9 @@ paths:
                             - name
                             - host
                             - leader
+                            - role
+                            - ready
+                            - progress
                             - online
                             - buffering
                           additionalProperties: false
@@ -16778,12 +16843,16 @@ paths:
                             items:
                               type: string
                               pattern: ^m_[A-Za-z0-9_-]{8,32}$
+                          lobby:
+                            default: false
+                            type: boolean
                         required:
                           - playing
                           - positionS
                           - at
                           - rev
                           - waitingFor
+                          - lobby
                         additionalProperties: false
                       settings:
                         type: object
@@ -16793,6 +16862,9 @@ paths:
                             enum:
                               - leader
                               - everyone
+                          coleaders:
+                            default: true
+                            type: boolean
                           queueMode:
                             type: string
                             enum:
@@ -16802,6 +16874,7 @@ paths:
                               - once
                         required:
                           - control
+                          - coleaders
                           - queueMode
                         additionalProperties: false
                       queue:
@@ -17055,7 +17128,7 @@ paths:
       tags:
         - party
       summary: "Tiempo real de la sala por SSE: estado, personas y chat"
-      description: Empieza con `party.snapshot` y luego manda `party.playback`, `party.room`, `party.chat` y `party.closed`. Con la conexión abierta la persona cuenta como presente.
+      description: Empieza con `party.snapshot` y luego manda `party.playback`, `party.room`, `party.chat`, `party.typing` y `party.closed`. Con la conexión abierta la persona cuenta como presente.
       parameters:
         - name: code
           in: path
@@ -17798,6 +17871,12 @@ paths:
                   maximum: 86400
                 buffering:
                   type: boolean
+                ready:
+                  type: boolean
+                progress:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
               required:
                 - token
                 - positionS
@@ -17978,12 +18057,13 @@ paths:
         - code: internal_error
           status: 500
           message: Algo ha fallado en el servidor. Queda anotado en el registro.
-  /api/v1/party/{code}/react:
+  /api/v1/party/{code}/typing:
     post:
-      operationId: partyReact
+      operationId: partyTyping
       tags:
         - party
-      summary: Lanzar una reacción que sube por encima del vídeo de todos
+      summary: Avisar de que se está escribiendo en el chat («Ana está escribiendo…»)
+      description: "Ligero y sin error por frecuencia: el servidor reenvía como mucho uno cada `PARTY.typingIntervalMs` por persona (`party.typing`) y descarta los demás."
       parameters:
         - name: code
           in: path
@@ -18001,20 +18081,8 @@ paths:
                 token:
                   type: string
                   pattern: ^m_[A-Za-z0-9_-]{8,32}\.[A-Za-z0-9_-]{20,64}$
-                emoji:
-                  type: string
-                  enum:
-                    - 😂
-                    - ❤️
-                    - 😮
-                    - 😢
-                    - 👏
-                    - 🔥
-                    - 😱
-                    - 👍
               required:
                 - token
-                - emoji
               additionalProperties: false
       responses:
         "200":
@@ -18040,7 +18108,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
-      x-native-path: /native/api/v1/party/{code}/react
+      x-native-path: /native/api/v1/party/{code}/typing
       x-side-effects: true
       x-legacy-twin: null
       x-errors:
@@ -18050,9 +18118,6 @@ paths:
         - code: party_forbidden
           status: 403
           message: Ya no estás en esta sala. Vuelve a entrar con el enlace.
-        - code: rate_limited
-          status: 429
-          message: Demasiadas peticiones seguidas. Espera un momento.
         - code: validation_error
           status: 400
           message: Falta algún dato o no tiene el formato esperado.
@@ -18088,7 +18153,7 @@ paths:
       operationId: partySettings
       tags:
         - party
-      summary: "Ajustes de la sala: quién controla y qué pasa al acabar (solo el líder)"
+      summary: "Ajustes de la sala: quién controla (el líder) y qué pasa al acabar (el líder y los co-líderes)"
       parameters:
         - name: code
           in: path
@@ -18111,6 +18176,8 @@ paths:
                   enum:
                     - leader
                     - everyone
+                coleaders:
+                  type: boolean
                 queueMode:
                   type: string
                   enum:
@@ -18193,7 +18260,7 @@ paths:
       operationId: partyMember
       tags:
         - party
-      summary: Echar a alguien o darle el liderazgo (solo el líder)
+      summary: Echar a alguien, darle el liderazgo o hacerle co-líder (solo el líder)
       parameters:
         - name: code
           in: path
@@ -18219,6 +18286,8 @@ paths:
                   enum:
                     - kick
                     - lead
+                    - coleader
+                    - guest
               required:
                 - token
                 - memberId

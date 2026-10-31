@@ -19,7 +19,6 @@ import type {
   PartyMemberBody,
   PartyPreview,
   PartyQueueBody,
-  PartyReactBody,
   PartySettingsBody,
   PartyStatusBody,
   PartyStatusResponse,
@@ -70,8 +69,9 @@ export interface PartyService extends Lifecycle {
   control(code: string, body: PartyControlBody): PartyStatusResponse;
   status(code: string, body: PartyStatusBody): Promise<PartyStatusResponse>;
   chat(code: string, body: PartyChatBody): void;
-  /** Reacciones, líder, ajustes y lista (docs/ver-juntos.md §11). */
-  react(code: string, body: PartyReactBody): void;
+  /** «Está escribiendo» (§13): se reenvía a la sala, como mucho uno cada `typingIntervalMs`. */
+  typing(code: string, token: string): void;
+  /** Líder, co-líderes, ajustes y lista (docs/ver-juntos.md §11 y §13). */
   settings(code: string, body: PartySettingsBody): void;
   member(code: string, body: PartyMemberBody): void;
   queue(code: string, body: PartyQueueBody): void;

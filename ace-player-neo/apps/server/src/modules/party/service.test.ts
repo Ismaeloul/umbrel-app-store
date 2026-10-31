@@ -10,7 +10,8 @@
      aprende título, duración y pistas;
    - un traspaso o un fallo de la sesión deja la sala en pausa e
      «interrumpida» (menos el del cambio de idioma);
-   - cerrar (solo el anfitrión), salir y la sala vacía que caduca. */
+   - cerrar (solo el anfitrión), salir y la sala vacía que caduca;
+   - co-líderes, «Esperando a todos» y «está escribiendo» (§13). */
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -47,6 +48,9 @@ const BODY: PartyCreateBody = {
   subtitle: null,
   audio: null,
   name: 'Isma',
+  control: 'leader',
+  coleaders: true,
+  queueMode: 'autoplay',
 };
 
 interface Call {
@@ -135,13 +139,22 @@ describe('«Ver juntos»: salas', () => {
         name: 'Isma',
         host: true,
         leader: true,
+        role: 'leader',
+        ready: false,
+        progress: null,
         online: true,
         buffering: false,
       },
     ]);
     expect(host.room.hostId).toBe(host.member.id);
     expect(host.room.leaderId).toBe(host.member.id);
-    expect(host.room.settings).toEqual({ control: 'leader', queueMode: 'autoplay' });
+    expect(host.room.settings).toEqual({
+      control: 'leader',
+      coleaders: true,
+      queueMode: 'autoplay',
+    });
+    /* Empieza en «Esperando a todos» (§13), parada en el principio. */
+    expect(host.room.playback).toMatchObject({ playing: false, positionS: 0, lobby: true });
     expect(host.room.queue).toEqual([]);
     expect(host.room.upNext).toBeNull();
     expect(host.room.code).toMatch(/^[A-Za-z0-9_-]{16}$/);
@@ -193,8 +206,10 @@ describe('«Ver juntos»: salas', () => {
     ]);
     expect(states.map((s) => s.playback.rev)).toEqual([2, 3, 4]);
     expect(states.every((s) => s.by === host.member.id)).toBe(true);
+    /* El primer «reproducir» es «Empezar para todos»: acaba la espera. */
+    expect(states.map((s) => s.playback.lobby)).toEqual([false, false, false]);
     expect(sse.of('party.chat').map((c) => c.message.text)).toEqual([
-      'Isma ha dado a reproducir.',
+      'Isma ha empezado para todos.',
       'Isma ha pausado.',
       'Isma ha saltado a 33:20.',
     ]);
@@ -490,7 +505,7 @@ function handoff(viewerIds: string[], hash: string) {
   };
 }
 
-describe('«Ver juntos»: líder, lista y reacciones (§11)', () => {
+describe('«Ver juntos»: líder, co-líderes y lista (§11 y §13)', () => {
   const OTRA = '0123456789abcdef0123456789abcdef01234567';
   const EPI2 = 'aaaabbbbccccddddeeeeffff0000111122223333';
 
@@ -557,22 +572,158 @@ describe('«Ver juntos»: líder, lista y reacciones (§11)', () => {
     expect(sse.of('party.room').at(-1)?.leaderId).toBe(host.member.id);
   });
 
-  it('reacciones: llegan a todos y tienen tope', () => {
+  it('co-líder: controla como el líder (si la sala lo deja) pero no echa ni pasa la corona', () => {
     const { party, host, ana, room } = room2();
+    const bea = party.join(room, 'Bea');
     const sse = listen(party, room, host.member.token);
-    party.react(room, { token: ana.member.token, emoji: '😂' });
-    expect(sse.of('party.reaction')).toEqual([
-      { memberId: ana.member.id, name: 'Ana', emoji: '😂' },
-    ]);
-    for (let i = 1; i < PARTY.reactionsPerWindow; i += 1) {
-      party.react(room, { token: ana.member.token, emoji: '🔥' });
-    }
+    const play = (token: string) => party.control(room, { token, action: 'play', positionS: 0 });
+    const roles = () =>
+      Object.fromEntries(
+        (sse.of('party.room').at(-1)?.members ?? []).map((m) => [m.name, [m.role, m.leader]]),
+      );
+    /* Solo el líder hace co-líder a alguien. */
     expect(
-      code(catchError(() => party.react(room, { token: ana.member.token, emoji: '🔥' }))),
-    ).toBe('rate_limited');
+      code(
+        catchError(() =>
+          party.member(room, {
+            token: bea.member.token,
+            memberId: ana.member.id,
+            action: 'coleader',
+          }),
+        ),
+      ),
+    ).toBe('party_leader_only');
+    party.member(room, { token: host.member.token, memberId: ana.member.id, action: 'coleader' });
+    expect(roles()).toEqual({
+      Isma: ['leader', true],
+      Ana: ['coleader', false],
+      Bea: ['guest', false],
+    });
+    expect(sse.of('party.chat').at(-1)?.message.text).toBe('Isma ha hecho co-líder a Ana.');
+    /* Controla el vídeo y la regla de lo siguiente; la invitada, no. */
+    expect(() => play(ana.member.token)).not.toThrow();
+    expect(code(catchError(() => play(bea.member.token)))).toBe('party_leader_only');
+    party.settings(room, { token: ana.member.token, queueMode: 'vote' });
+    /* Pero no cambia quién controla, no echa y no pasa ni quita la corona. */
+    expect(
+      code(catchError(() => party.settings(room, { token: ana.member.token, coleaders: false }))),
+    ).toBe('party_leader_only');
+    for (const [memberId, action] of [
+      [bea.member.id, 'kick'],
+      [bea.member.id, 'lead'],
+      [ana.member.id, 'lead'],
+      [bea.member.id, 'coleader'],
+    ] as const) {
+      expect(
+        code(catchError(() => party.member(room, { token: ana.member.token, memberId, action }))),
+      ).toBe('party_leader_only');
+    }
+    /* «Solo yo»: los co-líderes dejan de controlar. */
+    party.settings(room, { token: host.member.token, coleaders: false });
+    expect(sse.of('party.chat').at(-1)?.message.text).toBe(
+      'Isma se ha quedado solo con el control.',
+    );
+    expect(code(catchError(() => play(ana.member.token)))).toBe('party_leader_only');
+    party.settings(room, { token: host.member.token, coleaders: true });
+    /* Quitar el escudo. */
+    party.member(room, { token: host.member.token, memberId: ana.member.id, action: 'guest' });
+    expect(roles().Ana).toEqual(['guest', false]);
+    expect(code(catchError(() => play(ana.member.token)))).toBe('party_leader_only');
+    /* Quien pasa la corona se queda de co-líder; la nueva líder deja de ser co-líder. */
+    party.member(room, { token: host.member.token, memberId: bea.member.id, action: 'coleader' });
+    party.member(room, { token: host.member.token, memberId: bea.member.id, action: 'lead' });
+    expect(roles()).toEqual({
+      Isma: ['coleader', false],
+      Ana: ['guest', false],
+      Bea: ['leader', true],
+    });
   });
 
-  it('lista: cualquiera añade y vota; quitar, quien lo añadió o el líder; en «elige el líder», solo él añade', () => {
+  it('«Esperando a todos»: arranca sola con todos listos (con dos o más) o con «Empezar para todos»', async () => {
+    const { party, host, ana, room } = room2();
+    const sse = listen(party, room, host.member.token);
+    listen(party, room, ana.member.token);
+    const status = (token: string, ready: boolean, progress: number) =>
+      party.status(room, { token, positionS: 0, buffering: !ready, ready, progress });
+    await status(host.member.token, true, 100);
+    await status(ana.member.token, false, 63);
+    const lobby = sse.of('party.room').at(-1)?.members;
+    expect(lobby?.map((m) => [m.name, m.ready, m.progress])).toEqual([
+      ['Isma', true, 100],
+      ['Ana', false, 63],
+    ]);
+    expect(sse.of('party.playback')).toEqual([]);
+    await status(ana.member.token, true, 100);
+    const started = sse.of('party.playback').at(-1);
+    expect(started).toMatchObject({ action: 'play', by: null });
+    expect(started?.playback).toMatchObject({ playing: true, lobby: false, positionS: 0 });
+    expect(sse.of('party.chat').at(-1)?.message.text).toBe('Ya estáis todos listos: empieza.');
+
+    /* Sola en la sala recién creada no arranca: espera a que entre alguien o a que le dé ella. */
+    const solo = setup();
+    const own = solo.party.create(BODY);
+    const soloSse = listen(solo.party, own.room.code, own.member.token);
+    await solo.party.status(own.room.code, {
+      token: own.member.token,
+      positionS: 0,
+      buffering: false,
+      ready: true,
+      progress: 100,
+    });
+    solo.clock.advance(5_000);
+    expect(soloSse.of('party.playback')).toEqual([]);
+    /* Una invitada no puede empezar; quien controla, sí. */
+    const eva = solo.party.join(own.room.code, 'Eva');
+    expect(
+      code(
+        catchError(() =>
+          solo.party.control(own.room.code, {
+            token: eva.member.token,
+            action: 'play',
+            positionS: 0,
+          }),
+        ),
+      ),
+    ).toBe('party_leader_only');
+    solo.party.control(own.room.code, { token: own.member.token, action: 'play', positionS: 0 });
+    expect(soloSse.of('party.playback').at(-1)?.playback).toMatchObject({
+      playing: true,
+      lobby: false,
+    });
+  });
+
+  it('una app vieja (sin `ready`) cuenta como lista en cuanto abre el vídeo y no carga', async () => {
+    const { party, host, ana, room } = room2();
+    const sse = listen(party, room, host.member.token);
+    listen(party, room, ana.member.token);
+    await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    await party.status(room, { token: host.member.token, positionS: 0, buffering: false });
+    expect(sse.of('party.playback')).toEqual([]);
+    await party.stream(room, streamQuery(ana.member.token, 'v-ana'), viewer('v-ana'), live());
+    await party.status(room, { token: ana.member.token, positionS: 0, buffering: false });
+    expect(sse.of('party.playback').at(-1)?.playback).toMatchObject({
+      playing: true,
+      lobby: false,
+    });
+  });
+
+  it('«está escribiendo»: llega a todos, como mucho uno cada typingIntervalMs por persona', () => {
+    const { party, clock, host, ana, room } = room2();
+    const sse = listen(party, room, host.member.token);
+    party.typing(room, ana.member.token);
+    party.typing(room, ana.member.token);
+    expect(sse.of('party.typing')).toEqual([{ memberId: ana.member.id, name: 'Ana' }]);
+    clock.advance(PARTY.typingIntervalMs);
+    party.typing(room, ana.member.token);
+    expect(sse.of('party.typing')).toHaveLength(2);
+    /* No va al chat ni se guarda. */
+    expect(sse.of('party.chat')).toEqual([]);
+    expect(code(catchError(() => party.typing(room, `${ana.member.id}.${'z'.repeat(32)}`)))).toBe(
+      'party_forbidden',
+    );
+  });
+
+  it('lista: cualquiera añade y vota; quitar, quien lo añadió o el líder; en «Elijo yo» también proponen', () => {
     const { party, host, ana, room } = room2();
     const sse = listen(party, room, host.member.token);
     party.queue(room, add(ana.member.token));
@@ -597,13 +748,17 @@ describe('«Ver juntos»: líder, lista y reacciones (§11)', () => {
         ?.queue.map((q) => q.id),
     ).toEqual([mine.id]);
     party.settings(room, { token: host.member.token, queueMode: 'leader' });
-    expect(code(catchError(() => party.queue(room, add(ana.member.token))))).toBe(
-      'party_leader_only',
-    );
+    party.queue(room, add(ana.member.token, OTRA, 'Propuesta'));
+    expect(
+      sse
+        .of('party.room')
+        .at(-1)
+        ?.queue.map((q) => q.title.title),
+    ).toEqual(['De Isma', 'Propuesta']);
   });
 
   it('al acabar: cuenta atrás y lo primero de la lista empieza para todos', async () => {
-    const { party, clock, host, room, released } = room2();
+    const { party, clock, host, ana, room, released } = room2();
     const sse = listen(party, room, host.member.token);
     await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
     party.queue(room, add(host.member.token));
@@ -618,11 +773,25 @@ describe('«Ver juntos»: líder, lista y reacciones (§11)', () => {
     clock.advance(PARTY.upNextMs);
     const last = sse.of('party.playback').at(-1);
     expect(last?.action).toBe('title');
-    expect(last?.playback).toMatchObject({ playing: true, positionS: 0 });
+    /* Otro título: otra vez «Esperando a todos» (§13), y empieza en cuanto todos lo tienen. */
+    expect(last?.playback).toMatchObject({ playing: false, positionS: 0, lobby: true });
     const now = sse.of('party.room').at(-1);
     expect(now?.title).toMatchObject({ id: OTRA, durationS: null });
     expect(now?.queue).toEqual([]);
     expect(released.at(-1)).toEqual({ sid: GRANT.session.id, viewer: 'v-isma' });
+    for (const token of [host.member.token, ana.member.token]) {
+      await party.status(room, {
+        token,
+        positionS: 0,
+        buffering: false,
+        ready: true,
+        progress: 100,
+      });
+    }
+    expect(sse.of('party.playback').at(-1)).toMatchObject({
+      action: 'play',
+      playback: { playing: true, lobby: false },
+    });
   });
 
   it('en «votar» gana lo más votado; cancelar quita la cuenta atrás; en «se para», no sigue nada', async () => {

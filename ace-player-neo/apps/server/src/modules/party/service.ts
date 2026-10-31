@@ -17,12 +17,20 @@
    `status`: así los invitados de fuera (docs/ver-juntos.md §9) no necesitan
    ninguna ruta de playback ni de vídeo de la casa.
 
-   Líder, lista y reacciones (§11, como en Rave): el líder (al principio,
-   quien crea la sala) manda en el vídeo si `settings.control` es `leader`,
-   cambia los ajustes y puede echar a alguien. Si se va o se desconecta, pasa
-   a ser líder quien lleva más tiempo en la sala. Al acabar un título, según
+   Líder y lista (§11, como en Rave): el líder (al principio, quien crea la
+   sala) manda en el vídeo si `settings.control` es `leader`, cambia los
+   ajustes y puede echar a alguien. Si se va o se desconecta, pasa a ser líder
+   quien lleva más tiempo en la sala. Al acabar un título, según
    `settings.queueMode`, empieza tras una cuenta atrás lo primero de la lista,
-   lo más votado o el siguiente episodio. */
+   lo más votado o el siguiente episodio.
+
+   Co-líderes, «Esperando a todos» y «está escribiendo» (§13): el líder hace
+   co-líder a quien quiera; con `settings.coleaders` controla como él, pero no
+   echa ni pasa la corona. Cada título empieza en `lobby` (el reloj parado en
+   el principio) y arranca solo cuando todos los conectados están listos (al
+   crear la sala, con dos o más: si no, empezaría antes de que entre nadie), o
+   cuando quien controla da a reproducir. «Está escribiendo» no se guarda: se
+   reenvía, como mucho uno cada `typingIntervalMs` por persona. */
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
@@ -81,7 +89,11 @@ interface Member {
   /** No se le espera hasta esta hora (ya se le esperó `holdMaxMs`). */
   holdSkipUntil: number;
   readonly chatTimes: number[];
-  readonly reactionTimes: number[];
+  /** «Esperando a todos» (§13): lo que dice su reproductor; null si no lo dice (una app vieja). */
+  readyReported: boolean | null;
+  progress: number | null;
+  /** El último «está escribiendo» que se reenvió. */
+  typingAt: number;
   /** Clave de vídeo (`partyVideo`): va en la ruta de la lista y de los segmentos. */
   readonly videoKey: string;
   /** Su visor de playback: el latido de la sesión lo da `status` (docs/ver-juntos.md §9). */
@@ -104,7 +116,14 @@ interface Room {
   readonly hostId: string;
   /** El líder (§11); al principio, `hostId`. */
   leaderId: string;
+  /** Los co-líderes (§13); el líder nunca está aquí. */
+  readonly coleaders: Set<string>;
   settings: PartySettings;
+  /**
+   * «Esperando a todos» (§13): `create`, la sala recién creada (arranca sola
+   * con dos o más listos); `title`, otro título (con uno basta); null, ya empezó.
+   */
+  lobby: 'create' | 'title' | null;
   readonly queue: QueueItem[];
   upNext: PartyUpNext | null;
   /** El siguiente episodio del título que suena (lo trae la concesión del vídeo). */
@@ -135,6 +154,20 @@ interface QueueItem {
   /** Quién lo ha votado (el empate lo gana lo que se añadió antes). */
   readonly votes: Set<string>;
 }
+
+/** «Solo yo», «Yo y co-líderes» o «Todos» (§13), para el aviso del chat. */
+type ControlRule = 'solo' | 'leaders' | 'everyone';
+
+function controlRule(settings: PartySettings): ControlRule {
+  if (settings.control === 'everyone') return 'everyone';
+  return settings.coleaders ? 'leaders' : 'solo';
+}
+
+const CONTROL_TEXT: Record<ControlRule, (name: string) => string> = {
+  solo: (name) => `${name} se ha quedado solo con el control.`,
+  leaders: (name) => `${name} comparte el control con los co-líderes.`,
+  everyone: (name) => `${name} ha dado el control a todos.`,
+};
 
 const QUEUE_MODE_TEXT: Record<PartySettings['queueMode'], string> = {
   autoplay: 'al acabar sigue lo primero de la lista',
@@ -191,6 +224,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       at: room.playback.at,
       rev: room.playback.rev,
       waitingFor: [...room.waiting.keys()],
+      lobby: room.lobby !== null,
     };
   }
 
@@ -211,12 +245,25 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     return member.connections > 0 || now - member.lastSeen < PARTY.memberTimeoutMs;
   }
 
+  /** Listo para empezar: lo que diga su reproductor o, si no dice nada, con vídeo y sin cargar. */
+  function isReady(member: Member): boolean {
+    return member.readyReported ?? (member.viewer !== null && !member.buffering);
+  }
+
+  function roleOf(room: Room, memberId: string): PartyMember['role'] {
+    if (memberId === room.leaderId) return 'leader';
+    return room.coleaders.has(memberId) ? 'coleader' : 'guest';
+  }
+
   function membersView(room: Room, now = clock.now()): PartyMember[] {
     return [...room.members.values()].map((member) => ({
       id: member.id,
       name: member.name,
       host: member.host,
       leader: member.id === room.leaderId,
+      role: roleOf(room, member.id),
+      ready: isReady(member),
+      progress: member.progress,
       online: online(member, now),
       buffering: member.buffering,
     }));
@@ -383,10 +430,21 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     return member;
   }
 
-  /** El vídeo y poner otro título: el líder, o todos si así lo ha dejado. */
+  /** El líder, o un co-líder si la sala deja controlar a los co-líderes (§13). */
+  function manages(room: Room, member: Member): boolean {
+    if (member.id === room.leaderId) return true;
+    return room.settings.coleaders && room.coleaders.has(member.id);
+  }
+
+  /** El vídeo y poner otro título: el líder (y los co-líderes), o todos si así lo ha dejado. */
   function requireControl(room: Room, member: Member): void {
-    if (room.settings.control === 'everyone' || member.id === room.leaderId) return;
+    if (room.settings.control === 'everyone' || manages(room, member)) return;
     throw new AppError('party_leader_only');
+  }
+
+  /** La regla de lo siguiente y quitar lo que añadió otro: el líder y los co-líderes. */
+  function requireManager(room: Room, member: Member): void {
+    if (!manages(room, member)) throw new AppError('party_leader_only');
   }
 
   function requireLeader(room: Room, member: Member): void {
@@ -401,6 +459,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   }
 
   function setLeader(room: Room, member: Member, text: string): void {
+    room.coleaders.delete(member.id);
     room.leaderId = member.id;
     say(room, text, null);
     sendRoom(room);
@@ -446,7 +505,9 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       bufferingSince: null,
       holdSkipUntil: 0,
       chatTimes: [],
-      reactionTimes: [],
+      readyReported: null,
+      progress: null,
+      typingAt: Number.NEGATIVE_INFINITY,
       videoKey: randomId(24),
       viewer: null,
     };
@@ -500,6 +561,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
 
   function removeMember(room: Room, member: Member, text: string): void {
     room.members.delete(member.id);
+    room.coleaders.delete(member.id);
     releaseViewer(member);
     for (const connection of [...room.connections]) {
       if (connection.memberId === member.id) closeConnection(room, connection);
@@ -573,9 +635,13 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       releaseViewer(member);
       member.buffering = false;
       member.bufferingSince = null;
+      member.readyReported = null;
+      member.progress = null;
     }
     fix(room, 0, now);
-    room.playback.playing = true;
+    /* Nadie se pierde el principio: espera a que todos lo tengan cargado (§13). */
+    room.playback.playing = false;
+    room.lobby = 'title';
     sendRoom(room);
     sendPlayback(room, 'title', by?.id ?? null);
     say(
@@ -589,7 +655,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   function queueAction(room: Room, member: Member, body: PartyQueueBody): void {
     switch (body.action) {
       case 'add': {
-        if (room.settings.queueMode === 'leader') requireLeader(room, member);
+        /* Proponer, cualquiera, también en «Elijo yo»: el líder elige entre lo propuesto (§13). */
         if (room.queue.length >= PARTY.queueMax) throw new AppError('party_queue_full');
         const title: PartyQueueTitle = {
           id: body.titleId,
@@ -623,7 +689,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
           if (!item.votes.delete(member.id)) item.votes.add(member.id);
           break;
         }
-        if (item.addedBy !== member.id) requireLeader(room, member);
+        if (item.addedBy !== member.id) requireManager(room, member);
         room.queue.splice(room.queue.indexOf(item), 1);
         if (room.upNext?.itemId === item.id) room.upNext = null;
         break;
@@ -677,6 +743,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       }
       for (const member of room.members.values()) maybeWait(room, member, now);
       handOver(room, now);
+      maybeStart(room, now);
       const duration = room.title.durationS;
       if (
         room.playback.playing &&
@@ -699,6 +766,23 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       }
       if (membersChanged) sendRoom(room);
     }
+  }
+
+  /**
+   * «Esperando a todos» (§13): si todos los conectados están listos, empieza
+   * sola. («Empezar para todos» es un `play` de quien controla: `control`.)
+   */
+  function maybeStart(room: Room, now: number): void {
+    if (room.lobby === null || room.interrupted) return;
+    const present = [...room.members.values()].filter((member) => online(member, now));
+    if (present.length < (room.lobby === 'create' ? 2 : 1)) return;
+    if (!present.every(isReady)) return;
+    room.lobby = null;
+    fix(room, room.playback.positionS, now);
+    room.playback.playing = true;
+    room.waiting.clear();
+    sendPlayback(room, 'play', null);
+    say(room, 'Ya estáis todos listos: empieza.', null);
   }
 
   /** Si alguien lleva cargando más de la gracia con la sala reproduciendo, el reloj se para. */
@@ -846,7 +930,13 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         interrupted: null,
         hostId,
         leaderId: hostId,
-        settings: { control: 'leader', queueMode: 'autoplay' },
+        coleaders: new Set(),
+        settings: {
+          control: body.control,
+          coleaders: body.coleaders,
+          queueMode: body.queueMode,
+        },
+        lobby: 'create',
         queue: [],
         upNext: null,
         nextEpisode: null,
@@ -936,10 +1026,12 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         index: room.audio.index ?? (vod.audioIndex >= 0 ? vod.audioIndex : null),
         tracks,
       };
+      /* En «Esperando a todos», quien abre el vídeo puede pasar a «listo» (una app vieja). */
       const changed =
         JSON.stringify(title) !== JSON.stringify(room.title) ||
         JSON.stringify(audio) !== JSON.stringify(room.audio) ||
-        room.interrupted !== null;
+        room.interrupted !== null ||
+        room.lobby !== null;
       room.title = title;
       room.audio = audio;
       room.nextEpisode = vod.next
@@ -984,7 +1076,13 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       let action: PartyAction = body.action;
       switch (body.action) {
         case 'play':
+          /* «Empezar para todos» (§13): reproducir en la espera la acaba. */
           room.playback.playing = true;
+          if (room.lobby !== null) {
+            room.lobby = null;
+            say(room, `${member.name} ha empezado para todos.`, null);
+            break;
+          }
           say(room, `${member.name} ha dado a reproducir.`, null);
           break;
         case 'pause':
@@ -1013,13 +1111,24 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       const room = find(code);
       const member = authenticate(room, body.token);
       const now = clock.now();
+      let changed = false;
       if (body.buffering !== member.buffering) {
         member.buffering = body.buffering;
         member.bufferingSince = body.buffering ? now : null;
         if (!body.buffering) stopWaiting(room, member.id, now);
         else maybeWait(room, member, now);
-        sendRoom(room);
+        changed = true;
       }
+      const ready = body.ready ?? null;
+      const progress = body.progress ?? null;
+      if (ready !== member.readyReported || progress !== member.progress) {
+        member.readyReported = ready;
+        member.progress = progress;
+        /* Fuera de la espera, el % no le importa a nadie: no se reparte. */
+        if (room.lobby !== null) changed = true;
+      }
+      if (changed) sendRoom(room);
+      maybeStart(room, now);
       /* El latido de su sesión de vídeo: los invitados no tienen las rutas de playback. */
       let stream: 'ok' | 'lost' | 'none' = 'none';
       const viewer = member.viewer;
@@ -1049,31 +1158,31 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       say(room, body.text, member);
     },
 
-    react(code, body) {
+    typing(code, token) {
       const room = find(code);
-      const member = authenticate(room, body.token);
-      throttle(member.reactionTimes, PARTY.reactionWindowMs, PARTY.reactionsPerWindow, clock.now());
-      broadcast(room, {
-        type: 'party.reaction',
-        data: { memberId: member.id, name: member.name, emoji: body.emoji },
-      });
+      const member = authenticate(room, token);
+      const now = clock.now();
+      /* Sin error: los de más se descartan (el cliente ya los espacia). */
+      if (now - member.typingAt < PARTY.typingIntervalMs) return;
+      member.typingAt = now;
+      broadcast(room, { type: 'party.typing', data: { memberId: member.id, name: member.name } });
     },
 
     settings(code, body) {
       const room = find(code);
       const member = authenticate(room, body.token);
-      requireLeader(room, member);
-      const { control, queueMode } = body;
-      if (control && control !== room.settings.control) {
-        room.settings = { ...room.settings, control };
-        say(
-          room,
-          control === 'leader'
-            ? `${member.name} ha dejado el control solo al líder.`
-            : `${member.name} ha dado el control a todos.`,
-          null,
-        );
-      }
+      const { control, coleaders, queueMode } = body;
+      /* Quién controla, solo el líder; la regla de lo siguiente, también los co-líderes (§13). */
+      if (control !== undefined || coleaders !== undefined) requireLeader(room, member);
+      if (queueMode !== undefined) requireManager(room, member);
+      const before = controlRule(room.settings);
+      room.settings = {
+        ...room.settings,
+        ...(control !== undefined ? { control } : {}),
+        ...(coleaders !== undefined ? { coleaders } : {}),
+      };
+      const after = controlRule(room.settings);
+      if (after !== before) say(room, CONTROL_TEXT[after](member.name), null);
       if (queueMode && queueMode !== room.settings.queueMode) {
         room.settings = { ...room.settings, queueMode };
         say(room, `${member.name} ha cambiado la lista: ${QUEUE_MODE_TEXT[queueMode]}.`, null);
@@ -1089,11 +1198,30 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       const reclaim = body.action === 'lead' && member.host && target === member;
       if (!reclaim) requireLeader(room, member);
       if (!target) throw new AppError('party_gone');
+      if (body.action === 'coleader' || body.action === 'guest') {
+        /* Al líder no se le cambia el papel: primero tendría que pasar la corona. */
+        if (target.id === room.leaderId) return;
+        const was = room.coleaders.has(target.id);
+        if (body.action === 'coleader' && !was) {
+          room.coleaders.add(target.id);
+          say(room, `${member.name} ha hecho co-líder a ${target.name}.`, null);
+        } else if (body.action === 'guest' && was) {
+          room.coleaders.delete(target.id);
+          say(room, `${target.name} ya no es co-líder.`, null);
+        } else {
+          return;
+        }
+        sendRoom(room);
+        return;
+      }
       if (body.action === 'lead') {
         /* A alguien desconectado no: el liderazgo volvería a pasar a otro en el siguiente barrido. */
         if (!online(target, clock.now())) throw new AppError('party_gone');
-        if (target.id !== room.leaderId)
+        if (target.id !== room.leaderId) {
+          /* Quien pasa la corona se queda de co-líder: seguía controlando. */
+          room.coleaders.add(room.leaderId);
           setLeader(room, target, `${target.name} es ahora el líder.`);
+        }
         return;
       }
       /* A uno mismo y a quien creó la sala no se les puede echar. */
