@@ -4,6 +4,7 @@ import { matchAt, NOW, TODAY } from '../agenda/test-utils.tsx';
 import {
   addRecent,
   highlightParts,
+  logoText,
   highlightRange,
   readRecents,
   RECENTS_MAX,
@@ -107,5 +108,14 @@ describe('recientes', () => {
     expect(readRecents()).toEqual([]);
     saveRecents(['dazn', 'dune']);
     expect(readRecents()).toEqual(['dazn', 'dune']);
+  });
+});
+
+describe('la pastilla del canal', () => {
+  it('lleva el nombre si cabe y, si no, la sigla y el número', () => {
+    expect(logoText('Barça TV')).toBe('Barça TV');
+    expect(logoText('DAZN LaLiga 1080p')).toBe('DAZN LaLiga');
+    expect(logoText('M+ Liga de Campeones 2')).toBe('M+ 2');
+    expect(logoText('LaLiga TV Hypermotion')).toBe('LALIGA');
   });
 });

@@ -17,7 +17,9 @@
 .qs-scrim {
   position: absolute;
   inset: 0;
+  /* El de la maqueta, algo más claro que el --scrim de las hojas. */
   background: var(--scrim);
+  background: light-dark(oklch(0.155 0.004 285.9 / 0.33), oklch(0 0 0 / 0.55));
   animation: ace-funde var(--dur-rapido) var(--ease-out);
 }
 
@@ -88,21 +90,8 @@
 .qs-field__input:focus-visible {
   outline: none;
 }
-/* Foco visible en el campo: una raya amarilla bajo la fila (el anillo de 2 px
-   del resto de la app cortaría la esquina redonda de la ventana). */
-.qs-field:has(.qs-field__input:focus-visible) {
-  box-shadow: inset 0 -2px 0 var(--accent-edge);
-}
-.qs-field__clear {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--line-soft);
-  color: var(--text-2);
-}
+/* El campo es lo único que coge el foco al abrir: lo marca el cursor amarillo
+   (caret-color), como en la maqueta, sin anillo ni raya que corten la ventana. */
 .qs-kbd {
   flex: none;
   padding: 2px 6px;
@@ -157,11 +146,6 @@
   font-weight: 650;
   letter-spacing: 0;
   text-transform: none;
-}
-.qs-sec--motor {
-  margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid var(--line);
 }
 
 .qs-opt {
@@ -261,6 +245,28 @@
   margin-right: -6px;
   border-radius: 50%;
   color: var(--text-3);
+}
+
+/* La pastilla del canal (52×36, radio 9): su tono y su nombre, en blanco. */
+.qs-logo {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 52px;
+  height: 36px;
+  padding: 0 3px;
+  overflow: hidden;
+  border-radius: 9px;
+  background: var(--qs-logo);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: #fff;
+  font-size: var(--fs-11);
+  font-stretch: 85%;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 /* Escudos: los dos de 24 px, montados. */

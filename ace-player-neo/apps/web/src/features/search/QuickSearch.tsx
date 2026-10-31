@@ -11,11 +11,15 @@
      en tus canales (biblioteca y tu IPTV, con «Ahora: …» de la guía o del
      partido que echan) y en el catálogo de Películas y series, agrupado. El
      partido en directo sale primero, con su minuto, sus fuentes y su play.
-     Chips «Todo · N», «Partidos · N»… y «Ver los N» en cada grupo. Al final,
-     «Buscar en el motor AceStream» lleva a la vista Buscar con el texto.
+     Chips «Todo · N», «Partidos · N»… (solo los que tienen algo) y «Ver los
+     N» en cada grupo. Si no sale nada, «Buscar en el motor AceStream» lleva a
+     la vista Buscar con el texto.
    - Teclado: flechas para moverse (con vuelta), Intro abre, Ctrl+Intro abre
      «Ver juntos» en una película (pide el nombre aquí mismo y crea la sala);
-     en lo demás, igual que Intro. Esc cierra. Pie con las teclas.
+     en lo demás, igual que Intro. Esc cierra. Pie con las teclas. Un Intro
+     pulsado antes de que se asiente lo escrito espera a esos resultados (no
+     abre los del texto anterior), y un clic dentro de la ventana no le quita
+     el foco al campo: las flechas siguen funcionando.
    - Accesible: role=dialog modal con el foco atrapado y devuelto al cerrar,
      el campo es un combobox con su listbox (aria-activedescendant), grupos
      con nombre y la cuenta de resultados anunciada.
@@ -36,12 +40,15 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { api, describeFailure, useApiQuery, useIptvActive, useVodActive } from '../../api/index.ts';
 import { rememberViewParam, useNavigate } from '../../app/router.tsx';
+import { channelTone, oklchCss } from '../../lib/color.ts';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { MEDIA, useMediaQuery } from '../../lib/media.ts';
@@ -72,6 +79,7 @@ import {
   addRecent,
   GROUP_TITLE,
   highlightParts,
+  logoText,
   QUICK_MIN,
   readRecents,
   removeRecent,
@@ -152,6 +160,8 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
   const [active, setActive] = useState(0);
   const [recents, setRecents] = useState(readRecents);
   const [juntos, setJuntos] = useState<VodCard | null>(null);
+  /** Intro pulsado antes de que se asiente lo escrito: `true` si fue con Ctrl (ver juntos). */
+  const pendingEnter = useRef<boolean | null>(null);
 
   // Capa modal: el resto de la app queda inert y el foco vuelve a donde estaba.
   useLayoutEffect(() => {
@@ -172,7 +182,8 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
     input.select();
   }, [nonce]);
 
-  const query = useSettled(text.replace(/\s+/g, ' ').trim(), SETTLE_MS);
+  const clean = text.replace(/\s+/g, ' ').trim();
+  const query = useSettled(clean, SETTLE_MS);
   const typed = foldText(text).length >= QUICK_MIN;
   const searching = foldText(query).length >= QUICK_MIN;
   const detected = isHashOrLink(text);
@@ -281,7 +292,7 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
   const loading =
     typed &&
     !detected &&
-    (text.replace(/\s+/g, ' ').trim() !== query ||
+    (clean !== query ||
       schedule.isLoading ||
       (withIptv && iptvSearch.isFetching && !iptvSearch.data) ||
       (withVod && (movies.isLoading || series.isLoading)));
@@ -336,8 +347,10 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
         { kind: 'pegar', id: 'pegar' },
       ];
     }
-    return [...groups.flatMap((group) => group.options), { kind: 'motor', id: 'motor' }];
-  }, [detected, typed, recents, groups]);
+    const found = groups.flatMap((group) => group.options);
+    // Sin nada en la agenda, tus canales ni el catálogo: buscar en el motor.
+    return found.length || loading ? found : [{ kind: 'motor', id: 'motor' }];
+  }, [detected, typed, recents, groups, loading]);
 
   // Lo escrito o el chip cambian: la primera opción vuelve a ser la activa.
   useEffect(() => setActive(0), [query, typed, shownFilter, detected]);
@@ -496,6 +509,14 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
     if (boxRef.current) trapTab(event, boxRef.current);
   };
 
+  // El Intro que esperaba: en cuanto lo escrito se asienta (y la agenda está), abre el primero.
+  useEffect(() => {
+    if (pendingEnter.current === null || clean !== query || schedule.isLoading) return;
+    const together = pendingEnter.current;
+    pendingEnter.current = null;
+    choose(options[0], together);
+  });
+
   const onFieldKey = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
@@ -504,7 +525,13 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
     }
     if (event.key === 'Enter') {
       event.preventDefault();
-      choose(activeOption, event.ctrlKey || event.metaKey);
+      const together = event.ctrlKey || event.metaKey;
+      // Lo escrito aún no se ha asentado: las opciones son las del texto anterior.
+      if (typed && !detected && clean !== query) {
+        pendingEnter.current = together;
+        return;
+      }
+      choose(activeOption, together);
       return;
     }
     // Supr quita un reciente (la ✕ de su fila es solo para el ratón).
@@ -540,19 +567,37 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
       choose(option, event.ctrlKey || event.metaKey),
   });
 
-  const chip = (value: QuickFilter, label: string, count: number) => (
-    <Chip
-      key={value}
-      pressed={shownFilter === value}
-      disabled={value !== 'todo' && count === 0}
-      onClick={() => {
-        setFilter(value);
-        inputRef.current?.focus();
-      }}
-    >
-      {`${label} · ${count}`}
-    </Chip>
-  );
+  // Solo los chips con algo (como en la maqueta del móvil); «Todo», siempre.
+  const chip = (value: QuickFilter, label: string, count: number) =>
+    value !== 'todo' && count === 0 ? null : (
+      <Chip
+        key={value}
+        pressed={shownFilter === value}
+        onClick={() => {
+          setFilter(value);
+          inputRef.current?.focus();
+        }}
+      >
+        {`${label} · ${count}`}
+      </Chip>
+    );
+
+  // Un clic dentro de la ventana (un rótulo, el hueco entre filas, el pie) no
+  // le quita el foco al campo: las flechas e Intro solo los escucha el campo.
+  // El clic sigue llegando a las filas y a los botones.
+  const keepFieldFocus = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (juntos) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('input, textarea')) return;
+    // La barra de desplazamiento de la lista se sigue pudiendo arrastrar.
+    if (
+      target.scrollHeight > target.clientHeight &&
+      event.nativeEvent.offsetX >= target.clientWidth
+    )
+      return;
+    event.preventDefault();
+    if (document.activeElement !== inputRef.current) inputRef.current?.focus();
+  };
 
   return (
     <div className="qs-layer" onKeyDown={onKeyDown}>
@@ -564,6 +609,7 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
+        onMouseDown={keepFieldFocus}
       >
         <h2 id={titleId} className="sr-only">
           Buscar partidos, canales, pelis y series
@@ -594,32 +640,23 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
                 aria-controls={listId}
                 aria-autocomplete="list"
                 aria-activedescendant={activeOption ? optionId(activeOption) : undefined}
+                aria-describedby={`${listId}-teclas`}
                 placeholder="Partidos, canales, pelis…"
                 autoComplete="off"
                 spellCheck={false}
                 enterKeyHint="go"
                 maxLength={200}
                 value={text}
-                onChange={(event) => setText(event.target.value)}
+                onChange={(event) => {
+                  pendingEnter.current = null;
+                  setText(event.target.value);
+                }}
                 onKeyDown={onFieldKey}
               />
-              {text ? (
-                <button
-                  type="button"
-                  className="qs-field__clear"
-                  aria-label="Borrar lo escrito"
-                  onClick={() => {
-                    setText('');
-                    inputRef.current?.focus();
-                  }}
-                >
-                  <Icon name="x" size={16} />
-                </button>
-              ) : null}
               <kbd className="qs-kbd">Esc</kbd>
             </div>
 
-            {typed && !detected ? (
+            {typed && !detected && total > 0 ? (
               <div className="qs-chips" role="group" aria-label="Qué enseñar">
                 {chip('todo', 'Todo', total)}
                 {chip('partidos', 'Partidos', counts.partidos)}
@@ -630,6 +667,10 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
 
             <p className="sr-only" aria-live="polite">
               {liveText(text.trim())}
+            </p>
+            <p id={`${listId}-teclas`} className="sr-only">
+              Flechas para moverse, Intro para abrir y Control más Intro para ver juntos una
+              película.
             </p>
 
             <div className="qs-body" id={listId} role="listbox" aria-label="Resultados">
@@ -670,10 +711,12 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
                       title={GROUP_TITLE[group]}
                       more={
                         shownFilter === 'todo' && counts[group] > rows.length ? (
+                          // Atajo del ratón: con el teclado, el chip del grupo hace lo mismo.
                           <button
                             type="button"
                             className="qs-sec__more"
                             tabIndex={-1}
+                            aria-hidden="true"
                             onClick={() => {
                               setFilter(group);
                               inputRef.current?.focus();
@@ -696,9 +739,7 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
                           />
                         ) : option.kind === 'canal' ? (
                           <div key={option.id} {...optionProps(option)}>
-                            <span className="qs-opt__mark" aria-hidden="true">
-                              <ChannelMark name={option.channel.title} shape="tile" size={30} />
-                            </span>
+                            <ChannelLogo name={option.channel.title} />
                             <span className="qs-opt__text">
                               <b>
                                 <Marked text={option.channel.title} query={query} />
@@ -739,25 +780,27 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
                       )}
                     </Section>
                   ))}
-                  {groups.length === 0 && !loading ? (
-                    <p className="qs-empty">
-                      {`Nada con «${query}» en la agenda, tus canales ni el catálogo.`}
-                    </p>
-                  ) : null}
                   {groups.length === 0 && loading ? (
                     <p className="qs-empty qs-empty--loading">{`Buscando «${text.trim()}»…`}</p>
                   ) : null}
-                  <div className="qs-sec qs-sec--motor">
-                    <div {...optionProps(options.at(-1)!)}>
-                      <span className="qs-opt__icon" aria-hidden="true">
-                        <Icon name="motor" size={20} />
-                      </span>
-                      <span className="qs-opt__text">
-                        <b>{`Buscar «${text.trim()}» en el motor AceStream`}</b>
-                        <small>Canales publicados que aún no tienes</small>
-                      </span>
-                    </div>
-                  </div>
+                  {options[0]?.kind === 'motor' ? (
+                    <>
+                      <p className="qs-empty">
+                        {`Nada con «${query}» en la agenda, tus canales ni el catálogo.`}
+                      </p>
+                      <div className="qs-sec" role="group" aria-label="Motor AceStream">
+                        <div {...optionProps(options[0])}>
+                          <span className="qs-opt__icon" aria-hidden="true">
+                            <Icon name="motor" size={20} />
+                          </span>
+                          <span className="qs-opt__text">
+                            <b>{`Buscar «${text.trim()}» en el motor AceStream`}</b>
+                            <small>Canales publicados que aún no tienes</small>
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
                 </>
               )}
             </div>
@@ -787,6 +830,16 @@ interface OptionProps {
   className: string | undefined;
   onMouseMove(): void;
   onClick(event: { ctrlKey: boolean; metaKey: boolean }): void;
+}
+
+/** La pastilla de 52×36 del canal (la de la maqueta): su tono y su nombre. Decorativa: el nombre va al lado. */
+function ChannelLogo({ name }: { name: string }) {
+  const style = { '--qs-logo': oklchCss(channelTone(name)) } as CSSProperties;
+  return (
+    <span className="qs-logo" style={style} aria-hidden="true">
+      {logoText(name)}
+    </span>
+  );
 }
 
 function Section({
@@ -850,10 +903,12 @@ function EmptyStart({
                 <span className="qs-opt__text">
                   <b className="qs-opt__plain">{option.text}</b>
                 </span>
+                {/* Atajo del ratón: con el teclado se quita con Supr. */}
                 <button
                   type="button"
                   className="qs-opt__x"
                   tabIndex={-1}
+                  aria-hidden="true"
                   aria-label={`Quitar «${option.text}» de recientes`}
                   onClick={(event) => {
                     event.stopPropagation();

@@ -136,6 +136,51 @@ describe('Buscar con Ctrl K (escritorio)', () => {
     expect(within(recientes).getByRole('option', { name: /barc/ })).toBeInTheDocument();
   });
 
+  it('Intro pulsado nada más escribir espera a los resultados de ese texto', async () => {
+    setup();
+    act(() => openSearch(vi.fn()));
+    await waitFor(() => expect(field()).toHaveFocus());
+    // La agenda, ya cargada (lo normal al abrir la ventana desde la app).
+    fireEvent.change(field(), { target: { value: 'inter' } });
+    await screen.findByRole('group', { name: 'Partidos' });
+    // Se escribe otra cosa e Intro al momento: no abre el «inter» ni el motor.
+    fireEvent.change(field(), { target: { value: 'madrid' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await waitFor(() => expect(screen.getByTestId('ruta')).toHaveTextContent('partido/clasico'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('un clic dentro de la ventana deja el foco en el campo y las flechas siguen', async () => {
+    setup();
+    act(() => openSearch(vi.fn()));
+    await waitFor(() => expect(field()).toHaveFocus());
+    fireEvent.change(field(), { target: { value: 'barc' } });
+    const partidos = await screen.findByRole('group', { name: 'Partidos' });
+    const rows = await within(partidos).findAllByRole('option');
+    // El rótulo del grupo: el mousedown no se lleva el foco.
+    const press = fireEvent.mouseDown(within(partidos).getByText('Partidos'));
+    expect(press).toBe(false);
+    expect(field()).toHaveFocus();
+    fireEvent.keyDown(field(), { key: 'ArrowDown' });
+    expect(field()).toHaveAttribute('aria-activedescendant', rows[1]!.id);
+  });
+
+  it('sin resultados ofrece el motor; con resultados, ni el motor ni chips a 0', async () => {
+    setup();
+    act(() => openSearch(vi.fn()));
+    await waitFor(() => expect(field()).toHaveFocus());
+    fireEvent.change(field(), { target: { value: 'barc' } });
+    await screen.findByRole('group', { name: 'Partidos' });
+    expect(screen.queryByRole('option', { name: /en el motor AceStream/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Canales · 0/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.change(field(), { target: { value: 'zzqx' } });
+    expect(
+      await screen.findByRole('option', { name: /Buscar «zzqx» en el motor AceStream/ }),
+    ).toBeInTheDocument();
+  });
+
   it('un Content ID pegado se ofrece para reproducir', async () => {
     setup();
     act(() => openSearch(vi.fn()));

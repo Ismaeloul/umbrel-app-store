@@ -11,8 +11,9 @@
    - Chips y filas: los grupos se cuentan enteros, pero con «Todo» cada grupo
      enseña unos pocos y «Ver los N» lleva a su chip. */
 
-import type { FootballMatch, LiveScore } from '@ace/shared';
+import { stripQualityMarks, type FootballMatch, type LiveScore } from '@ace/shared';
 import { readJson, writeJson } from '../../lib/storage.ts';
+import { channelAbbrev, channelDorsal } from '../../ui/ChannelMark.tsx';
 import { foldText } from '../library/model.ts';
 import { matchStatus, minutesToMatch, type MatchPhase } from '../agenda/domain.ts';
 
@@ -170,4 +171,14 @@ export function stepIndex(current: number, count: number, delta: 1 | -1): number
   if (count <= 0) return -1;
   if (current < 0) return delta > 0 ? 0 : count - 1;
   return (current + delta + count) % count;
+}
+
+// ---- Canales ----------------------------------------------------------------------
+
+/** Texto de la pastilla: el nombre si cabe; si no, la sigla y el número («M+ 2»). */
+export function logoText(name: string): string {
+  const clean = stripQualityMarks(name).replace(/\s+/g, ' ').trim() || name.trim();
+  if (clean.length <= 12) return clean;
+  const dorsal = channelDorsal(clean);
+  return /\d/.test(dorsal) ? `${channelAbbrev(clean)} ${dorsal}` : channelAbbrev(clean);
 }
