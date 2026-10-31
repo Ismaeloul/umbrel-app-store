@@ -337,6 +337,12 @@ describe('armazón', () => {
     expect(await screen.findByText('Columna de agenda')).toBeInTheDocument();
     expect(screen.getByTestId('dock')).toHaveAttribute('data-presentation', 'stage');
     expect(app()).toHaveAttribute('data-column', 'true');
+    // La barra de la Agenda va encima de la columna y el vídeo (rediseño,
+    // pantalla 1); su título no es un <h1>: el de la vista es el del partido.
+    const bar = document.querySelector('.app-bar');
+    expect(bar).toHaveTextContent('Agenda');
+    expect(within(bar as HTMLElement).queryByRole('heading')).toBeNull();
+    expect(within(bar as HTMLElement).getByRole('button', { name: /Buscar/ })).toBeInTheDocument();
   });
 
   it('tableta (768-1023): barra superior y sin panel lateral', async () => {
@@ -345,6 +351,7 @@ describe('armazón', () => {
     await screen.findByRole('heading', { level: 1, name: 'Canales' });
     expect(app()).toHaveAttribute('data-layout', 'tablet');
     expect(screen.queryByText('Contenido del panel')).toBeNull();
+    expect(document.querySelector('.app-bar')).toBeNull();
   });
 
   it('?vista=sistema enseña la página de muestra en desarrollo', async () => {

@@ -555,6 +555,41 @@
   .app-aside:empty {
     display: none;
   }
+  /* Partido con la columna de agenda (desde 1024; rediseño, pantalla 1): la
+     barra de la Agenda arriba, a lo ancho de la lista y la ficha, y debajo
+     las dos pegadas, sin márgenes: es la misma pantalla que la Agenda. */
+  .app[data-column='true'] {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'side bar bar aside'
+      'side column main aside';
+  }
+  .app-bar {
+    grid-area: bar;
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+    min-width: 0;
+  }
+  .app-bar .view-head {
+    position: static;
+    margin-inline: 0;
+    padding-inline: 22px calc(22px + var(--safe-right));
+  }
+  .app[data-column='true'] .app-column {
+    top: calc(var(--topbar-h) + var(--safe-top));
+    height: calc(100dvh - var(--topbar-h) - var(--safe-top));
+    padding: 16px 18px calc(var(--safe-bottom) + 24px);
+  }
+  .app[data-column='true'] .app-main {
+    padding-inline: 0 var(--safe-right);
+  }
+  .app[data-column='true'] .stage[data-presentation='stage'] {
+    padding: 0;
+  }
+  .app[data-column='true'] .stage__status {
+    max-width: none;
+  }
 }
 
 /* Tableta estrecha: el menú se queda en sus iconos (72 px) para dejar sitio. */

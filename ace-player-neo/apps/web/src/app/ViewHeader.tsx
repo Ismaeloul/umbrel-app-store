@@ -25,6 +25,9 @@ export interface ViewHeaderProps {
   actions?: ReactNode;
   /** Sin el estado del motor (por ejemplo, dentro de Ajustes → Salud). */
   hideEngine?: boolean;
+  /** La barra que el armazón pone sobre la agenda y el partido: la vista ya
+      tiene su <h1>, así que el título va en un párrafo. */
+  titleAs?: 'h1' | 'p';
   className?: string;
   children?: ReactNode;
 }
@@ -34,6 +37,7 @@ export function ViewHeader({
   subtitle,
   actions,
   hideEngine = false,
+  titleAs = 'h1',
   className,
   children,
 }: ViewHeaderProps) {
@@ -43,9 +47,13 @@ export function ViewHeader({
     <header className={cx('view-head', className)}>
       <div className="view-head__row">
         <div className="view-head__titles">
-          <h1 className="view-head__title" tabIndex={-1}>
-            {title}
-          </h1>
+          {titleAs === 'h1' ? (
+            <h1 className="view-head__title" tabIndex={-1}>
+              {title}
+            </h1>
+          ) : (
+            <p className="view-head__title">{title}</p>
+          )}
           {subtitle ? <div className="view-head__subtitle">{subtitle}</div> : null}
         </div>
         <div className="view-head__actions">

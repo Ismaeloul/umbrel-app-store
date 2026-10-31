@@ -644,17 +644,10 @@ export default function Agenda({ active }: ViewProps) {
   if (stageVisible) {
     return (
       <div className="agenda agenda--desk" data-demo={appMode === 'demo' || undefined}>
+        {/* Solo el título, como en la maqueta: el día ya lo dice la tira. */}
         <ViewHeader
           title="Agenda"
           className="agenda-head"
-          subtitle={
-            dayText ? (
-              <span className="agenda-head__lede">
-                {dayText.primary === dayText.long ? '' : `${dayText.primary} · `}
-                {capitalize(dayText.long)}
-              </span>
-            ) : undefined
-          }
           actions={
             <>
               <IconButton
@@ -680,7 +673,7 @@ export default function Agenda({ active }: ViewProps) {
         <div className="agenda-desk">
           <DeskList
             className="agenda-desk__list"
-            selectedId={null}
+            selectedId={selected?.id ?? null}
             active={active}
             onOpen={openMatch}
           />
@@ -697,10 +690,12 @@ export default function Agenda({ active }: ViewProps) {
                 watching={watched === selected.id}
                 onOpen={openMatch}
               />
+              {foot}
             </aside>
-          ) : null}
+          ) : (
+            <div className="agenda-desk__side">{foot}</div>
+          )}
         </div>
-        {foot}
         <p className="sr-only" role="status" aria-live="polite">
           {announcement}
         </p>
