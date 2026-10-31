@@ -5,7 +5,13 @@
    tarjeta «Cuando acabe», la cuenta atrás de «A continuación» y «Esperando a
    todos» antes de empezar. Sin reacciones: el chat es solo texto. */
 
-import type { PartyMember, PartyQueueItem, PartyQueueMode, PartyRoom } from '@ace/shared';
+import {
+  PARTY,
+  type PartyMember,
+  type PartyQueueItem,
+  type PartyQueueMode,
+  type PartyRoom,
+} from '@ace/shared';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { describeFailure } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
@@ -15,7 +21,7 @@ import { Icon } from '../../ui/Icon.tsx';
 import { Menu, MenuButton, useContextMenu, type MenuItem } from '../../ui/Menu.tsx';
 import { canControl, controllers, isManager, roleOf, type PartyClient } from './client.ts';
 import { Art } from '../cine/Art.tsx';
-import { clock } from './sync.ts';
+import { clock, targetPosition } from './sync.ts';
 import { JUNTOS_TEXT } from './texts.ts';
 
 /** Una orden de la sala: si falla, se dice por qué (p. ej. «Solo el líder…»). */
@@ -119,10 +125,13 @@ export function People({
   room,
   client,
   selfId,
+  onCloseRoom,
 }: {
   room: PartyRoom;
   client: PartyClient;
   selfId: string;
+  /** «Cerrar la sala» al final (quien la creó; en la maqueta no hay sitio para ello junto a «Invitar»). */
+  onCloseRoom?: () => void;
 }) {
   const control = canControl(room, selfId);
   const names = controllers(room);
@@ -145,13 +154,18 @@ export function People({
         </p>
       ) : null}
       {iLead ? <ControlRule room={room} client={client} /> : null}
+      {onCloseRoom ? (
+        <Button variant="quiet" icon="x" className="juntos-people__close" onClick={onCloseRoom}>
+          {JUNTOS_TEXT.closeRoom}
+        </Button>
+      ) : null}
     </div>
   );
 }
 
 export type ControlValue = 'solo' | 'leaders' | 'everyone';
 
-function controlValue(room: PartyRoom): ControlValue {
+export function controlValue(room: PartyRoom): ControlValue {
   if (room.settings.control === 'everyone') return 'everyone';
   return room.settings.coleaders ? 'leaders' : 'solo';
 }
@@ -417,7 +431,121 @@ export function NextCard({ room, onSeeList }: { room: PartyRoom; onSeeList(): vo
   );
 }
 
-/** La pestaña Siguiente: «Cuando acabe», la regla y lo propuesto con sus votos. */
+/** El anillo de «Cuando acabe»: lo que falta de la cuenta atrás (con sus segundos) o de la película. */
+function Countdown({ room, client }: { room: PartyRoom; client: PartyClient }) {
+  const upNext = room.upNext;
+  const [now, setNow] = useState(() => client.serverNow());
+  useEffect(() => {
+    const timer = globalThis.setInterval(() => setNow(client.serverNow()), upNext ? 250 : 5_000);
+    return () => globalThis.clearInterval(timer);
+  }, [upNext, client]);
+  const duration = room.title.durationS ?? 0;
+  let done: number;
+  let seconds: number | null = null;
+  if (upNext) {
+    const left = Math.max(0, upNext.startsAt - now);
+    seconds = Math.ceil(left / 1000);
+    done = 1 - Math.min(1, left / PARTY.upNextMs);
+  } else {
+    done = duration ? targetPosition(room.playback, now, duration) / duration : 0;
+  }
+  const ring = 2 * Math.PI * 24;
+  return (
+    <span className="juntos-ring" aria-hidden="true">
+      <svg className="juntos-ring__svg" viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="24" className="juntos-ring__track" />
+        <circle
+          cx="26"
+          cy="26"
+          r="24"
+          className="juntos-ring__done"
+          strokeDasharray={ring}
+          strokeDashoffset={ring * (1 - Math.max(0, Math.min(1, done)))}
+        />
+      </svg>
+      {seconds !== null ? seconds : <Icon name="clock" size={18} />}
+    </span>
+  );
+}
+
+/** Una propuesta: cartel, título, quién la propuso y el voto. «Poner ya» y «Quitar», con el menú contextual. */
+function NextItem({
+  item,
+  room,
+  client,
+  selfId,
+}: {
+  item: PartyQueueItem;
+  room: PartyRoom;
+  client: PartyClient;
+  selfId: string;
+}) {
+  const control = canControl(room, selfId);
+  const voted = item.votes.includes(selfId);
+  const removable = isManager(room, selfId) || item.addedBy === selfId;
+  const kind = item.title.kind === 'episode' ? JUNTOS_TEXT.episode : JUNTOS_TEXT.movie;
+  const actions: MenuItem[] = [
+    ...(control
+      ? [
+          {
+            id: 'play',
+            label: JUNTOS_TEXT.playNow,
+            icon: 'play' as const,
+            onSelect: () => attempt(() => client.queue({ action: 'play', itemId: item.id })),
+          },
+        ]
+      : []),
+    ...(removable
+      ? [
+          {
+            id: 'remove',
+            label: JUNTOS_TEXT.remove,
+            icon: 'trash' as const,
+            danger: true,
+            onSelect: () => attempt(() => client.queue({ action: 'remove', itemId: item.id })),
+          },
+        ]
+      : []),
+  ];
+  const { bind, menu } = useContextMenu();
+  const title = item.title.subtitle
+    ? `${item.title.title} · ${item.title.subtitle}`
+    : item.title.title;
+  return (
+    <li
+      className="juntos-next__item"
+      title={actions.length ? JUNTOS_TEXT.itemMenuHint : undefined}
+      {...(actions.length ? bind : {})}
+    >
+      <Poster stamp={item.title.poster} artId={item.title.artId} title={item.title.title} />
+      <span className="juntos-next__text">
+        <span className="juntos-next__title">{title}</span>
+        <span className="juntos-next__by">{JUNTOS_TEXT.proposedBy(kind, item.addedByName)}</span>
+      </span>
+      <button
+        type="button"
+        className="juntos-vote"
+        aria-pressed={voted}
+        aria-label={`${JUNTOS_TEXT.vote} ${title} (${JUNTOS_TEXT.votes(item.votes.length)})`}
+        aria-haspopup={actions.length ? 'menu' : undefined}
+        onClick={() => attempt(() => client.queue({ action: 'vote', itemId: item.id }))}
+      >
+        <Icon name="chev-u" size={18} />
+        <span className="juntos-vote__n">{item.votes.length}</span>
+      </button>
+      {actions.length ? (
+        <Menu {...menu} label={JUNTOS_TEXT.itemActions(item.title.title)} items={actions} />
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * La pestaña Siguiente, como la maqueta: «Cuando acabe» con su anillo, la
+ * regla y lo propuesto con sus votos. Sin botones de más en cada fila:
+ * «Poner ya» y «Quitar» van en el menú contextual (clic derecho, pulsación
+ * larga o la tecla de menú sobre el voto).
+ */
 export function NextPanel({
   room,
   client,
@@ -430,7 +558,6 @@ export function NextPanel({
   /** «Proponer algo de Pelis y series» (en casa; el invitado de fuera no tiene catálogo). */
   onPropose?: () => void;
 }) {
-  const control = canControl(room, selfId);
   const manager = isManager(room, selfId);
   const next = nextUp(room);
   const items = orderedQueue(room);
@@ -448,6 +575,7 @@ export function NextPanel({
             <span className="juntos-nextcard__title">{next.title}</span>
             <span className="juntos-nextcard__line">{nextHint(room, next.item)}</span>
           </span>
+          <Countdown room={room} client={client} />
         </div>
       ) : null}
       <div className="juntos-next__rules" role="radiogroup" aria-label={JUNTOS_TEXT.ruleLabel}>
@@ -474,82 +602,11 @@ export function NextPanel({
         </div>
       ) : (
         <ol className="juntos-next__list">
-          {items.map((item) => {
-            const voted = item.votes.includes(selfId);
-            const removable = manager || item.addedBy === selfId;
-            const kind = item.title.kind === 'episode' ? JUNTOS_TEXT.episode : JUNTOS_TEXT.movie;
-            return (
-              <li key={item.id} className="juntos-next__item">
-                <Poster
-                  stamp={item.title.poster}
-                  artId={item.title.artId}
-                  title={item.title.title}
-                />
-                <span className="juntos-next__text">
-                  <span className="juntos-next__title">
-                    {item.title.title}
-                    {item.title.subtitle ? ` · ${item.title.subtitle}` : ''}
-                  </span>
-                  <span className="juntos-next__by">
-                    {JUNTOS_TEXT.proposedBy(kind, item.addedByName)}
-                  </span>
-                </span>
-                {control || removable ? (
-                  <MenuButton
-                    label={JUNTOS_TEXT.itemActions(item.title.title)}
-                    variant="quiet"
-                    items={[
-                      ...(control
-                        ? [
-                            {
-                              id: 'play',
-                              label: JUNTOS_TEXT.playNow,
-                              icon: 'play' as const,
-                              onSelect: () =>
-                                attempt(() => client.queue({ action: 'play', itemId: item.id })),
-                            },
-                          ]
-                        : []),
-                      ...(removable
-                        ? [
-                            {
-                              id: 'remove',
-                              label: JUNTOS_TEXT.remove,
-                              icon: 'trash' as const,
-                              danger: true,
-                              onSelect: () =>
-                                attempt(() => client.queue({ action: 'remove', itemId: item.id })),
-                            },
-                          ]
-                        : []),
-                    ]}
-                  />
-                ) : null}
-                <button
-                  type="button"
-                  className="juntos-vote"
-                  aria-pressed={voted}
-                  aria-label={`${JUNTOS_TEXT.vote} ${item.title.title} (${JUNTOS_TEXT.votes(item.votes.length)})`}
-                  onClick={() => attempt(() => client.queue({ action: 'vote', itemId: item.id }))}
-                >
-                  <Icon name="chev-u" size={18} />
-                  <span className="juntos-vote__n">{item.votes.length}</span>
-                </button>
-              </li>
-            );
-          })}
+          {items.map((item) => (
+            <NextItem key={item.id} item={item} room={room} client={client} selfId={selfId} />
+          ))}
         </ol>
       )}
-      {control && (room.queue.length > 0 || room.title.kind === 'episode') ? (
-        <Button
-          size="sm"
-          variant="quiet"
-          icon="chev-r"
-          onClick={() => attempt(() => client.queue({ action: 'next' }))}
-        >
-          {room.queue.length === 0 ? JUNTOS_TEXT.nextEpisode : JUNTOS_TEXT.next}
-        </Button>
-      ) : null}
       {onPropose ? (
         <button type="button" className="juntos-propose" onClick={onPropose}>
           <Icon name="plus" size={18} />

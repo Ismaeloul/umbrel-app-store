@@ -129,7 +129,8 @@ export function JuntosButton({ target, disabled }: { target: JuntosTarget; disab
         open={open}
         onClose={() => setOpen(false)}
         title={JUNTOS_TEXT.createTitle}
-        description={target.subtitle ? `${target.title} · ${target.subtitle}` : target.title}
+        hideTitle
+        className="juntos-sheet"
         size="sm"
         footer={
           <Button
@@ -145,13 +146,21 @@ export function JuntosButton({ target, disabled }: { target: JuntosTarget; disab
         }
       >
         <div className="juntos-create">
-          <Art
-            id={target.artId}
-            art="poster"
-            v={target.poster}
-            title={target.title}
-            className="juntos-poster juntos-create__poster"
-          />
+          {/* Como la maqueta: el cartel pequeño junto a «Ver juntos» y el título
+              (el título de la hoja queda para el lector de pantalla). */}
+          <div className="juntos-create__head">
+            <Art
+              id={target.artId}
+              art="poster"
+              v={target.poster}
+              title={target.title}
+              className="juntos-poster juntos-create__poster"
+            />
+            <p className="juntos-create__heading">
+              <b aria-hidden="true">{JUNTOS_TEXT.createTitle}</b>
+              <span>{target.subtitle ? `${target.title} · ${target.subtitle}` : target.title}</span>
+            </p>
+          </div>
           {current ? (
             <div className="juntos-add">
               <Button variant="quiet" icon="plus" busy={busy} onClick={() => void addToRoom()}>

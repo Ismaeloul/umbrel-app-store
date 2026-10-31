@@ -2,13 +2,20 @@
    ENCIMA del vídeo, como en Rave y en el reproductor de casa, y se esconden
    solos.
 
+   Escritorio (`desk`, desde 768), como la maqueta:
    - Arriba: «Sala de Ismael · 4» y «● Sincronizados» (o «Esperando a Ana…»,
      «Reconectando…»).
    - En el centro, para quien controla: −10 s, reproducir o pausar y +10 s; o
      el aviso del momento («Toca para empezar», un error).
    - Abajo: la barra de tiempo del reproductor de casa (`VodTimeline`: arrastrar,
-     tiempo flotante y salto al soltar; sin tirador para quien no controla), el
-     tiempo en mono y volumen, idioma y pantalla completa.
+     tiempo flotante y salto al soltar), el tiempo en mono, idioma y pantalla
+     completa (sin volumen: la maqueta no lo trae; M silencia).
+   Móvil, como siempre: arriba el título y «Controla Ana (líder)»; en el
+   centro, el botón grande; abajo, reproducir, ±10 s, el tiempo, volumen,
+   idioma y pantalla completa.
+   En los dos:
+   - Quien no controla ve una barra de solo lectura (sin tirador, sin foco y
+     sin anunciarse como deslizador): no puede mover la sala.
    - Sin reacciones ni chat encima: en pantalla completa, solo el vídeo.
    - El tiempo y la barra son los de la SALA (su reloj), no los de este vídeo:
      así todos ven el mismo minuto aunque este aparato vaya cargando.
@@ -26,6 +33,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type ReactNode,
 } from 'react';
 import { describeFailure } from '../../api/index.ts';
@@ -53,6 +61,7 @@ export function Theater({
   video,
   fullscreen,
   onFullscreen,
+  desk = true,
 }: {
   player: RoomPlayer;
   client: PartyClient;
@@ -61,6 +70,8 @@ export function Theater({
   video: HTMLVideoElement | null;
   fullscreen: boolean;
   onFullscreen(): void;
+  /** El rediseño de escritorio; `false`, la sala de siempre del móvil. */
+  desk?: boolean;
 }) {
   const view = useSyncExternalStore(player.subscribe, player.getView);
   const control = canControl(room, client.credential.id);
@@ -71,6 +82,7 @@ export function Theater({
   const position = targetPosition(playback, client.serverNow(), duration || null);
   const hostName = room.members.find((member) => member.id === room.hostId)?.name ?? '';
   const online = room.members.filter((member) => member.online).length;
+  const leaderName = room.members.find((member) => member.id === room.leaderId)?.name ?? '';
   const waitingNames = room.members
     .filter((member) => playback.waitingFor.includes(member.id))
     .map((member) => member.name);
@@ -195,16 +207,39 @@ export function Theater({
         aria-hidden="true"
       />
 
-      <div className="juntos-chrome__top">
-        <span className="juntos-chip">
-          <Icon name="personas" size={16} />
-          {JUNTOS_TEXT.roomOf(hostName, online)}
-        </span>
-        {fullscreen ? <span className="juntos-chrome__title">{room.title.title}</span> : null}
-        <span className="juntos-chip" role="status">
-          {status}
-        </span>
-      </div>
+      {desk ? (
+        <div className="juntos-chrome__top">
+          <span className="juntos-chip">
+            <Icon name="personas" size={16} />
+            {JUNTOS_TEXT.roomOf(hostName, online)}
+          </span>
+          {fullscreen ? <span className="juntos-chrome__title">{room.title.title}</span> : null}
+          <span className="juntos-chip" role="status">
+            {status}
+          </span>
+        </div>
+      ) : (
+        <div className="juntos-chrome__top">
+          <div className="juntos-chrome__heading">
+            <span className="juntos-chrome__title">{room.title.title}</span>
+            {room.title.subtitle ? (
+              <span className="juntos-chrome__sub">{room.title.subtitle}</span>
+            ) : null}
+          </div>
+          <div className="juntos-chrome__chips">
+            <span className="juntos-chip">
+              <Icon name="personas" size={16} />
+              {online}
+            </span>
+            {!control && leaderName ? (
+              <span className="juntos-chip">
+                <Icon name="corona" size={16} />
+                {JUNTOS_TEXT.leaderControls(leaderName)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       <Center
         view={view}
@@ -214,6 +249,7 @@ export function Theater({
         running={running}
         waitingNames={waitingNames}
         reconnecting={reconnecting}
+        desk={desk}
         onToggle={() => {
           togglePlay();
           wake();
@@ -227,23 +263,63 @@ export function Theater({
 
       <div className="juntos-chrome__bottom">
         <div className={cx('juntos-chrome__bar', !control && 'juntos-chrome__bar--locked')}>
-          <VodTimeline
-            vod={{
-              positionS: position,
-              durationS: duration,
-              bufferedEndS: Math.max(position, view.bufferedS),
-            }}
-            onSeek={(seconds) => order('seek', seconds)}
-            onNudge={nudge}
-          />
+          {control ? (
+            <VodTimeline
+              vod={{
+                positionS: position,
+                durationS: duration,
+                bufferedEndS: Math.max(position, view.bufferedS),
+              }}
+              onSeek={(seconds) => order('seek', seconds)}
+              onNudge={nudge}
+            />
+          ) : (
+            <ReadOnlyBar position={position} duration={duration} buffered={view.bufferedS} />
+          )}
         </div>
         <div className="juntos-chrome__row">
-          <span className="juntos-chrome__time">
-            {clock(position)}
-            <span className="juntos-chrome__dur"> / {clock(duration)}</span>
-          </span>
+          {desk ? (
+            <span className="juntos-chrome__time">
+              {clock(position)}
+              <span className="juntos-chrome__dur"> / {clock(duration)}</span>
+            </span>
+          ) : (
+            <div className="juntos-chrome__group">
+              {control ? (
+                <>
+                  <IconButton
+                    icon={playback.playing ? 'pause' : 'play'}
+                    label={playback.playing ? JUNTOS_TEXT.pause : JUNTOS_TEXT.play}
+                    variant="video"
+                    onClick={() => {
+                      togglePlay();
+                      wake();
+                    }}
+                  />
+                  <IconButton
+                    icon="back"
+                    label={JUNTOS_TEXT.back10}
+                    variant="video"
+                    className="juntos-chrome__nudge"
+                    onClick={() => nudge(-STEP_S)}
+                  />
+                  <IconButton
+                    icon="chev-r"
+                    label={JUNTOS_TEXT.forward10}
+                    variant="video"
+                    className="juntos-chrome__nudge"
+                    onClick={() => nudge(STEP_S)}
+                  />
+                </>
+              ) : null}
+              <span className="juntos-chrome__time">
+                {clock(position)}
+                <span className="juntos-chrome__dur"> / {clock(duration)}</span>
+              </span>
+            </div>
+          )}
           <div className="juntos-chrome__group">
-            {video ? <Volume video={video} /> : null}
+            {!desk && video ? <Volume video={video} /> : null}
             {audioItems.length > 1 ? (
               <MenuButton
                 icon="idioma"
@@ -274,6 +350,7 @@ function Center({
   running,
   waitingNames,
   reconnecting,
+  desk,
   onToggle,
   onNudge,
 }: {
@@ -284,6 +361,7 @@ function Center({
   running: boolean;
   waitingNames: readonly string[];
   reconnecting: boolean;
+  desk: boolean;
   onToggle(): void;
   onNudge(delta: number): void;
 }) {
@@ -336,6 +414,18 @@ function Center({
     );
   } else if (view.buffering) {
     body = <span className="juntos-spinner juntos-spinner--bare" aria-hidden="true" />;
+  } else if (control && !desk) {
+    /* Móvil: el botón grande de siempre (±10 s van en la fila de abajo). */
+    body = (
+      <button
+        type="button"
+        className="juntos-center__big-btn juntos-center__big-btn--toggle"
+        aria-label={room.playback.playing ? JUNTOS_TEXT.pause : JUNTOS_TEXT.play}
+        onClick={onToggle}
+      >
+        <Icon name={room.playback.playing ? 'pause' : 'play'} size={32} />
+      </button>
+    );
   } else if (control) {
     body = (
       <div className="juntos-center__controls">
@@ -367,6 +457,41 @@ function Center({
     );
   }
   return body ? <div className="juntos-center">{body}</div> : null;
+}
+
+/**
+ * La barra de quien no controla: la misma pinta que la de casa, sin tirador
+ * ni deslizador (ni foco ni «ajustable» en el lector de pantalla), porque no
+ * puede mover la sala. El lector lee el tiempo como una barra de progreso.
+ */
+function ReadOnlyBar({
+  position,
+  duration,
+  buffered,
+}: {
+  position: number;
+  duration: number;
+  buffered: number;
+}) {
+  const ratio = duration ? Math.min(1, position / duration) : 0;
+  const loaded = duration ? Math.min(1, Math.max(position, buffered) / duration) : 0;
+  return (
+    <div
+      className="vod-bar juntos-chrome__ro"
+      role="progressbar"
+      aria-label={JUNTOS_TEXT.position}
+      aria-valuemin={0}
+      aria-valuemax={Math.round(duration)}
+      aria-valuenow={Math.round(Math.min(position, duration))}
+      aria-valuetext={`${clock(position)} / ${clock(duration)}`}
+      style={{ '--p': ratio, '--b': loaded } as CSSProperties}
+    >
+      <span className="vod-bar__track" aria-hidden="true">
+        <span className="vod-bar__loaded" />
+        <span className="vod-bar__played" />
+      </span>
+    </div>
+  );
 }
 
 /** Silencio y volumen de ESTE aparato (no es de la sala). En el iPhone solo hay silencio. */

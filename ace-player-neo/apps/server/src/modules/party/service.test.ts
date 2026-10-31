@@ -629,13 +629,22 @@ describe('«Ver juntos»: líder, co-líderes y lista (§11 y §13)', () => {
     party.member(room, { token: host.member.token, memberId: ana.member.id, action: 'guest' });
     expect(roles().Ana).toEqual(['guest', false]);
     expect(code(catchError(() => play(ana.member.token)))).toBe('party_leader_only');
-    /* Quien pasa la corona se queda de co-líder; la nueva líder deja de ser co-líder. */
+    /* Quien pasa la corona se queda de invitado (no sigue controlando sin que nadie lo decida);
+       la nueva líder deja de ser co-líder. */
     party.member(room, { token: host.member.token, memberId: bea.member.id, action: 'coleader' });
     party.member(room, { token: host.member.token, memberId: bea.member.id, action: 'lead' });
     expect(roles()).toEqual({
-      Isma: ['coleader', false],
+      Isma: ['guest', false],
       Ana: ['guest', false],
       Bea: ['leader', true],
+    });
+    expect(code(catchError(() => play(host.member.token)))).toBe('party_leader_only');
+    /* Quien creó la sala recupera la corona y Bea vuelve a ser invitada, no co-líder. */
+    party.member(room, { token: host.member.token, memberId: host.member.id, action: 'lead' });
+    expect(roles()).toEqual({
+      Isma: ['leader', true],
+      Ana: ['guest', false],
+      Bea: ['guest', false],
     });
   });
 

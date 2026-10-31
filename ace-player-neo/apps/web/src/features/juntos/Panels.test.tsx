@@ -162,9 +162,17 @@ describe('«Ver juntos»: Siguiente', () => {
       'true',
     );
     expect(screen.getByRole('radio', { name: 'En orden' })).toBeDisabled();
-    /* De lo suyo puede quitar; de lo de Isma, nada (ni «Poner ya»). */
-    expect(screen.queryByRole('button', { name: 'Opciones de Otra peli' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Opciones de La más votada' })).toBeTruthy();
+    /* Como la maqueta, cada fila lleva solo su voto: ni «⋯» ni «Siguiente» debajo. */
+    expect(screen.queryByRole('button', { name: /Opciones de/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Siguiente' })).toBeNull();
+    /* De lo suyo puede quitar (menú contextual); de lo de Isma, nada (ni «Poner ya»). */
+    const vote = (title: string) =>
+      screen.getByRole('button', { name: new RegExp(`Votar ${title}`) });
+    expect(vote('Otra peli')).not.toHaveAttribute('aria-haspopup');
+    expect(vote('La más votada')).toHaveAttribute('aria-haspopup', 'menu');
+    fireEvent.contextMenu(vote('La más votada'));
+    expect(await screen.findByRole('menuitem', { name: /Quitar/ })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: /Poner ya/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Proponer algo de Pelis y series' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Votar Otra peli/ }));
     await waitFor(() =>
@@ -176,7 +184,7 @@ describe('«Ver juntos»: Siguiente', () => {
     net = mockFetch({ 'POST /api/v1/party/:code/settings': () => json({ ok: true }) });
     const { client: party } = client(BEA);
     render(<NextPanel room={queued()} client={party} selfId={BEA} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Opciones de Otra peli' }));
+    fireEvent.contextMenu(screen.getByRole('button', { name: /Votar Otra peli/ }));
     expect(await screen.findByRole('menuitem', { name: /Poner ya/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('radio', { name: 'Elijo yo' }));
     await waitFor(() => expect(net?.calls.at(-1)?.body).toMatchObject({ queueMode: 'leader' }));
@@ -263,5 +271,20 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
     party.report(0, false, null);
     await waitFor(() => expect(net?.calls).toHaveLength(2));
     expect(net?.calls[1]?.body).not.toHaveProperty('ready');
+  });
+
+  it('«listo» sale al momento aunque el % acabe de salir (la sala arranca con él)', async () => {
+    net = mockFetch({
+      'POST /api/v1/party/:code/status': () => json({ serverNow: 1, rev: 2, stream: 'ok' }),
+    });
+    const { client: party } = client(ANA);
+    party.report(0, false, { ready: false, progress: 40 });
+    await waitFor(() => expect(net?.calls).toHaveLength(1));
+    /* Un % nuevo en el mismo segundo espera al siguiente tramo… */
+    party.report(0, false, { ready: false, progress: 60 });
+    /* …pero «listo», no. */
+    party.report(0, false, { ready: true, progress: 100 });
+    await waitFor(() => expect(net?.calls).toHaveLength(2));
+    expect(net?.calls[1]?.body).toMatchObject({ ready: true, progress: 100 });
   });
 });

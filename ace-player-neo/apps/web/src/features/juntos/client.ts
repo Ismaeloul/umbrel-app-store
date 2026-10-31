@@ -350,11 +350,14 @@ export class PartyClient {
     let urgent = buffering !== this.local.buffering;
     if (lobby) {
       const sent = this.sentLobby;
-      const moved =
-        !sent ||
-        sent.ready !== lobby.ready ||
-        Math.abs(sent.progress - lobby.progress) >= PROGRESS_STEP;
-      if (moved && this.env.now() - this.sentLobbyAt >= LOBBY_STATUS_MS) urgent = true;
+      /* «Listo» sale siempre al momento (la sala arranca con él); el % va espaciado. */
+      if (!sent || sent.ready !== lobby.ready) urgent = true;
+      else if (
+        Math.abs(sent.progress - lobby.progress) >= PROGRESS_STEP &&
+        this.env.now() - this.sentLobbyAt >= LOBBY_STATUS_MS
+      ) {
+        urgent = true;
+      }
     }
     this.local = { positionS, buffering, lobby };
     if (urgent) void this.sendStatus().catch(() => undefined);

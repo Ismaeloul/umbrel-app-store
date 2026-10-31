@@ -73,11 +73,30 @@ export const JUNTOS_TEXT = {
   invite: 'Invitar',
   roomOf: (name: string, count: number) => `Sala de ${name} · ${count}`,
   synced: 'Sincronizados',
-  /* La línea bajo el título, según quién eres. */
-  youControl: 'Tú controlas · todos van sincronizados',
+  /* La línea bajo el título, según quién eres (en «Esperando a todos» aún no va nadie sincronizado). */
+  youControl: (lobby: boolean) =>
+    `Tú controlas · ${lobby ? 'esperando a todos' : 'todos van sincronizados'}`,
   coleaderControls: (leader: string) => `Co-líder · controlas con ${leader}`,
-  everyoneControls: 'Controláis todos · todos van sincronizados',
-  guestOf: (leader: string) => `Sala de ${leader} · él controla`,
+  everyoneControls: (lobby: boolean) =>
+    `Controláis todos · ${lobby ? 'esperando a todos' : 'todos van sincronizados'}`,
+  /* Sin dar por hecho el género y con los co-líderes: «Sala de Ismael · controlan Ismael y Yassin». */
+  guestOf: (host: string, names: string, many: boolean) =>
+    `Sala de ${host} · ${many ? 'controlan' : 'controla'} ${names}`,
+  /* El móvil (la sala de siempre): las pestañas Lista y Ajustes y «Controla Ana (líder)». */
+  tabQueue: 'Lista',
+  tabSettings: 'Ajustes',
+  chatPlaceholderMobile: 'Escribe un mensaje',
+  leaderControls: (name: string) => `Controla ${name} (líder)`,
+  listEmpty: 'La lista está vacía.',
+  listEmptyHint:
+    'En casa, abre una película o un episodio en «Pelis y series» y pulsa «Ver juntos» → «Proponer en la sala».',
+  queueBy: (name: string) => `Lo ha añadido ${name}`,
+  settingsQueue: 'Al acabar',
+  queueAutoplay: 'Seguir con la lista',
+  queueVote: 'Votar lo siguiente',
+  queueLeader: 'Elige el líder',
+  queueOnce: 'Parar',
+  settingsHint: 'Sin nada en la lista, en una serie sigue el siguiente episodio.',
   memberActions: (name: string) => `Opciones de ${name}`,
   makeColeader: 'Hacer co-líder',
   removeColeader: 'Quitar co-líder',
@@ -126,6 +145,7 @@ export const JUNTOS_TEXT = {
   votes: (n: number) => (n === 1 ? '1 voto' : `${n} votos`),
   playNow: 'Poner ya',
   itemActions: (title: string) => `Opciones de ${title}`,
+  itemMenuHint: 'Más opciones con clic derecho o pulsación larga',
   remove: 'Quitar',
   next: 'Siguiente',
   nextEpisode: 'Siguiente episodio',

@@ -14,7 +14,7 @@ const HOST = 'm_IsmaAnfitrion';
 const ANA = 'm_AnaInvitada01';
 const NOW = 1_000_000;
 
-function setup(selfId: string, over: Partial<PartyRoom> = {}) {
+function setup(selfId: string, over: Partial<PartyRoom> = {}, desk = true) {
   const env: PartyEnv = {
     now: () => NOW,
     eventSource: () => new EventTarget() as unknown as EventSource,
@@ -52,9 +52,10 @@ function setup(selfId: string, over: Partial<PartyRoom> = {}) {
       client={client}
       room={room}
       state={state}
-      video={null}
+      video={document.createElement('video')}
       fullscreen={false}
       onFullscreen={() => undefined}
+      desk={desk}
     />,
   );
 }
@@ -71,6 +72,12 @@ describe('«Ver juntos»: el reproductor', () => {
     expect(screen.queryByRole('button', { name: 'Pausar' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Avanzar 10 segundos' })).toBeNull();
     expect(document.querySelector('.juntos-chrome__bar--locked')).toBeTruthy();
+    /* La barra no es un deslizador que no hace nada: es de solo lectura (sin foco). */
+    expect(screen.queryByRole('slider', { name: 'Posición' })).toBeNull();
+    expect(screen.getByRole('progressbar', { name: 'Posición' })).toHaveAttribute(
+      'aria-valuetext',
+      '10:00 / 1:48:36',
+    );
     expect(screen.getByText('Sala de Isma · 2')).toBeTruthy();
     expect(screen.getByText('Sincronizados')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Pantalla completa' })).toBeTruthy();
@@ -94,5 +101,31 @@ describe('«Ver juntos»: el reproductor', () => {
     expect(screen.getAllByRole('button', { name: 'Pausar' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Avanzar 10 segundos' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Retroceder 10 segundos' })).toBeTruthy();
+  });
+
+  it('en escritorio, como la maqueta: sin volumen (la M silencia)', () => {
+    setup(HOST);
+    expect(screen.queryByRole('button', { name: 'Silenciar' })).toBeNull();
+    expect(screen.getByRole('slider', { name: 'Posición' })).toBeTruthy();
+  });
+});
+
+describe('«Ver juntos»: el reproductor en el móvil (como siempre)', () => {
+  it('arriba el título y quién manda; abajo, el volumen; sin reacciones ni chat', () => {
+    setup(ANA, {}, false);
+    expect(screen.getByText((joined.room as PartyRoom).title.title)).toBeTruthy();
+    expect(screen.getByText('Controla Isma (líder)')).toBeTruthy();
+    expect(screen.queryByText('Sala de Isma · 2')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Silenciar' })).toBeTruthy();
+    expect(screen.getByRole('progressbar', { name: 'Posición' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Reaccionar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chat' })).toBeNull();
+  });
+
+  it('el líder: el botón grande y, abajo, reproducir y ±10 s', () => {
+    setup(HOST, {}, false);
+    expect(screen.getAllByRole('button', { name: 'Pausar' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Avanzar 10 segundos' })).toBeTruthy();
+    expect(document.querySelector('.juntos-center__controls')).toBeNull();
   });
 });

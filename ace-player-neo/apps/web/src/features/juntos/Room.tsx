@@ -4,8 +4,11 @@
      controles (Theater), debajo el título con quién controla e «Invitar», y
      la tarjeta «Cuando acabe»; a la derecha, las caras de la gente y las
      pestañas Chat, Siguiente y Gente. Entre 768 y 1024, lo mismo apilado.
-   - Móvil (menos de 768): como antes, la cabecera con el título y los
-     botones, el vídeo y las pestañas debajo.
+   - Móvil (menos de 768): la sala de siempre, sin tocar su aspecto: la
+     cabecera con el título, «Invitar» y «Salir», el vídeo y las pestañas
+     Chat, Lista, Gente y Ajustes (el líder) debajo (Mobile.tsx). Lo que sí
+     cambia es el funcionamiento: sin reacciones, los co-líderes y «Esperando
+     a todos».
    - Antes de empezar, «Esperando a todos» (Lobby) encima del vídeo, que ya
      va cargando por debajo.
    - Pantalla completa: solo el vídeo (sin chat). En el iPhone no hay
@@ -26,13 +29,15 @@ import { describeFailure } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
 import { copyText } from '../../player/clipboard.ts';
-import { Button, IconButton } from '../../ui/Button.tsx';
+import { Button } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
 import { Tabs, tabPanelProps } from '../../ui/Segmented.tsx';
 import { Art } from '../cine/Art.tsx';
 import { Chat } from './Chat.tsx';
-import { canControl, inviteUrl, PartyClient, rememberRoom, roleOf } from './client.ts';
-import { Faces, Lobby, NextCard, NextPanel, People } from './Panels.tsx';
+import { canControl, controllers, inviteUrl, PartyClient, rememberRoom, roleOf } from './client.ts';
+import { MEDIA, useMediaQuery } from '../../lib/media.ts';
+import { MobilePeople, MobileQueue, MobileSettings } from './Mobile.tsx';
+import { Faces, joinNames, Lobby, NextCard, NextPanel, People } from './Panels.tsx';
 import { RoomPlayer } from './player.ts';
 import { Theater } from './Theater.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
@@ -47,6 +52,8 @@ const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
 };
 
 type SideTab = 'chat' | 'siguiente' | 'gente';
+/* Las del móvil, las de siempre. */
+type MobileTab = 'chat' | 'lista' | 'personas' | 'ajustes';
 
 /** ¿Este navegador sabe poner un elemento cualquiera en pantalla completa? (el iPhone, no). */
 function nativeFullscreen(element: HTMLElement | null): boolean {
@@ -83,6 +90,9 @@ export function Room({
   const stage = useRef<HTMLDivElement>(null);
   const [player, setPlayer] = useState<RoomPlayer | null>(null);
   const [tab, setTab] = useState<SideTab>('chat');
+  const [mobileTab, setMobileTab] = useState<MobileTab>('chat');
+  /* Desde 768, el rediseño; en el móvil, la sala de siempre. */
+  const desk = useMediaQuery(MEDIA.tablet);
   /* `native`: la del navegador; `page`: el vídeo a toda pantalla con CSS (iPhone). */
   const [fullscreen, setFullscreen] = useState<'native' | 'page' | null>(null);
 
@@ -156,23 +166,22 @@ export function Room({
   const room = state.room;
   const selfId = credential.id;
   const isHost = room?.hostId === selfId;
+  const isLeader = room?.leaderId === selfId;
   const control = canControl(room, selfId);
   const role = roleOf(room, selfId);
   const leaderName = room?.members.find((member) => member.id === room.leaderId)?.name ?? '';
-  const tabs: { value: SideTab; label: string; count?: number }[] = [
-    { value: 'chat', label: JUNTOS_TEXT.tabChat },
-    { value: 'siguiente', label: JUNTOS_TEXT.tabNext, count: room?.queue.length ?? 0 },
-    { value: 'gente', label: JUNTOS_TEXT.tabPeople },
-  ];
+  const hostName = room?.members.find((member) => member.id === room.hostId)?.name ?? leaderName;
+  const lobby = !!room?.playback.lobby;
+  const names = room ? (controllers(room) ?? []) : [];
   const whoControls = !room
     ? ''
     : room.settings.control === 'everyone'
-      ? JUNTOS_TEXT.everyoneControls
+      ? JUNTOS_TEXT.everyoneControls(lobby)
       : role === 'leader'
-        ? JUNTOS_TEXT.youControl
+        ? JUNTOS_TEXT.youControl(lobby)
         : role === 'coleader' && control
           ? JUNTOS_TEXT.coleaderControls(leaderName)
-          : JUNTOS_TEXT.guestOf(leaderName);
+          : JUNTOS_TEXT.guestOf(hostName, joinNames(names), names.length > 1);
 
   /* La web de casa va por http: sin la API del portapapeles, `copyText` tira del
      respaldo. Si tampoco puede, el enlace sale en una ventana para copiarlo a mano
@@ -200,37 +209,123 @@ export function Room({
     onLeft();
   };
 
-  /* Móvil: como siempre, «Invitar» y «Salir» (o «Cerrar sala»). */
-  const actions = (
-    <>
-      <Button size="sm" variant="primary" icon="link" onClick={() => void copyLink()}>
-        {JUNTOS_TEXT.invite}
-      </Button>
-      <Button size="sm" variant={isHost ? 'danger' : 'quiet'} icon="x" onClick={() => void leave()}>
-        {isHost ? JUNTOS_TEXT.closeRoom : JUNTOS_TEXT.leave}
-      </Button>
-    </>
+  const stageContent = (
+    <div ref={stage} className="juntos__stage" data-fullscreen={fullscreen ? 'true' : 'false'}>
+      <video ref={video} className="juntos__video" playsInline preload="auto" />
+      {player && room ? (
+        <Theater
+          player={player}
+          client={client}
+          room={room}
+          state={state}
+          video={video.current}
+          fullscreen={fullscreen !== null}
+          onFullscreen={toggleFullscreen}
+          desk={desk}
+        />
+      ) : null}
+      {room?.playback.lobby && !fullscreen ? (
+        <Lobby
+          room={room}
+          client={client}
+          selfId={selfId}
+          onGesture={() => {
+            /* «Toca para empezar» queda debajo: este toque ya desbloquea el sonido. */
+            if (player?.getView().phase === 'blocked') player.unlock();
+          }}
+        />
+      ) : null}
+    </div>
   );
-  /* Escritorio, como la maqueta: «Invitar» para quien controla y, al lado, salir
-     o cerrar con solo el icono; los invitados, solo «Salir». */
-  const deskActions =
-    control || isHost ? (
-      <>
+
+  if (!desk) {
+    /* Móvil: la sala de siempre. */
+    const shownTab: MobileTab = mobileTab === 'ajustes' && !isLeader ? 'chat' : mobileTab;
+    const mobileTabs: { value: MobileTab; label: string; count?: number }[] = [
+      { value: 'chat', label: JUNTOS_TEXT.tabChat },
+      { value: 'lista', label: JUNTOS_TEXT.tabQueue, count: room?.queue.length ?? 0 },
+      { value: 'personas', label: JUNTOS_TEXT.tabPeople, count: room?.members.length ?? 0 },
+      ...(isLeader ? [{ value: 'ajustes' as const, label: JUNTOS_TEXT.tabSettings }] : []),
+    ];
+    return (
+      <div className={cx('juntos', fullscreen === 'page' && 'juntos--page-fs')}>
+        {header}
+        <header className="juntos__head">
+          <div className="juntos__heading">
+            <h1 className="juntos__title">{room?.title.title ?? JUNTOS_TEXT.connecting}</h1>
+            {room?.title.subtitle ? <p className="juntos__sub">{room.title.subtitle}</p> : null}
+          </div>
+          <div className="juntos__actions">
+            <Button size="sm" variant="primary" icon="link" onClick={() => void copyLink()}>
+              {JUNTOS_TEXT.invite}
+            </Button>
+            <Button
+              size="sm"
+              variant={isHost ? 'danger' : 'quiet'}
+              icon="x"
+              onClick={() => void leave()}
+            >
+              {isHost ? JUNTOS_TEXT.closeRoom : JUNTOS_TEXT.leave}
+            </Button>
+          </div>
+        </header>
+        <div className="juntos__body" data-fullscreen={fullscreen ? 'true' : 'false'}>
+          {stageContent}
+          <aside className="juntos__side">
+            <div className="juntos__side-head">
+              <Tabs
+                label={JUNTOS_TEXT.people}
+                idPrefix="juntos"
+                block
+                items={mobileTabs}
+                value={shownTab}
+                onChange={setMobileTab}
+              />
+            </div>
+            <div className="juntos__panel" {...tabPanelProps('juntos', shownTab)}>
+              {shownTab === 'chat' ? (
+                <Chat
+                  messages={state.chat}
+                  room={room}
+                  selfId={selfId}
+                  onSend={(text) => client.chat(text)}
+                  onTyping={() => client.typing()}
+                />
+              ) : !room ? null : shownTab === 'lista' ? (
+                <MobileQueue room={room} client={client} selfId={selfId} />
+              ) : shownTab === 'personas' ? (
+                <MobilePeople room={room} client={client} selfId={selfId} />
+              ) : (
+                <MobileSettings room={room} client={client} />
+              )}
+            </div>
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
+  const tabs: { value: SideTab; label: string; count?: number }[] = [
+    { value: 'chat', label: JUNTOS_TEXT.tabChat },
+    { value: 'siguiente', label: JUNTOS_TEXT.tabNext, count: room?.queue.length ?? 0 },
+    { value: 'gente', label: JUNTOS_TEXT.tabPeople },
+  ];
+  /* Como la maqueta: quien creó la sala, solo «Invitar» («Cerrar sala» va al
+     final de Gente); los demás, «Salir» (e «Invitar» si controlan). */
+  const deskActions = (
+    <>
+      {control || isHost ? (
         <Button variant="primary" icon="link" onClick={() => void copyLink()}>
           {JUNTOS_TEXT.invite}
         </Button>
-        <IconButton
-          icon={isHost ? 'x' : 'salir'}
-          label={isHost ? JUNTOS_TEXT.closeRoom : JUNTOS_TEXT.leave}
-          variant="ghost"
-          onClick={() => void leave()}
-        />
-      </>
-    ) : (
-      <Button variant="quiet" icon="salir" onClick={() => void leave()}>
-        {JUNTOS_TEXT.leave}
-      </Button>
-    );
+      ) : null}
+      {isHost ? null : (
+        <Button variant="quiet" icon="salir" onClick={() => void leave()}>
+          {JUNTOS_TEXT.leave}
+        </Button>
+      )}
+    </>
+  );
 
   return (
     <div
@@ -241,45 +336,9 @@ export function Room({
       )}
     >
       {header}
-      {/* Móvil: la cabecera de siempre (desde 768 la sustituye la fila bajo el vídeo). */}
-      <header className="juntos__head">
-        <div className="juntos__heading">
-          <h1 className="juntos__title">{room?.title.title ?? JUNTOS_TEXT.connecting}</h1>
-          {room?.title.subtitle ? <p className="juntos__sub">{room.title.subtitle}</p> : null}
-        </div>
-        <div className="juntos__actions">{actions}</div>
-      </header>
       <div className="juntos__body" data-fullscreen={fullscreen ? 'true' : 'false'}>
         <div className="juntos__main">
-          <div
-            ref={stage}
-            className="juntos__stage"
-            data-fullscreen={fullscreen ? 'true' : 'false'}
-          >
-            <video ref={video} className="juntos__video" playsInline preload="auto" />
-            {player && room ? (
-              <Theater
-                player={player}
-                client={client}
-                room={room}
-                state={state}
-                video={video.current}
-                fullscreen={fullscreen !== null}
-                onFullscreen={toggleFullscreen}
-              />
-            ) : null}
-            {room?.playback.lobby && !fullscreen ? (
-              <Lobby
-                room={room}
-                client={client}
-                selfId={selfId}
-                onGesture={() => {
-                  /* «Toca para empezar» queda debajo: este toque ya desbloquea el sonido. */
-                  if (player?.getView().phase === 'blocked') player.unlock();
-                }}
-              />
-            ) : null}
-          </div>
+          {stageContent}
           {room ? (
             <div className="juntos-info">
               <Art
@@ -290,17 +349,19 @@ export function Room({
                 className="juntos-poster juntos-info__poster"
               />
               <div className="juntos-info__text">
-                <h2 className="juntos-info__title">
+                <h1 className="juntos-info__title">
                   {room.title.title}
                   {room.title.subtitle ? (
                     <span className="juntos-info__sub"> · {room.title.subtitle}</span>
                   ) : null}
-                </h2>
+                </h1>
                 <p className="juntos-info__who">{whoControls}</p>
               </div>
               <div className="juntos-info__actions">{deskActions}</div>
             </div>
-          ) : null}
+          ) : (
+            <h1 className="juntos-info__title">{JUNTOS_TEXT.connecting}</h1>
+          )}
           {room ? <NextCard room={room} onSeeList={() => setTab('siguiente')} /> : null}
         </div>
         <aside className="juntos__side">
@@ -321,6 +382,7 @@ export function Room({
                 messages={state.chat}
                 room={room}
                 selfId={selfId}
+                desk
                 typing={state.typing}
                 onSend={(text) => client.chat(text)}
                 onTyping={() => client.typing()}
@@ -329,7 +391,12 @@ export function Room({
             ) : !room ? null : tab === 'siguiente' ? (
               <NextPanel room={room} client={client} selfId={selfId} onPropose={onPropose} />
             ) : (
-              <People room={room} client={client} selfId={selfId} />
+              <People
+                room={room}
+                client={client}
+                selfId={selfId}
+                onCloseRoom={isHost ? () => void leave() : undefined}
+              />
             )}
           </div>
         </aside>

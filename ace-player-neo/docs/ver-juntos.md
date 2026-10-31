@@ -232,12 +232,21 @@ de casa y como Rave: todo encima del vídeo y escondiéndose solo.
 
 La sala de escritorio sigue la maqueta 01-escritorio (sección 5) y las de móvil `ver-juntos*.html`: el vídeo y el
 control a la izquierda; a la derecha las caras de la gente y las pestañas Chat, Siguiente y Gente. Por debajo de
-768 px la sala del móvil no cambia de sitio las cosas.
+768 px la sala del móvil se ve como antes (cabecera, vídeo y las pestañas Chat, Lista, Gente y Ajustes; el chat en
+lista con nombre y hora): `Room.tsx` pinta otro marcado a cada lado de 768 (`Mobile.tsx` para las pestañas del
+móvil) y `juntos.css` separa lo común, el móvil y el escritorio. Lo que cambia en los dos es el funcionamiento: sin
+reacciones, los co-líderes (escudo junto al nombre y su opción en el menú del líder; las tres opciones de «Quién
+controla» en Ajustes) y «Esperando a todos».
 
 - **Papeles** (`member.role`): `leader` (la corona), `coleader` (el escudo azul) y `guest`. El booleano `leader` se
   mantiene igual que antes (las apps de iPhone y Android solo leen ese). El líder hace co-líder a quien quiera y se lo
   quita (`partyMember` con `coleader` / `guest`). El co-líder controla como el líder, pero no echa ni pasa ni quita la
-  corona. Quien pasa la corona se queda de co-líder.
+  corona. Quien pasa la corona se queda de invitado (y quien recupera la corona no deja co-líder al que la tenía):
+  nadie sigue controlando sin que el líder lo decida.
+- **Quién controla, en pantalla**: bajo el título, «Tú controlas · todos van sincronizados» (en la espera,
+  «· esperando a todos»); para los demás, «Sala de Ismael · controla Ismael» o «· controlan Ismael y Yassin» (sin
+  dar por hecho el género). Quien no controla ve la barra de solo lectura: sin tirador, sin foco y anunciada como
+  barra de progreso, no como deslizador.
 - **Quién controla**, sin romper las apps viejas (que solo conocen `leader` y `everyone`):
 
   | En la web | `settings.control` | `settings.coleaders` |
@@ -255,17 +264,25 @@ control a la izquierda; a la derecha las caras de la gente y las pestañas Chat,
   co-líderes.
 - **Siguiente** («Cuando acabe»): la regla En orden / Por votos / Elijo yo es `queueMode` `autoplay` / `vote` /
   `leader` (`once` sigue valiendo para las apps viejas, pero la web no lo ofrece). En series, sin nada propuesto,
-  sigue solo el siguiente episodio. Bajo el vídeo, la tarjeta «Cuando acabe · Por votos» con «Ver la lista».
+  sigue solo el siguiente episodio. Bajo el vídeo, la tarjeta «Cuando acabe · Por votos» con «Ver la lista». En la
+  pestaña, «Cuando acabe» lleva el anillo de la maqueta: lo que queda de película o, en la cuenta atrás, sus
+  segundos. Cada propuesta lleva solo su voto, como la maqueta; «Poner ya» y «Quitar» van en su menú contextual
+  (clic derecho, pulsación larga o la tecla de menú). En el móvil, la Lista de siempre con sus botones.
 - **«Esperando a todos»** (`playback.lobby`): cada título empieza parado y arranca solo cuando todos los conectados
   están listos (al crear, en cuanto entra el segundo), o cuando quien controla pulsa «Empezar para todos». Cada uno
   manda en `partyStatus` `ready` y `progress` (0-100, lo cargado); sin ellos (una app vieja), cuenta como lista al
-  abrir el vídeo y no estar cargando. La web enseña quién está listo y a quién le falta, con su %.
+  abrir el vídeo y no estar cargando. La web enseña quién está listo y a quién le falta, con su %. El paso a
+  «listo» se manda al momento; el % va espaciado (un tramo de 10 puntos, como mucho uno por segundo, o con el
+  latido). Si quien crea la sala está solo, no arranca sola: espera a que entre alguien o a «Empezar para todos».
 - **«X está escribiendo…»**: `partyTyping` y el evento `party.typing` (`memberId`, `name`). El cliente lo manda como
   mucho cada `PARTY.typingIntervalMs` (2 s) y el servidor ignora, sin error, lo que llegue más deprisa; se enseña
   `PARTY.typingShowMs` (4 s) y se quita al llegar un mensaje de esa persona.
 - **Fuera las reacciones**: ni bandeja ni emojis encima del vídeo; tampoco `partyReact`, `party.reaction`, su
   límite ni la ruta en la lista blanca del Caddyfile del proxy. El chat es solo texto (los emojis, del teclado).
-- **Pantalla completa**: solo el vídeo, sin chat encima.
+- **Pantalla completa**: solo el vídeo, sin chat encima (también en el móvil).
+- **Escritorio, lo que no trae la maqueta**: sin volumen en la barra del vídeo (globo y pantalla completa; la M
+  silencia) y sin la X junto a «Invitar»: quien creó la sala la cierra con «Cerrar sala» al final de Gente; los
+  demás tienen «Salir» en esa fila.
 - **Crear sala** (desde la ficha): tu nombre, «Quién entra» solo «Con enlace» (no hay amigos ni sala pública),
   «Quién controla», «Votar lo siguiente» (interruptor: `vote` o `autoplay`) y «Crear sala e invitar». Sin chat de
   voz: queda para otra fase y no se pinta nada de él (ni micros en las caras).

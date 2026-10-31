@@ -1217,11 +1217,10 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       if (body.action === 'lead') {
         /* A alguien desconectado no: el liderazgo volvería a pasar a otro en el siguiente barrido. */
         if (!online(target, clock.now())) throw new AppError('party_gone');
-        if (target.id !== room.leaderId) {
-          /* Quien pasa la corona se queda de co-líder: seguía controlando. */
-          room.coleaders.add(room.leaderId);
+        /* Quien pasa la corona se queda de invitado: nadie ha decidido que
+           siga controlando (si el nuevo líder quiere, lo hace co-líder). */
+        if (target.id !== room.leaderId)
           setLeader(room, target, `${target.name} es ahora el líder.`);
-        }
         return;
       }
       /* A uno mismo y a quien creó la sala no se les puede echar. */
