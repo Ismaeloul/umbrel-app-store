@@ -384,9 +384,9 @@ export function Shell() {
               ) : (
                 <StagePlaceholder />
               )}
-              {inStage ? (
-                <StatusLineHost className="stage__status" quietWhenOk={kind !== 'mobile'} />
-              ) : null}
+              {/* En el ordenador, sin línea de estado sobre el vídeo: la fuente y DIRECTO ya
+                  van en sus píldoras. */}
+              {inStage && kind === 'mobile' ? <StatusLineHost className="stage__status" /> : null}
             </div>
           ) : null}
           <div className="views">

@@ -274,6 +274,13 @@ describe('armazón', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Canales' })).toBeInTheDocument();
   });
 
+  it('en el ordenador no hay línea de estado sobre el vídeo (la fuente y DIRECTO van en píldoras)', async () => {
+    setViewport(1280, 800);
+    renderApp('?vista=partido/fltv-2026-09-23-3');
+    await screen.findByTestId('dock');
+    expect(document.querySelector('.stage__status')).toBeNull();
+  });
+
   it('el reproductor es UNO: de grande en el partido a «mini» fuera sin recrearse', async () => {
     renderApp('?vista=partido/fltv-2026-09-23-3');
     const dock = await screen.findByTestId('dock');
