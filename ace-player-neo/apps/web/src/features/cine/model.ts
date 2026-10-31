@@ -219,6 +219,14 @@ export function columnsFor(width: number): number {
   return 2;
 }
 
+/** Ancho mínimo de un cartel en la rejilla de escritorio (rediseño: carteles de unos 150 px). */
+export const DESK_CARD_MIN = 150;
+
+/** Columnas en escritorio: las que quepan de al menos DESK_CARD_MIN px, con 20 px entre ellas. */
+export function deskColumnsFor(width: number, gap = 20): number {
+  return Math.max(4, Math.floor((width + gap) / (DESK_CARD_MIN + gap)));
+}
+
 /** Filas de `n` en `n` (la última puede ir corta). */
 export function chunk<T>(items: readonly T[], n: number): T[][] {
   const size = Math.max(1, Math.floor(n));

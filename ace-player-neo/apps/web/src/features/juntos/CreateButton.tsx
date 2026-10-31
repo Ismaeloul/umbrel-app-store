@@ -9,6 +9,7 @@ import { useNavigate } from '../../app/router.tsx';
 import { notify } from '../../notices/index.ts';
 import { Button } from '../../ui/Button.tsx';
 import { TextField } from '../../ui/Field.tsx';
+import type { IconName } from '../../ui/icons.ts';
 import { Sheet } from '../../ui/Sheet.tsx';
 import { forgetLastRoom, lastRoom, saveCredential, saveName, savedName } from './client.ts';
 import { JUNTOS_TEXT } from './texts.ts';
@@ -19,7 +20,22 @@ export type JuntosTarget = Omit<PartyCreateBody, 'name' | 'audio' | 'poster' | '
   readonly subtitle: string | null;
 };
 
-export function JuntosButton({ target, disabled }: { target: JuntosTarget; disabled?: boolean }) {
+/** El aspecto del botón (el escaparate y la ficha de escritorio lo pintan a su manera). */
+export interface JuntosLook {
+  className?: string;
+  icon?: IconName;
+  size?: 'md' | 'sm';
+}
+
+export function JuntosButton({
+  target,
+  disabled,
+  look,
+}: {
+  target: JuntosTarget;
+  disabled?: boolean;
+  look?: JuntosLook;
+}) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(savedName);
@@ -85,8 +101,9 @@ export function JuntosButton({ target, disabled }: { target: JuntosTarget; disab
     <>
       <Button
         variant="quiet"
-        size="sm"
-        icon="link"
+        size={look?.size ?? 'sm'}
+        icon={look?.icon ?? 'link'}
+        className={look?.className}
         disabled={disabled}
         onClick={() => {
           setCurrent(lastRoom());

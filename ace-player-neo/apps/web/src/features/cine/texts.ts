@@ -65,6 +65,7 @@ export const CINE_TEXT = {
   listGone: 'Ya no está en tu IPTV',
   listEmptyMovies: 'No tienes películas en Mi lista. Añádelas desde su ficha.',
   listEmptySeries: 'No tienes series en Mi lista. Añádelas desde su ficha.',
+  listEmpty: 'Mi lista está vacía. Añade películas y series desde su ficha.',
   // Menú de «Seguir viendo» (§12.4)
   hideContinue: 'Quitar de Seguir viendo',
   markWatched: 'Marcar como visto',
@@ -400,4 +401,50 @@ export function listFailedText(title: string, adding: boolean): string {
   return adding
     ? `No se ha podido añadir «${title}» a Mi lista.`
     : `No se ha podido quitar «${title}» de Mi lista.`;
+}
+
+// ---- Rediseño de escritorio (≥ 768 px): pestañas, escaparate y ficha ---------------------
+
+export const DESK_TEXT = {
+  /** El titular de la barra, como en el menú lateral. */
+  title: 'Pelis y series',
+  tabs: 'Secciones de Pelis y series',
+  home: 'Inicio',
+  continueKicker: 'Seguir viendo',
+  alsoHalf: 'También a medias',
+  pick: 'Cambiar lo destacado',
+  follow: 'Seguir',
+  share: 'Compartir',
+  shared: 'Enlace copiado: pégalo donde quieras.',
+  shareFailed: 'No se ha podido copiar el enlace.',
+  noTrailer: 'Este título no tiene tráiler',
+  moreActions: 'Más acciones',
+  emptyTitle: 'Aún no tienes nada a medias',
+  emptyText: 'Lo que empieces a ver saldrá aquí, en grande, para seguir donde lo dejaste.',
+} as const;
+
+/** «Mi lista · 12» (la pestaña); sin saber cuántos, «Mi lista». */
+export function listTabText(n: number | null): string {
+  return n === null ? CINE_TEXT.myList : `${CINE_TEXT.myList} · ${formatCount(n)}`;
+}
+
+/** «12 títulos» (películas y series juntas: la pestaña «Mi lista»). */
+export function anyTitlesText(n: number): string {
+  return n === 1 ? '1 título' : `${formatCount(n)} títulos`;
+}
+
+/** «T3 E4» (el botón «Seguir · T3 E4»); en la temporada 0, «Especial 2». */
+export function shortCode(season: number, n: number): string {
+  return season === 0 ? `Especial ${n}` : `T${season} E${n}`;
+}
+
+/** «Seguir · T3 E4» o «Seguir · 43:12». */
+export function followText(where: string): string {
+  return `${DESK_TEXT.follow} · ${where}`;
+}
+
+/** «1:12» (horas y minutos, como «1:12 de 2:46» en las tarjetas a medias). */
+export function hoursText(seconds: number): string {
+  const total = Math.max(0, Math.floor((Number.isFinite(seconds) ? seconds : 0) / 60));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
