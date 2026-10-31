@@ -287,12 +287,17 @@ function startOf(match: FootballMatch): number {
  * algo tuyo (en «Todos», con gustos), luego el resto y al final los de
  * cantera, filiales o femenino; dentro de cada tramo, en el orden de su
  * primer partido pendiente, como antes.
+ *
+ * Con `order: 'clock'` (la lista de escritorio) los partidos de cada bloque
+ * van solo por hora, como un horario: los terminados arriba, con su
+ * resultado. El orden de los bloques no cambia.
  */
 export function groupByCompetition(
   matches: readonly FootballMatch[],
   now: number,
   scores: Readonly<Record<string, LiveScore>> = {},
   preferences: ForYouPreferences | null | undefined = null,
+  order: 'phase' | 'clock' = 'phase',
 ): CompetitionGroup[] {
   const prefs = asForYou(preferences);
   const hasPrefs = hasFootballPreferences(prefs);
@@ -321,6 +326,13 @@ export function groupByCompetition(
         mine,
         minor,
       });
+    }
+  }
+  if (order === 'clock') {
+    const at = new Map(decorated.map((item) => [item.match, [item.start, item.index] as const]));
+    const key = (match: FootballMatch) => at.get(match) ?? [0, 0];
+    for (const entry of groups.values()) {
+      entry.group.matches.sort((a, b) => key(a)[0] - key(b)[0] || key(a)[1] - key(b)[1]);
     }
   }
   const tier = (entry: { mine: boolean; minor: boolean }) => (entry.mine ? 0 : entry.minor ? 2 : 1);

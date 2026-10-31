@@ -1323,6 +1323,10 @@
 }
 .desk-agenda {
   display: grid;
+  /* Arriba y a su altura: con pocos partidos (una liga de tres) la columna es
+     más alta que lo que hay, y sin esto las filas se estiraban (días y chips
+     gigantes). */
+  align-content: start;
   gap: 12px;
   min-width: 0;
 }
@@ -1569,10 +1573,16 @@
   justify-items: end;
   min-width: 24px;
 }
-.desk-row__final {
-  color: var(--text-3);
-  font-size: var(--fs-11);
-  font-weight: var(--wght-strong);
+/* El resultado de un terminado: un número por equipo, a su altura. */
+.desk-row__score {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--fs-15);
+  font-weight: 700;
+  line-height: 20px;
 }
 /* Terminado: los equipos apagados, como en la maqueta. */
 .desk-row__teams--done {
@@ -1858,5 +1868,15 @@
 @media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
   .agenda-stage__row:hover {
     background: var(--line-soft);
+  }
+}
+/* Táctil desde 768: «Ver canal» y «Ver juntos» de la ficha miden 40; su zona
+   invisible, 44. Con ratón no cambia nada. */
+@media (min-width: 768px) and (pointer: coarse) {
+  .agenda-stage__go.btn::before,
+  .agenda-stage__together.btn::before {
+    content: '';
+    position: absolute;
+    inset: -2px 0;
   }
 }

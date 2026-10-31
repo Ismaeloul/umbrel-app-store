@@ -4,7 +4,13 @@ import { resetMode, setMode } from '../../api/mode.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { fixture, mockFetch } from '../../test/fetch.ts';
 import AgendaColumn from './column.tsx';
-import { competitionInitials, competitionTone, splitLeagueChips } from './DeskList.tsx';
+import {
+  byChip,
+  competitionInitials,
+  competitionTone,
+  FOR_YOU_CHIP,
+  splitLeagueChips,
+} from './DeskList.tsx';
 import { resetScoreRevealForTests } from './score-reveal.ts';
 import { resetAgendaUi, setAgendaChip } from './state.ts';
 import { liveScore, matchAt, NOW, renderWithApp, scheduleOf, TODAY } from './test-utils.tsx';
@@ -196,5 +202,17 @@ describe('«Más ligas»', () => {
       ),
     );
     expect(within(group).getByRole('button', { name: 'Más ligas: 2' })).toBeInTheDocument();
+  });
+});
+
+describe('«Para ti» en el escritorio', () => {
+  it('deja solo lo de tus gustos (tus equipos y ligas), como en el móvil', () => {
+    const preferences = { leagues: [], teams: ['Betis'], nationalities: [] };
+    const day = [CURRENT, OTHER, NONE];
+    expect(byChip(day, FOR_YOU_CHIP, NOW, {}, preferences).map((match) => match.id)).toEqual([
+      OTHER.id,
+    ]);
+    // Sin gustos no filtra nada.
+    expect(byChip(day, FOR_YOU_CHIP, NOW, {}, null)).toHaveLength(3);
   });
 });

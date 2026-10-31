@@ -7,8 +7,8 @@
    - los dos equipos, uno encima del otro, con su escudo o monograma;
    - a la derecha, las barritas si es lo que suena; en directo, el botón de
      play; antes, el punto de la señal con las fuentes verificadas («● 4»);
-     «Final» (y los equipos apagados) si terminó. Nunca el marcador: va
-     tapado en la ficha («Marcador»).
+     si terminó, «Final» en la hora, los equipos apagados y el resultado
+     (salvo el del partido que estás viendo, que va tapado en la ficha).
 
    La tira de días es la de la maqueta de escritorio: hasta siete pastillas
    prietas (el día en mayúsculas pequeñas y el número), la elegida en
@@ -20,7 +20,14 @@
 import './demo.ts';
 import './agenda.css';
 
-import { LEAGUE_ALIASES, leagueMatches, type FootballMatch, type LiveScore } from '@ace/shared';
+import {
+  hasFootballPreferences,
+  LEAGUE_ALIASES,
+  leagueMatches,
+  type FootballMatch,
+  type ForYouPreferences,
+  type LiveScore,
+} from '@ace/shared';
 import { useMemo, useState, type CSSProperties } from 'react';
 import { hueFromName, oklchToRgb, rgbToHex } from '../../lib/color.ts';
 import { cx } from '../../lib/cx.ts';
@@ -34,6 +41,7 @@ import { usePreferences } from '../preferences/usePreferences.ts';
 import { versusSide } from './cards.ts';
 import { useMatchSignal, useNow, useSchedule, useScores } from './data.ts';
 import {
+  asForYou,
   countLive,
   dayLabel,
   groupByCompetition,
@@ -45,19 +53,24 @@ import {
   resolveDay,
   visibleMatches,
 } from './domain.ts';
-import { useWatchedMatch } from './score-reveal.ts';
+import { useScoreCovered, useScoreHidden, useWatchedMatch } from './score-reveal.ts';
 import { setAgendaChip, setAgendaDay, useAgendaUi } from './state.ts';
 
 const EMPTY: readonly FootballMatch[] = [];
 
-/** Filtra por el chip: null (todo), 'live' (en directo) o el nombre de una competición. */
+/** El chip «Para ti»: lo de tus gustos (equipos, selecciones y ligas), como en el móvil. */
+export const FOR_YOU_CHIP = 'para-ti';
+
+/** Filtra por el chip: null (todo), 'live' (en directo), «Para ti» o el nombre de una competición. */
 export function byChip(
   matches: readonly FootballMatch[],
   chip: string | null,
   now: number,
   scores: Readonly<Record<string, LiveScore>>,
+  preferences: ForYouPreferences | null | undefined = null,
 ): FootballMatch[] {
   if (chip === null) return [...matches];
+  if (chip === FOR_YOU_CHIP) return visibleMatches(matches, 'forYou', preferences);
   if (chip === 'live')
     return matches.filter((match) => matchStatus(match, now, scores[match.id])?.phase === 'live');
   return matches.filter((match) => match.competition === chip);
@@ -228,7 +241,14 @@ export function DeskRow({ match, now, score, selected, watching, mine, onOpen }:
         ? 'Desc.'
         : `${minute.minute}'`
       : 'Directo'
-    : (match.time ?? '—');
+    : done
+      ? 'Final'
+      : (match.time ?? '—');
+  /* Terminado: «Final» y el resultado, salvo el del partido que estás viendo
+     (sin destapar) o uno que tapaste a mano. */
+  const covered = useScoreCovered(match.id);
+  const hidden = useScoreHidden(match.id);
+  const final = done && score && !covered && !hidden ? score : null;
   const progress = live ? matchProgressAt(match, now, score) : 0;
   return (
     <li>
@@ -268,9 +288,15 @@ export function DeskRow({ match, now, score, selected, watching, mine, onOpen }:
         <span className="desk-row__end">
           {watching ? (
             <Equalizer playing />
-          ) : done ? (
-            <span className="desk-row__final">Final</span>
-          ) : live && signal?.state === 'ok' ? (
+          ) : final ? (
+            <span
+              className="desk-row__score"
+              aria-label={`Resultado: ${final.home} a ${final.away}`}
+            >
+              <Num value={final.home} />
+              <Num value={final.away} />
+            </span>
+          ) : done ? null : live && signal?.state === 'ok' ? (
             <span className="desk-row__play" title={signal.summary} aria-hidden="true">
               <Icon name="play" size={18} />
             </span>
@@ -319,8 +345,20 @@ export function DeskList({ selectedId, active, onOpen, className }: DeskListProp
       competitionsOf(groupByCompetition(all, now, scores, preferences).flatMap((g) => g.matches)),
     [all, now, scores, preferences],
   );
+  const forYou = useMemo(
+    () =>
+      hasFootballPreferences(asForYou(preferences))
+        ? visibleMatches(all, 'forYou', preferences).length
+        : 0,
+    [all, preferences],
+  );
   const chip =
-    ui.chip !== null && ui.chip !== 'live' && !competitions.includes(ui.chip) ? null : ui.chip;
+    ui.chip === null ||
+    ui.chip === 'live' ||
+    (ui.chip === FOR_YOU_CHIP && forYou > 0) ||
+    competitions.includes(ui.chip)
+      ? ui.chip
+      : null;
   const leagues = useMemo(() => {
     const mine = new Set(
       all.filter((match) => isMine(match, preferences)).map((match) => match.competition),
@@ -334,9 +372,12 @@ export function DeskList({ selectedId, active, onOpen, className }: DeskListProp
     return counts;
   }, [all]);
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
-  const shown = useMemo(() => byChip(all, chip, now, scores), [all, chip, now, scores]);
+  const shown = useMemo(
+    () => byChip(all, chip, now, scores, preferences),
+    [all, chip, now, scores, preferences],
+  );
   const groups = useMemo(
-    () => groupByCompetition(shown, now, scores, preferences),
+    () => groupByCompetition(shown, now, scores, preferences, 'clock'),
     [shown, now, scores, preferences],
   );
   const live = countLive(all, now, scores);
@@ -380,6 +421,11 @@ export function DeskList({ selectedId, active, onOpen, className }: DeskListProp
         <Chip pressed={chip === null} count={all.length} onClick={() => pick(null)}>
           Todo
         </Chip>
+        {forYou > 0 ? (
+          <Chip pressed={chip === FOR_YOU_CHIP} count={forYou} onClick={() => pick(FOR_YOU_CHIP)}>
+            Para ti
+          </Chip>
+        ) : null}
         {live > 0 ? (
           <Chip pressed={chip === 'live'} count={live} onClick={() => pick('live')}>
             <span className="desk-agenda__dot" aria-hidden="true" />
