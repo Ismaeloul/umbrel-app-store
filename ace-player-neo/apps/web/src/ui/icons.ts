@@ -91,6 +91,12 @@ export const ICONS = {
   chat: '<path d="M4.5 5.5h15a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V17.5h-1A1.5 1.5 0 0 1 3 16V7a1.5 1.5 0 0 1 1.5-1.5z"/><path d="M7.5 10h9M7.5 13.5h6"/>',
   emoji:
     '<circle cx="12" cy="12" r="8.5"/><path d="M8.3 14.2a4.6 4.6 0 0 0 7.4 0"/><circle cx="9.2" cy="9.8" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.8" cy="9.8" r="1.1" fill="currentColor" stroke="none"/>',
+  /* Ajustes (rediseño): el Umbrel al que estás conectado y «Mis equipos». */
+  servidor:
+    '<rect x="4" y="4.5" width="16" height="6.5" rx="2"/><rect x="4" y="13" width="16" height="6.5" rx="2"/><path d="M7.6 7.75h.01M7.6 16.25h.01" stroke-width="2.6"/>',
+  camiseta: '<path d="M8.5 4 4 6.5l1.8 4 2-.9V20h8.4V9.6l2 .9 1.8-4L15.5 4a3.5 3.5 0 0 1-7 0z"/>',
+  /* Flecha de las filas que abren algo (Ajustes); girada, la de «volver». */
+  chevron: '<path d="M9.5 5.5 16 12l-6.5 6.5"/>',
   /* Avisos: la campana de la barra de cada sección. */
   campana:
     '<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/>',

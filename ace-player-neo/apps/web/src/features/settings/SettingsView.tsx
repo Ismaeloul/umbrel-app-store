@@ -32,7 +32,12 @@
      Umbrel y «Descargar logs» (un .zip para pasarlo si algo falla). Solo en
      la web; su propio trozo de JS.
    - Motor AceStream: estado y reinicio con segundo toque (6 s).
-   - Acerca de: versión y atajos. */
+   - Acerca de: versión y atajos.
+
+   Escritorio (rediseño, sección 7, desde 768 px): sin sección en la dirección
+   se ve la portada «Lo tuyo arriba, lo técnico abajo» (Overview.tsx) y cada
+   sección se abre sola, a todo el ancho, con «‹ Ajustes» para volver. El
+   índice de tarjetas queda solo para el móvil, que no cambia. */
 
 import type { PlaybackMode } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -51,6 +56,7 @@ import {
 } from '../../api/index.ts';
 import type { ViewProps } from '../../app/contracts.ts';
 import { ErrorBoundary } from '../../app/ErrorBoundary.tsx';
+import { useLayout } from '../../app/layout.tsx';
 import { useNavigate } from '../../app/router.tsx';
 import { searchFor } from '../../app/routes.ts';
 import { setTheme, setTransparency, useTheme, type ThemePreference } from '../../app/theme.ts';
@@ -75,6 +81,7 @@ import { DirectoriesSection } from '../directories/DirectoriesSection.tsx';
 import { WherePlayingSection } from '../where-playing/WherePlayingSection.tsx';
 import { externalSection, type ExternalSection } from './external.tsx';
 import { ModePicker } from './ModePicker.tsx';
+import { Overview } from './Overview.tsx';
 import { PLAYBACK_MODE_HELP, setPlaybackMode, usePlaybackMode } from './playback-mode.ts';
 import { useSecondTap } from './second-tap.ts';
 import './settings.css';
@@ -539,12 +546,28 @@ function AboutSection() {
  * vista en el primer fotograma tras cada cambio de ruta; el de la sección
  * tiene que llegar después.
  */
-function useFocusOnSectionChange(current: SectionId, active: boolean) {
+function useFocusOnSectionChange(current: SectionId | null, active: boolean) {
   const shown = useRef(current);
   useEffect(() => {
     if (shown.current === current) return;
+    const from = shown.current;
     shown.current = current;
     if (!active) return;
+    // Vuelta a la portada de escritorio: el foco, a la fila de la que se vino
+    // (también con doble fotograma, detrás del que pone el armazón).
+    if (current === null) {
+      let second = 0;
+      const first = requestAnimationFrame(() => {
+        second = requestAnimationFrame(() => {
+          const row = from ? document.getElementById(`ajustes-fila-${from}`) : null;
+          row?.focus();
+        });
+      });
+      return () => {
+        cancelAnimationFrame(first);
+        cancelAnimationFrame(second);
+      };
+    }
     let inner = 0;
     const outer = requestAnimationFrame(() => {
       inner = requestAnimationFrame(() => {
@@ -598,6 +621,8 @@ function External({ section, route, active }: { section: ExternalSection } & Vie
 
 export default function SettingsView({ route, active }: ViewProps) {
   const navigate = useNavigate();
+  // Escritorio: portada sin sección y cada sección sola (rediseño, sección 7).
+  const desk = useLayout().kind !== 'mobile';
   const hasHealth = externalSection('salud') !== null;
   const hasDevices = externalSection('dispositivos') !== null;
   const sections = SECTIONS.filter(
@@ -606,21 +631,24 @@ export default function SettingsView({ route, active }: ViewProps) {
   const requested = route.vista === 'ajustes' ? route.seccion : null;
   // Sin panel de salud, «ajustes/salud» (el indicador del motor) va al motor.
   // Sin sección (o con una que no existe) se ve la primera.
-  const current: SectionId =
+  const chosen: SectionId | null =
     requested === 'salud' && !hasHealth
       ? 'motor'
       : sections.some((s) => s.id === requested)
         ? (requested as SectionId)
-        : (sections[0]?.id ?? 'listas');
+        : null;
+  const current: SectionId = chosen ?? sections[0]?.id ?? 'listas';
+  // En escritorio, sin sección (o con una que no existe) se ve la portada.
+  const overview = desk && chosen === null;
   const list = useRef<HTMLUListElement>(null);
-  useFocusOnSectionChange(current, active);
+  useFocusOnSectionChange(overview ? null : current, active);
   useCurrentChipInView(list, current);
 
   // Cambiar de sección no es cambiar de vista: sin transición, pero sí con su
   // entrada en el historial (atrás vuelve a la sección anterior). Si ya es la
   // actual, el foco vuelve a su título.
   const go = (id: SectionId) => {
-    if (id === current) {
+    if (id === current && !overview) {
       document.getElementById(`ajustes-${id}-t`)?.focus({ preventScroll: true });
       return;
     }
@@ -726,6 +754,41 @@ export default function SettingsView({ route, active }: ViewProps) {
         );
     }
   };
+
+  if (desk) {
+    return (
+      <div className="set set--desk">
+        <ViewHeader title="Ajustes" />
+        {overview ? (
+          <Overview go={go} hasDevices={hasDevices} hasHealth={hasHealth} />
+        ) : (
+          <div className="set-one" id="ajustes-panel">
+            <a
+              className="set-back"
+              href={searchFor({ vista: 'ajustes', seccion: null })}
+              onClick={(event) => {
+                if (
+                  event.button !== 0 ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey
+                )
+                  return;
+                event.preventDefault();
+                haptic('selection');
+                navigate({ vista: 'ajustes', seccion: null }, { instant: true });
+              }}
+            >
+              <Icon name="chevron" size={18} className="set-back__ic" />
+              Ajustes
+            </a>
+            {def ? render(def) : null}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="set">

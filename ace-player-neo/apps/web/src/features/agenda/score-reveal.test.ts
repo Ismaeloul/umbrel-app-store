@@ -7,9 +7,11 @@ import {
   resetScoreReveal,
   resetScoreRevealForTests,
   revealScore,
+  setScoreHiding,
   useRevealedScores,
   useScoreCovered,
   useScoreHidden,
+  useScoreHiding,
   useScoreRevealed,
   useWatchedMatch,
   watchedMatchOf,
@@ -18,6 +20,7 @@ import {
 const partido = (id: string) => ({ vista: 'partido' as const, id, canal: null });
 
 afterEach(() => {
+  setScoreHiding(true);
   setPlayerPresence({ active: false, route: null, immersive: false });
   resetScoreRevealForTests();
 });
@@ -102,5 +105,38 @@ describe('agenda: todo tapado hasta que se pide (corrección 1)', () => {
     expect(result.current.x).toBe(true);
     act(() => revealScore('x'));
     expect(result.current.x).toBe(false);
+  });
+
+  it('«Marcador oculto» apagado (Ajustes): todo se ve y se guarda en el navegador', () => {
+    setPlayerPresence({ active: true, route: partido('a') });
+    const { result } = renderHook(() => ({
+      hiding: useScoreHiding(),
+      revealed: useScoreRevealed('a'),
+      hidden: useScoreHidden('a'),
+      covered: useScoreCovered('a'),
+      set: useRevealedScores(),
+    }));
+    act(() => hideScore('a'));
+    expect(result.current).toMatchObject({
+      hiding: true,
+      revealed: false,
+      hidden: true,
+      covered: true,
+    });
+    expect(isScoreRevealed(result.current.set, 'a')).toBe(false);
+    act(() => setScoreHiding(false));
+    expect(localStorage.getItem('aceneo-marcador')).toBe('visible');
+    expect(result.current).toMatchObject({
+      hiding: false,
+      revealed: true,
+      hidden: false,
+      covered: false,
+    });
+    // La agenda lo comprueba con el conjunto que le da useRevealedScores.
+    expect(isScoreRevealed(result.current.set, 'a')).toBe(true);
+    expect(isScoreRevealed(result.current.set, 'cualquiera')).toBe(true);
+    act(() => setScoreHiding(true));
+    expect(localStorage.getItem('aceneo-marcador')).toBe('oculto');
+    expect(result.current.hidden).toBe(true);
   });
 });

@@ -98,4 +98,12 @@ export const STORAGE_KEYS = {
   aside: 'aceneo-panel',
   /** Guía TV: «Favoritos | Todos» elegido (`favoritos` o `todos`). */
   guideScope: 'aceneo-guia-ambito',
+  /** Ajustes → «Marcador oculto»: `oculto` (por defecto) o `visible`. */
+  scoreHiding: 'aceneo-marcador',
+  /** Ajustes → «Cambiar de fuente sola»: `si` (por defecto) o `no`. */
+  autoSwitch: 'aceneo-cambio-fuente',
+  /** Ajustes → «Avisos»: minutos antes de empezar (`0`, `5`, `10`, `15`, `30`) o `no`. */
+  alertLead: 'aceneo-avisos',
+  /** Ajustes → «Idioma preferido»: `es`, `en` u `original`. */
+  preferredLang: 'aceneo-idioma',
 } as const;

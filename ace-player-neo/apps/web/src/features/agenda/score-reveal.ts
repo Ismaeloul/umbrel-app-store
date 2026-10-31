@@ -11,6 +11,7 @@
    «destapado». Qué partido se ve lo dice el armazón (playerPresence). */
 
 import { playerPresence, type PlayerPresence } from '../../app/player-presence.ts';
+import { readItem, STORAGE_KEYS, writeItem } from '../../lib/storage.ts';
 import { createStore, useStore } from '../../lib/store.ts';
 
 interface RevealState {
@@ -21,6 +22,13 @@ interface RevealState {
   /** Partidos que TAPASTE a mano en la agenda (cápsula «Marcador» o menú):
       la tira «En directo», que enseña el resultado, tampoco lo enseña. */
   covered: ReadonlySet<string>;
+  /** «Marcador oculto» de Ajustes (rediseño, sección 7): apagado, todo se ve. */
+  hiding: boolean;
+}
+
+/** «Marcador oculto» guardado en este navegador; sin nada guardado, encendido. */
+function readHiding(): boolean {
+  return readItem(STORAGE_KEYS.scoreHiding) !== 'visible';
 }
 
 /** Id del partido que se está viendo, o null (un canal suelto no es un partido). */
@@ -34,6 +42,7 @@ const store = createStore<RevealState>({
   watched: watchedMatchOf(playerPresence.get()),
   revealed: new Set(),
   covered: new Set(),
+  hiding: readHiding(),
 });
 
 /* Cambiar de partido o detener vuelve a tapar: el destapado era para ESA
@@ -90,19 +99,34 @@ export function hideScore(matchId: string): void {
    estás viendo (regla 29, `useScoreHidden`) y salvo los que hayas tapado a
    mano (`useScoreCovered`). */
 
+/* «Marcador oculto» apagado: la agenda recibe este conjunto en vez del de
+   destapados y lo da todo por destapado (sin tocar a quien lo usa). */
+const EVERYTHING: ReadonlySet<string> = new Set<string>();
+
 /** Puro: ¿este partido está destapado? */
 export function isScoreRevealed(revealed: ReadonlySet<string>, matchId: string): boolean {
-  return revealed.has(matchId);
+  return revealed === EVERYTHING || revealed.has(matchId);
 }
 
 /** Los partidos destapados (la agenda lo lee una vez para sus menús contextuales). */
 export function useRevealedScores(): ReadonlySet<string> {
-  return useStore(store, (state) => state.revealed);
+  return useStore(store, (state) => (state.hiding ? state.revealed : EVERYTHING));
 }
 
 /** ¿Este partido está destapado en la agenda? */
 export function useScoreRevealed(matchId: string): boolean {
-  return useStore(store, (state) => isScoreRevealed(state.revealed, matchId));
+  return useStore(store, (state) => !state.hiding || isScoreRevealed(state.revealed, matchId));
+}
+
+/** ¿Está encendido «Marcador oculto»? (Ajustes → Agenda.) */
+export function useScoreHiding(): boolean {
+  return useStore(store, (state) => state.hiding);
+}
+
+/** Enciende o apaga «Marcador oculto» y lo guarda en este navegador. */
+export function setScoreHiding(hiding: boolean): void {
+  writeItem(STORAGE_KEYS.scoreHiding, hiding ? 'oculto' : 'visible');
+  store.set((state) => (state.hiding === hiding ? state : { ...state, hiding }));
 }
 
 /** Vuelve a tapar (el reproductor lo puede llamar al cambiar de fuente o de canal). */
@@ -112,7 +136,7 @@ export function resetScoreReveal(): void {
 
 /** ¿Lo has tapado a mano en la agenda (y no lo has vuelto a destapar)? */
 export function useScoreCovered(matchId: string): boolean {
-  return useStore(store, (state) => state.covered.has(matchId));
+  return useStore(store, (state) => state.hiding && state.covered.has(matchId));
 }
 
 /** Id del partido que se está viendo (o null). */
@@ -127,7 +151,7 @@ export function useWatchedMatch(): string | null {
  */
 export function useScoreHidden(matchId: string, alsoWatched = false): boolean {
   const watched = useWatchedMatch();
-  const revealed = useStore(store, (state) => state.revealed.has(matchId));
+  const revealed = useStore(store, (state) => !state.hiding || state.revealed.has(matchId));
   return (alsoWatched || watched === matchId) && !revealed;
 }
 
@@ -137,5 +161,6 @@ export function resetScoreRevealForTests(): void {
     watched: watchedMatchOf(playerPresence.get()),
     revealed: new Set(),
     covered: new Set(),
+    hiding: readHiding(),
   });
 }
