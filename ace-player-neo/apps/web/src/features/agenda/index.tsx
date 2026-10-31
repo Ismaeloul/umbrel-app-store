@@ -43,6 +43,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { describeFailure, useAppMode } from '../../api/index.ts';
 import type { ViewProps } from '../../app/contracts.ts';
 import { useLayout } from '../../app/layout.tsx';
+import { playerPresence } from '../../app/player-presence.ts';
 import { useNavigate } from '../../app/router.tsx';
 import { useShortcut } from '../../app/shortcuts.ts';
 import { preloadView } from '../../app/views.tsx';
@@ -69,6 +70,7 @@ import {
   toggleFollow,
 } from '../preferences/model.ts';
 import { usePreferences, useSavePreferences } from '../preferences/usePreferences.ts';
+import { autoStartWithoutIptv } from '../sources/auto-iptv.ts';
 import { AgendaRows, type RowSlot } from './AgendaList.tsx';
 import { useLibraryLookup, useNow, useSchedule, useScores } from './data.ts';
 import { useDaySwipe } from './day-swipe.ts';
@@ -86,6 +88,7 @@ import {
   laterMatches,
   madridClock,
   madridHour,
+  matchStatus,
   paintableScore,
   resolveDay,
   visibleMatches,
@@ -131,6 +134,14 @@ function LoadingRows() {
       </div>
     </div>
   );
+}
+
+/** El destacado ya se abrió solo en esta carga de la página (una vez). */
+let autoOpened = false;
+
+/** Solo para los tests. */
+export function resetAgendaAutoOpenForTests(): void {
+  autoOpened = false;
 }
 
 export default function Agenda({ active }: ViewProps) {
@@ -220,10 +231,35 @@ export default function Agenda({ active }: ViewProps) {
         return;
       }
       haptic('light');
+      autoStartWithoutIptv(null);
       navigate({ vista: 'partido', id: match.id, canal: null });
     },
     [navigate],
   );
+
+  /* Escritorio: al entrar, si el destacado está en directo y tiene un canal de
+     AceStream en tu biblioteca, se abre solo y empieza a sonar (en el
+     ordenador la Agenda y el partido son la misma pantalla: no se nota el
+     cambio, solo que el vídeo arranca). Una vez por carga de la página, sin
+     nada sonando y sin que hayas elegido otro partido. Con solo IPTV, no: la
+     cuenta tiene una conexión y se espera a que des al play. */
+  const autoMatch =
+    active &&
+    stageVisible &&
+    !schedule.isPending &&
+    !autoOpened &&
+    ui.selected === null &&
+    featured &&
+    matchStatus(featured, now, scores[featured.id])?.phase === 'live' &&
+    channelInfo(featured, lookup).some((channel) => channel.inLibrary)
+      ? featured
+      : null;
+  useEffect(() => {
+    if (!autoMatch || autoOpened || playerPresence.get().active) return;
+    autoOpened = true;
+    autoStartWithoutIptv(autoMatch.id);
+    navigate({ vista: 'partido', id: autoMatch.id, canal: null }, { replace: true });
+  }, [autoMatch, navigate]);
 
   const changeDay = useCallback(
     (date: string, direction: 'next' | 'prev' | null = null) => {

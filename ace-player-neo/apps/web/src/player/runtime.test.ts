@@ -376,6 +376,29 @@ describe('arranque', () => {
     expect(t.outcomes()).toEqual(['arranco']);
   });
 
+  it('sin gesto, si el navegador solo deja sonar en silencio, arranca en silencio (sin capa de toque)', async () => {
+    const t = setup();
+    t.video.muted = false;
+    t.video.playImpl = () =>
+      t.video.muted
+        ? Promise.resolve()
+        : Promise.reject(Object.assign(new Error('bloqueado'), { name: 'NotAllowedError' }));
+    t.runtime.play({ hash: HASH, title: 'Canal' });
+    await flush();
+    t.engines.last().args.callbacks.onReady();
+    t.video.setBuffered([[0, 7]]);
+    await vi.advanceTimersByTimeAsync(250);
+    // El reintento en silencio va en la tarea siguiente.
+    await vi.advanceTimersByTimeAsync(10);
+    await flush();
+    t.video.dispatchEvent(new Event('playing'));
+    t.video.advance(0.1);
+    await vi.advanceTimersByTimeAsync(250);
+    await flush();
+    expect(t.video.muted).toBe(true);
+    expect(t.state.phase).toBe('reproduciendo');
+  });
+
   it('una respuesta tardía de un canal anterior se descarta (B-083)', async () => {
     const t = setup();
     let resolveFirst: () => void = () => {};

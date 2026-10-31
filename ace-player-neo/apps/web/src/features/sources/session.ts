@@ -65,6 +65,7 @@
        · en Recientes entra el canal TOCADO, una vez por sesión, al arrancar
          la primera fuente (sea la IPTV o una AceStream). */
 
+import { autoMayUseIptv, autoStartWithoutIptv } from './auto-iptv.ts';
 import type {
   FootballMatch,
   IptvView,
@@ -1417,6 +1418,8 @@ function noteIptvBusyWhileConnecting(): void {
 function tryAutoStart(): boolean {
   const state = sessionStore.get();
   if (!state.autoVerified || state.stopped || !drives(state)) return false;
+  /* Abierto solo por la Agenda de escritorio: sin tu IPTV (una conexión por cuenta). */
+  const iptv = autoMayUseIptv(state.key);
   const screen = screenNow();
   if (belongsOnScreen(state, screen)) return false;
   const now = clock();
@@ -1424,9 +1427,9 @@ function tryAutoStart(): boolean {
   const finished = scanFinished(state.scan);
   const lanes = lanesNow();
   laneWait = false;
-  const chosen = pickAutoSource(state.entries, effective, finished, { lanes });
+  const chosen = pickAutoSource(state.entries, effective, finished, { iptv, lanes });
   /* La que se habría elegido sin mirar a los demás (D35): si es otra, se dice por qué. */
-  const preferred = pickAutoSource(state.entries, effective, finished);
+  const preferred = pickAutoSource(state.entries, effective, finished, { iptv });
   const busy = preferred && preferred.id !== chosen?.id ? takesFromOther(preferred, lanes) : null;
   const total = state.entries.length;
   if (chosen) {
@@ -2479,5 +2482,6 @@ export function openPaste(open = true): void {
 /** Solo para los tests. */
 export function resetSessionForTests(): void {
   endSession();
+  autoStartWithoutIptv(null);
   clock = () => Date.now();
 }
