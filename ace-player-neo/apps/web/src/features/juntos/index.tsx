@@ -74,6 +74,11 @@ function JuntosRoom({ code }: { code: string }) {
     setCredential(null);
   }, [code]);
   const toCine = useCallback(() => navigate({ vista: 'cine', id: null }), [navigate]);
+  /* Al salir de una sala en directo, a la Agenda; de una de pelis y series, a Pelis y series. */
+  const left = useCallback(
+    (live: boolean) => (live ? navigate({ vista: 'agenda' }) : toCine()),
+    [navigate, toCine],
+  );
   /* Desde 768, la barra de la sección; en el móvil la sala sigue como estaba. */
   const desk = useLayoutKind() !== 'mobile';
   const exitAction = (
@@ -87,7 +92,7 @@ function JuntosRoom({ code }: { code: string }) {
       code={code}
       credential={credential}
       onForbidden={forbidden}
-      onLeft={toCine}
+      onLeft={left}
       onEnter={stopHousePlayer}
       onPropose={toCine}
       header={desk ? <ViewHeader title={JUNTOS_TEXT.open} /> : undefined}

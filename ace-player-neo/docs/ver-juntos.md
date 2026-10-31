@@ -5,15 +5,16 @@ mismo a la vez y chatean. Pausar, avanzar o cambiar el idioma pasa para todos.
 
 ## 1. Fases
 
-| Fase | Qué | Estado |
-|---|---|---|
-| 1 | Sala dentro de casa (la web de siempre, con el login de Umbrel): sincronización, chat, idioma | 0.9.4 |
-| 2 | Invitados desde fuera en `https://sala.ismaeloul.es/s/<código>` (§9) | 0.9.5 |
-| 2b | La app del iPhone (Ace Neo) crea, entra y cierra salas (§10) | 0.9.6 |
-| 3 | Como Rave (§11): líder, echar, reacciones, lista con votos, siguiente episodio para todos | 0.9.13 (web) |
-| 3c | Reproductor nuevo: controles sobre el vídeo, pantalla completa con chat (§12) | 0.9.15 (web) |
-| 3d | Rediseño de escritorio: co-líderes, «Esperando a todos», «está escribiendo», sin reacciones (§13) | 0.10.x (web y servidor) |
-| 3b | Lo mismo en la app del iPhone; chat de voz; que los invitados busquen y añadan títulos | ideas |
+| Fase | Qué                                                                                               | Estado                  |
+| ---- | ------------------------------------------------------------------------------------------------- | ----------------------- |
+| 1    | Sala dentro de casa (la web de siempre, con el login de Umbrel): sincronización, chat, idioma     | 0.9.4                   |
+| 2    | Invitados desde fuera en `https://sala.ismaeloul.es/s/<código>` (§9)                              | 0.9.5                   |
+| 2b   | La app del iPhone (Ace Neo) crea, entra y cierra salas (§10)                                      | 0.9.6                   |
+| 3    | Como Rave (§11): líder, echar, reacciones, lista con votos, siguiente episodio para todos         | 0.9.13 (web)            |
+| 3c   | Reproductor nuevo: controles sobre el vídeo, pantalla completa con chat (§12)                     | 0.9.15 (web)            |
+| 3d   | Rediseño de escritorio: co-líderes, «Esperando a todos», «está escribiendo», sin reacciones (§13) | 0.10.x (web y servidor) |
+| 3e   | La sala de un partido en directo: una conexión del NAS para todos (§14)                           | 0.10.x (web y servidor) |
+| 3b   | Lo mismo en la app del iPhone; chat de voz; que los invitados busquen y añadan títulos            | ideas                   |
 
 Descartado para la fase 2: Cloudflare Tunnel (sus condiciones no quieren mucho vídeo y Isma quiere algo que no dependa
 de terceros) y Tailscale (el invitado tendría que instalar algo).
@@ -41,19 +42,19 @@ de terceros) y Tailscale (el invitado tendría que instalar algo).
 
 ## 4. Rutas
 
-| Id | Método y ruta | Qué |
-|---|---|---|
-| `partyCreate` | `POST /api/v1/party` | crear (201) con el título y el nombre del anfitrión |
-| `partyPreview` | `GET /api/v1/party/:code` | lo que se ve antes de entrar (sin credencial) |
-| `partyJoin` | `POST /api/v1/party/:code/join` | entrar con un nombre |
-| `partyEvents` | `GET /api/v1/party/:code/events?t=` | SSE: `party.snapshot`, `party.playback`, `party.room`, `party.chat`, `party.closed` |
-| `partyStream` | `GET /api/v1/party/:code/stream` | el vídeo (una `VodGrant`) |
-| `partyControl` | `POST /api/v1/party/:code/control` | `play`, `pause`, `seek` o `audio` para todos |
-| `partyStatus` | `POST /api/v1/party/:code/status` | latido de cada uno: posición y si carga |
-| `partyChat` | `POST /api/v1/party/:code/chat` | un mensaje |
-| `partyTyping` | `POST /api/v1/party/:code/typing` | «está escribiendo» (uno cada 2 s por persona; §13) |
-| `partyLeave` | `POST /api/v1/party/:code/leave` | salir |
-| `partyClose` | `POST /api/v1/party/:code/close` | cerrar (solo el anfitrión) |
+| Id             | Método y ruta                       | Qué                                                                                 |
+| -------------- | ----------------------------------- | ----------------------------------------------------------------------------------- |
+| `partyCreate`  | `POST /api/v1/party`                | crear (201) con el título y el nombre del anfitrión                                 |
+| `partyPreview` | `GET /api/v1/party/:code`           | lo que se ve antes de entrar (sin credencial)                                       |
+| `partyJoin`    | `POST /api/v1/party/:code/join`     | entrar con un nombre                                                                |
+| `partyEvents`  | `GET /api/v1/party/:code/events?t=` | SSE: `party.snapshot`, `party.playback`, `party.room`, `party.chat`, `party.closed` |
+| `partyStream`  | `GET /api/v1/party/:code/stream`    | el vídeo (una `VodGrant`)                                                           |
+| `partyControl` | `POST /api/v1/party/:code/control`  | `play`, `pause`, `seek` o `audio` para todos                                        |
+| `partyStatus`  | `POST /api/v1/party/:code/status`   | latido de cada uno: posición y si carga                                             |
+| `partyChat`    | `POST /api/v1/party/:code/chat`     | un mensaje                                                                          |
+| `partyTyping`  | `POST /api/v1/party/:code/typing`   | «está escribiendo» (uno cada 2 s por persona; §13)                                  |
+| `partyLeave`   | `POST /api/v1/party/:code/leave`    | salir                                                                               |
+| `partyClose`   | `POST /api/v1/party/:code/close`    | cerrar (solo el anfitrión)                                                          |
 
 El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 salen como JSON normal.
 
@@ -138,7 +139,7 @@ iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:84
   `/api/v1/party/<código>/v/<clave>/index.m3u8` y los segmentos, relativos, la heredan. `partyVideo` sirve los mismos
   ficheros que `video` (Range 206/416) de la sesión de esa persona.
 - **Latido por la sala**: `partyStatus` da el latido de la sesión de playback de la persona y dice `stream: ok | lost |
-  none`; con `lost`, el reproductor vuelve a abrir (si la sala no está interrumpida). Así ni la web de casa ni el
+none`; con `lost`, el reproductor vuelve a abrir (si la sala no está interrumpida). Así ni la web de casa ni el
   invitado llaman a las rutas de playback. Salir o cerrar suelta los visores.
 - **Enlace público**: `PARTY_PUBLIC_URL=https://sala.ismaeloul.es` en storage; `room.inviteUrl` es
   `https://sala.ismaeloul.es/s/<código>` y «Copiar enlace» lo usa (sin él, el de casa).
@@ -164,7 +165,6 @@ iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:84
 - Probado en el simulador contra esta rama con el proveedor falso (`--vod-muestras`) y un invitado por la API: crear
   desde la ficha, play/pausa/salto en los dos sentidos (0,1 s de diferencia tras un salto), chat, entrar a mitad de
   película y cerrar la sala para todos.
-
 
 ## 11. Como en Rave (fase 3, 0.9.13)
 
@@ -249,15 +249,16 @@ controla» en Ajustes) y «Esperando a todos».
   barra de progreso, no como deslizador.
 - **Quién controla**, sin romper las apps viejas (que solo conocen `leader` y `everyone`):
 
-  | En la web | `settings.control` | `settings.coleaders` |
-  |---|---|---|
-  | Solo yo | `leader` | `false` |
-  | Yo y co-líderes (por defecto) | `leader` | `true` |
-  | Todos | `everyone` | (da igual) |
+  | En la web                     | `settings.control` | `settings.coleaders` |
+  | ----------------------------- | ------------------ | -------------------- |
+  | Solo yo                       | `leader`           | `false`              |
+  | Yo y co-líderes (por defecto) | `leader`           | `true`               |
+  | Todos                         | `everyone`         | (da igual)           |
 
   Una sala sin `coleaders` (una app vieja que crea con lo de siempre) se queda con `true`: si no hay co-líderes,
   es lo mismo que «Solo yo». `partyCreate` acepta `control`, `coleaders` y `queueMode`; `partySettings`, lo mismo
   (solo el líder).
+
 - **Sin control** (invitado, o co-líder con «Solo yo»): ni pausa ni ±10 s, y la barra sin tirador. En Gente, «Solo
   Ismael y Yassin pueden pausar o cambiar lo que se ve. Tú puedes chatear y proponer lo siguiente.». En pelis y
   series los invitados SÍ proponen y votan lo siguiente (también en «Elijo yo»); quitar lo de otro, el líder o los
@@ -291,3 +292,41 @@ controla» en Ajustes) y «Esperando a todos».
   `sync.test.ts` y `cine/Ficha.test.tsx`.
 - **Pendiente:** la sala en directo de fútbol (otra fase); las apps de iPhone y Android aún no enseñan co-líderes,
   lobby ni «está escribiendo» (siguen funcionando con `leader` y sin `ready`/`progress`).
+
+## 14. La sala de un partido en directo (fase 3e)
+
+Como «compartir pantalla»: el NAS abre UNA conexión (la plaza de la IPTV o un AceStream) y la reparte a todos por la
+ruta de la sala. Los invitados nunca se conectan a la IPTV ni al motor: ven exactamente lo mismo que el líder, en
+directo y a la vez. Sigue la maqueta `ver-juntos.html` (sala de fútbol).
+
+- **Crear**: «Ver juntos» en la ficha del partido (`MatchHead`) y en la de la Agenda de escritorio (`Stage`),
+  `features/juntos/LiveCreate.tsx`. Tu nombre, «Con enlace» y quién controla (sin «Votar lo siguiente»). La fuente es
+  la que suena en casa si es ese partido (y el reproductor de casa se para: si no, se pelea con la sala por la misma
+  conexión); si no, la mejor del servidor (`footballResolve`, la primera candidata).
+- **Servidor**: `partyCreate` acepta `{ live: { hash, channel, source, matchId, match }, name, control, coleaders }`.
+  La sala lleva `room.live` (con `auto`, el cambio automático) y un título `kind: 'live'` (el partido, con el canal de
+  subtítulo). Empieza ya (sin «Esperando a todos»), siempre reproduciendo; `queueMode` queda en `once` y la lista
+  (`partyQueue`), la pausa, los saltos y el idioma responden `validation_error` (`party_live`). Nadie espera al que
+  carga.
+- **El vídeo**: `partyStream` llama a `playback.acquire` del canal con `{ partyKey }`: el visor consume el remux
+  (también en la web) para que `partyVideo` sirva sus ficheros con la clave de cada persona, y los visores de la misma
+  sala comparten la sesión sin traspaso aunque la política sea `handoff` (`liveParty` en `playback/service.ts`). Si
+  alguien de casa abre ese canal con `handoff`, la sala queda «interrumpida» (`taken`), como en pelis y series. La
+  concesión dice si es IPTV y corrige `live.source`.
+- **Cambiar de canal**: `partyControl` con `{ action: 'live', live }` (quien controla). Se sueltan los visores de
+  todos, `party.room` trae el canal nuevo y `party.playback` la acción `title`: cada reproductor vuelve a abrir. El
+  chat dice «Isma ha cambiado a M+ LaLiga».
+- **Web**: sin barra de tiempo, pausa ni ±10 s; abajo la píldora roja DIRECTO, el canal y el volumen; arriba «● En
+  directo». Quien controla tiene Chat, Fuentes, Partidos y Gente; los demás, Chat y Gente. Fuentes y Partidos usan la
+  agenda y las fuentes de casa, así que solo salen en casa (`liveTools`), no en la página del invitado.
+  - **Fuentes**: «Cambio automático si se cae» (`partySettings` con `auto`) y las conexiones del partido por canal,
+    con la calidad, IPTV o AceStream y «Poner» o «En la sala».
+  - **Partidos**: los de hoy en directo y los de más tarde con «Poner» (su mejor fuente) y «Poner un canal» (tus
+    favoritos).
+  - **Cambio automático**: lo hace el navegador del líder (o de quien controle si el líder no está) cuando el vídeo
+    falla: la siguiente fuente no probada, sin repetir la IPTV si la caída fue de la IPTV. Con freno: un salto cada
+    30 s y 3 seguidos sin que suene ninguna (con el motor caído, en local se comía las siete fuentes en un minuto).
+- **Pruebas**: `modules/party/live.test.ts` y, a mano en el PC contra el motor del NAS, crear desde la ficha, ver el
+  partido en la sala, Fuentes y «Poner», y cerrar la sala.
+- **Salir o cerrar** una sala en directo lleva a la Agenda (una de pelis y series, a Pelis y series).
+- **Pendiente**: las apps de iPhone y Android no entienden una sala en directo (esperan una `VodGrant`).

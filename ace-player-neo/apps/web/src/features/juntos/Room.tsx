@@ -59,6 +59,10 @@ const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
   gone: JUNTOS_TEXT.gone,
 };
 
+/** «Cambio automático si se cae»: como mucho un salto cada 30 s y 3 seguidos sin que suene ninguna. */
+const AUTO_SWITCH_GAP_MS = 30_000;
+const AUTO_SWITCH_MAX = 3;
+
 /** «Cerrar sala» queda armado este rato tras el primer toque. */
 const CLOSE_CONFIRM_MS = 5_000;
 
@@ -70,6 +74,11 @@ type MobileTab = 'chat' | 'lista' | 'fuentes' | 'partidos' | 'personas' | 'ajust
  * «Cambio automático si se cae» (§14): si el vídeo de la sala falla y quien lo
  * nota manda (el líder, o quien controle si el líder no está), salta a la
  * siguiente fuente que la sala no haya probado aún. Sin pintar nada.
+ *
+ * Con freno: un salto cada `AUTO_SWITCH_GAP_MS` como mucho y
+ * `AUTO_SWITCH_MAX` seguidos sin que ninguna llegue a sonar. Con el motor
+ * del NAS caído, todas fallan igual y saltar no arregla nada (en local se
+ * comía las siete fuentes en un minuto).
  */
 function LiveAutoSwitch({
   room,
@@ -84,18 +93,30 @@ function LiveAutoSwitch({
   const sources = useLiveSources(match, true);
   const view: PlayerView = useSyncExternalStore(player.subscribe, player.getView);
   const tried = useRef(new Set<string>());
+  /* Saltos seguidos sin que ninguna suene y cuándo fue el último. */
+  const streak = useRef({ count: 0, at: Number.NEGATIVE_INFINITY });
   const live = room.live;
   const selfId = client.credential.id;
   const leader = room.members.find((member) => member.id === room.leaderId);
   const decides = selfId === room.leaderId || (!leader?.online && canControl(room, selfId));
   if (live) tried.current.add(live.hash);
+  /* Una que suena: vuelve a valer todo. */
+  if (view.phase === 'ready' && streak.current.count > 0) {
+    streak.current = { count: 0, at: streak.current.at };
+    tried.current = new Set(live ? [live.hash] : []);
+  }
+  const failed = view.phase === 'error' || room.interrupted === 'failed';
   useEffect(() => {
-    if (!live?.auto || !decides || view.phase !== 'error' || room.interrupted) return;
+    if (!live?.auto || !decides || !failed || room.interrupted === 'taken') return;
+    const now = Date.now();
+    if (streak.current.count >= AUTO_SWITCH_MAX) return;
+    if (now - streak.current.at < AUTO_SWITCH_GAP_MS) return;
     const next = nextSource(sources.data ?? [], live, tried.current);
     if (!next) return;
     tried.current.add(next.choice.hash);
+    streak.current = { count: streak.current.count + 1, at: now };
     void client.control({ action: 'live', live: next.choice }).catch(() => undefined);
-  }, [live, decides, view.phase, room.interrupted, sources.data, client]);
+  }, [live, decides, failed, room.interrupted, sources.data, client]);
   return null;
 }
 
@@ -118,8 +139,8 @@ export function Room({
   code: string;
   credential: PartyCredential;
   onForbidden(): void;
-  /** Tras «Salir» o «Cerrar sala» (en casa, a Películas y series; el invitado, a la entrada). */
-  onLeft(): void;
+  /** Tras «Salir» o «Cerrar sala» (en casa, a la Agenda si era en directo o a Películas y series; el invitado, a la entrada). */
+  onLeft(live: boolean): void;
   /** Al montar el vídeo (en casa, se para el reproductor de la casa: la sala usa la plaza de la IPTV). */
   onEnter?: () => void;
   /** «Proponer algo de Pelis y series» (solo en casa: el invitado de fuera no tiene catálogo). */
@@ -268,7 +289,7 @@ export function Room({
     setClosing(true);
     try {
       await client.close();
-      onLeft();
+      onLeft(!!state.room?.live);
     } catch (error) {
       notify(describeFailure(error), { tone: 'err' });
       setClosing(false);
@@ -281,7 +302,7 @@ export function Room({
       return;
     }
     await client.leave();
-    onLeft();
+    onLeft(!!state.room?.live);
   };
   const closeArmed = closeTap.armed === 'close';
 

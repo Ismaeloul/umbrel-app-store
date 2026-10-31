@@ -4,7 +4,8 @@
    controla.
 
    La fuente: la que suena en casa si es este partido (lo que estás viendo
-   pasa a la sala); si no, la mejor que da el servidor. */
+   pasa a la sala y el reproductor de casa se para); si no, la mejor que da
+   el servidor. */
 
 import type { FootballMatch, PartyLiveChoice } from '@ace/shared';
 import { useState, type FormEvent } from 'react';
@@ -12,7 +13,7 @@ import { api, describeFailure } from '../../api/index.ts';
 import { useNavigate } from '../../app/router.tsx';
 import { notify } from '../../notices/index.ts';
 import { copyText } from '../../player/clipboard.ts';
-import { isIptvPlayback, playerStore } from '../../player/api.ts';
+import { isIptvPlayback, playerStore, stop as stopHousePlayer } from '../../player/api.ts';
 import { Button } from '../../ui/Button.tsx';
 import { TextField } from '../../ui/Field.tsx';
 import { Icon } from '../../ui/Icon.tsx';
@@ -68,6 +69,8 @@ export function LiveJuntosButton({ match, look }: { match: FootballMatch; look?:
       const created = await api('partyCreate', {
         body: { live, name: clean, control: settings.control, coleaders: settings.coleaders },
       });
+      /* Lo de casa se para YA: si sigue, se pelea con la sala por la misma conexión. */
+      stopHousePlayer();
       saveName(clean);
       saveCredential(created.room.code, created.member);
       setOpen(false);
