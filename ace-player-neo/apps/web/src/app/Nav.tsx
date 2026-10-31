@@ -6,11 +6,9 @@
      radio 24, sombra Palco) con una píldora que se desliza hasta el destino
      activo (solo transform) y un velo debajo que funde la lista antes de la
      barra (corrección 4: que no asome texto alrededor).
-   - Desde 768 px: BARRA SUPERIOR de 64 px, de cristal mientras la página está
-     arriba y sólida en cuanto se baja (un centinela con IntersectionObserver
-     cambia una clase; el color lo hace una capa con opacidad). Marca a la
-     izquierda, destinos al centro con la misma píldora deslizante, estado del
-     motor y ayuda a la derecha.
+   - Desde 768 px: MENÚ LATERAL fijo de 232 px (rediseño de escritorio),
+     con la Guía y «Ver juntos» como destinos propios; Buscar pasa a la barra
+     de cada sección (Ctrl K).
 
    Son enlaces de verdad (`?vista=…`): se pueden abrir en otra pestaña; el
    clic normal navega sin recargar. Pasar el ratón por encima precarga el JS
@@ -20,15 +18,9 @@
    El número de destinos cambia: `--n` y el índice de la píldora (`--i`) salen
    SIEMPRE de la lista que se pinta (T17), nunca de un 4 fijo. */
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type MouseEvent,
-  type RefObject,
-} from 'react';
+import { type CSSProperties, type MouseEvent } from 'react';
 import { useVodActive } from '../api/index.ts';
+import { useLiveCountToday } from '../features/agenda/live-count.ts';
 import { cx } from '../lib/cx.ts';
 import { BrandMark } from '../ui/BrandMark.tsx';
 import { IconButton } from '../ui/Button.tsx';
@@ -41,9 +33,12 @@ import {
   navParent,
   navVistas,
   searchFor,
+  sideParent,
+  sideVistas,
   VISTA_TITLE,
   type NavVista,
   type Route,
+  type SideVista,
 } from './routes.ts';
 import { preloadView } from './views.tsx';
 
@@ -142,73 +137,112 @@ export function TabBar({ route, hidden }: { route: Route; hidden?: boolean }) {
   );
 }
 
-/**
- * ¿La página ha bajado? Un centinela de 32 px arriba del todo: cuando deja de
- * verse, la barra pasa de cristal a sólida. Sin IntersectionObserver (jsdom,
- * navegadores viejos) se queda de cristal, que también se lee.
- */
-function useScrolledPast(): [boolean, RefObject<HTMLDivElement | null>] {
-  const sentinel = useRef<HTMLDivElement | null>(null);
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const node = sentinel.current;
-    if (!node || typeof IntersectionObserver !== 'function') return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry) setScrolled(!entry.isIntersecting);
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-  return [scrolled, sentinel];
+const SIDE_ICON: Record<SideVista, IconName> = {
+  agenda: 'agenda',
+  biblioteca: 'biblioteca',
+  guia: 'guia',
+  cine: 'cine',
+  juntos: 'personas',
+  ajustes: 'ajustes',
+};
+
+const SIDE_LABEL: Record<SideVista, string> = {
+  agenda: 'Agenda',
+  biblioteca: 'Canales',
+  guia: 'Guía',
+  cine: 'Pelis y series',
+  juntos: 'Ver juntos',
+  ajustes: 'Ajustes',
+};
+
+function sideRoute(vista: SideVista): Route {
+  if (vista === 'ajustes') return { vista: 'ajustes', seccion: null };
+  if (vista === 'cine') return { vista: 'cine', id: null };
+  if (vista === 'juntos') return { vista: 'juntos', code: null };
+  return { vista };
 }
 
-export function TopBar({ route, onHelp }: { route: Route; onHelp?: () => void }) {
-  const link = useNavLink(route);
-  const vistas = useNavVistas();
-  const index = activeIndex(route, vistas);
-  const [scrolled, sentinel] = useScrolledPast();
+/**
+ * Menú lateral fijo de escritorio (desde 768 px; rediseño de escritorio):
+ * marca, los destinos con el contador rojo de partidos en directo en Agenda,
+ * el hueco del mini-reproductor (lo coloca shell.css: el reproductor no se
+ * mueve de sitio en el árbol) y, abajo del todo, el motor y Ajustes. Opaco,
+ * sin cristal; el activo lleva fondo `--surface` y la barrita amarilla.
+ */
+export function SideNav({ route, onHelp }: { route: Route; onHelp?: () => void }) {
+  const navigate = useNavigate();
+  const vod = useVodActive();
+  const vistas = sideVistas({ vod });
+  const current = sideParent(route.vista);
+  const live = useLiveCountToday();
+  const link = (vista: SideVista) => ({
+    href: searchFor(
+      sideRoute(vista),
+      globalThis.location?.search ?? '',
+      rememberedViewParams(vista),
+    ),
+    'aria-current': current === vista ? ('page' as const) : undefined,
+    onClick: (event: MouseEvent<HTMLAnchorElement>) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      event.preventDefault();
+      navigate(sideRoute(vista));
+    },
+    onPointerEnter: () => preloadView(vista),
+    onFocus: () => preloadView(vista),
+  });
+  const item = (vista: SideVista, extra?: string) => (
+    <a
+      key={vista}
+      className={cx('sidenav__item', extra)}
+      {...link(vista)}
+      {...(vista === 'cine' ? { title: VISTA_TITLE.cine, 'aria-label': VISTA_TITLE.cine } : {})}
+    >
+      <Icon name={SIDE_ICON[vista]} size={24} />
+      <span className="sidenav__label">{SIDE_LABEL[vista]}</span>
+      {vista === 'agenda' && live > 0 ? (
+        <span className="sidenav__count" aria-label={`${live} en directo`}>
+          {live}
+        </span>
+      ) : null}
+    </a>
+  );
   return (
-    <>
-      <div ref={sentinel} className="topbar-sentinel" aria-hidden="true" />
-      <nav
-        className={cx('topbar', scrolled && 'topbar--solid', index < 0 && 'topbar--none')}
-        aria-label="Principal"
-        data-n={vistas.length}
-        style={{ '--i': Math.max(0, index), '--n': vistas.length } as CSSProperties}
-      >
+    <nav className="sidenav" aria-label="Principal">
+      <div className="sidenav__head">
         <a
-          className="topbar__brand"
+          className="sidenav__brand"
           {...link('agenda')}
           aria-current={undefined}
-          aria-label="Ace Player Neo: ir a la agenda"
+          aria-label="Ace Neo: ir a la agenda"
         >
-          <BrandMark className="topbar__mark" size={28} />
-          <span className="topbar__name">Ace Player Neo</span>
+          <BrandMark className="sidenav__mark" size={34} />
+          <span className="sidenav__name">Ace Neo</span>
         </a>
-        <div className="topbar__items">
-          {vistas.map((vista) => {
-            const { label, ...named } = labelProps(vista);
-            return (
-              <a key={vista} className="topbar__item" {...link(vista)} {...named}>
-                <Icon name={NAV_ICON[vista]} size={20} />
-                <span>{label}</span>
-              </a>
-            );
-          })}
-        </div>
-        <div className="topbar__right">
-          <EngineIndicator className="topbar__engine" />
+        <div className="sidenav__tools">
+          <EngineIndicator className="sidenav__engine" />
           {onHelp ? (
             <IconButton
               icon="ayuda"
               label="Atajos de teclado"
               shortcut="?"
-              className="topbar__help"
+              className="sidenav__help"
               onClick={onHelp}
             />
           ) : null}
         </div>
-      </nav>
-    </>
+      </div>
+      {vistas.map((vista) => item(vista, vista === 'juntos' ? 'sidenav__item--sep' : undefined))}
+      <div className="sidenav__spacer" />
+      <div className="sidenav__mini-slot" aria-hidden="true" />
+      {item('ajustes', 'sidenav__item--foot')}
+    </nav>
   );
 }

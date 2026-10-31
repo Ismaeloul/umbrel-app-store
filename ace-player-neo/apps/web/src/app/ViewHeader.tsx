@@ -1,6 +1,10 @@
 /* Cabecera común de las vistas: titular a anchura 112 y, a la derecha, las
-   acciones de la vista y el estado del motor (en el móvil y la tableta; en
-   escritorio el motor ya está abajo en el carril).
+   acciones de la vista y el estado del motor (en el móvil; desde 768 el motor
+   va en el menú lateral).
+
+   Desde 768 (rediseño de escritorio) es la barra de la sección: 64 px pegados
+   arriba con el título, las acciones y el buscador con Ctrl K; el subtítulo y
+   los hijos (chips, pestañas) van debajo.
 
    El <h1> lleva tabIndex=-1: al navegar, el armazón le pasa el foco para que
    los lectores de pantalla anuncien la vista nueva. */
@@ -8,7 +12,10 @@
 import type { ReactNode } from 'react';
 import { useAppMode } from '../api/index.ts';
 import { cx } from '../lib/cx.ts';
+import { Icon } from '../ui/Icon.tsx';
 import { EngineIndicator } from './EngineIndicator.tsx';
+import { useNavigate } from './router.tsx';
+import { openSearch } from './search-open.ts';
 import './view-header.css';
 
 export interface ViewHeaderProps {
@@ -31,6 +38,7 @@ export function ViewHeader({
   children,
 }: ViewHeaderProps) {
   const mode = useAppMode();
+  const navigate = useNavigate();
   return (
     <header className={cx('view-head', className)}>
       <div className="view-head__row">
@@ -49,6 +57,11 @@ export function ViewHeader({
             <EngineIndicator className="view-head__engine" />
           )}
           {actions}
+          <button type="button" className="view-head__search" onClick={() => openSearch(navigate)}>
+            <Icon name="buscar" size={18} />
+            <span className="view-head__search-text">Buscar partidos, canales, pelis…</span>
+            <kbd>Ctrl K</kbd>
+          </button>
         </div>
       </div>
       {children}

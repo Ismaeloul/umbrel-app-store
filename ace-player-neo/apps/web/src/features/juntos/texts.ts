@@ -21,6 +21,10 @@ export const JUNTOS_TEXT = {
   closedEmpty: 'La sala se ha cerrado porque no quedaba nadie.',
   closedShutdown: 'El servidor se ha reiniciado y la sala se ha cerrado.',
   backToCine: 'Volver a Películas y series',
+  homeTitle: 'Ver con tus amigos',
+  homeHint:
+    'Abre una película o un episodio y pulsa «Ver juntos»: te da un enlace para que entren desde su móvil u ordenador.',
+  backToRoom: 'Volver a tu sala',
   copyLink: 'Copiar enlace',
   linkCopied: 'Enlace copiado. Pásaselo a quien quieras.',
   linkCopyManual: 'No se ha podido copiar solo. Copia este enlace y pásaselo a quien quieras:',

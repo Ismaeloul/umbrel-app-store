@@ -6,10 +6,13 @@
      destinos (5 con «Pelis y series», docs/vod.md §12.1) y el
      mini-reproductor encima. En el centro de partido no hay barra: el vídeo
      va arriba, pegado, y se minimiza con la flecha o deslizando.
-   - Tableta (768-1023): barra superior + la vista.
-   - Escritorio (1024-1279): barra superior + vista + panel lateral de la vista.
-   - Ancho (≥ 1280): en el centro de partido, columna de agenda + reproductor +
-     panel lateral, todo a la vez bajo la barra superior.
+   - Desde 768 (rediseño de escritorio): menú lateral fijo de 232 px con el
+     mini-reproductor abajo; cada vista lleva su barra (título, buscador con
+     Ctrl K) en su ViewHeader.
+   - Tableta (768-1023): menú + la vista.
+   - Escritorio (1024-1279): menú + vista + panel lateral de la vista.
+   - Ancho (≥ 1280): en el centro de partido, menú + columna de agenda +
+     reproductor + panel lateral.
    - Móvil en horizontal viendo un partido: el vídeo ocupa la pantalla (el
      reproductor oculta sus controles solo).
 
@@ -49,7 +52,7 @@ import type { PlayerPresentation } from './contracts.ts';
 import { ErrorBoundary } from './ErrorBoundary.tsx';
 import { requestFocus } from './focus.ts';
 import { LayoutContext, type LayoutValue } from './layout.tsx';
-import { TabBar, TopBar } from './Nav.tsx';
+import { SideNav, TabBar } from './Nav.tsx';
 import { usePlayerPresence } from './player-presence.ts';
 import { useBack, useNavigate, useRoute } from './router.tsx';
 import { formatVista, type Route, type Vista } from './routes.ts';
@@ -67,6 +70,7 @@ import {
 import { playPendingCrossfade } from './viewCrossfade.ts';
 import { installViewTransitionGuard, viewMotion } from './viewTransitionGuard.ts';
 import { useShortcut } from './shortcuts.ts';
+import { openSearch } from './search-open.ts';
 import { AgendaColumn, asideComponent, PlayerDock, viewComponent } from './views.tsx';
 import './shell.css';
 
@@ -280,6 +284,19 @@ export function Shell() {
     },
   });
 
+  // Ctrl K (Cmd K en Mac): el buscador, también con el foco en un campo. El
+  // registro de atajos deja Ctrl y Cmd al navegador; este es la excepción.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.shiftKey) return;
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return;
+      event.preventDefault();
+      openSearch(navigate);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [navigate]);
+
   const setAsideOpen = (open: boolean) => {
     setAsideOpenState(open);
     writeItem(STORAGE_KEYS.aside, open ? 'abierto' : 'plegado');
@@ -318,7 +335,7 @@ export function Shell() {
         >
           Saltar al contenido
         </a>
-        <TopBar route={route} onHelp={() => setHelpOpen(true)} />
+        <SideNav route={route} onHelp={() => setHelpOpen(true)} />
         {columnVisible && AgendaColumn ? (
           <aside className="app-column" aria-label="Agenda">
             <ErrorBoundary what="la agenda">

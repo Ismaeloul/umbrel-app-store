@@ -170,16 +170,24 @@ const nav = () => screen.getAllByRole('navigation', { name: 'Principal' });
 const app = () => document.querySelector('.app') as HTMLElement;
 
 describe('armazón', () => {
-  it('navegación con los cuatro destinos (barra inferior y superior) y enlace para saltar al contenido', async () => {
+  it('navegación (barra inferior y menú lateral) y enlace para saltar al contenido', async () => {
     renderApp();
     expect(nav()).toHaveLength(2);
-    // La barra superior tiene la marca, los destinos y la ayuda de atajos.
-    expect(document.querySelector('.topbar')).not.toBeNull();
+    // El menú lateral tiene la marca, los destinos, Ajustes y la ayuda de atajos.
+    expect(document.querySelector('.sidenav')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Atajos de teclado' })).toBeInTheDocument();
+    const side = document.querySelector('.sidenav') as HTMLElement;
+    expect([...side.querySelectorAll('.sidenav__item')].map((a) => a.textContent)).toEqual([
+      'Agenda',
+      'Canales',
+      'Guía',
+      'Ver juntos',
+      'Ajustes',
+    ]);
     for (const bar of nav()) {
       const links = within(bar).getAllByRole('link');
       expect(links.map((a) => a.textContent)).toEqual(
-        expect.arrayContaining(['Agenda', 'Canales', 'Buscar', 'Ajustes']),
+        expect.arrayContaining(['Agenda', 'Canales', 'Ajustes']),
       );
       expect(within(bar).getByRole('link', { name: 'Agenda' })).toHaveAttribute(
         'aria-current',
@@ -346,47 +354,60 @@ describe('armazón', () => {
   });
 
   describe('«Pelis y series» (docs/vod.md §12.1, T17)', () => {
-    /* Los destinos (la barra superior lleva además la marca, que no cuenta). */
+    /* Los destinos de la barra inferior del móvil (el menú lateral tiene los suyos). */
+    const tabbar = () => document.querySelector('.tabbar') as HTMLElement;
     const labels = (bar: HTMLElement) =>
-      [...bar.querySelectorAll('.tabbar__item, .topbar__item')].map((a) => a.textContent);
+      [...bar.querySelectorAll('.tabbar__item')].map((a) => a.textContent);
+    const sideLabels = () =>
+      [...document.querySelectorAll('.sidenav__item')].map((a) => a.textContent);
 
     it('con features.vod, cinco destinos sin ?flag=cine; --n y la píldora salen de esa lista', async () => {
       history.replaceState(null, '', '/?vista=cine');
       renderApp('?vista=cine', clientWithVod(true));
       await screen.findAllByRole('heading', { level: 1 });
+      expect(labels(tabbar())).toEqual([
+        'Agenda',
+        'Canales',
+        'Pelis y series',
+        'Buscar',
+        'Ajustes',
+      ]);
+      expect(sideLabels()).toEqual([
+        'Agenda',
+        'Canales',
+        'Guía',
+        'Pelis y series',
+        'Ver juntos',
+        'Ajustes',
+      ]);
       for (const bar of nav()) {
-        expect(labels(bar)).toEqual(
-          expect.arrayContaining(['Agenda', 'Canales', 'Pelis y series', 'Buscar', 'Ajustes']),
-        );
         const cine = within(bar).getByRole('link', { name: 'Películas y series' });
         expect(cine).toHaveAttribute('title', 'Películas y series');
         expect(cine).toHaveAttribute('aria-current', 'page');
         expect(cine.getAttribute('href')).toContain('vista=cine');
       }
-      const tabbar = document.querySelector('.tabbar') as HTMLElement;
-      expect(tabbar.getAttribute('style')).toContain('--n: 5');
-      expect(tabbar.getAttribute('style')).toContain('--i: 2');
-      expect(document.querySelector('.topbar')?.getAttribute('style')).toContain('--n: 5');
+      expect(tabbar().getAttribute('style')).toContain('--n: 5');
+      expect(tabbar().getAttribute('style')).toContain('--i: 2');
       // Buscar pasa a la cuarta columna.
-      fireEvent.click(within(nav()[0] as HTMLElement).getByRole('link', { name: 'Buscar' }));
+      fireEvent.click(within(tabbar()).getByRole('link', { name: 'Buscar' }));
       await screen.findByRole('heading', { level: 1, name: 'Buscar' });
-      expect(tabbar.getAttribute('style')).toContain('--i: 3');
+      expect(tabbar().getAttribute('style')).toContain('--i: 3');
     });
 
     it('sin features.vod, los cuatro de siempre', async () => {
       renderApp('', clientWithVod(false));
       await screen.findByRole('heading', { level: 1, name: 'Agenda' });
-      for (const bar of nav())
-        expect(labels(bar)).toEqual(['Agenda', 'Canales', 'Buscar', 'Ajustes']);
-      expect(document.querySelector('.tabbar')?.getAttribute('style')).toContain('--n: 4');
+      expect(labels(tabbar())).toEqual(['Agenda', 'Canales', 'Buscar', 'Ajustes']);
+      expect(sideLabels()).toEqual(['Agenda', 'Canales', 'Guía', 'Ver juntos', 'Ajustes']);
+      expect(tabbar().getAttribute('style')).toContain('--n: 4');
     });
 
     it('sin películas en el servidor, Buscar sigue en la tercera columna', async () => {
       renderApp('', clientWithVod(false));
       await screen.findByRole('heading', { level: 1, name: 'Agenda' });
-      for (const bar of nav()) expect(labels(bar)).toHaveLength(4);
+      expect(labels(tabbar())).toHaveLength(4);
       // Buscar sigue en la tercera columna.
-      fireEvent.click(within(nav()[0] as HTMLElement).getByRole('link', { name: 'Buscar' }));
+      fireEvent.click(within(tabbar()).getByRole('link', { name: 'Buscar' }));
       await screen.findByRole('heading', { level: 1, name: 'Buscar' });
       expect(document.querySelector('.tabbar')?.getAttribute('style')).toContain('--i: 2');
     });

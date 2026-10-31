@@ -1,6 +1,7 @@
 /* ==========================================================================
-   Armazón: regiones y navegación, piel «Palco» (plan fase 2, decisión W3).
-   Fronteras: 768 (barra superior en vez de barra inferior), 1024 (panel
+   Armazón: regiones y navegación. Móvil con la piel «Palco» (plan fase 2,
+   decisión W3); desde 768, el rediseño de escritorio.
+   Fronteras: 768 (menú lateral en vez de barra inferior), 1024 (panel
    lateral), 1280 (columna de agenda en el centro de partido).
    ========================================================================== */
 
@@ -273,7 +274,7 @@
    (Canales con scroll, sobre todo). Con nombre, las barras son su propia
    capa, encima de las vistas, y base.css las deja quietas (clase ace-barra):
    la píldora sigue deslizándose porque la imagen nueva está viva. */
-.topbar {
+.sidenav {
   view-transition-name: ace-barra-superior;
   view-transition-class: ace-barra;
 }
@@ -345,77 +346,58 @@
   outline-offset: -2px;
 }
 
-/* ---- Barra superior (desde 768) --------------------------------------------------
-   Sticky en la primera fila de la rejilla: ocupa sus 64 px y, al bajar, se
-   queda arriba. Dos capas de color: el cristal (siempre) y una capa sólida
-   (::before) que aparece con opacidad cuando el centinela deja de verse. */
-.topbar,
-.topbar-sentinel {
+/* ---- Menú lateral (desde 768, rediseño de escritorio) ----------------------------
+   Fijo, 232 px, opaco con un filo de 1 px. El activo: fondo --surface y una
+   barrita amarilla de 3 px pegada al borde izquierdo. El mini-reproductor se
+   queda donde está en el árbol (un solo <video>): aquí se coloca encima de
+   Ajustes y el menú le guarda el hueco (.sidenav__mini-slot). */
+.sidenav {
   display: none;
 }
 
 @media (min-width: 768px) {
   .app {
+    --side-w: 232px;
+    /* Lo que ocupa el mini en el menú: la imagen 16:9 a 204 px + su línea. */
+    --side-mini-h: 176px;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      'top top top'
-      'column main aside';
+    grid-template-columns: var(--side-w) auto minmax(0, 1fr) auto;
+    grid-template-areas: 'side column main aside';
     align-items: start;
   }
-  .topbar-sentinel {
-    display: block;
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 1px;
-    height: 32px;
-    pointer-events: none;
-  }
-  .topbar {
-    /* --n lo pone Nav.tsx en línea (4 o 5 destinos), como en la barra inferior. */
-    --i: 0;
-    --topbar-item-w: 116px;
-    grid-area: top;
+  .sidenav {
+    grid-area: side;
     position: sticky;
     top: 0;
     z-index: var(--z-nav);
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    height: 100dvh;
+    padding: calc(var(--safe-top) + 18px) 14px calc(var(--safe-bottom) + 14px)
+      calc(var(--safe-left) + 14px);
+    overflow-y: auto;
+    background: var(--bg-sunk);
+    box-shadow: inset -1px 0 0 var(--line-soft);
+  }
+  .sidenav__head {
+    display: flex;
     align-items: center;
-    gap: var(--s-4);
-    height: calc(var(--topbar-h) + var(--safe-top));
-    padding: var(--safe-top) calc(var(--gutter) + var(--safe-right)) 0
-      calc(var(--gutter) + var(--safe-left));
-    color: var(--text);
-    background: var(--glass);
-    -webkit-backdrop-filter: var(--blur);
-    backdrop-filter: var(--blur);
-    isolation: isolate;
+    justify-content: space-between;
+    gap: 4px;
+    margin-bottom: 14px;
   }
-  /* La capa sólida y el filo inferior: aparecen al bajar, solo con opacidad. */
-  .topbar::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: var(--glass-dense);
-    box-shadow: inset 0 -1px 0 var(--line-soft);
-    opacity: 0;
-    transition: opacity var(--dur-rapido) var(--ease-out);
+  .sidenav__tools {
+    display: flex;
+    align-items: center;
   }
-  .topbar--solid::before {
-    opacity: 1;
-  }
-  .topbar__brand {
-    display: inline-flex;
+  .sidenav__brand {
+    display: flex;
     align-items: center;
     gap: 10px;
-    justify-self: start;
-    min-width: var(--tap);
+    min-width: 0;
     min-height: var(--tap);
-    padding-right: 8px;
+    padding: 0 8px;
     border-radius: var(--r-s);
     font-size: var(--fs-17);
     font-weight: var(--wght-head);
@@ -423,68 +405,90 @@
     letter-spacing: var(--tracking-head);
     white-space: nowrap;
   }
-  /* La marca (ui/BrandMark.tsx) trae sus esquinas redondeadas en el dibujo. */
-  .topbar__mark {
+  .sidenav__mark {
     flex: none;
-    width: 28px;
-    height: 28px;
+    border-radius: 10px;
   }
-  .topbar__items {
+  .sidenav__item {
     position: relative;
-    display: grid;
-    grid-template-columns: repeat(var(--n), var(--topbar-item-w));
-    padding: 4px;
-    border-radius: var(--r-pill);
-    isolation: isolate;
-  }
-  /* La píldora deslizante: la misma que la barra inferior. */
-  .topbar__items::before {
-    content: '';
-    position: absolute;
-    z-index: -1;
-    top: 4px;
-    bottom: 4px;
-    left: 4px;
-    width: var(--topbar-item-w);
-    border-radius: var(--r-pill);
-    background: var(--accent-wash);
-    transform: translateX(calc(var(--i) * 100%));
-    transition: transform var(--dur-estandar) var(--ease-estandar);
-  }
-  .topbar--none .topbar__items::before {
-    opacity: 0;
-  }
-  .topbar__item {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 7px;
-    /* Objetivo de 44 (la píldora mide lo mismo: 4 + 44 + 4 = 52 dentro de 64). */
+    gap: 12px;
     min-height: var(--tap);
     padding: 0 12px;
-    border-radius: var(--r-pill);
+    border-radius: var(--r-m);
     color: var(--text-2);
-    font-size: var(--fs-13);
-    font-weight: 620;
-    font-stretch: var(--w-tight);
+    font-size: var(--fs-15);
+    font-weight: 600;
     white-space: nowrap;
   }
-  .topbar__item[aria-current='page'] {
-    color: var(--accent-ink);
+  .sidenav__item[aria-current='page'] {
+    color: var(--text);
+    background: var(--surface);
   }
-  .topbar__item:focus-visible {
+  .sidenav__item[aria-current='page']::before {
+    content: '';
+    position: absolute;
+    left: -14px;
+    top: 12px;
+    bottom: 12px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--accent-edge);
+  }
+  .sidenav__item:focus-visible {
     outline-offset: -2px;
   }
-  .topbar__right {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 2px;
-    justify-self: end;
-    min-width: 0;
+  .sidenav__item--sep {
+    margin-top: 10px;
   }
-  .topbar__help {
-    color: var(--text-2);
+  .sidenav__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sidenav__count {
+    display: grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    margin-left: auto;
+    padding: 0 6px;
+    border-radius: var(--r-pill);
+    background: var(--live);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: var(--fs-11);
+    font-weight: 700;
+  }
+  .sidenav__spacer {
+    flex: 1;
+  }
+  .sidenav__mini-slot {
+    display: none;
+    flex: none;
+    height: var(--side-mini-h);
+  }
+  .app[data-mini='true'] .sidenav__mini-slot {
+    display: block;
+  }
+  .sidenav__item--foot {
+    flex: none;
+    margin-top: 8px;
+  }
+  .sidenav__engine .engine__text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .sidenav__engine,
+  .sidenav__help {
+    flex: none;
+    min-width: 32px;
+    padding: 0;
+    color: var(--text-3);
   }
   .tabbar,
   .bottom-veil {
@@ -496,7 +500,7 @@
     padding-bottom: calc(var(--safe-bottom) + 32px);
   }
   .app[data-mini='true'] .app-main {
-    padding-bottom: calc(var(--safe-bottom) + var(--mini-h) + 48px);
+    padding-bottom: calc(var(--safe-bottom) + 32px);
   }
   .stage[data-presentation='stage'] {
     position: relative;
@@ -518,26 +522,26 @@
   .stage-placeholder {
     border-radius: var(--r-xl);
   }
-  /* Mini en escritorio: tarjeta abajo a la izquierda (ya no hay carril). */
+  /* Mini en escritorio: dentro del menú lateral, encima de Ajustes. */
   .dock[data-presentation='mini'] {
-    left: calc(var(--safe-left) + 16px);
+    left: calc(var(--safe-left) + 14px);
     right: auto;
-    bottom: calc(var(--safe-bottom) + 16px);
-    width: min(440px, calc(100vw - 32px));
+    bottom: calc(var(--safe-bottom) + 14px + var(--tap) + 8px);
+    width: calc(var(--side-w) - 28px);
+    min-height: 0;
   }
   .app-column,
   .app-aside {
     position: sticky;
-    top: calc(var(--topbar-h) + var(--safe-top));
-    height: calc(100dvh - var(--topbar-h) - var(--safe-top));
+    top: 0;
+    height: 100dvh;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 20px 16px calc(var(--safe-bottom) + 20px);
+    padding: calc(var(--safe-top) + 20px) 16px calc(var(--safe-bottom) + 20px);
   }
   .app-column {
     grid-area: column;
     width: var(--column-w);
-    padding-left: calc(16px + var(--safe-left));
     border-right: 1px solid var(--line-soft);
   }
   .app-aside {
@@ -553,41 +557,55 @@
   }
 }
 
-/* Barra superior más prieta cuando no cabe el nombre (tableta estrecha). */
+/* Tableta estrecha: el menú se queda en sus iconos (72 px) para dejar sitio. */
 @media (min-width: 768px) and (max-width: 1023px) {
-  .topbar__name {
+  .app {
+    --side-w: 72px;
+  }
+  .sidenav {
+    align-items: center;
+    padding-inline: 10px;
+  }
+  .sidenav__name,
+  .sidenav__label {
     position: absolute;
     width: 1px;
     height: 1px;
     overflow: hidden;
     clip-path: inset(50%);
   }
-  .topbar {
-    --topbar-item-w: 104px;
+  .sidenav__brand,
+  .sidenav__item {
+    justify-content: center;
+    width: 48px;
+    padding: 0;
   }
-  .topbar__item {
-    padding: 0 8px;
+  .sidenav__item[aria-current='page']::before {
+    left: -10px;
   }
-  /* Con «Pelis y series» (5 destinos) no caben los iconos: van todos sin él,
-     por igual (docs/vod.md §12.1), en huecos de 96 px («Pelis y series» mide
-     ~68 px a 13 px), y el estado del motor se queda en su icono (medido con
-     revision-visual a 768 px: si no, «Ajustes» pisaba el motor). */
-  .topbar[data-n='5'] {
-    --topbar-item-w: 96px;
+  .sidenav__count {
+    position: absolute;
+    top: 2px;
+    right: 0;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
   }
-  .topbar[data-n='5'] .topbar__item .icon,
-  .topbar[data-n='5'] .topbar__engine .engine__text {
+  .sidenav__head {
+    flex-direction: column;
+  }
+  .sidenav__tools {
+    flex-direction: column;
+  }
+  /* El mini no cabe en un menú de iconos: tarjeta abajo a la derecha. */
+  .app[data-mini='true'] .sidenav__mini-slot {
     display: none;
   }
-}
-
-/* Pantallas bajas (móvil en horizontal): barra superior de 52 px. */
-@media (min-width: 768px) and (max-height: 540px) {
-  :root {
-    --topbar-h: 52px;
-  }
-  .topbar__engine .engine__text {
-    display: none;
+  .dock[data-presentation='mini'] {
+    left: auto;
+    right: calc(var(--safe-right) + 16px);
+    bottom: calc(var(--safe-bottom) + 16px);
+    width: min(400px, calc(100vw - 120px));
   }
 }
 
@@ -632,7 +650,7 @@
   -webkit-line-clamp: 2;
   white-space: normal;
 }
-.app[data-immersive='true'] .topbar,
+.app[data-immersive='true'] .sidenav,
 .app[data-immersive='true'] .tabbar,
 .app[data-immersive='true'] .bottom-veil {
   visibility: hidden;
@@ -684,34 +702,15 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .topbar__item:hover:not([aria-current='page']) {
+  .sidenav__item:hover:not([aria-current='page']) {
     color: var(--text);
+    background: var(--line-soft);
   }
   .tabbar__item:hover:not([aria-current='page']) {
     color: var(--text);
   }
   .engine:hover,
-  .topbar__help:hover {
+  .sidenav__help:hover {
     color: var(--text);
   }
-}
-
-/* Cristal opaco con transparencia reducida (la barra no lleva la clase .glass
-   porque su capa sólida ya la pone ::before). */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .topbar {
-    background: var(--glass-solid);
-  }
-}
-@media (prefers-reduced-transparency: reduce) {
-  .topbar {
-    background: var(--glass-solid);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-}
-:root[data-transparency='reduced'] .topbar {
-  background: var(--glass-solid);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
