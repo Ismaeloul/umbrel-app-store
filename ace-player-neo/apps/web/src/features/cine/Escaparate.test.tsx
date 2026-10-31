@@ -1,6 +1,7 @@
-/* Pelis y series en escritorio (rediseño, pantalla 5): pestañas en la barra,
-   el escaparate con «Seguir viendo» en grande (sin novedades ni estrenos),
-   «Mi lista» con películas y series juntas y la ficha con «Seguir · T1 E3»,
+/* Pelis y series en escritorio (rediseño, pantalla 5): pestañas «Mi lista ·
+   N», «Películas» y «Series» en la barra (sin «Inicio»), la portada = Mi
+   lista («Seguir viendo» y la lista partida en Series y Películas, sin
+   novedades ni estrenos) y la ficha con «Seguir · T1 E3»,
    Mi lista / Ver juntos / Tráiler / Compartir y el siguiente episodio
    marcado. En el móvil nada de esto cambia (lo cubren los demás tests). */
 
@@ -9,11 +10,17 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { resetToasts } from '../../notices/toasts.ts';
-import { mockFetch } from '../../test/fetch.ts';
-import { DEMO_VOD_IDS, resetDemoVod } from './demo-data.ts';
-import { halfBadge, heroFollow, heroLine, splitSubtitle } from './Escaparate.tsx';
+import { json, mockFetch } from '../../test/fetch.ts';
+import {
+  DEMO_VOD_IDS,
+  demoListRemove,
+  demoVodHome,
+  demoVodList,
+  resetDemoVod,
+} from './demo-data.ts';
+import { halfBadge, heroLine, listSections, splitSubtitle } from './Escaparate.tsx';
 import { deskColumnsFor } from './model.ts';
-import { demoRoutes, renderCine } from './test-utils.tsx';
+import { demoRoutes, queryOf, renderCine } from './test-utils.tsx';
 
 let net: ReturnType<typeof mockFetch>;
 
@@ -53,8 +60,8 @@ function entry(patch: Partial<VodContinue>): VodContinue {
   };
 }
 
-describe('textos del escaparate', () => {
-  it('parte «T3 · E4 · Dame la mano» y escribe la línea, el botón y la cápsula', () => {
+describe('textos de la portada de escritorio', () => {
+  it('parte «T3 · E4 · Dame la mano» y escribe la línea y la cápsula', () => {
     expect(splitSubtitle('T3 · E4 · Dame la mano')).toEqual({
       code: 'T3 · E4',
       name: 'Dame la mano',
@@ -63,13 +70,11 @@ describe('textos del escaparate', () => {
     expect(splitSubtitle(null)).toEqual({ code: null, name: null });
     const episode = entry({});
     expect(heroLine(episode)).toBe('T3 · E4 «Dame la mano» · quedan 31 min');
-    expect(heroFollow(episode)).toBe('Seguir · T3 E4');
     expect(halfBadge(episode)).toBe('T3 · E4');
     const next = entry({ isNext: true, posS: 0 });
     expect(heroLine(next)).toBe('Siguiente: T3 · E4 «Dame la mano»');
     const movie = entry({ kind: 'movie', seriesId: null, subtitle: null, posS: 4320, durS: 9960 });
     expect(heroLine(movie)).toBe('1:12 de 2:46 · quedan 1 h 34 min');
-    expect(heroFollow(movie)).toBe('Seguir · 1:12:00');
     expect(halfBadge(movie)).toBe('1:12 de 2:46');
   });
 
@@ -80,48 +85,115 @@ describe('textos del escaparate', () => {
   });
 });
 
-describe('escritorio: pestañas y escaparate', () => {
-  it('Inicio: «Seguir viendo» en grande, también a medias y Mi lista; nada de novedades', async () => {
+describe('escritorio: pestañas y portada (Mi lista)', () => {
+  it('parte Mi lista en Series y Películas (una vacía no sale)', () => {
+    const items = demoVodList().items;
+    expect(listSections(items).map((section) => section.kind)).toEqual(['series', 'movie']);
+    const movies = items.filter((item) => item.kind === 'movie');
+    expect(listSections(movies).map((section) => section.kind)).toEqual(['movie']);
+    expect(listSections([])).toEqual([]);
+  });
+
+  it('sin «Inicio»: la portada es Mi lista, con Seguir viendo, Series y Películas', async () => {
     net = mockFetch(demoRoutes());
     renderCine(desk);
     expect(await screen.findByRole('heading', { level: 1, name: 'Pelis y series' })).toBeVisible();
     const tabs = screen.getByRole('group', { name: 'Secciones de Pelis y series' });
-    expect(within(tabs).getByRole('button', { name: 'Inicio' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
+    expect(within(tabs).queryByRole('button', { name: 'Inicio' })).toBeNull();
+    const mine = await within(tabs).findByRole('button', { name: 'Mi lista · 4' });
+    expect(mine).toHaveAttribute('aria-pressed', 'true');
+    const names = within(tabs)
+      .getAllByRole('button')
+      .map((button) => button.textContent);
+    expect(names).toEqual(['Mi lista · 4', 'Películas', 'Series']);
+    // De arriba abajo: lo empezado, y la lista partida en dos.
+    const headings = (await screen.findAllByRole('heading', { level: 2 })).map(
+      (heading) => heading.textContent,
     );
-    expect(await within(tabs).findByRole('button', { name: 'Mi lista · 4' })).toBeVisible();
-    const hero = await screen.findByRole('region', { name: 'Dune' });
-    expect(within(hero).getByText('Seguir viendo · Película')).toBeVisible();
-    expect(within(hero).getByRole('button', { name: /^Seguir · 43:12$/ })).toBeEnabled();
-    expect(within(hero).getByRole('button', { name: 'Ver juntos' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'También a medias' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Mi lista' })).toBeVisible();
+    const halfCount = demoVodHome().continue.length;
+    expect(headings).toEqual([`Seguir viendo, ${halfCount}`, 'Series, 2', 'Películas, 2']);
+    const series = screen.getByRole('list', { name: 'Series' });
+    expect(within(series).getByRole('link', { name: /^The Office/ })).toBeVisible();
+    expect(within(series).queryByRole('link', { name: /^Coco/ })).toBeNull();
+    const movies = screen.getByRole('list', { name: 'Películas' });
+    // En latino y con todo elegido: en Mi lista sale igual.
+    expect(within(movies).getByRole('link', { name: /^Coco/ })).toBeVisible();
+    const continuing = screen.getByRole('list', { name: 'Seguir viendo' });
+    expect(within(continuing).getByRole('button', { name: /^Dune\. / })).toBeVisible();
+    // Ni el destacado de antes ni novedades ni estrenos.
+    expect(screen.queryByRole('group', { name: 'Cambiar lo destacado' })).toBeNull();
     expect(screen.queryByText('Novedades en películas')).toBeNull();
     expect(screen.queryByText('Series actualizadas')).toBeNull();
-    // Sin el buscador de la portada: en escritorio está el de la barra (Ctrl K).
+    // Sin el buscador de la rejilla: en la portada está el de la barra (Ctrl K).
     expect(screen.queryByRole('searchbox', { name: 'Buscar películas' })).toBeNull();
   });
 
-  it('una miniatura pone en grande otra cosa a medias, con su episodio', async () => {
+  it('la URL de la antigua pestaña Mi lista (`cinecat=milista`) cae en la portada', async () => {
     net = mockFetch(demoRoutes());
-    renderCine(desk);
-    const picker = await screen.findByRole('group', { name: 'Cambiar lo destacado' });
-    const casa = within(picker).getByRole('button', { name: /^La casa de papel\./ });
-    fireEvent.click(casa);
-    expect(casa).toHaveAttribute('aria-pressed', 'true');
-    const hero = await screen.findByRole('region', { name: 'La casa de papel' });
-    expect(within(hero).getByText('Seguir viendo · Serie')).toBeVisible();
-    expect(within(hero).getByText(/^T1 · E3 «El plan» · quedan/)).toBeVisible();
-    expect(within(hero).getByRole('button', { name: 'Seguir · T1 E3' })).toBeVisible();
-    // Ya está en Mi lista: el botón lo dice (interruptor).
-    expect(await within(hero).findByRole('button', { name: 'En mi lista' })).toHaveAttribute(
+    renderCine({ ...desk, search: '?vista=cine&cinecat=milista' });
+    const tabs = await screen.findByRole('group', { name: 'Secciones de Pelis y series' });
+    expect(await within(tabs).findByRole('button', { name: 'Mi lista · 4' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
+    expect(await screen.findByRole('list', { name: 'Series' })).toBeVisible();
+    expect(screen.getByRole('list', { name: 'Películas' })).toBeVisible();
+    // Ni la rejilla del móvil («Mi lista» con su flecha) ni una petición al catálogo.
+    expect(screen.queryByRole('button', { name: 'Volver a Películas y series' })).toBeNull();
+    expect(net.calls.some((call) => call.url.includes('/vod/browse'))).toBe(false);
   });
 
-  it('Películas abre la rejilla con su buscador, filtros y orden; Inicio vuelve', async () => {
+  it('`cinecat=milista` con distintivo o texto escrito a mano también cae en la portada', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine({ ...desk, search: '?vista=cine&cinecat=milista&cinetag=4k&cineq=dune' });
+    expect(await screen.findByRole('list', { name: 'Series' })).toBeVisible();
+    const tabs = screen.getByRole('group', { name: 'Secciones de Pelis y series' });
+    expect(within(tabs).getByRole('button', { name: /^Mi lista/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.queryByRole('button', { name: 'Volver a Películas y series' })).toBeNull();
+  });
+
+  it('solo series en la lista: sale «Series» y no «Películas»', async () => {
+    for (const item of demoVodList().items) if (item.kind === 'movie') demoListRemove(item.id);
+    net = mockFetch(demoRoutes());
+    renderCine(desk);
+    expect(await screen.findByRole('list', { name: 'Series' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: /^Películas/ })).toBeNull();
+    const tabs = screen.getByRole('group', { name: 'Secciones de Pelis y series' });
+    expect(await within(tabs).findByRole('button', { name: 'Mi lista · 2' })).toBeVisible();
+  });
+
+  it('lista vacía y nada a medias: invita a explorar Películas y Series o a buscar', async () => {
+    for (const item of demoVodList().items) demoListRemove(item.id);
+    net = mockFetch({
+      ...demoRoutes(),
+      'GET /api/v1/vod': (call) => json({ ...demoVodHome(queryOf(call)), continue: [] }),
+    });
+    renderCine(desk);
+    expect(await screen.findByText('Tu lista está vacía')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: /^Seguir viendo/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Buscar Ctrl K' })).toHaveTextContent('Ctrl K');
+    const tabs = screen.getByRole('group', { name: 'Secciones de Pelis y series' });
+    expect(await within(tabs).findByRole('button', { name: 'Mi lista · 0' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Explorar series' }));
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Todas las series' }),
+    ).toBeVisible();
+    expect(location.search).toContain('cine=series');
+  });
+
+  it('lista vacía con algo a medias: Seguir viendo arriba y la invitación debajo', async () => {
+    for (const item of demoVodList().items) demoListRemove(item.id);
+    net = mockFetch(demoRoutes());
+    renderCine(desk);
+    expect(await screen.findByText('Tu lista está vacía')).toBeVisible();
+    expect(screen.getByRole('heading', { name: /^Seguir viendo/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Explorar películas' })).toBeVisible();
+  });
+
+  it('Películas abre la rejilla con su buscador, filtros y orden; Mi lista vuelve', async () => {
     net = mockFetch(demoRoutes());
     renderCine(desk);
     const tabs = await screen.findByRole('group', { name: 'Secciones de Pelis y series' });
@@ -141,18 +213,15 @@ describe('escritorio: pestañas y escaparate', () => {
       await screen.findByRole('heading', { level: 2, name: 'Todas las series' }),
     ).toBeVisible();
     expect(location.search).toContain('cine=series');
-  });
-
-  it('Mi lista: películas y series juntas, sin flecha', async () => {
-    net = mockFetch(demoRoutes());
-    renderCine(desk);
-    const tabs = await screen.findByRole('group', { name: 'Secciones de Pelis y series' });
-    fireEvent.click(await within(tabs).findByRole('button', { name: 'Mi lista · 4' }));
-    expect(await screen.findByText('4 títulos')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Volver a Películas y series' })).toBeNull();
-    const list = screen.getByRole('list', { name: 'Mi lista' });
-    expect(within(list).getByRole('link', { name: /^The Office/ })).toBeVisible();
-    expect(within(list).getByRole('link', { name: /^Coco/ })).toBeVisible();
+    fireEvent.click(within(tabs).getByRole('button', { name: /^Mi lista/ }));
+    await waitFor(() => expect(location.search).not.toContain('cinecat'));
+    // Sin quedarse en «Series»: al estrechar la ventana, el móvil sale en Películas.
+    expect(location.search).not.toContain('cine=series');
+    expect(await screen.findByRole('list', { name: 'Series' })).toBeVisible();
+    expect(within(tabs).getByRole('button', { name: /^Mi lista/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 });
 

@@ -1,46 +1,47 @@
-/* El escaparate de Pelis y series en escritorio (rediseño, pantalla 5;
-   maqueta 01-escritorio.html §4 y pelis-y-series-escaparate.html). Desde
-   768 px sustituye a la portada en filas; en el móvil sigue la de siempre.
+/* La portada de Pelis y series en escritorio (desde 768 px; en el móvil sigue
+   la portada en filas de siempre). Es «Mi lista»: lo pidió Isma («eliminamos
+   Inicio y hacemos Mi lista como el inicio; ahí sale todo, mis series y mis
+   películas, diferenciadas»). De arriba abajo:
 
-   - Arriba, «SEGUIR VIENDO» en grande: lo último que estabas viendo, con el
-     episodio o por dónde vas, lo que queda, la barra amarilla y «Seguir · T3
-     E4», «En mi lista» y «Ver juntos». A la derecha, las otras cosas a medias
-     en miniatura (hasta tres): tocar una la pone en grande.
-   - Debajo, «También a medias» (carteles con «T2 · E7» o «1:12 de 2:46» y la
-     barra) y «Mi lista» con «Ver todo».
-   - NADA de novedades ni estrenos: eso está en Películas y Series (la rejilla
-     con filtros y orden).
-   Sin nada a medias ni en la lista, una salida a Películas y a Series. */
+   - «Seguir viendo»: lo empezado, en carteles con «T2 · E7» o «1:12 de 2:46»
+     y la barra (tocar sigue donde se dejó; el menú contextual, lo de siempre).
+     Es la única fila que se desplaza a lo ancho (puede haber hasta 20): lleva
+     el número en el título y, con ratón, la flecha de «más» siempre a la vista
+     mientras quede algo a la derecha, para que no parezca que se acaba ahí.
+     Va primero porque es lo más útil, y fuera de la lista: no hace falta
+     guardar algo para seguir viéndolo. Sin nada a medias, no sale.
+   - «Series» y «Películas»: Mi lista partida en dos, en la misma rejilla que
+     la pestaña Películas (carteles de unos 150 px, todos a la misma altura).
+     Una vacía no sale; las dos vacías, una invitación a explorar o buscar.
 
-import type { VodContinue, VodHome as VodHomeData, VodListItem } from '@ace/shared';
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+   Antes era un «escaparate» con lo último a medias en grande (el destacado):
+   la imagen iba solo en la parte derecha, bajo un degradado oscuro, y el
+   cartel se veía tapado y cortado por la izquierda, junto al menú lateral. */
+
+import type { VodContinue, VodHome as VodHomeData, VodKind, VodListItem } from '@ace/shared';
+import { useEffect, useMemo, type CSSProperties } from 'react';
 import { useNavigate } from '../../app/router.tsx';
+import { openSearch } from '../../app/search-open.ts';
 import {
   Button,
   EmptyState,
+  Kbd,
   Menu,
   PosterRail,
-  ProgressBar,
+  SkeletonRows,
   useContextMenu,
 } from '../../ui/index.ts';
-import { JuntosButton } from '../juntos/CreateButton.tsx';
-import { Art, artFill } from './Art.tsx';
+import { Art } from './Art.tsx';
 import { playContinue, useContinueItems } from './ContinueRail.tsx';
-import {
-  openCineGrid,
-  rememberCards,
-  seenCard,
-  useListToggle,
-  useVodList,
-  type ListTarget,
-} from './data.ts';
-import { MY_LIST_CAT, clockText, progressRatio, remainingText } from './model.ts';
-import { listNote } from './MyList.tsx';
-import { PosterCard, useTitleLink } from './PosterCard.tsx';
-import { CINE_TEXT, DESK_TEXT, followText, hoursText } from './texts.ts';
+import { openCineGrid, rememberCards, seenCard, useVodList } from './data.ts';
+import { useWidth } from './Grid.tsx';
+import { deskColumnsFor, progressRatio, remainingText } from './model.ts';
+import { listNote, listOfKind } from './MyList.tsx';
+import { PosterCard } from './PosterCard.tsx';
+import { CINE_TEXT, DESK_TEXT, hoursText } from './texts.ts';
 
-/** Miniaturas a la derecha del destacado. */
-export const HERO_SIDE_MAX = 3;
+/** Hueco entre carteles (el de la rejilla de escritorio, `.cine-grid__cells`). */
+const DESK_GAP = 20;
 
 const EPISODE_RE = /^((?:T\d+ · E\d+)|(?:Especial \d+)) · (.+)$/;
 
@@ -65,9 +66,9 @@ function leftText(entry: Pick<VodContinue, 'posS' | 'durS'>): string | null {
 }
 
 /**
- * La línea bajo el título: «T3 · E4 «Dame la mano» · quedan 31 min»,
- * «Siguiente: T2 · E6 «Todo cambia»» o, en una película, «1:12 de 2:46 ·
- * quedan 1 h 34 min».
+ * Lo que dice una tarjeta a medias al lector de pantalla: «T3 · E4 «Dame la
+ * mano» · quedan 31 min», «Siguiente: T2 · E6 «Todo cambia»» o, en una
+ * película, «1:12 de 2:46 · quedan 1 h 34 min».
  */
 export function heroLine(entry: VodContinue): string {
   if (entry.kind === 'episode') {
@@ -80,25 +81,19 @@ export function heroLine(entry: VodContinue): string {
   return [at, leftText(entry)].filter(Boolean).join(' · ');
 }
 
-/** «Seguir · T3 E4» (episodio) o «Seguir · 43:12» (película). */
-export function heroFollow(entry: VodContinue): string {
-  if (entry.kind === 'episode') {
-    const { code } = splitSubtitle(entry.subtitle);
-    if (code) return followText(code.replace(' · ', ' '));
-    return DESK_TEXT.follow;
-  }
-  return entry.posS > 0 ? followText(clockText(entry.posS)) : DESK_TEXT.follow;
-}
-
 /** La cápsula de la tarjeta a medias: «T2 · E7» o «1:12 de 2:46». */
 export function halfBadge(entry: VodContinue): string | null {
   if (entry.kind === 'episode') return splitSubtitle(entry.subtitle).code;
   return entry.durS > 0 ? `${hoursText(entry.posS)} de ${hoursText(entry.durS)}` : null;
 }
 
-/** El título (película o serie) al que pertenece una entrada. */
-function titleIdOf(entry: VodContinue): string {
-  return entry.seriesId ?? entry.id;
+/** Mi lista partida en «Series» y «Películas» (en ese orden), cada una con lo suyo. */
+export function listSections(
+  items: readonly VodListItem[],
+): Array<{ kind: VodKind; items: VodListItem[] }> {
+  return (['series', 'movie'] as const)
+    .map((kind) => ({ kind, items: listOfKind(items, kind) }))
+    .filter((section) => section.items.length > 0);
 }
 
 type Posters = ReadonlyMap<string, string | null>;
@@ -108,7 +103,7 @@ function posterArt(
   entry: VodContinue,
   posters: Posters,
 ): { id: string; art: 'poster' | 'backdrop' | 'still'; v: string | null } {
-  const id = titleIdOf(entry);
+  const id = entry.seriesId ?? entry.id;
   const v = posters.get(id) ?? seenCard(id)?.poster ?? null;
   if (v) return { id, art: 'poster', v };
   return entry.art
@@ -116,144 +111,7 @@ function posterArt(
     : { id, art: 'poster', v: null };
 }
 
-// ---- El destacado ---------------------------------------------------------------------
-
-function HeroList({ target }: { target: ListTarget }) {
-  const list = useVodList(true);
-  const toggle = useListToggle();
-  const [busy, setBusy] = useState(false);
-  const pressed = list.data?.items.some((item) => item.id === target.id) === true;
-  return (
-    <Button
-      variant="quiet"
-      icon={pressed ? 'marcado' : 'marcador'}
-      pressed={pressed}
-      className="cine-esc-hero__ghost"
-      onClick={() => {
-        if (busy) return;
-        setBusy(true);
-        void toggle(target, !pressed).finally(() => setBusy(false));
-      }}
-    >
-      {pressed ? CINE_TEXT.inList : CINE_TEXT.myList}
-    </Button>
-  );
-}
-
-interface HeroProps {
-  entry: VodContinue;
-  side: readonly VodContinue[];
-  posters: Posters;
-  onPick(entry: VodContinue): void;
-}
-
-function Hero({ entry, side, posters, onPick }: HeroProps) {
-  const navigate = useNavigate();
-  const titleId = titleIdOf(entry);
-  const link = useTitleLink(titleId);
-  const ratio = entry.isNext ? null : progressRatio(entry);
-  const line = heroLine(entry);
-  /* Detrás va el fondo panorámico o el fotograma; un cartel suelto no (habría que
-     estirarlo y difuminarlo): entonces, solo el degradado del color del título,
-     como la maqueta. */
-  const art = entry.art && entry.art.art !== 'poster' ? entry.art : null;
-  const poster = posters.get(titleId) ?? seenCard(titleId)?.poster ?? null;
-  const style = { '--hero-fill': artFill(entry.title) } as CSSProperties;
-  const kind = entry.kind === 'episode' ? CINE_TEXT.seriesKicker : CINE_TEXT.movieKicker;
-  return (
-    <section
-      className="cine-esc-hero"
-      aria-labelledby="cine-esc-hero-title"
-      data-art={art?.art ?? 'none'}
-      style={style}
-    >
-      <div className="cine-esc-hero__bg" aria-hidden="true">
-        {art ? (
-          <Art
-            key={`${art.id}:${art.art}`}
-            id={art.id}
-            art={art.art}
-            v={art.v}
-            title={entry.title}
-            eager
-            bare
-          />
-        ) : null}
-      </div>
-      <div className="cine-esc-hero__in">
-        <p className="cine-esc-hero__kicker">
-          {DESK_TEXT.continueKicker} · {kind}
-        </p>
-        <h2 id="cine-esc-hero-title" className="cine-esc-hero__title">
-          <a className="cine-esc-hero__link" {...link}>
-            {entry.title}
-          </a>
-        </h2>
-        {line ? <p className="cine-esc-hero__meta">{line}</p> : null}
-        {ratio !== null ? (
-          <ProgressBar
-            className="cine-esc-hero__bar"
-            size="thin"
-            value={ratio}
-            label={`Visto: ${Math.round(ratio * 100)} %`}
-          />
-        ) : null}
-        <div className="cine-esc-hero__actions">
-          <Button
-            variant="primary"
-            icon="play"
-            className="cine-esc-hero__play"
-            onClick={() => playContinue(entry, navigate)}
-          >
-            {heroFollow(entry)}
-          </Button>
-          <HeroList
-            target={{
-              id: titleId,
-              kind: entry.kind === 'episode' ? 'series' : 'movie',
-              title: entry.title,
-              year: null,
-              poster,
-            }}
-          />
-          <JuntosButton
-            look={{ className: 'cine-esc-hero__ghost', icon: 'personas', size: 'md' }}
-            target={{
-              titleId: entry.id,
-              kind: entry.kind,
-              artId: titleId,
-              poster,
-              title: entry.title,
-              subtitle: entry.subtitle,
-            }}
-          />
-        </div>
-      </div>
-      {side.length > 1 ? (
-        <div className="cine-esc-hero__side" role="group" aria-label={DESK_TEXT.pick}>
-          {side.map((item) => {
-            const thumb = posterArt(item, posters);
-            const on = item === entry;
-            return (
-              <button
-                key={`${item.id}:${item.isNext}`}
-                type="button"
-                className="cine-esc-hero__thumb press"
-                aria-pressed={on}
-                aria-label={`${item.title}. ${heroLine(item)}`}
-                onClick={() => onPick(item)}
-              >
-                <Art id={thumb.id} art={thumb.art} v={thumb.v} title={item.title} eager />
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-// ---- «También a medias» -----------------------------------------------------------------
+// ---- «Seguir viendo» --------------------------------------------------------------------
 
 function HalfCard({ entry, posters }: { entry: VodContinue; posters: Posters }) {
   const navigate = useNavigate();
@@ -290,24 +148,77 @@ function HalfCard({ entry, posters }: { entry: VodContinue; posters: Posters }) 
   );
 }
 
-function RowTitle({ id, title, onSeeAll }: { id: string; title: string; onSeeAll?(): void }) {
+function SectionHead({ id, title, count }: { id: string; title: string; count?: number }) {
   return (
     <div className="cine-esc-row__head">
       <h2 id={id} className="cine-esc-row__title">
         {title}
+        {count !== undefined ? (
+          <span className="cine-esc-row__count">
+            <span className="sr-only">, </span>
+            {count}
+          </span>
+        ) : null}
       </h2>
-      {onSeeAll ? (
-        <button type="button" className="cine-esc-row__all" onClick={onSeeAll}>
-          {CINE_TEXT.seeAllRow}
-        </button>
-      ) : null}
     </div>
   );
 }
 
-// ---- El escaparate --------------------------------------------------------------------
+// ---- Mi lista: Series y Películas -------------------------------------------------------
 
-export function Escaparate({ data, active }: { data: VodHomeData; active: boolean }) {
+/** Una sección de Mi lista: la rejilla (sin virtualizar: la lista es corta). */
+function ListSection({ kind, items }: { kind: VodKind; items: readonly VodListItem[] }) {
+  const id = kind === 'series' ? 'cine-lista-series' : 'cine-lista-peliculas';
+  const title = kind === 'series' ? CINE_TEXT.series : CINE_TEXT.movies;
+  return (
+    <section className="cine-esc-row" aria-labelledby={id}>
+      <SectionHead id={id} title={title} count={items.length} />
+      <ul className="cine-esc-grid" aria-label={title}>
+        {items.map((item) => (
+          <li key={item.id} className="cine-esc-grid__cell">
+            <PosterCard card={item} note={listNote(item)} gone={!item.available} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function EmptyList() {
+  const navigate = useNavigate();
+  return (
+    <EmptyState
+      title={DESK_TEXT.emptyTitle}
+      actions={
+        <>
+          <Button
+            variant="primary"
+            icon="cine"
+            onClick={() => openCineGrid({ kind: 'movie', cat: 'all', tag: null, q: '' })}
+          >
+            {DESK_TEXT.exploreMovies}
+          </Button>
+          <Button
+            variant="quiet"
+            icon="tv"
+            onClick={() => openCineGrid({ kind: 'series', cat: 'all', tag: null, q: '' })}
+          >
+            {DESK_TEXT.exploreSeries}
+          </Button>
+          <Button variant="quiet" icon="buscar" onClick={() => openSearch(navigate)}>
+            {DESK_TEXT.search} <Kbd>Ctrl K</Kbd>
+          </Button>
+        </>
+      }
+    >
+      {DESK_TEXT.emptyText}
+    </EmptyState>
+  );
+}
+
+// ---- La portada ------------------------------------------------------------------------
+
+export function DeskHome({ data, active }: { data: VodHomeData; active: boolean }) {
   const list = useVodList(active);
   const items: readonly VodListItem[] = useMemo(() => list.data?.items ?? [], [list.data]);
   useEffect(() => {
@@ -321,80 +232,44 @@ export function Escaparate({ data, active }: { data: VodHomeData; active: boolea
     return out;
   }, [data.newMovies, data.updatedSeries, items]);
   const entries = data.continue;
-  const [pick, setPick] = useState<string | null>(null);
+  const sections = listSections(items);
+  /* «Seguir viendo» con el mismo ancho de cartel que la rejilla: las columnas
+     de las tres secciones caen una debajo de otra. */
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const columns = deskColumnsFor(width, DESK_GAP);
+  const cardWidth = Math.max(120, (width - (columns - 1) * DESK_GAP) / columns);
+  const style = { '--cols': columns, '--esc-card-w': `${cardWidth}px` } as CSSProperties;
+
   const keyOf = (entry: VodContinue) => `${entry.id}:${entry.isNext}`;
-  const featured = entries.find((entry) => keyOf(entry) === pick) ?? entries[0] ?? null;
-  const side = entries.slice(0, HERO_SIDE_MAX);
-  /* Si el destacado no está entre las miniaturas (se eligió y luego cambió la lista), va el primero. */
-  const others = entries.filter((entry) => entry !== featured);
-
-  if (!featured && items.length === 0)
-    return (
-      <EmptyState
-        title={DESK_TEXT.emptyTitle}
-        actions={
-          <>
-            <Button
-              variant="primary"
-              icon="cine"
-              onClick={() => openCineGrid({ kind: 'movie', cat: 'all', tag: null })}
-            >
-              {CINE_TEXT.seeAllMovies}
-            </Button>
-            <Button
-              variant="quiet"
-              icon="tv"
-              onClick={() => openCineGrid({ kind: 'series', cat: 'all', tag: null })}
-            >
-              {CINE_TEXT.seeAllSeries}
-            </Button>
-          </>
-        }
-      >
-        {DESK_TEXT.emptyText}
-      </EmptyState>
-    );
-
   return (
-    <div className="cine-esc">
-      {featured ? (
-        <Hero
-          entry={featured}
-          side={side}
-          posters={posters}
-          onPick={(entry) => setPick(keyOf(entry))}
-        />
-      ) : null}
-      {others.length ? (
-        <section className="cine-esc-row" aria-labelledby="cine-esc-medias">
-          <RowTitle id="cine-esc-medias" title={DESK_TEXT.alsoHalf} />
-          <PosterRail label={DESK_TEXT.alsoHalf} list className="cine-esc-rail">
-            {others.map((entry) => (
+    <div ref={ref} className="cine-esc" style={style}>
+      {entries.length ? (
+        <section className="cine-esc-row" aria-labelledby="cine-esc-seguir">
+          <SectionHead
+            id="cine-esc-seguir"
+            title={CINE_TEXT.continueTitle}
+            count={entries.length}
+          />
+          <PosterRail label={CINE_TEXT.continueTitle} list className="cine-esc-rail">
+            {entries.map((entry) => (
               <HalfCard key={keyOf(entry)} entry={entry} posters={posters} />
             ))}
           </PosterRail>
         </section>
       ) : null}
-      {items.length ? (
-        <section className="cine-esc-row" aria-labelledby="cine-esc-lista">
-          <RowTitle
-            id="cine-esc-lista"
-            title={CINE_TEXT.myList}
-            onSeeAll={() => openCineGrid({ cat: MY_LIST_CAT, tag: null, q: '' })}
-          />
-          <PosterRail label={CINE_TEXT.myList} list className="cine-esc-rail">
-            {items.map((item) => (
-              <PosterCard
-                key={item.id}
-                card={item}
-                note={listNote(item)}
-                gone={!item.available}
-                className="cine-esc-poster"
-              />
-            ))}
-          </PosterRail>
-        </section>
+      {list.isPending ? <SkeletonRows rows={2} label={CINE_TEXT.loading} /> : null}
+      {list.isError && !list.data ? (
+        <div className="cine-row__failed" role="alert">
+          <p>{CINE_TEXT.rowFailed}</p>
+          <Button variant="quiet" size="sm" icon="refresh" onClick={() => void list.refetch()}>
+            {CINE_TEXT.retry}
+          </Button>
+        </div>
       ) : null}
+      {sections.map((section) => (
+        <ListSection key={section.kind} kind={section.kind} items={section.items} />
+      ))}
+      {list.data && items.length === 0 ? <EmptyList /> : null}
     </div>
   );
 }

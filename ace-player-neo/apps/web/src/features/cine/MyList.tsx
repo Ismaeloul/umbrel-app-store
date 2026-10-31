@@ -26,7 +26,7 @@ import { MY_LIST_CAT } from './model.ts';
 import { PosterGrid } from './Grid.tsx';
 import { PosterCard } from './PosterCard.tsx';
 import { RowHead } from './Rows.tsx';
-import { anyTitlesText, CINE_TEXT, titlesText, upToText } from './texts.ts';
+import { CINE_TEXT, titlesText, upToText } from './texts.ts';
 import type { ListTarget } from './data.ts';
 
 /** La línea de debajo del título en «Mi lista». */
@@ -118,69 +118,40 @@ export function MyListRow({ kind, active }: { kind: VodKind; active: boolean }) 
 const TITLE_ID = 'cine-rejilla-titulo';
 
 /**
- * «Ver todo» de «Mi lista»: toda la lista de ese tipo en la rejilla. En
- * escritorio (la pestaña «Mi lista»), películas y series juntas y
- * sin flecha: se vuelve con «Inicio».
+ * «Ver todo» de «Mi lista» (móvil): toda la lista de ese tipo en la rejilla.
+ * En escritorio no sale: allí Mi lista es la portada (Escaparate.tsx).
  */
-export function MyListScreen({
-  kind,
-  active,
-  desk = false,
-}: {
-  kind: VodKind;
-  active: boolean;
-  desk?: boolean;
-}) {
+export function MyListScreen({ kind, active }: { kind: VodKind; active: boolean }) {
   const list = useVodList(active);
   const data = list.data?.items;
-  const items = useMemo(
-    () => (desk ? [...(data ?? [])] : listOfKind(data, kind)),
-    [data, kind, desk],
-  );
+  const items = useMemo(() => listOfKind(data, kind), [data, kind]);
   useEffect(() => {
     if (items.length) rememberCards(items);
   }, [items]);
   const byId = new Map(items.map((item) => [item.id, item] as const));
   return (
-    <section
-      className={
-        desk
-          ? 'cine-browse cine-browse--mylist cine-browse--desk'
-          : 'cine-browse cine-browse--mylist'
-      }
-      aria-labelledby={TITLE_ID}
-    >
+    <section className="cine-browse cine-browse--mylist" aria-labelledby={TITLE_ID}>
       <div className="cine-browse__head">
-        {desk ? null : (
-          <IconButton
-            icon="chev-l"
-            variant="quiet"
-            label={CINE_TEXT.backHome}
-            onClick={closeCineGrid}
-          />
-        )}
+        <IconButton
+          icon="chev-l"
+          variant="quiet"
+          label={CINE_TEXT.backHome}
+          onClick={() => closeCineGrid()}
+        />
         <div className="cine-browse__titles">
           <h2 id={TITLE_ID} className="cine-browse__title" tabIndex={-1}>
             {CINE_TEXT.myList}
           </h2>
           {list.data ? (
-            <p className="cine-browse__count">
-              {desk ? anyTitlesText(items.length) : titlesText(items.length, kind)}
-            </p>
+            <p className="cine-browse__count">{titlesText(items.length, kind)}</p>
           ) : null}
         </div>
       </div>
       {list.data && items.length === 0 ? (
         <EmptyState
-          title={
-            desk
-              ? CINE_TEXT.listEmpty
-              : kind === 'movie'
-                ? CINE_TEXT.listEmptyMovies
-                : CINE_TEXT.listEmptySeries
-          }
+          title={kind === 'movie' ? CINE_TEXT.listEmptyMovies : CINE_TEXT.listEmptySeries}
           actions={
-            <Button variant="primary" icon="chev-l" onClick={closeCineGrid}>
+            <Button variant="primary" icon="chev-l" onClick={() => closeCineGrid()}>
               {CINE_TEXT.backHome}
             </Button>
           }

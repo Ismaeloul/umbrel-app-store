@@ -10,7 +10,7 @@
 
 import type { VodCategory } from '@ace/shared';
 import { cx } from '../../lib/cx.ts';
-import { Chip, Icon, Num, Sheet } from '../../ui/index.ts';
+import { Chip, Num, Sheet } from '../../ui/index.ts';
 import { CINE_TEXT, formatCount } from './texts.ts';
 import { categoryLabel } from './model.ts';
 
@@ -28,35 +28,13 @@ export interface CategoryListProps {
   onChange(id: string | null): void;
   /** Total de «Todas». */
   total?: number | null;
-  /** «Inicio» delante (el panel lateral: vuelve a la portada). */
-  withHome?: boolean;
   className?: string;
 }
 
-/** La lista entera, con «Todas» (y, en el panel, «Inicio») delante. */
-export function CategoryList({
-  categories,
-  value,
-  onChange,
-  total,
-  withHome = false,
-  className,
-}: CategoryListProps) {
+/** La lista entera, con «Todas» delante. */
+export function CategoryList({ categories, value, onChange, total, className }: CategoryListProps) {
   return (
     <ul className={cx('cine-cats', className)} aria-label={CINE_TEXT.categories}>
-      {withHome ? (
-        <li>
-          <button
-            type="button"
-            className="cine-cat cine-cat--home press"
-            aria-pressed={value === null}
-            onClick={() => onChange(null)}
-          >
-            <Icon name="cine" size={20} />
-            <span className="cine-cat__name">{CINE_TEXT.home}</span>
-          </button>
-        </li>
-      ) : null}
       <li>
         <button
           type="button"

@@ -1759,6 +1759,10 @@ de otras apps (`docs/investigacion/pelis-y-series.md`, con «Qué hemos adoptado
   Cada fila: `vodBrowse({kind, cat, sort: 'added', limit: 20})`, pedida al acercarse a la pantalla; 12 filas y «Más
   categorías»; al final «Ver las 1.234 películas». En el móvil, «Categorías» abre la hoja; en escritorio, el panel
   lateral con «Inicio».
+- **Escritorio (desde 768 px, rediseño de oct-2026):** no hay «Inicio»; las pestañas son «Mi lista · N», «Películas» y
+  «Series», y la portada es Mi lista: «Seguir viendo» arriba y debajo la lista partida en «Series» y «Películas» (una
+  vacía no sale; las dos, una invitación a explorar o a buscar con Ctrl K). La URL sin `cinecat` o con
+  `cinecat=milista` cae en ella. El móvil sigue con la portada en filas.
 - **La rejilla es otra pantalla:** con `cinecat` (id o `all`, que ahora sí se escribe), `cinetag` o una búsqueda.
   Cabecera «‹ VOD | 4K · 9 películas» («‹ Resultados de «dune»» buscando), chips de categorías (solo en la tableta:
   en el móvil está «Categorías» arriba y los carteles necesitan el sitio) y una fila con «Novedades | A-Z» y los

@@ -49,7 +49,6 @@ export const CINE_TEXT = {
   seeAllSeries: 'Ver todas las series',
   allMovies: 'Todas las películas',
   allSeries: 'Todas las series',
-  home: 'Inicio',
   backHome: 'Volver a Películas y series',
   exitSearch: 'Salir de la búsqueda',
   searchAllMovies: 'Buscar en todas las películas',
@@ -65,7 +64,6 @@ export const CINE_TEXT = {
   listGone: 'Ya no está en tu IPTV',
   listEmptyMovies: 'No tienes películas en Mi lista. Añádelas desde su ficha.',
   listEmptySeries: 'No tienes series en Mi lista. Añádelas desde su ficha.',
-  listEmpty: 'Mi lista está vacía. Añade películas y series desde su ficha.',
   // Menú de «Seguir viendo» (§12.4)
   hideContinue: 'Quitar de Seguir viendo',
   markWatched: 'Marcar como visto',
@@ -403,34 +401,29 @@ export function listFailedText(title: string, adding: boolean): string {
     : `No se ha podido quitar «${title}» de Mi lista.`;
 }
 
-// ---- Rediseño de escritorio (≥ 768 px): pestañas, escaparate y ficha ---------------------
+// ---- Rediseño de escritorio (≥ 768 px): pestañas, portada (Mi lista) y ficha -------------
 
 export const DESK_TEXT = {
   /** El titular de la barra, como en el menú lateral. */
   title: 'Pelis y series',
   tabs: 'Secciones de Pelis y series',
-  home: 'Inicio',
-  continueKicker: 'Seguir viendo',
-  alsoHalf: 'También a medias',
-  pick: 'Cambiar lo destacado',
+  exploreMovies: 'Explorar películas',
+  exploreSeries: 'Explorar series',
+  search: 'Buscar',
   follow: 'Seguir',
   share: 'Compartir',
   shared: 'Enlace copiado: pégalo donde quieras.',
   shareFailed: 'No se ha podido copiar el enlace.',
   noTrailer: 'Este título no tiene tráiler',
   moreActions: 'Más acciones',
-  emptyTitle: 'Aún no tienes nada a medias',
-  emptyText: 'Lo que empieces a ver saldrá aquí, en grande, para seguir donde lo dejaste.',
+  emptyTitle: 'Tu lista está vacía',
+  emptyText:
+    'Añade películas y series desde su ficha con «Añadir a mi lista» y saldrán aquí, separadas en Series y Películas.',
 } as const;
 
 /** «Mi lista · 12» (la pestaña); sin saber cuántos, «Mi lista». */
 export function listTabText(n: number | null): string {
   return n === null ? CINE_TEXT.myList : `${CINE_TEXT.myList} · ${formatCount(n)}`;
-}
-
-/** «12 títulos» (películas y series juntas: la pestaña «Mi lista»). */
-export function anyTitlesText(n: number): string {
-  return n === 1 ? '1 título' : `${formatCount(n)} títulos`;
 }
 
 /** «T3 E4» (el botón «Seguir · T3 E4»); en la temporada 0, «Especial 2». */

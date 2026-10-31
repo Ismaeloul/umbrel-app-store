@@ -57,7 +57,7 @@ import {
 } from '../../ui/index.ts';
 import { CategoryChips, CategorySheet } from './CategorySheet.tsx';
 import { ContinueRail } from './ContinueRail.tsx';
-import { Escaparate } from './Escaparate.tsx';
+import { DeskHome } from './Escaparate.tsx';
 import {
   CINE_TEXT_DELAY_MS,
   closeCineGrid,
@@ -293,37 +293,33 @@ function gridTitle(state: CineUrlState, q: string, home: VodHomeData): string {
 }
 
 /** La pestaña de la barra en escritorio. */
-export type DeskTab = 'inicio' | 'movie' | 'series' | 'lista';
+export type DeskTab = 'lista' | 'movie' | 'series';
 
 /**
- * Inicio / Películas / Series / Mi lista · N (escritorio): Inicio es el
- * escaparate; las otras abren la rejilla (con su entrada en el historial, como
- * «Ver todo»: Atrás vuelve al escaparate). Ir de una a otra cambia la rejilla
- * sin sumar entradas: desde cualquiera, un solo Atrás vuelve a Inicio.
+ * Mi lista · N / Películas / Series (escritorio): Mi lista es la portada; las
+ * otras abren la rejilla (con su entrada en el historial, como «Ver todo»:
+ * Atrás vuelve a Mi lista). Ir de una a otra cambia la rejilla sin sumar
+ * entradas: desde cualquiera, un solo Atrás vuelve a Mi lista.
  */
 export function DeskTabs({ value, active }: { value: DeskTab; active: boolean }) {
   const list = useVodList(active);
   const count = list.data ? list.data.items.length : null;
   const go = (tab: DeskTab) => {
-    if (tab === value && (tab === 'inicio' || tab === 'lista')) return;
+    if (tab === value && tab === 'lista') return;
     haptic('selection');
-    if (tab === 'inicio') closeCineGrid();
-    else if (tab === 'lista') openCineGrid({ cat: MY_LIST_CAT, tag: null, q: '' });
+    if (tab === 'lista') closeCineGrid({ keepKind: false });
     else openCineGrid({ kind: tab, cat: 'all', tag: null, q: '' });
   };
   return (
     <div className="cine-tabs" role="group" aria-label={DESK_TEXT.tabs}>
-      <Chip pressed={value === 'inicio'} onClick={() => go('inicio')}>
-        {DESK_TEXT.home}
+      <Chip pressed={value === 'lista'} onClick={() => go('lista')}>
+        {listTabText(count)}
       </Chip>
       <Chip pressed={value === 'movie'} onClick={() => go('movie')}>
         {CINE_TEXT.movies}
       </Chip>
       <Chip pressed={value === 'series'} onClick={() => go('series')}>
         {CINE_TEXT.series}
-      </Chip>
-      <Chip pressed={value === 'lista'} onClick={() => go('lista')}>
-        {listTabText(count)}
       </Chip>
     </div>
   );
@@ -350,7 +346,16 @@ export function Home({ active }: HomeProps) {
   /* Borrar el texto vuelve a la portada al momento; escribir espera a que se pare. */
   const q = typed === '' ? '' : settled;
   const searching = q !== '';
-  const grid = showsGrid(state, q);
+  /* Rediseño de escritorio (desde 768): pestañas Mi lista / Películas / Series
+     en la barra; la portada es Mi lista (DeskHome) y las otras, la rejilla con
+     sus filtros y su buscador. El móvil sigue como estaba. */
+  const desk = layout.kind !== 'mobile';
+  /* En escritorio, «Mi lista» ES la portada: la URL de su antigua pestaña
+     (`cinecat=milista`) también cae en ella, no en una rejilla aparte, aunque
+     lleve un distintivo o un texto de búsqueda (desde la interfaz no se llega;
+     escrito a mano, abría la pantalla de Mi lista del móvil, con su flecha). */
+  const deskList = desk && state.cat === MY_LIST_CAT;
+  const grid = showsGrid(state, q) && !deskList;
   const ready = home.data?.active === true && home.data.state === 'ready';
   /* La primera vez (aún sin elegir idiomas), el selector antes que nada. */
   const welcome = ready && lang.prefs !== null && !lang.prefs.chosen;
@@ -436,11 +441,7 @@ export function Home({ active }: HomeProps) {
     });
   };
 
-  /* Rediseño de escritorio (desde 768): pestañas Inicio / Películas / Series /
-     Mi lista en la barra, el escaparate en Inicio y la rejilla con sus
-     filtros y su buscador. El móvil sigue como estaba. */
-  const desk = layout.kind !== 'mobile';
-  const tab: DeskTab = !grid ? 'inicio' : state.cat === MY_LIST_CAT ? 'lista' : state.kind;
+  const tab: DeskTab = grid ? state.kind : 'lista';
   const categories = home.data?.categories[state.kind] ?? [];
   const showSheetButton =
     !desk && !layout.asideVisible && ready && !welcome && categories.length > 0;
@@ -538,7 +539,7 @@ export function Home({ active }: HomeProps) {
         ) : null}
         <div className="cine-portada" hidden={grid}>
           {desk ? (
-            <Escaparate data={data} active={active && !grid} />
+            <DeskHome data={data} active={active && !grid} />
           ) : (
             <Portada
               data={data}
@@ -549,7 +550,7 @@ export function Home({ active }: HomeProps) {
             />
           )}
         </div>
-        {grid && myList ? <MyListScreen kind={state.kind} active={active} desk={desk} /> : null}
+        {grid && myList ? <MyListScreen kind={state.kind} active={active} /> : null}
         {grid && !myList ? (
           <GridScreen
             state={state}
@@ -747,7 +748,7 @@ function GridScreen({
   const subtitle = total !== null ? count(total) : state.tag ? TAG_LABEL[state.tag] : '';
   const live = first && !pages.isFetching ? count(first.total) : '';
   const searchAll = () => setCineState({ cat: 'all' });
-  /* En escritorio, «Todas las películas» es la pestaña: sin flecha (Inicio vuelve). */
+  /* En escritorio, «Todas las películas» es la pestaña: sin flecha (Mi lista vuelve). */
   const arrow = !desk || searching || state.cat !== 'all' || state.tag !== null;
   return (
     <section
@@ -779,7 +780,7 @@ function GridScreen({
                 ? onClearSearch
                 : desk
                   ? () => setCineState({ cat: 'all', tag: null })
-                  : closeCineGrid
+                  : () => closeCineGrid()
             }
           />
         ) : null}

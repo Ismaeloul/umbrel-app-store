@@ -136,9 +136,8 @@ async function passCineLanguages(page) {
 }
 
 /** La portada de Películas y series, lista: en el móvil sus filas (`.cine-row`);
-    desde 768 (rediseño de escritorio) el escaparate (`.cine-esc`), con su
-    destacado (`.cine-esc-hero`) si hay algo a medias. */
-const CINE_HOME = '.cine-row .cine-card, .cine-esc-hero, .cine-esc .cine-card';
+    desde 768 (rediseño de escritorio) Mi lista (`.cine-esc`) con sus carteles. */
+const CINE_HOME = '.cine-row .cine-card, .cine-esc .cine-card';
 
 /** ¿Pelis y series de escritorio? Desde 768 de ancho (también el móvil en
     horizontal): la barra lleva las pestañas Inicio / Películas / Series / Mi lista. */
