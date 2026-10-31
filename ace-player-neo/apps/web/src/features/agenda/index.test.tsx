@@ -5,7 +5,7 @@ import { setPlayerPresence } from '../../app/player-presence.ts';
 import { installShortcutListener, shortcutStore } from '../../app/shortcuts.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { fixture, json, mockFetch } from '../../test/fetch.ts';
-import Agenda, { resetAgendaAutoOpenForTests } from './index.tsx';
+import Agenda from './index.tsx';
 import { resetScoreRevealForTests } from './score-reveal.ts';
 import { resetAgendaUi } from './state.ts';
 import { liveScore, matchAt, NOW, renderWithApp, scheduleOf, TODAY } from './test-utils.tsx';
@@ -91,7 +91,6 @@ beforeEach(() => {
   resetToasts();
   setPlayerPresence({ active: false, route: null, immersive: false });
   resetScoreRevealForTests();
-  resetAgendaAutoOpenForTests();
   uninstall = installShortcutListener(window);
 });
 afterEach(() => {
@@ -490,26 +489,6 @@ describe('vista Agenda', () => {
     renderAgenda();
     await screen.findByRole('heading', { name: /LaLiga/ });
     expect(net.calls.some((call) => call.url.startsWith('/api/v1/scores'))).toBe(false);
-  });
-
-  it('escritorio: el destacado en directo con su canal en tu biblioteca se abre solo, una vez', async () => {
-    const library = structuredClone(fixture('libraryGet')) as {
-      favorites: { id: string; title: string; alias?: string }[];
-    };
-    library.favorites = [
-      ...library.favorites,
-      { ...(library.favorites[0] ?? {}), id: 'f'.repeat(40), title: 'M+ Liga de Campeones' },
-    ];
-    net = mockFetch(routes({ 'GET /api/v1/library': library }));
-    renderAgenda('desktop');
-    await waitFor(() => expect(location.search).toBe(`?vista=partido/${LIVE.id}`));
-  });
-
-  it('escritorio: sin el canal en tu biblioteca (solo IPTV o por buscar) no se abre solo', async () => {
-    net = mockFetch(routes());
-    renderAgenda('desktop');
-    await screen.findByRole('complementary', { name: 'Partido destacado' });
-    expect(location.search).toBe('');
   });
 
   it('escritorio: dos paneles, lista compacta por competición con chips y la ficha del destacado', async () => {

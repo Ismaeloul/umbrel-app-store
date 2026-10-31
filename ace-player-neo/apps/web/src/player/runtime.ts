@@ -567,14 +567,6 @@ export class PlayerRuntime {
       onState: () => this.publish(),
       onAutoplayBlocked: () => {
         this.report('client', 'autoplay_blocked', 'El navegador bloqueó el arranque con sonido');
-        /* Sin un toque previo (la Agenda de escritorio abre sola el destacado) el
-           navegador no deja sonar: se arranca en silencio, que sí deja, y el
-           altavoz del reproductor lo quita. Ya en silencio y bloqueado, queda
-           la capa «Toca para reproducir». */
-        if (!this.video.muted) {
-          this.video.muted = true;
-          setTimeout(() => void this.controller.requestPlay('autoplay-muted'), 0);
-        }
       },
     });
 
