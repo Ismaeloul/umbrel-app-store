@@ -296,20 +296,12 @@ describe('tarjetas: reproducir, borrar con deshacer, favorito y renombrar', () =
     ).toBeInTheDocument();
   });
 
-  it('con la ficha a la vista, el primer clic elige y el segundo reproduce', async () => {
+  it('en escritorio ya no hay ficha lateral que elegir: el primer clic en la fila reproduce', async () => {
     const library = makeLibrary();
-    setup(library, { layout: { asideVisible: true, asideAvailable: true, kind: 'desktop' } });
-    const link = await screen.findByRole('link', { name: 'Eurosport 1' });
-    fireEvent.click(link);
-    await waitFor(() =>
-      expect(selectionStore.get()).toEqual({
-        collection: 'favorites',
-        id: library.favorites[1]!.id,
-      }),
-    );
-    expect(route()).toBe('biblioteca');
-    fireEvent.click(screen.getByRole('link', { name: 'Eurosport 1' }));
+    setup(library, { layout: { kind: 'desktop' } });
+    fireEvent.click(await screen.findByRole('link', { name: 'Eurosport 1' }));
     await waitFor(() => expect(route()).toBe(`partido/canal/${library.favorites[1]!.id}`));
+    expect(selectionStore.get()).toBeNull();
   });
 });
 

@@ -1,6 +1,7 @@
 Biblioteca (favoritos, recientes, listas y «Emitiendo ahora»). Entrada del
-armazón: `index.tsx` (la vista) y `aside.tsx` (la ficha del canal en
-escritorio). El código está en `src/features/library/`; «Pegar hash» en
+armazón: `index.tsx` (la vista). Desde el rediseño de escritorio (pantalla 4)
+ya no hay `aside.tsx`: desde 768 px la vista es la tabla de
+`DeskChannels.tsx`, sin ficha lateral. El código está en `src/features/library/`; «Pegar hash» en
 `src/features/paste-hash/`. Capturas y revisión de 11 tamaños en
 `docs/capturas/fase2/biblioteca/`.
 
@@ -9,7 +10,8 @@ escritorio). El código está en `src/features/library/`; «Pegar hash» en
 | `LibraryView.tsx`              | Pestañas (abre en la que tiene contenido, viaja en `&pestana=`), filtro local de 140 ms, «Buscar «q» en el motor», acordeones de categorías, vacíos con salida, pie |
 | `ChannelRow.tsx`               | Tarjeta con dorsal (C2), lo que da hoy, «En pantalla», estrella y «Más» (también clic derecho y pulsación larga)                                                    |
 | `OnAirStrip.tsx` / `on-air.ts` | «Emitiendo ahora» (C1): cruce canal ↔ agenda con `channelMatchScore ≥ 92`, hora de Madrid, marcadores 8 s / 45 s                                                    |
-| `ChannelDetail.tsx`            | Ficha del panel lateral (≥ 1024): Ver canal, acciones, «Ahora» con anillo, «Después», hash                                                                          |
+| `DeskChannels.tsx`             | Escritorio (≥ 768): Favoritos / Recientes / Todos (listas + IPTV), chips por tipo (`genres.ts`) y tabla CANAL · AHORA · DESPUÉS (`guide-now.ts` para la IPTV)    |
+| `ChannelDetail.tsx`            | La ficha que iba en el panel lateral (≥ 1024) hasta el rediseño; ya no la monta el armazón                                                                          |
 | `data.ts`                      | Cambios optimistas; borrar y quitar favorito con DESHACER de 6 s (se mandan con `keepalive` si se cierra la página)                                                 |
 | `actions.ts` / `clipboard.ts`  | Menú: favorito, «Abrir en la app AceStream», «Copiar URL del stream (VLC)», copiar enlace/hash/nombre (con respaldo `execCommand` por HTTP)                         |
 | `play.ts`                      | Reproducir (API del reproductor + `partido/canal/<hash>`); un doble clic navega una sola vez                                                                        |

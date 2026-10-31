@@ -12,8 +12,10 @@
    - Listas largas virtualizadas; en Listas, categorías en acordeón (con texto
      escrito salen todas abiertas).
    - Cada estado vacío con el botón que lo resuelve.
-   - Con la ficha de escritorio a la vista (aside.tsx), el clic elige el canal;
-     sin ella, el clic reproduce (selection.ts).
+   - Desde 768 px (rediseño de escritorio, pantalla 4) la vista es otra: la
+     TABLA de DeskChannels.tsx con Favoritos / Recientes / Todos, chips por
+     tipo y «ahora / después», sin ficha lateral. Lo de aquí debajo es el
+     móvil, que no cambia.
    - Oculta (Activity), la vista conserva pestaña, texto, acordeones y scroll
      y no tiene nada vivo: ni consultas, ni temporizadores.
    - Con IPTV activa y 2 letras o más (docs/iptv.md §14.5): debajo de la lista
@@ -74,7 +76,6 @@ import {
   initialTab,
   isFallenFavorite,
   itemsFor,
-  LIBRARY_TABS,
   libraryFooter,
   LOCAL_FILTER_DELAY_MS,
   recentGroups,
@@ -87,10 +88,10 @@ import {
   type CollectionTab,
   type LibraryTab,
 } from './model.ts';
+import { DeskChannels, type DeskTab } from './DeskChannels.tsx';
 import { onAirEntries, OnAirStrip } from './OnAirStrip.tsx';
 import { useOnAir } from './on-air.ts';
 import { useOnScreenHash } from './play.ts';
-import { selectChannel, useSelection } from './selection.ts';
 import { useChannelActions } from './useChannelActions.tsx';
 import { VirtualList } from './VirtualList.tsx';
 import { registerIptvChannelsDemo } from '../search/demo-register.ts';
@@ -140,12 +141,12 @@ export default function LibraryView({ active }: ViewProps) {
   const [iptvText, setIptvText] = useState('');
   const withIptv = useIptvActive();
   const panelRef = useRef<HTMLDivElement>(null);
-  const selection = useSelection();
   const onAir = useOnAir(active);
   const onScreen = useOnScreenHash();
-  const selectOnClick = layout.asideVisible;
+  /* Escritorio y tableta: la tabla (DeskChannels); el móvil se queda como estaba. */
+  const desk = layout.kind !== 'mobile';
 
-  const setTab = (next: LibraryTab) => {
+  const setTab = (next: LibraryTab | 'todos') => {
     // Cambiar de pestaña (toque o deslizamiento): «selección» del mapa háptico.
     if (next !== tabParam) haptic('selection');
     setTabParam(next);
@@ -194,7 +195,13 @@ export default function LibraryView({ active }: ViewProps) {
   useEffect(() => {
     if (firstTab === null && visible) setFirstTab(initialTab(visible));
   }, [firstTab, visible]);
-  const tab: LibraryTab = shownTab(tabParam, withIptv, firstTab ?? 'favoritos');
+  /* «Todos» es la pestaña de escritorio que junta Listas e IPTV: en el móvil abre Listas. */
+  const tab: LibraryTab = shownTab(
+    tabParam === 'todos' ? 'listas' : tabParam,
+    withIptv,
+    firstTab ?? 'favoritos',
+  );
+  const deskTab: DeskTab = tab === 'listas' ? 'todos' : tab;
   /* La pestaña si es una colección (Favoritos, Recientes o Listas); null en «IPTV». */
   const collectionTab: CollectionTab | null = tab === 'iptv' ? null : tab;
   const tabs = tabsFor(withIptv);
@@ -239,37 +246,6 @@ export default function LibraryView({ active }: ViewProps) {
       channelCount: items.length,
     };
   }, [visible, collectionTab, q, openCats]);
-
-  // Con la ficha a la vista, siempre hay un canal elegido: el que suena si
-  // está en la biblioteca y, si no, el primero de la pestaña.
-  useEffect(() => {
-    // En «IPTV» los canales no son de la biblioteca: se deja lo elegido como estaba.
-    if (!selectOnClick || !active || !visible || collectionTab === null) return;
-    const exists = (collection: LibraryCollection, id: string) =>
-      itemsFor(
-        visible,
-        collection === 'favorites'
-          ? 'favoritos'
-          : collection === 'history'
-            ? 'recientes'
-            : 'listas',
-      ).some((item) => item.id === id);
-    if (selection && exists(selection.collection, selection.id)) return;
-    const playing = onScreen
-      ? LIBRARY_TABS.map((t) => ({
-          t,
-          found: itemsFor(visible, t).find((i) => i.id === onScreen),
-        })).find((entry) => entry.found)
-      : undefined;
-    if (playing?.found) {
-      selectChannel({ collection: TAB_COLLECTION[playing.t], id: playing.found.id });
-      return;
-    }
-    const first = rows.find((row) => row.type === 'channel');
-    selectChannel(
-      first?.type === 'channel' ? { collection: first.collection, id: first.item.id } : null,
-    );
-  }, [selectOnClick, active, visible, selection, rows, onScreen, collectionTab]);
 
   // Deslizar a los lados cambia de pestaña en el móvil (como los días de la agenda).
   useSwipe(panelRef, {
@@ -341,12 +317,9 @@ export default function LibraryView({ active }: ViewProps) {
         fallen={collection === 'favorites' && isFallenFavorite(item, webIds)}
         onScreen={watching}
         onAir={onAir(item)}
-        selected={selectOnClick && selection?.collection === collection && selection.id === item.id}
-        selectOnClick={selectOnClick}
         onPlay={() => actions.play(item)}
-        onSelect={() => selectChannel({ collection, id: item.id })}
         onToggleFavorite={() => actions.toggleFavorite(item)}
-        menuItems={actions.menuFor(item, collection, { withPlay: selectOnClick })}
+        menuItems={actions.menuFor(item, collection)}
         enterIndex={entering ? Math.min(index, 12) : null}
         highlight={q}
       />
@@ -358,8 +331,9 @@ export default function LibraryView({ active }: ViewProps) {
       title={VISTA_TITLE.biblioteca}
       actions={
         <>
-          {/* La Guía TV es hija de Canales (docs/iptv.md §20): su entrada, aquí. */}
-          {withIptv ? (
+          {/* La Guía TV es hija de Canales (docs/iptv.md §20): su entrada, aquí.
+              En escritorio la Guía ya está en el menú lateral. */}
+          {withIptv && !desk ? (
             <Button
               variant="quiet"
               size="sm"
@@ -372,22 +346,24 @@ export default function LibraryView({ active }: ViewProps) {
               Guía TV
             </Button>
           ) : null}
+          {/* Escritorio: tu IPTV por categorías y con sus filtros (la pestaña IPTV del móvil). */}
+          {withIptv && desk ? (
+            <Button
+              variant="quiet"
+              size="sm"
+              icon="tv"
+              aria-pressed={tab === 'iptv'}
+              onClick={() => setTab(tab === 'iptv' ? 'todos' : 'iptv')}
+            >
+              Categorías IPTV
+            </Button>
+          ) : null}
           <IconButton
             icon="paste"
             label="Pegar un Content ID o enlace acestream://"
             title="Pegar hash"
             onClick={() => setPasteOpen(true)}
           />
-          {layout.asideAvailable ? (
-            <IconButton
-              icon="panel"
-              label={
-                layout.asideVisible ? 'Ocultar la ficha del canal' : 'Enseñar la ficha del canal'
-              }
-              pressed={layout.asideVisible}
-              onClick={() => layout.setAsideOpen(!layout.asideVisible)}
-            />
-          ) : null}
         </>
       }
     />
@@ -430,7 +406,7 @@ export default function LibraryView({ active }: ViewProps) {
     return (
       <div className="lib">
         {header}
-        {search}
+        {desk ? null : search}
         {library.isError ? (
           <EmptyState
             tone="error"
@@ -618,6 +594,55 @@ export default function LibraryView({ active }: ViewProps) {
     },
   }));
 
+  /* La lista activa: su nombre, cuándo se sincronizó, «Cambiar de lista» y «Gestionar». */
+  const sourceBar = activeSource ? (
+    <div className="lib-source">
+      <p className="lib-source__text">
+        <span className="lib-source__name">{activeSource.name}</span>
+        <span className="lib-source__meta">
+          {shortDate(activeSource.syncedAt)
+            ? `sincronizada ${shortDate(activeSource.syncedAt)}`
+            : 'sin sincronizar'}
+        </span>
+      </p>
+      {data.webSources.length > 1 ? (
+        <MenuButton
+          icon="list"
+          label="Cambiar de lista"
+          menuLabel="Listas guardadas"
+          items={listMenu}
+        />
+      ) : null}
+      <Button variant="ghost" size="sm" icon="ajustes" onClick={addList}>
+        Gestionar
+      </Button>
+    </div>
+  ) : null;
+
+  if (desk)
+    return (
+      <>
+        <DeskChannels
+          active={active}
+          header={header}
+          tab={deskTab}
+          onTab={(next) => setTab(next)}
+          library={visible ?? data}
+          data={data}
+          withIptv={withIptv}
+          actions={actions}
+          onScreen={onScreen}
+          onAir={onAir}
+          listBar={sourceBar}
+          footer={libraryFooter(data, mode === 'demo')}
+          onAddList={addList}
+          onPaste={() => setPasteOpen(true)}
+        />
+        {actions.sheets}
+        <PasteHashSheet open={pasteOpen} onClose={() => setPasteOpen(false)} />
+      </>
+    );
+
   return (
     <div className="lib" data-tab={tab}>
       {header}
@@ -647,29 +672,7 @@ export default function LibraryView({ active }: ViewProps) {
         }))}
       />
       <div ref={panelRef} className="lib-panel" {...tabPanelProps('bib', tab)}>
-        {tab === 'listas' && activeSource ? (
-          <div className="lib-source">
-            <p className="lib-source__text">
-              <span className="lib-source__name">{activeSource.name}</span>
-              <span className="lib-source__meta">
-                {shortDate(activeSource.syncedAt)
-                  ? `sincronizada ${shortDate(activeSource.syncedAt)}`
-                  : 'sin sincronizar'}
-              </span>
-            </p>
-            {data.webSources.length > 1 ? (
-              <MenuButton
-                icon="list"
-                label="Cambiar de lista"
-                menuLabel="Listas guardadas"
-                items={listMenu}
-              />
-            ) : null}
-            <Button variant="ghost" size="sm" icon="ajustes" onClick={addList}>
-              Gestionar
-            </Button>
-          </div>
-        ) : null}
+        {tab === 'listas' ? sourceBar : null}
         {tab === 'iptv' ? (
           <IptvTab
             text={text}
