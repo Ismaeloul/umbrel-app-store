@@ -11,7 +11,6 @@ import { json, mockFetch } from '../../test/fetch.ts';
 import homeNone from '@fixtures/variantes/vodHome.none.json';
 import homePreparing from '@fixtures/variantes/vodHome.preparing.json';
 import homeUnsupported from '@fixtures/variantes/vodHome.unsupported.json';
-import CineAside from './aside.tsx';
 import { DEMO_VOD_IDS, demoVodBrowse, demoVodHome, resetDemoVod } from './demo-data.ts';
 import { demoRoutes, queryOf, renderCine } from './test-utils.tsx';
 
@@ -459,31 +458,33 @@ describe('búsqueda (§12.5)', () => {
     expect(field).toHaveValue('wonka');
   });
 
-  it('el panel lateral marca la categoría en la que se busca (y nada si se busca desde la portada)', async () => {
+  it('en escritorio no hay panel lateral: las categorías van en la rejilla y marcan dónde se busca', async () => {
     net = mockFetch(demoRoutes());
-    const aside = <CineAside route={{ vista: 'cine', id: null }} active />;
-    const first = renderCine({
+    renderCine({
       search: `?vista=cine&cinecat=${DEMO_VOD_IDS.movieCategory}&cineq=wonka`,
-      layout: { kind: 'desktop', asideVisible: true },
-      ui: aside,
+      layout: { kind: 'desktop' },
     });
-    const nav = await screen.findByRole('navigation', { name: 'Categorías' });
-    expect(within(nav).getByRole('button', { name: /^4K/ })).toHaveAttribute(
+    expect(screen.queryByRole('navigation', { name: 'Categorías' })).toBeNull();
+    await screen.findByRole('heading', { level: 2, name: 'Resultados de «wonka»' });
+    const chips = screen.queryByRole('group', { name: 'Categorías' });
+    // Buscando no salen los chips (como en la tableta): se dice dónde se busca.
+    expect(chips).toBeNull();
+    expect(
+      await screen.findByRole('heading', { name: 'Nada con «wonka» en 4K' }),
+    ).toBeInTheDocument();
+  });
+
+  it('en escritorio, la rejilla de una categoría lleva sus chips con la categoría marcada', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine({
+      search: `?vista=cine&cinecat=${DEMO_VOD_IDS.movieCategory}`,
+      layout: { kind: 'desktop' },
+    });
+    const chips = await screen.findByRole('group', { name: 'Categorías' });
+    expect(within(chips).getByRole('button', { name: /^4K/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
-    first.unmount();
-    renderCine({
-      search: '?vista=cine&cineq=wonka',
-      layout: { kind: 'desktop', asideVisible: true },
-      ui: aside,
-    });
-    const again = await screen.findByRole('navigation', { name: 'Categorías' });
-    expect(
-      within(again)
-        .getAllByRole('button')
-        .filter((button) => button.getAttribute('aria-pressed') === 'true'),
-    ).toHaveLength(0);
   });
 
   it('Esc borra el texto y «/» enfoca el buscador', async () => {

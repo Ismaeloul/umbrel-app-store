@@ -17,6 +17,7 @@
 import type { VodEpisode, VodSeriesMain } from '@ace/shared';
 import type { CSSProperties } from 'react';
 import { describeFailure } from '../../api/index.ts';
+import { useLayout } from '../../app/layout.tsx';
 import { useNavigate } from '../../app/router.tsx';
 import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
@@ -79,9 +80,19 @@ interface EpisodeRowProps {
   season: number;
   compact: boolean;
   badge: string | null;
+  /** Escritorio (maqueta): «Siguiente · 4. Dame la mano», con la palabra en amarillo. */
+  desk: boolean;
 }
 
-function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: EpisodeRowProps) {
+function EpisodeRow({
+  episode,
+  seriesId,
+  seriesTitle,
+  season,
+  compact,
+  badge,
+  desk,
+}: EpisodeRowProps) {
   const navigate = useNavigate();
   const mark = useProgressMark();
   const context = useContextMenu();
@@ -204,8 +215,16 @@ function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: 
         )}
         <span className="cine-episode__body">
           <span className="cine-episode__head">
-            <span className="cine-episode__title">{name}</span>
-            {badge ? (
+            <span className="cine-episode__title">
+              {desk && badge ? (
+                <>
+                  <span className="cine-episode__lead">{badge}</span>
+                  <span aria-hidden="true"> · </span>
+                </>
+              ) : null}
+              {name}
+            </span>
+            {badge && !desk ? (
               <Capsule size="sm" tone="gold" className="cine-episode__badge">
                 {badge}
               </Capsule>
@@ -261,6 +280,7 @@ export function EpisodeList({
 }: EpisodeListProps) {
   /* Sin ningún fotograma en la temporada, la lista compacta. */
   const compact = episodes.every((episode) => episode.still === null);
+  const desk = useLayout().kind !== 'mobile';
   const style = { '--ep-fill': artFill(seriesTitle) } as CSSProperties;
   return (
     <ol className={cx('cine-episodes', compact && 'cine-episodes--compact')} style={style}>
@@ -272,6 +292,7 @@ export function EpisodeList({
           seriesTitle={seriesTitle}
           season={season}
           compact={compact}
+          desk={desk}
           badge={episode.id === mainId ? mainBadge(mainAction) : null}
         />
       ))}
