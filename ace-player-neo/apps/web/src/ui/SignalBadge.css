@@ -152,7 +152,8 @@
 /* ---- Compacto (C4) --------------------------------------------------------- */
 .sig__glyph {
   color: var(--sig);
-  font-size: 0.95em;
+  /* Nunca por debajo de 11 px (en las filas pequeñas, 0,95 em se quedaba en 10,45). */
+  font-size: max(0.95em, 0.6875rem);
   line-height: 1;
 }
 .sig--compact.sig--checking .sig__glyph {

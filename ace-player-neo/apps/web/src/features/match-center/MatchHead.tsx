@@ -76,10 +76,13 @@ export function DeskMatchHead({
   match,
   score,
   now,
+  active = true,
 }: {
   match: FootballMatch;
   score: LiveScore | null;
   now: number;
+  /** Con la vista oculta, el marcador no celebra goles (ni vibra). */
+  active?: boolean;
 }) {
   const live = matchStatus(match, now, score)?.phase === 'live';
   const sub = [match.competition, statusLine(match, score, now)].filter(Boolean).join(' · ');
@@ -96,7 +99,7 @@ export function DeskMatchHead({
         <p className="mc-dhead__sub">{sub}</p>
       </div>
       <div className="mc-dhead__actions">
-        <ScoreChip match={match} score={score} now={now} />
+        <ScoreChip match={match} score={score} now={now} quiet={!active} />
         {/* La sala del partido en directo llega en otra fase. aria-disabled y
             no disabled: así el title se ve al pasar el ratón. */}
         <Button

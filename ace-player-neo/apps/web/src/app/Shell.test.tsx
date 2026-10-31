@@ -173,10 +173,12 @@ describe('armazón', () => {
   it('navegación (barra inferior y menú lateral) y enlace para saltar al contenido', async () => {
     renderApp();
     expect(nav()).toHaveLength(2);
-    // El menú lateral tiene la marca, los destinos, Ajustes y la ayuda de atajos.
+    // El menú lateral tiene la marca, los destinos y Ajustes; como en la
+    // maqueta, ni botón de ayuda («?» la abre) ni motor si está en línea.
     expect(document.querySelector('.sidenav')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Atajos de teclado' })).toBeInTheDocument();
     const side = document.querySelector('.sidenav') as HTMLElement;
+    expect(within(side).queryByRole('button', { name: 'Atajos de teclado' })).toBeNull();
+    expect(side.querySelector('.sidenav__engine')).toBeNull();
     expect([...side.querySelectorAll('.sidenav__item')].map((a) => a.textContent)).toEqual([
       'Agenda',
       'Canales',

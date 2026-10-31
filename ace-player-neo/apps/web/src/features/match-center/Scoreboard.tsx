@@ -248,12 +248,20 @@ export function Scoreboard({ match, score: rawScore, now }: ScoreboardProps) {
  * vuelve a tapar. Sin marcador que pintar (antes de empezar o sin datos de
  * ESPN), no se pinta.
  */
-export function ScoreChip({ match, score: rawScore, now }: ScoreboardProps) {
+export function ScoreChip({
+  match,
+  score: rawScore,
+  now,
+  quiet = false,
+}: ScoreboardProps & {
+  /** La ficha no está a la vista: sin momento de gol ni háptico (cuenta como tapado). */
+  quiet?: boolean;
+}) {
   const done = matchStatus(match, now, rawScore)?.phase === 'done';
   const score = paintableScore(rawScore);
   const hidden = useScoreHidden(match.id, true) && score !== null;
   const [justRevealed, setJustRevealed] = useState(false);
-  const scorer = useGoalMoment(score, hidden);
+  const scorer = useGoalMoment(score, hidden || quiet);
   useEffect(() => {
     if (scorer) haptic('success');
   }, [scorer]);

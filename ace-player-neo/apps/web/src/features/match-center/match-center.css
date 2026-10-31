@@ -884,9 +884,26 @@
   color: var(--text);
   font-size: 0.875rem;
 }
+/* Aún no hace nada (la sala del partido llega en otra fase), pero se ve como
+   en la maqueta, con todo su brillo: lo dicen el cursor y el title. */
 .mc-dhead__together[aria-disabled='true'] {
-  opacity: 0.55;
   cursor: not-allowed;
+}
+/* Panel lateral de fuentes del reproductor: la hoja ya se titula «Fuentes»,
+   así que de la cabecera de la lista solo se ve «Rebuscar» (el título sigue
+   para los lectores de pantalla). */
+.mc-sources-sheet .src__head {
+  justify-content: flex-end;
+  min-height: 0;
+  margin-top: -8px;
+}
+.mc-sources-sheet .src__head .src__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 /* Ficha estrecha (la columna a 1024): los botones bajan bajo el titular. */
 @container mc (max-width: 539px) {

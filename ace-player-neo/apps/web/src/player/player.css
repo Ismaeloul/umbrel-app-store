@@ -1064,6 +1064,10 @@
     width: 18px;
     height: 18px;
   }
+  /* La pausa de contorno, como los iconos del menú (maqueta 01). */
+  .player-mini > .icon-btn:not(.player-mini__stop) .icon {
+    fill: none;
+  }
   /* «● Directo» sobre la imagen, arriba a la izquierda. */
   .player-mini__cap {
     position: absolute;
@@ -1392,5 +1396,26 @@ body:has(.app[data-immersive='true']) .menu {
   }
   .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__source {
     margin-left: auto;
+  }
+}
+/* Demo con el 1B: el rótulo «reproducción simulada…» va debajo de la pausa,
+   no detrás (el nombre del canal ya lo dice la píldora de la fuente). */
+.player:has(.player-1b__center) .player-demo {
+  top: calc(50% + 40px);
+  transform: translateX(-50%);
+}
+.player:has(.player-1b__center) .player-demo strong {
+  display: none;
+}
+/* La ficha junto a la agenda entre 1024 y 1279 deja el vídeo bajo (unos
+   230 px): pausa de 48 y sin el rótulo de la demo, que chocaba con la
+   cápsula de estado de abajo. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-1b__play {
+    width: 48px;
+    height: 48px;
+  }
+  .app[data-column='true'] .player:not([data-immersive='true']) .player-demo {
+    display: none;
   }
 }

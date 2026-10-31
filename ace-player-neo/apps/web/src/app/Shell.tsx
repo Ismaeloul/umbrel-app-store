@@ -339,7 +339,7 @@ export function Shell() {
         >
           Saltar al contenido
         </a>
-        <SideNav route={route} onHelp={() => setHelpOpen(true)} />
+        <SideNav route={route} />
         {/* La barra de la Agenda sobre la lista y el partido (rediseño,
             pantalla 1): abrir un partido no cambia de pantalla. */}
         {columnVisible ? (

@@ -15,6 +15,7 @@ import { LayoutContext } from '../../app/layout.tsx';
 import { RouterProvider } from '../../app/router.tsx';
 import { resetToasts } from '../../notices/toasts.ts';
 import { getPlayer, resetPlayerApi, setNerdOpen } from '../../player/api.ts';
+import { setSourcePanelOpen } from '../../player/source-panel.ts';
 import { fixture, json, mockFetch } from '../../test/fetch.ts';
 import { resetScoreRevealForTests } from '../agenda/score-reveal.ts';
 import {
@@ -294,5 +295,25 @@ describe('centro de partido', () => {
       'Partido',
       'Datos',
     ]);
+    // El panel lateral de fuentes del reproductor sí lleva cabecera: es donde
+    // se rebusca sin salir del vídeo.
+    act(() => setSourcePanelOpen(true));
+    const panel = await screen.findByRole('dialog', { name: 'Fuentes' });
+    expect(
+      within(panel).getByRole('button', { name: /^Rebuscar fuentes|^Rebuscando/ }),
+    ).toBeInTheDocument();
+    act(() => setSourcePanelOpen(false));
+  });
+
+  it('tableta: las fuentes en filas, como en escritorio, con «Rebuscar» junto a las pestañas', async () => {
+    renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />, {
+      kind: 'tablet',
+    });
+    expect(await screen.findByRole('list', { name: 'Fuentes del partido' })).toBeInTheDocument();
+    expect(document.querySelector('.src--line')).not.toBeNull();
+    expect(document.querySelector('.src__head')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /^Rebuscar fuentes|^Rebuscando/ }),
+    ).toBeInTheDocument();
   });
 });

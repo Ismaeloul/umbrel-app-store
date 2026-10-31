@@ -387,10 +387,6 @@
     gap: 4px;
     margin-bottom: 14px;
   }
-  .sidenav__tools {
-    display: flex;
-    align-items: center;
-  }
   .sidenav__brand {
     display: flex;
     align-items: center;
@@ -483,8 +479,7 @@
     overflow: hidden;
     clip-path: inset(50%);
   }
-  .sidenav__engine,
-  .sidenav__help {
+  .sidenav__engine {
     flex: none;
     min-width: 32px;
     padding: 0;
@@ -515,6 +510,12 @@
   }
   .stage:has(.player-chrome[data-visible='true'] .player-chrome__bottom) .stage__status {
     --status-lift: -64px;
+  }
+  /* Controles «1B»: abajo solo la barra y la píldora DIRECTO (30 px + 10 de
+     aire). Con 64 pisaba la pausa del centro con el vídeo bajo (la ficha
+     junto a la agenda a 1024). */
+  .stage:has(.player-chrome[data-visible='true'] .player-1b__bottom) .stage__status {
+    --status-lift: -40px;
   }
   .stage:has(.player-chrome[data-visible='true'] .vod-bottom) .stage__status {
     --status-lift: -100px;
@@ -629,9 +630,6 @@
   .sidenav__head {
     flex-direction: column;
   }
-  .sidenav__tools {
-    flex-direction: column;
-  }
   /* El mini no cabe en un menú de iconos: tarjeta abajo a la derecha. */
   .app[data-mini='true'] .sidenav__mini-slot {
     display: none;
@@ -744,8 +742,7 @@
   .tabbar__item:hover:not([aria-current='page']) {
     color: var(--text);
   }
-  .engine:hover,
-  .sidenav__help:hover {
+  .engine:hover {
     color: var(--text);
   }
 }

@@ -1329,19 +1329,19 @@
 .desk-agenda__chips {
   margin-bottom: 2px;
 }
-/* La tira de días de la maqueta: pastillas prietas a lo ancho, la elegida en
-   amarillo (el número en grande, el día en pequeño encima). */
+/* La tira de días de la maqueta: siete huecos a lo ancho, la elegida en
+   amarillo (el número en grande, el día en pequeño encima). Con menos días
+   las pastillas no crecen: miden lo mismo y sobra hueco a la derecha. */
 .desk-days {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 6px;
 }
 .desk-days__day {
   display: grid;
-  flex: 1 1 0;
   justify-items: center;
   gap: 1px;
   min-width: 0;
-  max-width: 64px;
   padding: 7px 0;
   border-radius: 12px;
   color: var(--text-2);
@@ -1384,8 +1384,12 @@
 .desk-agenda__chips .chip--button[aria-pressed='true'] {
   box-shadow: none;
 }
+/* «Todo · 9»: el punto con su aire a los dos lados (un espacio duro en la
+   Martian Mono de la cifra apenas se veía). */
 .desk-agenda__chips .chip__count::before {
-  content: '·\00a0';
+  content: '·';
+  margin-right: 4px;
+  font-family: var(--font);
 }
 .desk-agenda__dot {
   display: inline-block;
@@ -1606,8 +1610,19 @@
     gap: var(--s-4);
     padding-inline: 20px;
   }
-  .agenda-desk__side .agenda-foot {
+  /* El pie: de dónde salen los datos y, debajo, «Editar mis gustos» y
+     «Actualizar» (fuera de la barra, que es la misma con un partido abierto). */
+  .agenda-desk__foot {
+    display: grid;
+    gap: 6px;
     margin: var(--s-4) 20px 0;
+  }
+  .agenda-desk__tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-inline: -10px -8px;
   }
 }
 
@@ -1694,8 +1709,8 @@
     color: var(--text);
     font-size: 0.875rem;
   }
+  /* Sin opacidad, como en la maqueta (ver .mc-dhead__together). */
   .agenda-stage__together[aria-disabled='true'] {
-    opacity: 0.55;
     cursor: not-allowed;
   }
   .agenda-stage__where {

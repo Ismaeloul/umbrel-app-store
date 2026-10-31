@@ -509,6 +509,13 @@ describe('vista Agenda', () => {
       'true',
     );
     const channelRow = within(side).getByRole('button', { name: /M\+ Liga de Campeones/ });
+    // La barra, la misma que con un partido abierto (título y buscador):
+    // «Editar mis gustos» y «Actualizar» van al pie del panel.
+    const bar = document.querySelector('.agenda-head') as HTMLElement;
+    expect(within(bar).queryByRole('button', { name: 'Editar mis gustos' })).toBeNull();
+    expect(within(bar).queryByRole('button', { name: /^Actualizar agenda/ })).toBeNull();
+    expect(within(side).getByRole('button', { name: 'Editar mis gustos' })).toBeInTheDocument();
+    expect(within(side).getByRole('button', { name: /^Actualizar agenda/ })).toBeInTheDocument();
     // Filas compactas agrupadas por competición, sin cifras de marcador.
     expect(
       await screen.findByRole('button', { name: /^Real Madrid contra Girona, en directo/ }),

@@ -18,6 +18,7 @@ export function SourcesSheet() {
       title="Fuentes"
       placement="side"
       size="md"
+      className="mc-sources-sheet"
     >
       {open ? <SourcesPanel variant="line" className="mc-sources" /> : null}
     </Sheet>

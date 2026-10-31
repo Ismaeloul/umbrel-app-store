@@ -642,31 +642,31 @@ export default function Agenda({ active }: ViewProps) {
      partido) y a la derecha la ficha del destacado. Tocar un partido abre su
      ficha con el vídeo (el centro de partido), con la lista en su sitio. */
   if (stageVisible) {
+    /* «Editar mis gustos» y «Actualizar» bajan al pie del panel (siguen con E
+       y R): la barra queda igual que con un partido abierto, título y
+       buscador, como en la maqueta. */
+    const deskFoot = (
+      <div className="agenda-desk__foot">
+        {foot}
+        <div className="agenda-desk__tools">
+          <Button size="sm" variant="quiet" icon="pencil" onClick={openPreferences}>
+            Editar mis gustos
+          </Button>
+          <IconButton
+            icon="refresh"
+            label="Actualizar agenda de fútbol"
+            shortcut="R"
+            className="agenda-refresh"
+            busy={schedule.isFetching}
+            onClick={refresh}
+          />
+        </div>
+      </div>
+    );
     return (
       <div className="agenda agenda--desk" data-demo={appMode === 'demo' || undefined}>
         {/* Solo el título, como en la maqueta: el día ya lo dice la tira. */}
-        <ViewHeader
-          title="Agenda"
-          className="agenda-head"
-          actions={
-            <>
-              <IconButton
-                icon="pencil"
-                label="Editar mis gustos"
-                shortcut="E"
-                onClick={openPreferences}
-              />
-              <IconButton
-                icon="refresh"
-                label="Actualizar agenda de fútbol"
-                shortcut="R"
-                className="agenda-refresh"
-                busy={schedule.isFetching}
-                onClick={refresh}
-              />
-            </>
-          }
-        />
+        <ViewHeader title="Agenda" className="agenda-head" />
         {showCard ? (
           <FirstUseCard onCustomize={openPreferences} onSkip={skipFirstUse} busy={save.isPending} />
         ) : null}
@@ -691,10 +691,10 @@ export default function Agenda({ active }: ViewProps) {
                 onOpen={openMatch}
                 desk
               />
-              {foot}
+              {deskFoot}
             </aside>
           ) : (
-            <div className="agenda-desk__side">{foot}</div>
+            <div className="agenda-desk__side">{deskFoot}</div>
           )}
         </div>
         <p className="sr-only" role="status" aria-live="polite">

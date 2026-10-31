@@ -139,8 +139,8 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
 
   if (!match && schedule.isPending) return <MatchSkeleton />;
 
-  const desktop = layout.kind === 'desktop' || layout.kind === 'wide';
-  // Desde 768 la ficha lleva la cabecera de escritorio y el vídeo, los controles «1B».
+  // Desde 768 la ficha lleva la cabecera de escritorio, las fuentes en filas
+  // (también en la tableta) y el vídeo, los controles «1B».
   const desk = layout.kind !== 'mobile';
   const tabs = layout.asideVisible ? null : (
     <MatchTabs
@@ -149,7 +149,7 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
       now={now}
       channels={channels}
       today={today}
-      variant={desktop ? 'line' : 'list'}
+      variant={desk ? 'line' : 'list'}
       className="mc-tabs--view"
       extra={
         layout.asideAvailable ? (
@@ -158,7 +158,7 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
             label="Mostrar el panel lateral"
             onClick={() => layout.setAsideOpen(true)}
           />
-        ) : desktop ? (
+        ) : desk ? (
           <ResearchButton />
         ) : null
       }
@@ -218,7 +218,7 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
         </ScoreCapsuleSlot>
       ) : null}
       {desk ? (
-        <DeskMatchHead key={match.id} match={match} score={score} now={now} />
+        <DeskMatchHead key={match.id} match={match} score={score} now={now} active={active} />
       ) : (
         <MatchHead match={match} score={score} now={now} />
       )}
