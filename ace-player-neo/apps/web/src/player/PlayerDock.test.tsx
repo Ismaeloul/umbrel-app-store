@@ -179,6 +179,35 @@ describe('reproductor en grande', () => {
     expect(screen.getByRole('button', { name: 'Reproducir' })).toBeInTheDocument();
   });
 
+  it('escritorio (1B): silencio y barra de volumen junto a la barra del directo', () => {
+    const realMatchMedia = window.matchMedia;
+    // 1280 px con ratón: casan las de ancho y la de puntero fino.
+    window.matchMedia = ((query: string) => ({
+      matches: /min-width|pointer: fine/.test(query),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const { container } = renderDock();
+      setPlayer(playing());
+      const bottom = container.querySelector('.player-1b__bottom') as HTMLElement;
+      expect(bottom).not.toBeNull();
+      fireEvent.click(within(bottom).getByRole('button', { name: 'Silenciar' }));
+      const video = container.querySelector('video') as HTMLVideoElement;
+      expect(video.muted).toBe(true);
+      const slider = within(bottom).getByRole('slider', { name: 'Volumen' });
+      fireEvent.change(slider, { target: { value: '0.4' } });
+      expect(video.volume).toBeCloseTo(0.4);
+    } finally {
+      window.matchMedia = realMatchMedia;
+    }
+  });
+
   it('controles: pausa, −30 s, silencio y minimizar; y la línea de estado bajo el vídeo', () => {
     // Sin matchMedia (jsdom) cuenta como móvil: detener va en «Más opciones», como en la maqueta.
     const { handlers } = renderDock();

@@ -1263,6 +1263,9 @@ body:has(.app[data-immersive='true']) .menu {
   align-items: center;
   gap: 12px;
 }
+.player-1b__vol {
+  flex: none;
+}
 /* La barra del directo: roja y llena en directo; por detrás, gris hasta donde
    vas (--pos, de livePosition) con un punto blanco. Solo transform. */
 .player-1b__bar {

@@ -738,6 +738,31 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
                   />
                 </div>
                 <div className="player-chrome__bottom player-1b__bottom">
+                  {/* El volumen: la maqueta no lo trae, pero en el ordenador no
+                      hay botones físicos para bajarlo. */}
+                  <div className="player-cap player-1b__vol glass--video">
+                    <IconButton
+                      icon={state.muted || state.volume === 0 ? 'mute' : 'vol'}
+                      label={state.muted ? 'Activar sonido' : 'Silenciar'}
+                      shortcut="M"
+                      variant="video"
+                      onClick={actions.toggleMute}
+                    />
+                    {ctx.finePointer ? (
+                      <label className="player-vol">
+                        <span className="sr-only">Volumen</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={volume}
+                          style={{ '--v': volume } as CSSProperties}
+                          onChange={(event) => actions.setVolume(Number(event.currentTarget.value))}
+                        />
+                      </label>
+                    ) : null}
+                  </div>
                   <LiveBar state={state} />
                   <LivePill state={state} onPress={actions.goLive} />
                 </div>
