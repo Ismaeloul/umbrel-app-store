@@ -14,9 +14,16 @@ export interface AgendaUiState {
   mode: AgendaMode | null;
   /** Partido del escenario de escritorio; null: el destacado. */
   selected: string | null;
+  /** Chip de la lista de escritorio: null (Todo), 'live' (Directo) o una competición. */
+  chip: string | null;
 }
 
-export const agendaUi = createStore<AgendaUiState>({ day: null, mode: null, selected: null });
+export const agendaUi = createStore<AgendaUiState>({
+  day: null,
+  mode: null,
+  selected: null,
+  chip: null,
+});
 
 export function useAgendaUi(): AgendaUiState {
   return useStore(agendaUi);
@@ -30,6 +37,10 @@ export function setAgendaMode(mode: AgendaMode): void {
   agendaUi.set((state) => (state.mode === mode ? state : { ...state, mode }));
 }
 
+export function setAgendaChip(chip: string | null): void {
+  agendaUi.set((state) => (state.chip === chip ? state : { ...state, chip }));
+}
+
 export function setAgendaSelected(selected: string | null): void {
   agendaUi.set((state) => (state.selected === selected ? state : { ...state, selected }));
 }
@@ -41,5 +52,5 @@ export function modeAfterSaving(hasPreferences: boolean): void {
 
 /** Solo para los tests. */
 export function resetAgendaUi(): void {
-  agendaUi.set({ day: null, mode: null, selected: null });
+  agendaUi.set({ day: null, mode: null, selected: null, chip: null });
 }

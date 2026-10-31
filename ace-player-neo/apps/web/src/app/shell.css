@@ -611,13 +611,13 @@
 
 @media (min-width: 1600px) {
   :root {
-    --column-w: 340px;
+    --column-w: 400px;
     --aside-w: 380px;
   }
 }
 @media (min-width: 2200px) {
   :root {
-    --column-w: 380px;
+    --column-w: 440px;
     --aside-w: 440px;
   }
 }

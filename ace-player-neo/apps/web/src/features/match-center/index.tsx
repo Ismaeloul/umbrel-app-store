@@ -122,7 +122,6 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
 
   if (!match && schedule.isPending) return <MatchSkeleton />;
 
-  const desktop = layout.kind === 'desktop' || layout.kind === 'wide';
   const tabs = layout.asideVisible ? null : (
     <MatchTabs
       match={match}
@@ -130,7 +129,7 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
       now={now}
       channels={channels}
       today={today}
-      variant={desktop ? 'rack' : 'list'}
+      variant={layout.kind === 'desktop' || layout.kind === 'wide' ? 'line' : 'list'}
       className="mc-tabs--view"
       extra={
         layout.asideAvailable ? (

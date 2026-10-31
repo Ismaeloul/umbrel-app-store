@@ -140,7 +140,7 @@ export function ChannelTabs({ hash, context, variant, extra, className }: Channe
           ),
         },
       ];
-  tabs.push({ value: 'datos', label: 'Datos técnicos', content: <NerdSection /> });
+  tabs.push({ value: 'datos', label: 'Datos', content: <NerdSection /> });
   return <TheaterTabs kind="channel" tabs={tabs} extra={extra} className={className} />;
 }
 

@@ -187,6 +187,6 @@ export function MatchTabs({
         <MatchPanel match={match} score={score} now={now} channels={channels} today={today} />
       ),
     });
-  tabs.push({ value: 'datos', label: 'Datos técnicos', content: <NerdSection /> });
+  tabs.push({ value: 'datos', label: 'Datos', content: <NerdSection /> });
   return <TheaterTabs kind="match" tabs={tabs} extra={extra} className={className} />;
 }

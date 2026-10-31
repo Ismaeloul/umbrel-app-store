@@ -1288,6 +1288,181 @@
   aspect-ratio: 2 / 1;
 }
 
+/* ---- Agenda de escritorio (rediseño, pantalla 1) ------------------------------------
+   Dos paneles: la lista compacta (DeskList, ~380 px) y la ficha. La misma
+   lista va en la columna junto al vídeo del partido. */
+.agenda-desk {
+  display: grid;
+  grid-template-columns: minmax(300px, var(--column-w)) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s-6);
+  padding-top: var(--s-4);
+}
+.agenda-desk__side {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--safe-top) + var(--s-4));
+  min-width: 0;
+}
+.desk-agenda {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.desk-agenda .day-strip,
+.desk-agenda .daystrip {
+  margin: 0;
+}
+.desk-agenda__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.desk-agenda__dot {
+  width: 6px;
+  height: 6px;
+  margin-right: 2px;
+  border-radius: 50%;
+  background: var(--live);
+}
+.desk-agenda__loading,
+.desk-agenda__groups {
+  display: grid;
+  gap: var(--s-3);
+}
+.desk-agenda__empty {
+  padding: var(--s-4) 4px;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.desk-comp {
+  overflow: hidden;
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
+}
+.desk-comp__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  font-size: var(--fs-15);
+  font-weight: 750;
+}
+.desk-comp__badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-11);
+  font-weight: 800;
+}
+.desk-comp__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.desk-comp__count {
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+.desk-comp__rows {
+  display: grid;
+}
+.desk-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line-soft);
+  text-align: left;
+}
+.desk-row--sel {
+  background: var(--accent-wash);
+  box-shadow: inset 3px 0 0 var(--accent-edge);
+}
+.desk-row:focus-visible {
+  outline-offset: -3px;
+}
+.desk-row__when {
+  display: grid;
+  gap: 4px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.desk-row__when--live {
+  color: var(--live-ink);
+}
+.desk-row__bar {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line-soft);
+}
+.desk-row__bar i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--live);
+  clip-path: inset(0 calc(100% - var(--v)) 0 0);
+}
+.desk-row__teams {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.desk-row__team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-15);
+  font-weight: 560;
+}
+.desk-row--mine .desk-row__name {
+  font-weight: 720;
+}
+.desk-row__name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.desk-row__end {
+  display: grid;
+  justify-items: end;
+  min-width: 24px;
+}
+.desk-row__final {
+  color: var(--text-3);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+@media (hover: hover) and (pointer: fine) {
+  .desk-row:hover:not(.desk-row--sel) {
+    background: var(--line-soft);
+  }
+}
+/* La columna junto al vídeo: sin cabecera propia, la lista pegada arriba. */
+.agenda-col .desk-agenda {
+  padding-top: var(--s-2);
+}
+
 /* ---- Movimiento reducido: fundidos cortos, nada gira ni se desliza ----------------- */
 @media (prefers-reduced-motion: reduce) {
   .agenda-row--enter,

@@ -94,22 +94,19 @@ describe('centro de partido', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Fuentes del partido' })).toBeNull();
     expect(document.querySelectorAll('.src-poster').length).toBeGreaterThan(0);
-    expect(screen.getByRole('tab', { name: 'Datos técnicos' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Datos' })).toBeInTheDocument();
   });
 
   it('la tecla S (datos técnicos) abre su pestaña y otra S vuelve a la de antes', async () => {
     renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />);
     await screen.findByRole('heading', { level: 1, name: 'Atlético de Madrid vs Tottenham' });
     act(() => setNerdOpen(true));
-    expect(screen.getByRole('tab', { name: 'Datos técnicos' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    expect(screen.getByRole('tab', { name: 'Datos' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('heading', { name: 'Datos técnicos' })).toBeInTheDocument();
     act(() => setNerdOpen(false));
     expect(screen.getByRole('tab', { name: /^Fuentes/ })).toHaveAttribute('aria-selected', 'true');
     // Elegir la pestaña a mano también lo apunta en el reproductor.
-    fireEvent.click(screen.getByRole('tab', { name: 'Datos técnicos' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Datos' }));
     expect(getPlayer().nerdOpen).toBe(true);
   });
 
@@ -226,7 +223,7 @@ describe('centro de partido', () => {
     expect(
       within(panel).getByRole('button', { name: 'Plegar el panel lateral' }),
     ).toBeInTheDocument();
-    fireEvent.click(within(panel).getByRole('tab', { name: 'Datos técnicos' }));
+    fireEvent.click(within(panel).getByRole('tab', { name: 'Datos' }));
     expect(within(panel).getByRole('heading', { name: 'Datos técnicos' })).toBeInTheDocument();
     expect(within(view).queryByRole('group', { name: 'Acciones de la fuente' })).toBeNull();
     expect(within(view).queryByRole('tablist')).toBeNull();

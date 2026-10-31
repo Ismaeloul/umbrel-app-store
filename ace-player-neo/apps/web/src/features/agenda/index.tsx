@@ -73,6 +73,7 @@ import { AgendaRows, type RowSlot } from './AgendaList.tsx';
 import { useLibraryLookup, useNow, useSchedule, useScores } from './data.ts';
 import { useDaySwipe } from './day-swipe.ts';
 import { DayStrip } from './DayStrip.tsx';
+import { DeskList } from './DeskList.tsx';
 import {
   asForYou,
   channelInfo,
@@ -635,6 +636,82 @@ export default function Agenda({ active }: ViewProps) {
             liveCount > 0 ? `, ${liveCount} en directo` : ''
           }${mode === 'forYou' ? ', solo los tuyos' : ''}`
         : '';
+
+  /* Escritorio (rediseño, pantalla 1): dos paneles. A la izquierda la lista
+     compacta por competición (DeskList, la misma que acompaña al vídeo del
+     partido) y a la derecha la ficha del destacado. Tocar un partido abre su
+     ficha con el vídeo (el centro de partido), con la lista en su sitio. */
+  if (stageVisible) {
+    return (
+      <div className="agenda agenda--desk" data-demo={appMode === 'demo' || undefined}>
+        <ViewHeader
+          title="Agenda"
+          className="agenda-head"
+          subtitle={
+            dayText ? (
+              <span className="agenda-head__lede">
+                {dayText.primary === dayText.long ? '' : `${dayText.primary} · `}
+                {capitalize(dayText.long)}
+              </span>
+            ) : undefined
+          }
+          actions={
+            <>
+              <IconButton
+                icon="pencil"
+                label="Editar mis gustos"
+                shortcut="E"
+                onClick={openPreferences}
+              />
+              <IconButton
+                icon="refresh"
+                label="Actualizar agenda de fútbol"
+                shortcut="R"
+                className="agenda-refresh"
+                busy={schedule.isFetching}
+                onClick={refresh}
+              />
+            </>
+          }
+        />
+        {showCard ? (
+          <FirstUseCard onCustomize={openPreferences} onSkip={skipFirstUse} busy={save.isPending} />
+        ) : null}
+        <div className="agenda-desk">
+          <DeskList
+            className="agenda-desk__list"
+            selectedId={null}
+            active={active}
+            onOpen={openMatch}
+          />
+          {selected ? (
+            <aside className="agenda-desk__side" aria-label="Partido destacado">
+              <AgendaStage
+                key={selected.id}
+                match={selected}
+                now={now}
+                today={today}
+                score={selectedScore}
+                channels={channelInfo(selected, lookup)}
+                mine={isMine(selected, preferences)}
+                watching={watched === selected.id}
+                onOpen={openMatch}
+              />
+            </aside>
+          ) : null}
+        </div>
+        {foot}
+        <p className="sr-only" role="status" aria-live="polite">
+          {announcement}
+        </p>
+        {prefsMounted ? (
+          <Suspense fallback={null}>
+            <PreferencesSheet open={prefsOpen} onClose={() => setPrefsOpen(false)} />
+          </Suspense>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div

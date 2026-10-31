@@ -1,11 +1,11 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { fixture, mockFetch } from '../../test/fetch.ts';
 import AgendaColumn from './column.tsx';
 import { resetScoreRevealForTests } from './score-reveal.ts';
-import { resetAgendaUi, setAgendaMode } from './state.ts';
+import { resetAgendaUi, setAgendaChip } from './state.ts';
 import { liveScore, matchAt, NOW, renderWithApp, scheduleOf, TODAY } from './test-utils.tsx';
 
 const CURRENT = matchAt(-40, { home: 'Real Madrid', away: 'Girona', competition: 'LaLiga' });
@@ -64,47 +64,31 @@ function renderColumn() {
   );
 }
 
-describe('columna compacta de la agenda (centro de partido)', () => {
-  it('tarjetas compactas del día, el partido abierto marcado y los marcadores tapados', async () => {
+describe('columna de la agenda junto al vídeo (escritorio)', () => {
+  it('la misma lista compacta del día, el partido abierto marcado y sin marcadores', async () => {
     const { container } = renderColumn();
     expect(screen.getByRole('heading', { name: 'Agenda' })).toBeInTheDocument();
-    const current = await screen.findByRole('button', { name: /Real Madrid vs Girona/ });
+    const current = await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
     expect(current).toHaveAttribute('aria-current', 'true');
-    expect(container.querySelectorAll('.agenda-row--compact').length).toBe(3);
-    // Todo tapado (como en toda la agenda): la cápsula «Marcador», sin cifras.
-    expect(
-      await screen.findByRole('button', { name: 'Ver marcador de Real Madrid vs Girona' }),
-    ).toBeInTheDocument();
+    expect(container.querySelectorAll('.desk-row').length).toBe(3);
     expect(container.querySelectorAll('.agenda-score .num')).toHaveLength(0);
-    expect(screen.getByText('Hoy 23')).toBeInTheDocument();
   });
 
-  it('otra franja abre ese partido; sin canal, avisa', async () => {
+  it('otro partido se abre aquí al lado; sin canal, avisa', async () => {
     renderColumn();
-    fireEvent.click(await screen.findByRole('button', { name: /^Ver canal para Betis/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Betis contra Cádiz/ }));
     await waitFor(() => expect(location.search).toBe(`?vista=partido/${OTHER.id}`));
-    fireEvent.click(screen.getByRole('button', { name: /canal por confirmar/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Elche contra Eibar/ }));
     expect(toastStore.get().map((t) => t.text)).toContain('El canal todavía no está anunciado');
   });
 
-  it('comparte el día y el filtro con la vista (y cambia de día con sus flechas)', async () => {
+  it('comparte el chip con la vista: «Directo» deja solo el que está en juego', async () => {
     renderColumn();
-    await screen.findByRole('button', { name: /Real Madrid vs Girona/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Día siguiente' }));
-    expect(await screen.findByText('Mañana 24')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Real Madrid vs Girona/ })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Día anterior' }));
-    const group = screen.getByRole('radiogroup', { name: 'Qué partidos ver' });
-    expect(within(group).getByRole('radio', { name: 'Para ti' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
-    setAgendaMode('all');
+    await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    setAgendaChip('live');
     await waitFor(() =>
-      expect(within(group).getByRole('radio', { name: 'Todos' })).toHaveAttribute(
-        'aria-checked',
-        'true',
-      ),
+      expect(screen.queryByRole('button', { name: /^Betis contra Cádiz/ })).toBeNull(),
     );
+    expect(screen.getByRole('button', { name: /^Real Madrid contra Girona/ })).toBeInTheDocument();
   });
 });

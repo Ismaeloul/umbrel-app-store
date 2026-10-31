@@ -53,6 +53,7 @@ import {
   posterDetailOf,
   qualityTags,
 } from './model.ts';
+import { Equalizer } from '../../player/PlayerSurface.tsx';
 import { confirmSource, openReport, selectSource } from './session.ts';
 import type { SourceRow } from './useSources.ts';
 
@@ -237,6 +238,78 @@ export function SourcePoster({ row, inMatch, index, onArrow }: SourcePosterProps
             </span>
           ) : null}
           {detail ? <span className="src-poster__detail">{detail}</span> : null}
+        </span>
+      </button>
+      <Menu
+        open={menu.open}
+        anchor={menu.anchor}
+        onClose={menu.onClose}
+        label={`Fuente ${row.number}`}
+        items={rowMenu(row, inMatch)}
+      />
+    </li>
+  );
+}
+
+/**
+ * Fila compacta de fuente (rediseño de escritorio, ficha del partido): el
+ * número, el canal con su calidad, debajo «AceStream»/«IPTV» y los pares, y a
+ * la derecha la señal o, si es la que suena, las barritas. El mismo botón,
+ * menú, aria-label y flechas que el cartel.
+ */
+export function SourceLine({ row, inMatch, index, onArrow }: SourcePosterProps) {
+  const { bind, menu } = useContextMenu();
+  const menuOpenedAt = useRef(0);
+  useEffect(() => {
+    if (menu.open) menuOpenedAt.current = Date.now();
+  }, [menu.open]);
+  const ring = ringStateOf(row);
+  const quality = qualityTags(row.entry);
+  const peers = row.entry.probe?.peers ?? 0;
+  const iptv = isIptv(row.entry);
+  const title = [posterNameOf(row), ...quality.slice(0, 2)].join(' · ');
+  return (
+    <li className="src-item" style={{ '--i': index } as CSSProperties}>
+      <button
+        type="button"
+        className={cx('src-line', row.active && 'is-active', row.onScreen && 'is-onscreen')}
+        data-state={ring}
+        data-origin={row.entry.origin}
+        aria-current={row.active ? 'true' : undefined}
+        aria-label={row.description}
+        title={row.description}
+        onClick={() => {
+          if (Date.now() - menuOpenedAt.current < 700) return;
+          haptic('rigid');
+          selectSource(row.entry.id);
+        }}
+        onKeyDown={onArrow}
+        {...bind}
+      >
+        <span className="src-line__num" aria-hidden="true">
+          <Num value={row.number} />
+        </span>
+        <span className="src-line__text" aria-hidden="true">
+          <span className="src-line__title">{title}</span>
+          <span className="src-line__meta">
+            <span className={cx('src-line__tag', iptv && 'src-line__tag--iptv')}>
+              {iptv ? 'IPTV' : 'AceStream'}
+            </span>
+            {iptv ? (
+              <span>{row.presentation.provider || row.presentation.list || 'tu lista'}</span>
+            ) : peers > 0 ? (
+              <span>
+                <Num value={peers} condensed={false} /> pares
+              </span>
+            ) : null}
+          </span>
+        </span>
+        <span className="src-line__end" aria-hidden="true">
+          {row.onScreen ? (
+            <Equalizer playing />
+          ) : (
+            <SignalRing state={ring} word={row.signal.word} size={14} />
+          )}
         </span>
       </button>
       <Menu

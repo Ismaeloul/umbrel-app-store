@@ -214,11 +214,13 @@ export function Shell() {
   const dockMounted = PlayerDock !== null && (inStage || presence.active);
   const presentation: PlayerPresentation = inStage ? 'stage' : 'mini';
   const immersive = presence.immersive || (inStage && phoneLandscape);
-  const Aside = asideComponent(route.vista);
+  // El partido ya no lleva panel lateral en escritorio: sus pestañas van bajo
+  // el vídeo y a la izquierda está la agenda (rediseño, pantalla 1).
+  const Aside = inPartido ? null : asideComponent(route.vista);
   const wideEnough = kind === 'desktop' || kind === 'wide';
   const asideAvailable = Aside !== null && wideEnough;
   const asideVisible = asideAvailable && asideOpen;
-  const columnVisible = inPartido && kind === 'wide' && AgendaColumn !== null;
+  const columnVisible = inPartido && wideEnough && AgendaColumn !== null;
   const miniVisible = dockMounted && presentation === 'mini';
   const tabbarVisible = kind === 'mobile' && !inStage;
 
