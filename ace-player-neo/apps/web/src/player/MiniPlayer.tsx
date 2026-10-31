@@ -14,9 +14,15 @@
    «Dónde se está reproduciendo» (Ajustes → `ajustes/donde`): un botón con la
    tele. En pantallas anchas siempre; en el móvil, para no apretar el título,
    solo cuando otro dispositivo ve lo mismo (`data-shared`, del evento SSE
-   `playback.sessions` que ya está en la caché: no pide nada). */
+   `playback.sessions` que ya está en la caché: no pide nada).
 
-import { useRef, type RefObject } from 'react';
+   En el menú lateral (desde 1024; rediseño de escritorio, maqueta 01) es
+   la tarjeta de la maqueta: la imagen con la cápsula «● Directo», una línea
+   fina de progreso (el minuto del partido o lo visto de la película), el
+   partido y «67' · DAZN 1» en rojo, y la pausa. Detener aparece sobre la
+   imagen al pasar el ratón (o con el foco). player.css elige qué se ve. */
+
+import { useRef, type CSSProperties, type RefObject } from 'react';
 import { getDeviceId, getViewerId } from '../api/identity.ts';
 import { useApiQuery } from '../api/query.ts';
 import { useNavigate } from '../app/router.tsx';
@@ -28,10 +34,12 @@ import { haptic } from '../lib/haptics.ts';
 import { prefersReducedMotion } from '../lib/media.ts';
 import { toast } from '../notices/toasts.ts';
 import { IconButton } from '../ui/Button.tsx';
+import { LiveDot } from '../ui/LiveRing.tsx';
 import { ProgressBar } from '../ui/ProgressBar.tsx';
 import { play, playVod, stop, usePlayer, type PlayerState, type VodPlayback } from './api.ts';
 import { usePlayerContext, type PlayerContextValue } from './context.ts';
 import { Equalizer } from './PlayerSurface.tsx';
+import { liveButton } from './status.ts';
 import { clockText, durationWords } from './vod/timeline.ts';
 
 /** La segunda línea del mini con una película: «T1 · E3 · quedan 12 min». */
@@ -86,6 +94,27 @@ function useScoreNote(matchId: string): string | null {
   return minute.halftime ? 'Descanso' : `${minute.minute}'`;
 }
 
+/**
+ * El minuto del partido que suena («67'», «Descanso», «Final»; no es un
+ * spoiler: el marcador sigue tapado) y cuánto va de partido (0-1), de lo que
+ * ya hay en la caché.
+ */
+function useMatchClock(matchId: string | null): { text: string | null; progress: number | null } {
+  const scores = useApiQuery('scores', undefined, { enabled: false }).data;
+  const score = matchId && scores?.available ? paintableScore(scores.scores[matchId]) : null;
+  if (!score) return { text: null, progress: null };
+  if (score.state === 'post') return { text: 'Final', progress: 1 };
+  const minute = liveMinute(score);
+  if (!minute) return { text: null, progress: null };
+  if (minute.halftime) return { text: 'Descanso', progress: 0.5 };
+  // «45+2» cuenta como 45: la línea no pasa del final.
+  const played = Number.parseInt(minute.minute, 10);
+  return {
+    text: `${minute.minute}'`,
+    progress: Number.isFinite(played) ? Math.min(1, played / 90) : null,
+  };
+}
+
 /* Con su propia clave por partido: el selector de useScoreHidden no puede
    cambiar de partido sobre la marcha (useStore guarda el primero). */
 function ScoreNote({ matchId, separated }: { matchId: string; separated: boolean }) {
@@ -119,6 +148,18 @@ function Mini({
   // Una película: «T1 · E3 · quedan 12 min» y una barra fina (docs/vod.md §12.7).
   const subtitle = vod ? vodMiniLine(vod) : (state.channel?.subtitle ?? null);
   const armed = useRef(false);
+  const clock = useMatchClock(matchId);
+  // La tarjeta del menú lateral: el partido, «67' · DAZN 1» y la línea de progreso.
+  const live = !vod && liveButton(state).mode !== 'off';
+  const sideTitle = state.channel?.event ?? title;
+  const sideSub = vod
+    ? vodMiniLine(vod)
+    : [clock.text, state.channel?.event ? state.channel.title : null].filter(Boolean).join(' · ');
+  const sideProgress = vod
+    ? vod.durationS > 0
+      ? vod.positionS / vod.durationS
+      : 0
+    : (clock.progress ?? 1);
 
   const move = (dx: number, dy: number) => {
     const el = rootRef.current;
@@ -201,6 +242,20 @@ function Mini({
 
   return (
     <div className="player-mini">
+      {live ? (
+        <span className="player-mini__cap" aria-hidden="true">
+          <LiveDot />
+          Directo
+        </span>
+      ) : null}
+      <span
+        className="player-mini__line"
+        data-tone={vod ? 'vod' : 'live'}
+        style={{ '--v': sideProgress } as CSSProperties}
+        aria-hidden="true"
+      >
+        <i />
+      </span>
       <button
         type="button"
         className="player-mini__info"
@@ -220,6 +275,14 @@ function Mini({
             {subtitle ? <span>{subtitle}</span> : null}
           </span>
         ) : null}
+        <span className="player-mini__side" aria-hidden="true">
+          <span className="player-mini__side-title">{sideTitle}</span>
+          {sideSub ? (
+            <span className="player-mini__side-sub" data-tone={vod ? 'vod' : 'live'}>
+              {sideSub}
+            </span>
+          ) : null}
+        </span>
         {vod && vod.durationS > 0 ? (
           <ProgressBar
             className="player-mini__progress"
@@ -252,7 +315,7 @@ function Mini({
         icon="stop"
         label="Detener la reproducción"
         onClick={actions.stop}
-        className="player-mini__btn"
+        className="player-mini__btn player-mini__stop"
         data-fill="true"
       />
     </div>
