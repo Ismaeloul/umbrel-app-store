@@ -1,30 +1,33 @@
-/* Canales en escritorio (rediseño, pantalla 4; desde 768 px): la lista con
-   «ahora» convertida en TABLA, sin la ficha lateral de antes.
+/* Canales en escritorio (rediseño, sección 3 de la maqueta; desde 768 px):
+   la lista con «ahora» convertida en TABLA, sin la ficha lateral de antes.
 
-   - Debajo de la barra de la sección: pestañas Favoritos · N / Recientes /
-     Todos · N y chips por tipo (Todo, Deportes, Cine, Noticias, Infantil…,
-     genres.ts). «Todos» junta los canales de tus listas y los de tu IPTV
-     (por páginas de 60 con `iptvBrowse`, con el texto y el tipo en el
-     servidor). A la derecha, el filtro de siempre («/»).
-   - Cabecera CANAL · AHORA · DESPUÉS y una fila por canal: logo, nombre,
-     lo que echa ahora (título y barra de progreso; rojo con punto si es en
-     directo) y lo siguiente (hora en mono y título), más la estrella y «Más».
-     De dónde sale el «ahora»: la guía de tu IPTV para los canales IPTV
-     (guide-now.ts) y la agenda para los demás (on-air.ts). El marcador nunca
-     sale aquí: va tapado en el partido.
+   - Debajo de la barra de la sección (pegada arriba con ella): pestañas
+     Favoritos · N / Recientes / Todos · N y chips por tipo (Todo, Deportes,
+     Cine, Noticias, Infantil…, genres.ts). «Todos» junta los canales de tus
+     listas y los de tu IPTV en una tabla seguida (por páginas de 60 con
+     `iptvBrowse`, con el texto y el tipo en el servidor). El chip vuelve a
+     «Todo» al cambiar de pestaña.
+   - Cabecera CANAL · AHORA · DESPUÉS (pegada bajo las pestañas) y una fila
+     por canal: placa con la marca (ChannelPlate) o el logo de la guía,
+     nombre, lo que echa ahora (título y barra de progreso; rojo con punto si
+     es en directo) y lo siguiente (hora en mono y título), más la estrella.
+     De dónde sale el «ahora»: el partido de la agenda si lo hay en juego
+     (on-air.ts; el marcador nunca sale aquí) y, si no, la guía de tu IPTV
+     (guide-now.ts): la del canal IPTV o, para un canal AceStream, la del
+     canal de tu IPTV que es por su nombre.
    - El canal que suena va resaltado, con las barritas del reproductor.
    - Toda la fila reproduce (es un enlace de verdad a partido/canal: se puede
      abrir en otra pestaña); clic derecho o pulsación larga, el menú.
-   - Lo de antes sigue a mano: la lista activa con «Cambiar de lista» y
-     «Gestionar» al pie de «Todos», el recorrido de tu IPTV por categorías y
-     filtros con «Categorías IPTV» y «Pegar hash» en la barra de la sección
-     (LibraryView) y «Buscar en el motor» con 2 letras o más. */
+   - Lo de antes sigue a mano, a la derecha de las pestañas: la lupa del
+     filtro de siempre («/», se abre al enfocarla) y «Más opciones» con
+     «Categorías IPTV» (el recorrido por categorías y filtros), «Pegar un
+     hash», las listas guardadas y «Gestionar listas». Con 2 letras o más,
+     «Buscar en el motor». */
 
 import {
   GUIDE_FLAGS,
   IPTV_BROWSE,
   type IptvBrowseResponse,
-  type IptvGuideNowItem,
   type LibraryCollection,
   type LibraryView,
 } from '@ace/shared';
@@ -49,7 +52,6 @@ import { useNameHighlight } from '../../lib/name-highlight.ts';
 import { Equalizer } from '../../player/PlayerSurface.tsx';
 import {
   Button,
-  ChannelMark,
   Chip,
   EmptyState,
   Icon,
@@ -67,7 +69,14 @@ import {
 import { canSearch, cleanQuery } from '../search/model.ts';
 import { goToEngineSearch } from '../search/navigation.ts';
 import { genreChips, genreCounts, genreOf, GENRE_LABEL, isGenre, type Genre } from './genres.ts';
-import { clockText, programmeProgress, registerGuideNowDemo, useGuideNow } from './guide-now.ts';
+import { ChannelPlate } from './ChannelPlate.tsx';
+import {
+  clockText,
+  programmeProgress,
+  registerGuideNowDemo,
+  useGuideNow,
+  type GuideNow,
+} from './guide-now.ts';
 import { IPTV_TEXT_DELAY_MS, useSettled } from './iptv/data.ts';
 import { IptvTab } from './iptv/IptvTab.tsx';
 import { searchInCategory, IPTV_TAB_TEXT } from './iptv/texts.ts';
@@ -108,7 +117,6 @@ type Row =
       iptvId: string | null;
       fallen: boolean;
     }
-  | { type: 'heading'; key: string; label: string; count: number | null }
   | { type: 'loading'; key: string };
 
 const ROW_H = 64;
@@ -160,9 +168,8 @@ export interface DeskChannelsProps {
   actions: ChannelActions;
   onScreen: string | null;
   onAir: OnAirLookup;
-  /** La lista activa con «Cambiar de lista» y «Gestionar» (pie de «Todos»). */
-  listBar: ReactNode;
-  footer: string;
+  /** «Más opciones» de la sección: Categorías IPTV, Pegar hash, listas… */
+  moreItems: MenuItem[];
   onAddList(): void;
   onPaste(): void;
 }
@@ -178,8 +185,7 @@ export function DeskChannels({
   actions,
   onScreen,
   onAir,
-  listBar,
-  footer,
+  moreItems,
   onAddList,
   onPaste,
 }: DeskChannelsProps) {
@@ -194,6 +200,13 @@ export function DeskChannels({
   const [query, setQuery] = useState('');
   const [genre, setGenre] = useState<Genre | null>(null);
   const [iptvCategory, setIptvCategory] = useState<string | null>(null);
+  /* El chip es de la pestaña: al cambiar de pestaña vuelve a «Todo» (si no,
+     Favoritos se abría filtrado por el tipo elegido en Todos sin notarse). */
+  const [genreTab, setGenreTab] = useState(tab);
+  if (genreTab !== tab) {
+    setGenreTab(tab);
+    setGenre(null);
+  }
 
   // Filtro local con 140 ms de espera, como en el móvil.
   useEffect(() => {
@@ -208,7 +221,6 @@ export function DeskChannels({
 
   const inTodos = tab === 'todos';
   const totals = useIptvTotals(active && withIptv);
-  const iptvAll = useIptvAll(iptvQ, genre, active && withIptv && inTodos);
 
   const webById = useMemo(
     () => new Map(library.web.map((item) => [item.id, item] as const)),
@@ -238,6 +250,10 @@ export function DeskChannels({
   }, [own, inTodos, withIptv, totals.data]);
   const chips = genreChips(counts);
   const shownGenre = genre && chips.includes(genre) ? genre : null;
+  /* El tipo que se pide al servidor es el del chip A LA VISTA: si el elegido
+     no está entre los chips, ni las filas de la lista ni las de la IPTV se
+     filtran (antes la IPTV seguía filtrada con el chip oculto). */
+  const iptvAll = useIptvAll(iptvQ, shownGenre, active && withIptv && inTodos);
 
   const collection: LibraryCollection =
     tab === 'favoritos' ? 'favorites' : tab === 'recientes' ? 'history' : 'web';
@@ -255,8 +271,6 @@ export function DeskChannels({
     }));
   }, [own, q, shownGenre, collection, iptvIds, webIds]);
 
-  const iptvPages = iptvAll.data?.pages ?? [];
-  const iptvTotal = iptvPages[0]?.total ?? 0;
   const iptvRows = useMemo<Row[]>(() => {
     const seen = new Set<string>();
     const out: Row[] = [];
@@ -284,38 +298,17 @@ export function DeskChannels({
 
   const rows = useMemo<Row[]>(() => {
     if (!inTodos || !withIptv) return ownRows;
-    const provider = iptvPages[0]?.provider || 'Tu IPTV';
-    const out: Row[] = [];
-    if (ownRows.length)
-      out.push({ type: 'heading', key: 'h:listas', label: 'Tus listas', count: ownRows.length });
-    out.push(...ownRows);
-    if (iptvRows.length || iptvAll.isPending) {
-      out.push({
-        type: 'heading',
-        key: 'h:iptv',
-        label: `IPTV · ${provider}`,
-        count: iptvRows.length ? iptvTotal : null,
-      });
-      out.push(...iptvRows);
-    }
+    /* Una tabla seguida, como en la maqueta: primero tus listas y luego tu IPTV. */
+    const out: Row[] = [...ownRows, ...iptvRows];
     if (iptvAll.isPending || iptvAll.isFetchingNextPage)
       out.push({ type: 'loading', key: 'cargando' });
     return out;
-  }, [
-    inTodos,
-    withIptv,
-    ownRows,
-    iptvRows,
-    iptvPages,
-    iptvTotal,
-    iptvAll.isPending,
-    iptvAll.isFetchingNextPage,
-  ]);
+  }, [inTodos, withIptv, ownRows, iptvRows, iptvAll.isPending, iptvAll.isFetchingNextPage]);
 
-  /* La guía de los canales IPTV de la tabla (de 100 en 100). */
+  /* La guía de las filas (de 100 en 100): los canales IPTV por su id y los
+     AceStream por el suyo, que el servidor casa por nombre con tu IPTV. */
   const guideIds = useMemo(
-    () =>
-      rows.flatMap((row) => (row.type === 'channel' && row.iptvId !== null ? [row.iptvId] : [])),
+    () => rows.flatMap((row) => (row.type === 'channel' ? [row.iptvId ?? row.channel.id] : [])),
     [rows],
   );
   const guide = useGuideNow(guideIds, active && withIptv && guideIds.length > 0);
@@ -415,15 +408,6 @@ export function DeskChannels({
   })();
 
   const renderRow = (row: Row) => {
-    if (row.type === 'heading')
-      return (
-        <h2 className="ctab-group">
-          {row.label}
-          {row.count !== null ? (
-            <span className="ctab-group__n">{countText(row.count)}</span>
-          ) : null}
-        </h2>
-      );
     if (row.type === 'loading')
       return (
         <div className="ctab-loading" role="status" aria-busy="true">
@@ -439,7 +423,7 @@ export function DeskChannels({
         channel={channel}
         href={searchFor({ vista: 'partido', id: null, canal: channel.id })}
         now={now}
-        guide={row.iptvId !== null ? (guide.get(row.iptvId) ?? null) : null}
+        guide={guide.get(row.iptvId ?? channel.id) ?? null}
         iptv={row.iptvId !== null}
         onAir={row.iptvId !== null ? null : onAir(channel)}
         playing={onScreen === channel.id || tappedId === channel.id}
@@ -482,8 +466,9 @@ export function DeskChannels({
           </div>
         )}
         <div className="ctab-tools">
+          {/* La lupa del filtro: se abre al enfocarla (clic o «/») o con texto. */}
           <TextField
-            className="ctab-filter"
+            className={cx('ctab-filter', text && 'ctab-filter--open')}
             variant="search"
             type="search"
             label={fieldLabel}
@@ -505,6 +490,12 @@ export function DeskChannels({
                 setQuery('');
               }
             }}
+          />
+          <MenuButton
+            className="ctab-more"
+            label="Más opciones de Canales"
+            title="Más opciones"
+            items={moreItems}
           />
         </div>
       </div>
@@ -532,7 +523,7 @@ export function DeskChannels({
                 key={tab}
                 rows={rows}
                 rowKey={(row) => row.key}
-                estimate={(row) => (row.type === 'heading' ? 44 : ROW_H)}
+                estimate={() => ROW_H}
                 renderRow={renderRow}
                 label={TAB_TEXT[tab]}
                 className="ctab-list"
@@ -557,11 +548,6 @@ export function DeskChannels({
           </Button>
         ) : null}
       </div>
-      {inTodos ? listBar : null}
-      <p className="lib-foot">
-        <Icon name="list" size={16} />
-        {footer}
-      </p>
     </div>
   );
 }
@@ -583,13 +569,36 @@ interface NextCell {
 const matchTitle = (match: { home: string; away: string }) =>
   match.away ? `${match.home} – ${match.away}` : match.home;
 
-/** «Ahora» y «Después» de una fila: la guía si es IPTV, la agenda si no. */
+/** «Ahora» y «Después» de una fila: el partido en juego de la agenda, si no
+    la guía (la del canal IPTV o la del canal de tu IPTV que es por nombre) y,
+    sin guía, el próximo partido de la agenda. */
 export function rowCells(
-  guide: IptvGuideNowItem | null,
+  guide: GuideNow | null,
   onAir: ChannelOnAir | null,
   now: number,
 ): { now: Cell | null; next: NextCell | null } {
-  if (guide) {
+  const live = onAir?.live ?? null;
+  const guideNext: NextCell | null = guide?.next
+    ? { time: clockText(guide.next.start), title: guide.next.title || 'Sin título' }
+    : null;
+  if (live) {
+    const upcoming = onAir?.later[0];
+    return {
+      now: {
+        title: matchTitle(live.match),
+        // Sin reloj del partido: lo que va desde la hora de inicio, sobre las 2 h que se le dan.
+        progress:
+          live.minutesUntil === null
+            ? null
+            : Math.max(0, Math.min(1, -live.minutesUntil / MATCH_WINDOW_MIN)),
+        live: true,
+      },
+      next: upcoming
+        ? { time: upcoming.match.time || '—', title: matchTitle(upcoming.match) }
+        : guideNext,
+    };
+  }
+  if (guide && (guide.now || guide.next)) {
     return {
       now: guide.now
         ? {
@@ -598,26 +607,12 @@ export function rowCells(
             live: (guide.now.flags & GUIDE_FLAGS.live) !== 0,
           }
         : null,
-      next: guide.next
-        ? { time: clockText(guide.next.start), title: guide.next.title || 'Sin título' }
-        : null,
+      next: guideNext,
     };
   }
-  if (!onAir) return { now: null, next: null };
-  const live = onAir.live;
-  const upcoming = live ? onAir.later[0] : onAir.next;
+  const upcoming = onAir?.next;
   return {
-    now: live
-      ? {
-          title: matchTitle(live.match),
-          // Sin reloj del partido: lo que va desde la hora de inicio, sobre las 2 h que se le dan.
-          progress:
-            live.minutesUntil === null
-              ? null
-              : Math.max(0, Math.min(1, -live.minutesUntil / MATCH_WINDOW_MIN)),
-          live: true,
-        }
-      : null,
+    now: null,
     next: upcoming ? { time: upcoming.match.time || '—', title: matchTitle(upcoming.match) } : null,
   };
 }
@@ -626,7 +621,7 @@ interface DeskChannelRowProps {
   channel: ActionableChannel;
   href: string;
   now: number;
-  guide: IptvGuideNowItem | null;
+  guide: GuideNow | null;
   iptv: boolean;
   onAir: ChannelOnAir | null;
   playing: boolean;
@@ -679,7 +674,7 @@ function DeskChannelRow({
 
   return (
     <div className="ctab-row" data-playing={playing ? 'true' : undefined}>
-      <ChannelMark name={title} shape="tile" size={36} className="ctab-row__logo" />
+      <ChannelPlate name={title} logo={guide?.logoSrc ?? null} className="ctab-row__logo" />
       <span className="ctab-row__name">
         <a
           className="ctab-row__link"
@@ -728,7 +723,7 @@ function DeskChannelRow({
           </>
         ) : (
           <span className="ctab-row__none">
-            {iptv ? 'Sin guía para este canal' : 'Sin partido ahora'}
+            {iptv ? 'Sin guía para este canal' : 'Sin programa ahora'}
           </span>
         )}
       </span>

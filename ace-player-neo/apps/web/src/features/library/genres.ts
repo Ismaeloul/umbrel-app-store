@@ -1,5 +1,5 @@
 /* Chips por categoría de la tabla de Canales en escritorio (rediseño,
-   pantalla 4): «Todo», «Deportes», «Cine», «Noticias», «Infantil»…
+   sección 3): «Todo», «Deportes», «Cine», «Noticias», «Infantil»…
 
    Son los TIPOS de la IPTV (IPTV_TYPES de @ace/shared, §16.4), que el
    servidor ya deduce de cada canal de tu IPTV (faceta `type` de
@@ -36,13 +36,17 @@ export function isGenre(value: unknown): value is Genre {
   return typeof value === 'string' && (GENRES as readonly string[]).includes(value);
 }
 
-/* Palabras (ya sin tildes ni mayúsculas) que delatan cada tipo; se buscan
-   como palabra entera o como principio de palabra («deport» casa «deportes»). */
+/* Palabras (ya sin tildes ni mayúsculas) que delatan cada tipo. Van como
+   palabra ENTERA salvo las que acaban en «*», que valen como principio de
+   palabra («deport*» casa «deportes»). Así «gol» no casa «Golden» ni «nick»
+   «Nickel». Fuera las que fallan más que aciertan: «radio» (Radio Marca es
+   deporte) o «hits». Los tipos se prueban en el orden de GENRES: «TNT Sports»
+   o «Fox Sports» son deporte antes que series. */
 const TERMS: Record<Genre, readonly string[]> = {
   deportes: [
-    'deport',
-    'sport',
-    'futbol',
+    'deport*',
+    'sport*',
+    'futbol*',
     'football',
     'soccer',
     'dazn',
@@ -50,43 +54,51 @@ const TERMS: Record<Genre, readonly string[]> = {
     'la liga',
     'liga',
     'bein',
-    'eurosport',
+    'eurosport*',
     'gol',
+    'golazo',
     'f1',
-    'formula',
+    'formula 1',
     'motogp',
     'nba',
     'tenis',
     'tennis',
     'golf',
-    'espn',
+    'espn*',
     'champions',
-    'premier',
+    'premier league',
+    'padel',
+    'ufc',
+    'wwe',
+    'boxeo',
+    'ciclismo',
+    'basket',
     'ppv',
     'setanta',
-    'arena',
     'teledeporte',
     'realmadrid',
-    'barca',
+    'real madrid tv',
+    'barca tv',
   ],
-  cine: ['cine', 'movie', 'film', 'peli', 'cinema', 'estrenos', 'tcm', 'paramount', 'hollywood'],
+  cine: ['cine*', 'movie*', 'film*', 'peli*', 'estrenos', 'tcm', 'paramount', 'hollywood'],
   series: ['series', 'serie', 'axn', 'tnt', 'warner', 'comedy', 'calle 13', 'fox', 'syfy', 'cosmo'],
-  noticias: ['noticia', 'news', '24h', '24 horas', 'cnn', 'euronews', 'informativ', 'cnbc'],
+  noticias: ['noticia*', 'news', '24h', '24 horas', 'cnn', 'euronews', 'informativ*', 'cnbc'],
   infantil: [
-    'infantil',
+    'infantil*',
     'kids',
     'ninos',
     'clan',
-    'disney',
-    'cartoon',
+    'disney*',
+    'cartoon*',
     'nick',
+    'nickelodeon',
     'baby',
     'boing',
     'junior',
-    'toon',
+    'toon*',
   ],
   documentales: [
-    'document',
+    'document*',
     'discovery',
     'national geographic',
     'nat geo',
@@ -97,15 +109,22 @@ const TERMS: Record<Genre, readonly string[]> = {
     'viajar',
     'animal planet',
   ],
-  musica: ['musica', 'music', 'mtv', 'hits', 'radio', 'vh1'],
+  musica: ['musica', 'music', 'mtv', 'vh1'],
 };
 
-const PATTERNS: ReadonlyArray<[Genre, RegExp]> = GENRES.map((genre) => [
-  genre,
-  new RegExp(
-    `(?:^|[^a-z0-9])(?:${TERMS[genre].map((term) => term.replace(/[+.]/g, '\\$&')).join('|')})`,
-  ),
-]);
+const escape = (term: string) => term.replace(/[+.]/g, '\\$&');
+
+const PATTERNS: ReadonlyArray<[Genre, RegExp]> = GENRES.map((genre) => {
+  const whole = TERMS[genre].filter((term) => !term.endsWith('*')).map(escape);
+  const prefix = TERMS[genre]
+    .filter((term) => term.endsWith('*'))
+    .map((term) => escape(term.slice(0, -1)));
+  const parts = [
+    ...(whole.length ? [`(?:${whole.join('|')})(?![a-z0-9])`] : []),
+    ...(prefix.length ? [`(?:${prefix.join('|')})`] : []),
+  ];
+  return [genre, new RegExp(`(?:^|[^a-z0-9])(?:${parts.join('|')})`)];
+});
 
 /* La clave de cada canal ya calculada: la tabla se repinta a cada segundo de progreso. */
 const CACHE = new Map<string, Genre | null>();

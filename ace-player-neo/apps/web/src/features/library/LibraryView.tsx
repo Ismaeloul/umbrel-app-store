@@ -12,10 +12,12 @@
    - Listas largas virtualizadas; en Listas, categorías en acordeón (con texto
      escrito salen todas abiertas).
    - Cada estado vacío con el botón que lo resuelve.
-   - Desde 768 px (rediseño de escritorio, pantalla 4) la vista es otra: la
-     TABLA de DeskChannels.tsx con Favoritos / Recientes / Todos, chips por
-     tipo y «ahora / después», sin ficha lateral. Lo de aquí debajo es el
-     móvil, que no cambia.
+   - Desde 768 px (rediseño de escritorio, sección 3 de la maqueta) la vista
+     es otra: la TABLA de DeskChannels.tsx con Favoritos / Recientes / Todos,
+     chips por tipo y «ahora / después», sin ficha lateral. La barra de la
+     sección solo lleva el título y el buscador (como la maqueta); «Categorías
+     IPTV», «Pegar hash» y las listas van en «Más opciones», a la derecha de
+     las pestañas. Lo de aquí debajo es el móvil, que no cambia.
    - Oculta (Activity), la vista conserva pestaña, texto, acordeones y scroll
      y no tiene nada vivo: ni consultas, ni temporizadores.
    - Con IPTV activa y 2 letras o más (docs/iptv.md §14.5): debajo de la lista
@@ -346,24 +348,15 @@ export default function LibraryView({ active }: ViewProps) {
               Guía TV
             </Button>
           ) : null}
-          {/* Escritorio: tu IPTV por categorías y con sus filtros (la pestaña IPTV del móvil). */}
-          {withIptv && desk ? (
-            <Button
-              variant="quiet"
-              size="sm"
-              icon="tv"
-              aria-pressed={tab === 'iptv'}
-              onClick={() => setTab(tab === 'iptv' ? 'todos' : 'iptv')}
-            >
-              Categorías IPTV
-            </Button>
-          ) : null}
-          <IconButton
-            icon="paste"
-            label="Pegar un Content ID o enlace acestream://"
-            title="Pegar hash"
-            onClick={() => setPasteOpen(true)}
-          />
+          {/* En escritorio, «Pegar hash» va en «Más opciones» (DeskChannels). */}
+          {desk ? null : (
+            <IconButton
+              icon="paste"
+              label="Pegar un Content ID o enlace acestream://"
+              title="Pegar hash"
+              onClick={() => setPasteOpen(true)}
+            />
+          )}
         </>
       }
     />
@@ -619,6 +612,39 @@ export default function LibraryView({ active }: ViewProps) {
     </div>
   ) : null;
 
+  /* Escritorio: «Más opciones», a la derecha de las pestañas. Lo que en el
+     móvil va en la cabecera, en la pestaña IPTV y en el pie de Listas. */
+  const deskMenu: MenuItem[] = [
+    ...(withIptv
+      ? [
+          {
+            id: 'categorias-iptv',
+            label: tab === 'iptv' ? 'Volver a la tabla' : 'Categorías IPTV',
+            icon: 'tv' as const,
+            onSelect: () => setTab(tab === 'iptv' ? 'todos' : 'iptv'),
+          },
+        ]
+      : []),
+    {
+      id: 'pegar',
+      label: 'Pegar un hash o enlace',
+      icon: 'paste',
+      onSelect: () => setPasteOpen(true),
+    },
+    ...listMenu.map((item, index) => ({
+      ...item,
+      label: `Lista: ${item.label}`,
+      separated: index === 0,
+    })),
+    {
+      id: 'gestionar-listas',
+      label: activeSource ? 'Gestionar listas' : 'Añadir una lista',
+      icon: activeSource ? ('ajustes' as const) : ('plus' as const),
+      separated: listMenu.length === 0,
+      onSelect: addList,
+    },
+  ];
+
   if (desk)
     return (
       <>
@@ -633,8 +659,7 @@ export default function LibraryView({ active }: ViewProps) {
           actions={actions}
           onScreen={onScreen}
           onAir={onAir}
-          listBar={sourceBar}
-          footer={libraryFooter(data, mode === 'demo')}
+          moreItems={deskMenu}
           onAddList={addList}
           onPaste={() => setPasteOpen(true)}
         />

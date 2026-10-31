@@ -8,12 +8,13 @@ import { play } from '../../player/api.ts';
 import { fixture, json, mockFetch } from '../../test/fetch.ts';
 import { resetPending } from './data.ts';
 import { genreOf } from './genres.ts';
-import { chunkIds } from './guide-now.ts';
+import { brandOf, plateLabel } from './ChannelPlate.tsx';
+import { chunkIds, demoFill } from './guide-now.ts';
 import LibraryView from './LibraryView.tsx';
 import { madridClock } from './on-air.ts';
 import { makeItem, makeLibrary, renderWithApp, resetPlayback } from './test-utils.tsx';
 
-/* La tabla de Canales en escritorio (rediseño, pantalla 4): pestañas
+/* La tabla de Canales en escritorio (rediseño, sección 3): pestañas
    Favoritos / Recientes / Todos, chips por tipo y CANAL · AHORA · DESPUÉS. */
 
 let net: ReturnType<typeof mockFetch>;
@@ -69,9 +70,39 @@ describe('pestañas y chips', () => {
     expect(new URLSearchParams(location.search).get('pestana')).toBe('todos');
     expect(await screen.findByRole('link', { name: 'M+ LaLiga' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'La 1' })).toBeInTheDocument();
-    // Al pie, la lista activa con «Gestionar» (antes en la pestaña Listas).
-    expect(screen.getByText('Principal')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Gestionar' })).toBeInTheDocument();
+    // La lista activa y «Gestionar listas» (antes al pie de Listas), en «Más opciones».
+    fireEvent.click(screen.getByRole('button', { name: 'Más opciones de Canales' }));
+    const menu = await screen.findByRole('menu', { name: 'Más opciones de Canales' });
+    expect(
+      within(menu).getByRole('menuitemcheckbox', { name: /^Lista: Principal/ }),
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(within(menu).getByRole('menuitem', { name: 'Gestionar listas' })).toBeInTheDocument();
+    expect(
+      within(menu).getByRole('menuitem', { name: 'Pegar un hash o enlace' }),
+    ).toBeInTheDocument();
+    // Sin rótulos ni pie: una tabla seguida, como la maqueta.
+    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+  });
+
+  it('la barra de la sección solo lleva el título y el buscador; «Pegar hash» va en «Más opciones»', async () => {
+    setup();
+    await screen.findByRole('tab', { name: 'Favoritos · 2' });
+    const header = document.querySelector('.view-head') as HTMLElement;
+    expect(within(header).queryByRole('button', { name: /Pegar/ })).toBeNull();
+    expect(within(header).queryByRole('button', { name: 'Categorías IPTV' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Más opciones de Canales' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Pegar un hash o enlace' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('el filtro va plegado en una lupa y «/» lo abre', async () => {
+    setup();
+    const field = await screen.findByRole('searchbox', { name: 'Filtrar canales' });
+    const box = field.closest('.ctab-filter') as HTMLElement;
+    expect(box).not.toHaveClass('ctab-filter--open');
+    expect(field).toHaveAttribute('data-focus-target', 'buscar-biblioteca');
+    fireEvent.change(field, { target: { value: 'dazn' } });
+    expect(box).toHaveClass('ctab-filter--open');
   });
 
   it('un enlace viejo con «Listas» abre «Todos»; sin ficha lateral ni pestaña IPTV', async () => {
@@ -82,6 +113,19 @@ describe('pestañas y chips', () => {
     );
     expect(screen.queryByRole('button', { name: /ficha del canal/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Categorías IPTV' })).toBeNull();
+  });
+
+  it('el chip elegido vuelve a «Todo» al cambiar de pestaña', async () => {
+    setup(makeLibrary(), { search: '?vista=biblioteca&pestana=todos' });
+    const group = await screen.findByRole('group', { name: 'Filtrar por tipo de canal' });
+    fireEvent.click(within(group).getByRole('button', { name: 'Deportes' }));
+    await waitFor(() => expect(screen.queryByRole('link', { name: 'La 1' })).toBeNull());
+    fireEvent.click(screen.getByRole('tab', { name: 'Favoritos · 2' }));
+    const chips = await screen.findByRole('group', { name: 'Filtrar por tipo de canal' });
+    expect(within(chips).getByRole('button', { name: 'Todo' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('los chips salen de los tipos de la pestaña y filtran', async () => {
@@ -188,7 +232,7 @@ describe('filas', () => {
     );
     expect(dazn).not.toHaveTextContent('2');
     const eurosport = rowOf('Eurosport 1');
-    expect(eurosport).toHaveTextContent('Sin partido ahora');
+    expect(eurosport).toHaveTextContent('Sin programa ahora');
     expect(eurosport.querySelector('.ctab-row__time')).toHaveTextContent('23:00');
     expect(eurosport).toHaveTextContent('Betis – Valencia');
   });
@@ -231,8 +275,11 @@ describe('«Todos» con IPTV', () => {
     };
   }
 
+  const library = makeLibrary();
+  const LIST_ACE = library.web.find((item) => item.title === 'M+ LaLiga')!.id;
+
   function setupIptv() {
-    const view = setup(makeLibrary(), {
+    const view = setup(library, {
       search: '?vista=biblioteca&pestana=todos',
       routes: {
         'GET /api/v1/iptv/browse': (call) => {
@@ -269,6 +316,20 @@ describe('«Todos» con IPTV', () => {
                 },
               },
               { id: iptvId(2), guide: null, now: null, next: null },
+              // Un canal AceStream de tu lista que el servidor casa por nombre con tu IPTV.
+              {
+                id: LIST_ACE,
+                guide: 9,
+                now: {
+                  id: '9.1',
+                  start: NOW - 15 * 60_000,
+                  end: NOW + 45 * 60_000,
+                  title: 'El partido de las 21',
+                  flags: 1,
+                },
+                next: null,
+                logo: true,
+              },
             ],
           }),
       },
@@ -277,15 +338,18 @@ describe('«Todos» con IPTV', () => {
     return view;
   }
 
-  it('junta las listas y la IPTV con sus rótulos; el «ahora» de la IPTV sale de la guía', async () => {
+  it('junta las listas y la IPTV en una tabla seguida; el «ahora» sale de la guía', async () => {
     vi.useFakeTimers({ now: NOW, shouldAdvanceTime: true });
     setupIptv();
     expect(await screen.findByRole('tab', { name: 'Todos · 1203' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
-    expect(await screen.findByRole('heading', { name: /Tus listas/ })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: /IPTV · Casa/ })).toBeInTheDocument();
+    await screen.findByRole('link', { name: 'Telecinco' });
+    // Sin rótulos de grupo: primero tus listas y después tu IPTV.
+    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+    const names = [...document.querySelectorAll('.ctab-row__title')].map((el) => el.textContent);
+    expect(names.indexOf('M+ LaLiga')).toBeLessThan(names.indexOf('Telecinco'));
     const tele = (await screen.findByRole('link', { name: 'Telecinco' })).closest(
       '.ctab-row',
     ) as HTMLElement;
@@ -296,11 +360,21 @@ describe('«Todos» con IPTV', () => {
     expect(tele.querySelector('.ctab-row__time')).toHaveTextContent('21:30');
     expect(tele).toHaveTextContent('Gran Hermano');
     expect(rowOf('Cine Clásico')).toHaveTextContent('Sin guía para este canal');
-    // Una sola petición a la guía con los ids IPTV de la tabla.
+    // El canal AceStream de la lista, con la guía del canal de tu IPTV que es (en directo, rojo).
+    const liga = rowOf('M+ LaLiga');
+    await waitFor(() => expect(liga).toHaveTextContent('El partido de las 21'));
+    expect(liga.querySelector('.ctab-row__now--live')).not.toBeNull();
+    // Su logo, por el proxy de la guía.
+    expect(liga.querySelector('.plate--logo img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/api/v1/iptv/guide/art/c9'),
+    );
+    // La guía se pide con los ids de la tabla: los de tu lista (antes de que llegue
+    // tu IPTV, solos) y luego todos en un trozo.
     const guideCalls = net.calls.filter((c) => c.url.startsWith('/api/v1/iptv/guide/now'));
-    expect(guideCalls).toHaveLength(1);
-    expect(new URL(guideCalls[0]!.url, 'http://x').searchParams.get('ids')).toBe(
-      `${iptvId(1)},${iptvId(2)}`,
+    expect(guideCalls.length).toBeLessThanOrEqual(2);
+    expect(new URL(guideCalls.at(-1)!.url, 'http://x').searchParams.get('ids')).toBe(
+      [...library.web.map((item) => item.id), iptvId(1), iptvId(2)].join(','),
     );
   });
 
@@ -326,9 +400,11 @@ describe('«Todos» con IPTV', () => {
     );
   });
 
-  it('«Categorías IPTV» abre el recorrido por categorías y filtros de siempre', async () => {
+  it('«Categorías IPTV» (en «Más opciones») abre el recorrido por categorías y filtros de siempre', async () => {
     setupIptv();
-    fireEvent.click(await screen.findByRole('button', { name: 'Categorías IPTV' }));
+    await screen.findByRole('link', { name: 'Telecinco' });
+    fireEvent.click(screen.getByRole('button', { name: 'Más opciones de Canales' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Categorías IPTV' }));
     expect(new URLSearchParams(location.search).get('pestana')).toBe('iptv');
     expect(await screen.findByRole('button', { name: 'Volver a la tabla' })).toBeInTheDocument();
     expect(screen.getByRole('searchbox', { name: 'Buscar en tu IPTV' })).toBeInTheDocument();
@@ -341,6 +417,37 @@ describe('tipos de canal (genres.ts)', () => {
     expect(genreOf({ title: 'DAZN 1', category: '' })).toBe('deportes');
     expect(genreOf({ title: 'Clan TVE', category: 'Guardado' })).toBe('infantil');
     expect(genreOf({ title: 'La 1', category: 'Generalistas' })).toBeNull();
+  });
+
+  it('las palabras cortas solo valen enteras: «Gol» sí, «Golden» no', () => {
+    expect(genreOf({ title: 'Gol Play', category: '' })).toBe('deportes');
+    expect(genreOf({ title: 'Golden Hits', category: '' })).toBeNull();
+    expect(genreOf({ title: 'Nickel TV', category: '' })).toBeNull();
+    expect(genreOf({ title: 'Radio Marca', category: '' })).toBeNull();
+    expect(genreOf({ title: 'TNT Sports 1', category: '' })).toBe('deportes');
+    // Las que acaban en «*» casan como principio de palabra.
+    expect(genreOf({ title: 'Movistar Deportes 2', category: '' })).toBe('deportes');
+    expect(genreOf({ title: 'Cinemax', category: '' })).toBe('cine');
+  });
+
+  it('la placa del canal: la marca con su color o la primera palabra', () => {
+    expect(brandOf('DAZN 1 FHD')?.label).toBe('DAZN');
+    expect(brandOf('M+ LaLiga')?.label).toBe('M+');
+    expect(brandOf('beIN Sports 1')?.label).toBe('beIN');
+    expect(brandOf('Telemadrid')).toBeNull();
+    expect(plateLabel('Telemadrid HD')).toBe('Telemadrid');
+    expect(plateLabel('La 2')).toBe('La 2');
+  });
+
+  it('el relleno de la demo siempre cae dentro del programa (nunca la barra al 100 %)', () => {
+    const now = new Date('2026-09-23T19:47:00Z').getTime();
+    for (let n = 0; n < 200; n += 1) {
+      const id = (n * 7919).toString(16).padStart(6, '0').padEnd(40, 'a');
+      const fill = demoFill(id, now);
+      expect(fill.now!.start).toBeLessThanOrEqual(now);
+      expect(fill.now!.end).toBeGreaterThan(now);
+      expect(fill.next!.start).toBe(fill.now!.end);
+    }
   });
 
   it('pide la guía en trozos de 100 ids sin repetir', () => {

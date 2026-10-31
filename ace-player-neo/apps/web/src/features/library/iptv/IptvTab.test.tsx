@@ -17,7 +17,6 @@ import { fixture, json, mockFetch, type MockCall } from '../../../test/fetch.ts'
 import LibraryView from '../LibraryView.tsx';
 import { resetPending } from '../data.ts';
 import { takeChannelTap } from '../play.ts';
-import { selectionStore } from '../selection.ts';
 import { makeItem, makeLibrary, renderWithApp, resetPlayback } from '../test-utils.tsx';
 import { demoCategoryId, demoIptvBrowse } from './demo.ts';
 
@@ -93,7 +92,6 @@ afterEach(() => {
   resetToasts();
   resetMode();
   resetPlayback();
-  selectionStore.set(null);
 });
 
 describe('la pestaña', () => {

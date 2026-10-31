@@ -1,6 +1,7 @@
 /* ==========================================================================
-   Canales en escritorio (rediseño, pantalla 4; DeskChannels.tsx): pestañas y
-   chips bajo la barra de la sección y la TABLA canal · ahora · después.
+   Canales en escritorio (rediseño, sección 3 de la maqueta; DeskChannels.tsx):
+   pestañas y chips bajo la barra de la sección y la TABLA canal · ahora ·
+   después. Pestañas y cabecera de la tabla se quedan pegadas arriba.
    Superficies opacas con filo de 1 px, sin cristal; solo se anima transform y
    opacity (las barritas del canal que suena y la estrella al pasar el ratón);
    nada por debajo de 11 px.
@@ -10,13 +11,23 @@
   gap: 0;
   max-width: none;
 }
-/* Pestañas y chips: la fila de debajo de la barra de la sección. */
+/* Lo que miden pegadas: la barra de la sección (view-header.css) y la de pestañas. */
+.lib--desk {
+  --ctab-top: calc(var(--safe-top) + var(--topbar-h));
+  --ctab-bar-h: 60px;
+}
+/* Pestañas y chips: la fila de debajo de la barra de la sección, pegada a
+   ella al desplazarse (opaca, sin cristal). */
 .ctab-bar {
+  position: sticky;
+  top: var(--ctab-top);
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding: 12px 0;
+  height: var(--ctab-bar-h);
+  background: var(--bg);
 }
 /* Pestañas compactas: «Favoritos · 4», «Recientes», «Todos · 214». */
 .ctab-tabs {
@@ -61,13 +72,40 @@
 .ctab-tools {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
+  gap: 6px;
   margin-left: auto;
   flex: none;
 }
+/* El filtro, plegado en una lupa de 36 px como la maqueta (que no lo trae):
+   se abre al enfocarlo (clic o «/») y se queda abierto con texto. */
 .ctab-filter {
-  width: clamp(150px, 16vw, 220px);
+  position: relative;
+  width: 36px;
   min-width: 0;
+}
+.ctab-filter:focus-within,
+.ctab-filter--open {
+  width: 220px;
+}
+.ctab-filter:not(:focus-within, .ctab-filter--open) .field__box {
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+/* Plegado, el <input> transparente tapa la lupa: el clic lo enfoca y lo abre. */
+.ctab-filter:not(:focus-within, .ctab-filter--open) .field__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.ctab-filter:not(:focus-within, .ctab-filter--open) .field__kbd {
+  display: none;
+}
+.ctab-more {
+  width: 36px;
+  height: 36px;
 }
 .ctab-bar .ctab-filter .field__input {
   /* Ancho 0 y que crezca: si no, el ancho propio del <input> desborda la caja. */
@@ -93,7 +131,7 @@
   align-content: start;
   gap: 0;
   min-width: 0;
-  padding: 6px 0 var(--s-4);
+  padding: 0 0 var(--s-6);
 }
 /* «Buscar en el motor» bajo la tabla, con aire. */
 .ctab > .lib-engine {
@@ -113,9 +151,14 @@
   gap: 16px;
   padding: 10px 12px;
 }
+/* La cabecera CANAL · AHORA · DESPUÉS, pegada bajo las pestañas. */
 .ctab-head {
-  min-height: 36px;
+  position: sticky;
+  top: calc(var(--ctab-top) + var(--ctab-bar-h));
+  z-index: var(--z-sticky);
+  min-height: 40px;
   padding-block: 0;
+  background: var(--bg);
   color: var(--text-3);
   font-size: var(--fs-11);
   font-weight: 650;
@@ -125,7 +168,7 @@
 .ctab-list {
   min-width: 0;
 }
-/* El filo entre filas (no encima de la primera ni junto a un rótulo). */
+/* El filo entre filas (no encima de la primera). */
 .ctab-item--channel + .ctab-item--channel .ctab-row {
   box-shadow: 0 -1px 0 var(--line);
 }
@@ -146,8 +189,38 @@
   outline: 2px solid var(--accent-edge);
   outline-offset: -2px;
 }
+/* La placa del canal: 60 × 40 con el color de su marca (ChannelPlate.tsx). */
 .ctab-row__logo {
   justify-self: start;
+}
+.plate {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 60px;
+  height: 40px;
+  overflow: hidden;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: var(--plate-bg);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--plate-ink);
+  font-size: var(--fs-11);
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+}
+/* Con logo de la guía: sobre una placa clara en los dos temas (los logos
+   suelen ser para fondo claro). */
+.plate--logo {
+  padding: 5px 7px;
+  background: #f4f4f5;
+}
+.plate--logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .ctab-row__name {
   display: flex;
@@ -246,6 +319,12 @@
   color: var(--text-3);
   font-size: var(--fs-12);
 }
+/* Sobre el amarillo del canal que suena, --text-3 no llega a AA en oscuro
+   (4,16:1): ahí el texto apagado va con --text-2. */
+.ctab-row[data-playing] .ctab-row__none,
+.ctab-row[data-playing] .ctab-row__time {
+  color: var(--text-2);
+}
 /* Estrella y «Más» por encima del enlace de la fila. */
 .ctab-row__acts {
   position: relative;
@@ -260,25 +339,7 @@
 .ctab-row__fav[aria-pressed='true'] {
   color: var(--accent-ink);
 }
-/* Rótulos de «Todos» (Tus listas / IPTV) y la fila de carga. */
-.ctab-group {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 18px 12px 8px;
-  color: var(--text-2);
-  font-size: var(--fs-12);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.ctab-group__n {
-  color: var(--text-3);
-  font-family: var(--mono);
-  font-size: var(--fs-11);
-  font-weight: 500;
-  letter-spacing: 0;
-}
+/* La fila de carga al pedir otra página de tu IPTV. */
 .ctab-loading {
   display: grid;
   grid-template-columns: 72px minmax(120px, 200px) minmax(0, 1fr);
@@ -286,12 +347,6 @@
   gap: 16px;
   min-height: 64px;
   padding: 10px 12px;
-}
-.lib--desk .lib-source {
-  margin-top: var(--s-2);
-}
-.lib--desk .lib-foot {
-  padding: var(--s-2) 12px var(--s-6);
 }
 /* Con ratón: la fila se ilumina y la estrella vacía y «Más» aparecen al pasar
    (con teclado, al enfocarlos; en táctil se ven siempre). */
@@ -311,7 +366,8 @@
     opacity: 1;
   }
 }
-/* Tableta (768-1023): sin «Después» ni chips, para que «Ahora» respire. */
+/* Tableta (768-1023): sin «Después», para que «Ahora» respire. Los chips se
+   quedan y se desplazan de lado si no caben; el filtro abierto, más corto. */
 @media (max-width: 1023px) {
   .ctab-head,
   .ctab-row {
@@ -321,8 +377,9 @@
   .ctab-row__next {
     display: none;
   }
-  .ctab-chips {
-    display: none;
+  .ctab-filter:focus-within,
+  .ctab-filter--open {
+    width: 180px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

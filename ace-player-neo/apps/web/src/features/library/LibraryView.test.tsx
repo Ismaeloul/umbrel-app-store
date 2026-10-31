@@ -9,7 +9,6 @@ import { fixture, json, mockFetch } from '../../test/fetch.ts';
 import LibraryView from './LibraryView.tsx';
 import { resetPending } from './data.ts';
 import { madridClock } from './on-air.ts';
-import { selectionStore } from './selection.ts';
 import { makeItem, makeLibrary, renderWithApp, resetPlayback } from './test-utils.tsx';
 
 let net: ReturnType<typeof mockFetch>;
@@ -52,7 +51,6 @@ afterEach(() => {
   resetToasts();
   resetMode();
   resetPlayback();
-  selectionStore.set(null);
 });
 
 describe('pestañas (§13.1 y regla 32)', () => {
@@ -301,7 +299,6 @@ describe('tarjetas: reproducir, borrar con deshacer, favorito y renombrar', () =
     setup(library, { layout: { kind: 'desktop' } });
     fireEvent.click(await screen.findByRole('link', { name: 'Eurosport 1' }));
     await waitFor(() => expect(route()).toBe(`partido/canal/${library.favorites[1]!.id}`));
-    expect(selectionStore.get()).toBeNull();
   });
 });
 
