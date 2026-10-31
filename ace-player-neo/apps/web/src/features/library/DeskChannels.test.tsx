@@ -350,6 +350,9 @@ describe('«Todos» con IPTV', () => {
     expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
     const names = [...document.querySelectorAll('.ctab-row__title')].map((el) => el.textContent);
     expect(names.indexOf('M+ LaLiga')).toBeLessThan(names.indexOf('Telecinco'));
+    // Cada canal dice de dónde sale: tu IPTV o AceStream.
+    expect(rowOf('Telecinco').querySelector('.ctab-row__origin')).toHaveTextContent('IPTV');
+    expect(rowOf('M+ LaLiga').querySelector('.ctab-row__origin')).toHaveTextContent('AceStream');
     const tele = (await screen.findByRole('link', { name: 'Telecinco' })).closest(
       '.ctab-row',
     ) as HTMLElement;

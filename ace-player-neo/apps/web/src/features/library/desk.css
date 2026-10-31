@@ -230,6 +230,20 @@
   gap: 8px;
   min-width: 0;
 }
+/* IPTV o AceStream, la misma etiqueta que en la lista de fuentes. */
+.ctab-row__origin {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-11);
+  font-weight: 650;
+}
+.ctab-row__origin--iptv {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
 .ctab-row__link {
   min-width: 0;
   color: var(--text);

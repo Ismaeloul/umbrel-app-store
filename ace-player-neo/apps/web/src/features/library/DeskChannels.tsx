@@ -688,6 +688,10 @@ function DeskChannelRow({
             {title}
           </span>
         </a>
+        {/* De dónde sale: tu IPTV o AceStream (como en la lista de fuentes). */}
+        <span className={cx('ctab-row__origin', iptv && 'ctab-row__origin--iptv')}>
+          {iptv ? 'IPTV' : 'AceStream'}
+        </span>
         {playing ? <Equalizer playing /> : null}
         {fallen ? (
           <span
