@@ -56,12 +56,16 @@ import { PlayerRuntime } from './runtime.ts';
 import {
   canFullscreen,
   canPictureInPicture,
+  isPageFullscreen,
   toggleFullscreen,
   togglePictureInPicture,
   useScreenModes,
   type VideoWithExtras,
 } from './screen.ts';
 import { statusFor } from './status.ts';
+
+/** Lo que se espera a que el navegador entre en pantalla completa antes de poner el modo teatro. */
+const FULLSCREEN_ANSWER_MS = 1_500;
 import { zappingList, zapTarget, type ZapItem } from './zapping.ts';
 import {
   FavoriteZapper,
@@ -386,8 +390,18 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
         return;
       }
       haptic('medium');
+      /* Algunos navegadores empotrados no contestan nunca a la petición (ni entran ni fallan):
+         en escritorio, si a los 1,5 s no hay pantalla completa, el modo teatro ocupa la ventana. */
+      const fallback =
+        !compact && !fullscreen && playerStore.get().channel
+          ? globalThis.setTimeout(() => {
+              if (!isPageFullscreen()) setTheaterWanted(true);
+            }, FULLSCREEN_ANSWER_MS)
+          : undefined;
       void toggleFullscreen(video()).then((result) => {
-        if (result === 'not-ready')
+        globalThis.clearTimeout(fallback);
+        if (result === 'failed' && fallback !== undefined) setTheaterWanted(true);
+        else if (result === 'not-ready')
           toast('La pantalla completa estará disponible cuando arranque la imagen', {
             tone: 'info',
           });

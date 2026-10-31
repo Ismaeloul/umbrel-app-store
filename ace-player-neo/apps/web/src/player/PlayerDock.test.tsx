@@ -277,6 +277,40 @@ describe('reproductor en grande', () => {
     await waitFor(() => expect(video).not.toHaveAttribute('controls'));
   });
 
+  it('pantalla completa que el navegador no contesta nunca: a los 1,5 s, el modo teatro', async () => {
+    const requestFullscreen = vi.fn(() => new Promise<void>(() => {}));
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+    Object.defineProperty(document.documentElement, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    });
+    const realMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: /min-width|pointer: fine/.test(query),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    renderDock();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      setPlayer(playing());
+      fireEvent.click(screen.getAllByRole('button', { name: 'Pantalla completa' })[0]!);
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+      act(() => vi.advanceTimersByTime(1_400));
+      expect(playerPresence.get().immersive).toBe(false);
+      act(() => vi.advanceTimersByTime(200));
+      expect(playerPresence.get().immersive).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      window.matchMedia = realMatchMedia;
+      Reflect.deleteProperty(document, 'fullscreenEnabled');
+      Reflect.deleteProperty(document.documentElement, 'requestFullscreen');
+    }
+  });
+
   it('controles: el foco que deja un clic no los retiene (pantalla completa), el del teclado sí', () => {
     const { container } = renderDock();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
