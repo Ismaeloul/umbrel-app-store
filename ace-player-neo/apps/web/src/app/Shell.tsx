@@ -59,6 +59,7 @@ import { useBack, useNavigate, useRoute } from './router.tsx';
 import { formatVista, type Route, type Vista } from './routes.ts';
 import { restoreScroll } from './scroll-memory.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
+import { QuickSearchHost } from '../features/search/QuickSearchHost.tsx';
 import {
   finishEntranceAnimations,
   playerSwapsByName,
@@ -416,6 +417,7 @@ export function Shell() {
         <TabBar route={route} hidden={!tabbarVisible} />
         <Toaster bottomOffset={toastBottom} />
         <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+        <QuickSearchHost />
       </div>
     </LayoutContext>
   );
