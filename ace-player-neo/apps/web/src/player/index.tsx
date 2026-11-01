@@ -36,6 +36,8 @@ import {
   connectRuntime,
   INITIAL_PLAYER_STATE,
   kindFromIh,
+  notePlayerGesture,
+  peekPendingMuted,
   play,
   playerStore,
   setNerdOpen,
@@ -107,6 +109,10 @@ function usePlayerRuntime(videoRef: RefObject<HTMLVideoElement | null>): PlayerR
     let current = shared.runtime;
     if (!current || current.video !== video) {
       current?.destroy();
+      // El silencio pedido antes de montar (vista previa del móvil) va al <video> antes del
+      // runtime: si no, su estado inicial diría «sin silencio» como si lo hubiera quitado alguien.
+      const pendingMute = peekPendingMuted();
+      if (pendingMute !== null) video.muted = pendingMute;
       current = new PlayerRuntime({ video });
       shared.runtime = current;
     }
@@ -126,6 +132,7 @@ function usePlayerRuntime(videoRef: RefObject<HTMLVideoElement | null>): PlayerR
           volume: state.volume,
           waiting: state.waiting,
           waitingFinal: state.waitingFinal,
+          waitingAction: state.waitingAction,
         }));
       }, 0);
     };
@@ -350,9 +357,16 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
   const actions: PlayerActions = {
     toggle: () => {
       haptic('light');
+      // Reanudar es «tocar play» (la vista previa del partido en el móvil termina ahí).
+      const before = playerStore.get();
+      if (!before.desiredPlaying || before.phase === 'pausado' || before.phase === 'bloqueado')
+        notePlayerGesture('play');
       void runtime?.toggle('user');
     },
-    tapToPlay: () => void runtime?.tapToPlay(),
+    tapToPlay: () => {
+      notePlayerGesture('play');
+      void runtime?.tapToPlay();
+    },
     stop: () => {
       haptic('rigid');
       zapper.cancel();
@@ -376,9 +390,17 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
       haptic('light');
       // Quitar el silencio con el volumen a 0 lo sube a la mitad (si no, no se oiría nada).
       if (el.muted && el.volume === 0) el.volume = 0.5;
+      const unmute = el.muted;
       runtime?.setMuted(!el.muted);
+      // Quitar el silencio es un gesto (la vista previa del partido en el móvil termina ahí).
+      if (unmute && runtime) notePlayerGesture('unmute');
     },
-    setVolume: (value) => runtime?.setVolume(value),
+    setVolume: (value) => {
+      const el = video();
+      const unmute = Boolean(el?.muted) && value > 0;
+      runtime?.setVolume(value);
+      if (unmute && runtime) notePlayerGesture('unmute');
+    },
     toggleFullscreen: () => {
       // Sin pantalla completa en este navegador, en escritorio F es el modo teatro.
       if (!abilities.fullscreen && !compact && !fullscreen && playerStore.get().channel) {

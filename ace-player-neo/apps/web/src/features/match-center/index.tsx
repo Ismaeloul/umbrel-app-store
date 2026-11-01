@@ -117,8 +117,11 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
   const hasSession = useSession((state) => state.key === `m:${id}`);
   const today = madridClock(now).date;
 
-  // Entrar al partido: resolver, comprobar y arrancar la primera verificada.
-  const enter = useEffectEvent((current: FootballMatch) => enterMatch(current));
+  // Entrar al partido: resolver, comprobar y arrancar la primera verificada. Con la
+  // maquetación móvil, en vista previa (solo AceStream y en silencio; se decide al entrar).
+  const enter = useEffectEvent((current: FootballMatch) =>
+    enterMatch(current, { preview: layout.kind === 'mobile' }),
+  );
   const matchId = match?.id ?? null;
   useEffect(() => {
     if (!active || !match) return;

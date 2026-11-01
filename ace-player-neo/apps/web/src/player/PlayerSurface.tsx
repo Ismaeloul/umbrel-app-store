@@ -391,6 +391,25 @@ function VodFailureAction({ state, ctx }: { state: PlayerState; ctx: PlayerConte
 }
 
 function StageMessage({ state, ctx }: { state: PlayerState; ctx: PlayerContextValue }) {
+  const waitingAction = state.waiting ? state.waitingAction : null;
+  // Vista previa del partido en el móvil: nada suena solo; un botón grande de play. También
+  // encima de lo que aún suena de antes (el mini): la ficha enseña lo que ofrece.
+  if (
+    waitingAction &&
+    state.kind !== 'vod' &&
+    (state.phase === 'idle' || (waitingAction.cover === true && state.phase !== 'error'))
+  )
+    return (
+      <div className="player-msg player-msg--play" data-tone="idle" role="status">
+        <button type="button" className="player-msg__play press" onClick={waitingAction.onAction}>
+          <span className="player-tap__icon" aria-hidden="true">
+            <Icon name="play" size={32} />
+          </span>
+          {waitingAction.label}
+        </button>
+        {state.waiting ? <p className="player-msg__text">{state.waiting}</p> : null}
+      </div>
+    );
   const message = stageMessage(state);
   if (!message) return null;
   if (state.kind === 'vod')
@@ -431,6 +450,12 @@ function StageMessage({ state, ctx }: { state: PlayerState; ctx: PlayerContextVa
           onClick={ctx.actions.retry}
         >
           {showHere ? 'Reproducir aquí' : 'Reintentar'}
+        </Button>
+      ) : null}
+      {/* Cayó la AceStream de la vista previa del móvil: la IPTV, al tocar. */}
+      {waitingAction && state.phase === 'error' ? (
+        <Button variant="video" size="sm" icon="play" onClick={waitingAction.onAction}>
+          {waitingAction.label}
         </Button>
       ) : null}
     </div>

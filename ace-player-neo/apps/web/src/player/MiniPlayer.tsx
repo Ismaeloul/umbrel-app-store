@@ -57,7 +57,8 @@ export function miniKicker(state: PlayerState): string {
     case 'reproduciendo':
     case 'buffer':
     case 'buscando':
-      return 'Sonando';
+      // En silencio no «suena» (la vista previa del partido en el móvil arranca así).
+      return state.muted || state.volume === 0 ? 'En silencio' : 'Sonando';
     case 'cargando':
       return 'Conectando…';
     case 'reconectando':
@@ -279,7 +280,9 @@ function Mini({
         aria-label={infoLabel}
       >
         <span className="player-mini__kicker">
-          <Equalizer playing={state.phase === 'reproduciendo'} />
+          <Equalizer
+            playing={state.phase === 'reproduciendo' && !state.muted && state.volume > 0}
+          />
           {miniKicker(state)}
         </span>
         <span className="player-mini__title">{title}</span>

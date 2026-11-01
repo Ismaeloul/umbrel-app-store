@@ -225,6 +225,24 @@
   justify-content: center;
   gap: var(--s-2);
 }
+/* Vista previa del partido en el móvil: el botón grande de play («Toca para ver · IPTV»). */
+.player-msg__play {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-2);
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-l);
+  color: var(--on-video);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.7);
+}
+.player-msg__play:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 /* Reposo: motor, canales y partidos de hoy (inventario §8.1), en píldoras discretas. */
 .player-facts {
   display: flex;
@@ -303,6 +321,27 @@
   }
   .player-msg .btn {
     margin-top: 2px;
+  }
+  /* La vista previa: botón y una frase corta enteros entre las dos filas de controles
+     (el círculo, la etiqueta y hasta tres líneas caben en los ~120 px que quedan). */
+  .player-msg--play {
+    padding: 44px var(--s-4) 48px;
+  }
+  .player-msg--play .player-msg__play {
+    gap: 4px;
+    padding: 2px var(--s-3);
+    font-size: var(--fs-13);
+  }
+  .player-msg--play .player-tap__icon {
+    width: 40px;
+    height: 40px;
+  }
+  .player-msg--play .player-tap__icon .icon {
+    width: 22px;
+    height: 22px;
+  }
+  .player-msg--play .player-msg__text {
+    -webkit-line-clamp: 3;
   }
 }
 

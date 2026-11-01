@@ -88,6 +88,8 @@ export function statusFor(state: PlayerState): StatusContent | null {
     case 'idle':
       if (state.waiting && state.waitingFinal)
         return { text: state.waiting, signal: 'fail', tone: 'err' };
+      // La vista previa del móvil espera a que se toque play: no se está buscando nada.
+      if (state.waiting && state.waitingAction) return { text: state.waiting, icon: 'play' };
       if (state.waiting) return { text: state.waiting, signal: 'checking' };
       if (state.idleReason === 'traspasado' && state.message)
         return { text: state.message, icon: 'movil' };

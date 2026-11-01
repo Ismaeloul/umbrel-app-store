@@ -127,6 +127,27 @@ describe('centro de partido', () => {
     await waitFor(() => expect(getPlayer().channel?.hash).not.toBe(hash(1)));
   });
 
+  it('móvil: la ficha entra en vista previa (AceStream en silencio); desde 768, no', async () => {
+    const mobile = renderWithApp(
+      <MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />,
+    );
+    await waitFor(() => expect(getPlayer().channel?.hash).toBe(hash(1)));
+    expect(getSession().preview).toBe(true);
+    expect(getPlayer().muted).toBe(true);
+    mobile.unmount();
+    endSession();
+    // La AceStream sigue en el escenario: en silencio hasta que cambie lo que suena o se pare.
+    expect(getPlayer().muted).toBe(true);
+    resetPlayerApi();
+    expect(getPlayer().muted).toBe(false);
+    renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />, {
+      kind: 'tablet',
+    });
+    await waitFor(() => expect(getPlayer().channel?.hash).toBe(hash(1)));
+    expect(getSession().preview).toBe(false);
+    expect(getPlayer().muted).toBe(false);
+  });
+
   it('la tecla S (datos técnicos) abre su pestaña y otra S vuelve a la de antes', async () => {
     renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />);
     await screen.findByRole('heading', { level: 1, name: 'Atlético de Madrid vs Tottenham' });

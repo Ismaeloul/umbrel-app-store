@@ -23,9 +23,12 @@ import { fixture, mockFetch } from '../test/fetch.ts';
 import {
   hostNerdPanel,
   INITIAL_PLAYER_STATE,
+  onPlayerGesture,
   play,
   playerStore,
   resetPlayerApi,
+  setPlayerMuted,
+  setWaitingMessage,
   type PlayerState,
 } from './api.ts';
 import PlayerDock, { sharedRuntimeForTests } from './index.tsx';
@@ -128,6 +131,77 @@ describe('reproductor en grande', () => {
     const video = container.querySelector('video')!;
     expect(video).toHaveAttribute('playsinline');
     expect(video).not.toHaveAttribute('controls');
+  });
+
+  it('vista previa del móvil: un botón grande de play con su texto, sin «Buscando señal»', () => {
+    const onAction = vi.fn();
+    renderDock();
+    act(() => {
+      setWaitingMessage('Tu IPTV tiene este partido.', {
+        action: { label: 'Toca para ver · IPTV', onAction },
+      });
+    });
+    expect(screen.queryByText('Buscando señal')).toBeNull();
+    expect(
+      screen.getByText('Tu IPTV tiene este partido.', { selector: '.player-msg__text' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Toca para ver · IPTV' }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    act(() => setWaitingMessage(null));
+    expect(screen.queryByRole('button', { name: 'Toca para ver · IPTV' })).toBeNull();
+  });
+
+  it('vista previa con otro canal aún en el escenario (el mini): el botón grande va encima solo si lo pide', () => {
+    const onAction = vi.fn();
+    renderDock();
+    setPlayer(playing());
+    act(() => {
+      setWaitingMessage('Tu IPTV no arranca sola.', {
+        action: { label: 'Toca para ver · IPTV', onAction },
+      });
+    });
+    // Sin `cover`, lo que suena manda (el panel de espera no tapa un vídeo propio).
+    expect(screen.queryByRole('button', { name: 'Toca para ver · IPTV' })).toBeNull();
+    act(() => {
+      setWaitingMessage('Tu IPTV no arranca sola.', {
+        action: { label: 'Toca para ver · IPTV', onAction, cover: true },
+      });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Toca para ver · IPTV' }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('el silencio pedido antes de montar llega al <video> antes del runtime: nadie publica «sin silencio»', () => {
+    setPlayerMuted(true);
+    const seen: boolean[] = [];
+    const off = playerStore.subscribe(() => seen.push(playerStore.get().muted));
+    try {
+      const { container } = renderDock();
+      const video = container.querySelector('video') as HTMLVideoElement;
+      expect(video.muted).toBe(true);
+      expect(playerStore.get().muted).toBe(true);
+      expect(seen).not.toContain(false);
+    } finally {
+      off();
+    }
+  });
+
+  it('quitar el silencio con los controles avisa del gesto (la vista previa termina ahí); silenciar, no', async () => {
+    const gestures: string[] = [];
+    const off = onPlayerGesture((gesture) => gestures.push(gesture));
+    try {
+      const { container } = renderDock();
+      setPlayer(playing());
+      fireEvent.click(screen.getByRole('button', { name: 'Silenciar' }));
+      expect(gestures).toEqual([]);
+      const video = container.querySelector('video') as HTMLVideoElement;
+      expect(video.muted).toBe(true);
+      fireEvent.click(await screen.findByRole('button', { name: 'Activar sonido' }));
+      expect(video.muted).toBe(false);
+      expect(gestures).toEqual(['unmute']);
+    } finally {
+      off();
+    }
   });
 
   it('en reposo, los tres datos del panel (§8.1): motor, canales y partidos de HOY (en Madrid)', async () => {
@@ -823,6 +897,15 @@ describe('reproductor en grande', () => {
 });
 
 describe('mini-reproductor «Sonando»', () => {
+  it('en silencio (la vista previa del partido) dice «En silencio» y no anima el ecualizador', () => {
+    renderDock('mini');
+    setPlayer(playing({ muted: true }));
+    expect(screen.queryByText('Sonando')).toBeNull();
+    const kicker = document.querySelector('.player-mini__kicker')!;
+    expect(kicker).toHaveTextContent('En silencio');
+    expect(kicker.querySelector('.player-eq')).toHaveAttribute('data-playing', 'false');
+  });
+
   it('canal, segunda línea sin marcador, pausa y detener; tocarlo vuelve al vídeo', () => {
     const { handlers } = renderDock('mini');
     setPlayer(playing());
