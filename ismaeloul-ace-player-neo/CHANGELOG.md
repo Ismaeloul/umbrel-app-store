@@ -2,6 +2,16 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 1.1.0 (2026-11-01)
+
+Version 1.1.0. La web del movil, rediseñada: barra flotante abajo con el
+mini reproductor dentro, lupa y ajustes arriba, Agenda por competicion,
+ficha del partido con el video arriba y las fuentes debajo, Canales con lo
+que echan ahora, Guia con detalles al tocar un programa y Pelis y series
+desde Mi lista. Al abrir un partido en el movil solo arranca sola una
+AceStream, y en silencio; la IPTV espera a que toques para no ocupar tu
+conexion. En el ordenador no cambia nada.
+
 ## 1.0.0 (2026-11-01)
 
 Version 1.0.0. Agenda nueva al estilo SofaScore: al entrar ves las ligas
