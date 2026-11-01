@@ -17,6 +17,8 @@ import type {
   PartyCreateBody,
   PartyJoinResponse,
   PartyList,
+  PartyLiveSourcesQuery,
+  PartyLiveSourcesResponse,
   PartyMemberBody,
   PartyPreview,
   PartyQueueBody,
@@ -29,6 +31,8 @@ import type {
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { PlaybackService, ViewerIdentity } from '../playback/types.js';
 import type { RemuxService } from '../remux/types.js';
+import type { FootballService } from '../football/types.js';
+import type { ScannerService } from '../scanner/types.js';
 
 export interface PartyDeps extends CoreDeps {
   readonly playback: Pick<PlaybackService, 'acquire' | 'acquireVod' | 'heartbeat' | 'release'>;
@@ -37,6 +41,13 @@ export interface PartyDeps extends CoreDeps {
    * recibe: `index.m3u8` como siempre.
    */
   readonly remux?: Pick<RemuxService, 'vodLiteOffer' | 'vodLiteCovers'>;
+  /**
+   * Las fuentes de una sala en directo (§14, `partyLiveSources`) y el cambio automático del
+   * servidor. Sin él (tests viejos), la sala no tiene fuentes propias ni salta sola.
+   */
+  readonly football?: Pick<FootballService, 'resolve'>;
+  /** Los veredictos del comprobador (qué fuente está verificada) y los que aprende la sala. */
+  readonly scanner?: Pick<ScannerService, 'job' | 'verdict' | 'recordVerdict'>;
 }
 
 /** De dónde viene la petición de `partyStream`. */
@@ -81,6 +92,11 @@ export interface PartyService extends Lifecycle {
   /** La sesión de vídeo de la persona con esta clave (`partyVideo`). */
   videoSession(code: string, key: string): string;
   control(code: string, body: PartyControlBody): PartyStatusResponse;
+  /** Las fuentes del directo (`partyLiveSources`): el líder, los co-líderes y el anfitrión. */
+  liveSources(
+    code: string,
+    query: Omit<PartyLiveSourcesQuery, 't'> & { readonly t: string },
+  ): Promise<PartyLiveSourcesResponse>;
   status(code: string, body: PartyStatusBody): Promise<PartyStatusResponse>;
   chat(code: string, body: PartyChatBody): void;
   /** «Está escribiendo» (§13): se reenvía a la sala, como mucho uno cada `typingIntervalMs`. */

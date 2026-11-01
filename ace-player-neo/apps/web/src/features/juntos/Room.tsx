@@ -17,12 +17,14 @@
    - Pantalla completa: solo el vídeo (sin chat). En el iPhone no hay
      pantalla completa para un trozo de página: allí el vídeo ocupa toda la
      pantalla con CSS. En Android, además, se gira a horizontal.
-   - En directo (§14): sin «Cuando acabe» ni Siguiente. Quien controla tiene
-     Chat, Fuentes, Partidos y Gente; los demás, Chat y Gente. Fuentes y
-     Partidos tiran de la agenda y las fuentes de casa: solo en casa
-     (`liveTools`), no en la página del invitado. */
+   - En directo (§14): sin «Cuando acabe» ni Siguiente. Quien puede cambiar
+     la fuente (el líder, los co-líderes y el anfitrión) tiene Chat, Fuentes,
+     Partidos y Gente; los demás, Chat y Gente. Fuentes es una ruta de la
+     sala: también en la página del invitado. Partidos tira de la agenda de
+     casa: solo en casa (`liveTools`). El «Cambio automático si se cae» lo
+     decide el servidor (party/live-auto.ts). */
 
-import type { PartyCloseReason, PartyCredential, PartyRoom } from '@ace/shared';
+import type { PartyCloseReason, PartyCredential } from '@ace/shared';
 import {
   useCallback,
   useEffect,
@@ -47,9 +49,10 @@ import { Icon } from '../../ui/Icon.tsx';
 import { MEDIA, useMediaQuery } from '../../lib/media.ts';
 import { MobileFaces, MobileSkip } from './Mobile.tsx';
 import { Faces, joinNames, Lobby, NextCard, NextPanel, People } from './Panels.tsx';
-import { LiveMatches, LiveSources, useRoomMatch } from './LivePanels.tsx';
-import { nextSource, useLiveSources } from './live.ts';
-import { RoomPlayer, type PlayerView } from './player.ts';
+import { LiveMatches, LiveReclaim, LiveSources } from './LivePanels.tsx';
+import { canSwitchLive } from './liveSources.ts';
+import { RoomPlayer } from './player.ts';
+import { useUnread } from './useUnread.ts';
 import { Theater } from './Theater.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
 
@@ -62,72 +65,10 @@ const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
   gone: JUNTOS_TEXT.gone,
 };
 
-/** «Cambio automático si se cae»: como mucho un salto cada 30 s y 3 seguidos sin que suene ninguna. */
-const AUTO_SWITCH_GAP_MS = 30_000;
-const AUTO_SWITCH_MAX = 3;
-
 /** «Cerrar sala» queda armado este rato tras el primer toque. */
 const CLOSE_CONFIRM_MS = 5_000;
 
 type SideTab = 'chat' | 'siguiente' | 'fuentes' | 'partidos' | 'gente';
-
-/**
- * «Cambio automático si se cae» (§14): si el vídeo de la sala falla y quien lo
- * nota manda (el líder, o quien controle si el líder no está), salta a la
- * siguiente fuente que la sala no haya probado aún. Sin pintar nada.
- *
- * Con freno: un salto cada `AUTO_SWITCH_GAP_MS` como mucho y
- * `AUTO_SWITCH_MAX` seguidos sin que ninguna llegue a sonar. Con el motor
- * del NAS caído, todas fallan igual y saltar no arregla nada (en local se
- * comía las siete fuentes en un minuto).
- */
-export function LiveAutoSwitch({
-  room,
-  client,
-  player,
-}: {
-  room: PartyRoom;
-  client: PartyClient;
-  player: RoomPlayer;
-}) {
-  const match = useRoomMatch(room);
-  const sources = useLiveSources(match, true);
-  const view: PlayerView = useSyncExternalStore(player.subscribe, player.getView);
-  const tried = useRef(new Set<string>());
-  /* Saltos seguidos sin que ninguna suene y cuándo fue el último. */
-  const streak = useRef({ count: 0, at: Number.NEGATIVE_INFINITY });
-  /* Para volver a mirar cuando se cumple el hueco entre saltos. */
-  const [tick, setTick] = useState(0);
-  const live = room.live;
-  const selfId = client.credential.id;
-  const leader = room.members.find((member) => member.id === room.leaderId);
-  const decides = selfId === room.leaderId || (!leader?.online && canControl(room, selfId));
-  if (live) tried.current.add(live.hash);
-  /* Una que suena de verdad: vuelve a valer todo. 'ready' no basta: llega con la concesión,
-     antes de que suene nada, y con un fallo después de ella el freno no se aplicaba nunca. */
-  if (view.sounded && streak.current.count > 0) {
-    streak.current = { count: 0, at: streak.current.at };
-    tried.current = new Set(live ? [live.hash] : []);
-  }
-  const failed = view.phase === 'error' || room.interrupted === 'failed';
-  useEffect(() => {
-    if (!live?.auto || !decides || !failed || room.interrupted === 'taken') return;
-    const now = Date.now();
-    if (streak.current.count >= AUTO_SWITCH_MAX) return;
-    const wait = AUTO_SWITCH_GAP_MS - (now - streak.current.at);
-    if (wait > 0) {
-      /* Demasiado pronto: se vuelve a mirar al cumplirse el hueco (nada más lo haría). */
-      const timer = setTimeout(() => setTick((n) => n + 1), wait);
-      return () => clearTimeout(timer);
-    }
-    const next = nextSource(sources.data ?? [], live, tried.current);
-    if (!next) return;
-    tried.current.add(next.choice.hash);
-    streak.current = { count: streak.current.count + 1, at: now };
-    void client.control({ action: 'live', live: next.choice }).catch(() => undefined);
-  }, [live, decides, failed, room.interrupted, sources.data, client, tick]);
-  return null;
-}
 
 /** ¿Este navegador sabe poner un elemento cualquiera en pantalla completa? (el iPhone, no). */
 function nativeFullscreen(element: HTMLElement | null): boolean {
@@ -159,7 +100,7 @@ export function Room({
   header?: ReactNode;
   /** El botón para irse cuando la sala ya no existe (null en la página del invitado). */
   exitAction: ReactNode;
-  /** En casa: Fuentes y Partidos de la sala en directo (la agenda y las fuentes son de casa). */
+  /** En casa: Partidos de la sala en directo (la agenda es de casa; Fuentes va en todas partes). */
   liveTools?: boolean;
   /** La página del invitado: el reproductor pide las dos calidades (`abr=1`, docs/ver-juntos.md §17). */
   guest?: boolean;
@@ -177,6 +118,8 @@ export function Room({
   /* «Cerrar sala» pide un segundo toque (regla 31, sin confirm() nativo). */
   const closeTap = useSecondTap(CLOSE_CONFIRM_MS);
   const [closing, setClosing] = useState(false);
+  /* directo §14 */
+  const unread = useUnread(state.chat, credential.id, tab === 'chat');
 
   useEffect(() => {
     rememberRoom(code);
@@ -261,15 +204,15 @@ export function Room({
   const hostName = room?.members.find((member) => member.id === room.hostId)?.name ?? leaderName;
   const lobby = !!room?.playback.lobby;
   const live = room?.live ?? null;
-  /* Fuentes y Partidos: quien controla, en casa. */
-  const liveTabs = !!live && control && liveTools;
+  /* directo §14: Fuentes, quien puede cambiar la fuente (también por el enlace); Partidos, en casa. */
+  const liveTabs = !!live && canSwitchLive(room, selfId);
   const names = room ? (controllers(room) ?? []) : [];
   const whoControls = !room
     ? ''
     : live
-      ? role === 'leader' || (control && room.settings.control === 'everyone')
+      ? role === 'leader' || (liveTabs && room.settings.control === 'everyone')
         ? JUNTOS_TEXT.liveYouControl(live.channel)
-        : role === 'coleader' && control
+        : liveTabs
           ? JUNTOS_TEXT.liveColeader(leaderName)
           : JUNTOS_TEXT.liveGuestOf(hostName, names.length > 1)
       : room.settings.control === 'everyone'
@@ -316,16 +259,10 @@ export function Room({
   };
   const closeArmed = closeTap.armed === 'close';
 
-  const liveSide =
-    room && live && liveTools ? (
-      <>
-        {player && control ? <LiveAutoSwitch room={room} client={client} player={player} /> : null}
-      </>
-    ) : null;
   const livePanel = (which: 'fuentes' | 'partidos') =>
     room ? (
       which === 'fuentes' ? (
-        <LiveSourcesHere room={room} client={client} />
+        <LiveSources room={room} client={client} />
       ) : (
         <LiveMatches room={room} client={client} />
       )
@@ -361,12 +298,11 @@ export function Room({
 
   const tabs: { value: SideTab; label: string; count?: number }[] = live
     ? [
-        { value: 'chat', label: JUNTOS_TEXT.tabChat },
-        ...(liveTabs
-          ? [
-              { value: 'fuentes' as const, label: JUNTOS_TEXT.tabSources },
-              { value: 'partidos' as const, label: JUNTOS_TEXT.tabMatches },
-            ]
+        /* directo §14: los mensajes sin leer mientras se miran Fuentes, Partidos o Gente. */
+        { value: 'chat', label: JUNTOS_TEXT.tabChat, ...(unread ? { count: unread } : {}) },
+        ...(liveTabs ? [{ value: 'fuentes' as const, label: JUNTOS_TEXT.tabSources }] : []),
+        ...(liveTabs && liveTools
+          ? [{ value: 'partidos' as const, label: JUNTOS_TEXT.tabMatches }]
           : []),
         { value: 'gente', label: JUNTOS_TEXT.tabPeople },
       ]
@@ -413,7 +349,6 @@ export function Room({
       )}
     >
       {header}
-      {liveSide}
       <div className="juntos__body" data-fullscreen={fullscreen ? 'true' : 'false'}>
         <div className="juntos__main">
           {stageContent}
@@ -440,6 +375,8 @@ export function Room({
                   ) : null}
                 </h1>
                 <p className="juntos-info__who">{whoControls}</p>
+                {/* directo §14 */}
+                <LiveReclaim room={room} client={client} selfId={selfId} />
               </div>
               <div className="juntos-info__actions">{deskActions}</div>
             </div>
@@ -503,10 +440,4 @@ export function Room({
       </div>
     </div>
   );
-}
-
-/** Fuentes del partido que suena (lo busca en la agenda de casa). */
-function LiveSourcesHere({ room, client }: { room: PartyRoom; client: PartyClient }) {
-  const match = useRoomMatch(room);
-  return <LiveSources room={room} client={client} match={match} />;
 }

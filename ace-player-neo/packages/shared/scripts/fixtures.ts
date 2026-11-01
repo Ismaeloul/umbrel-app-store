@@ -109,6 +109,8 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'partySettings',
   'partyMember',
   'partyQueue',
+  /* Las fuentes del directo (directo §14): el líder y los co-líderes, también por el enlace. */
+  'partyLiveSources',
   'partyLeave',
   /* Las salas abiertas y cerrarlas desde casa: solo la web de casa. */
   'partyList',
@@ -1538,6 +1540,7 @@ export const WEB_V1_FIXTURES = {
   partySettings: { ok: true },
   partyMember: { ok: true },
   partyQueue: { ok: true },
+  partyLiveSources: { candidates: [candidate], scan: scanJob },
   partyLeave: { ok: true },
   partyClose: { ok: true },
   partyList: {

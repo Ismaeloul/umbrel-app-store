@@ -1,14 +1,15 @@
-/* Las pestañas de la sala en directo para quien controla (docs/ver-juntos.md
-   §14), como la maqueta ver-juntos.html:
+/* Las pestañas de la sala en directo para quien puede cambiar la fuente
+   (docs/ver-juntos.md §14), como la maqueta ver-juntos.html:
 
    - Fuentes: «Cambio automático si se cae» arriba y las conexiones del
-     partido por canal, cada una con su calidad, IPTV o AceStream y «Poner»
-     (o «En la sala», la que suena).
+     partido por canal con la lógica de la ficha (liveSources.ts): las IPTV,
+     la que suena y las AceStream verificadas, con su señal; las flojas y el
+     resto, plegadas. Es una ruta de la sala: también por el enlace.
    - Partidos: los de hoy en directo y los de más tarde, con «Poner» (su
-     mejor fuente) o «En la sala»; y «Poner un canal», tus favoritos.
+     mejor fuente) o «En la sala»; y «Poner un canal», tus favoritos. Tira de
+     la agenda de casa: solo en casa.
 
-   Los invitados no las ven: solo Chat y Gente. Desde fuera de casa no hay
-   agenda ni fuentes (son rutas de casa): se dice y ya. */
+   Los invitados no las ven: solo Chat y Gente. */
 
 import type { FootballMatch, PartyLiveChoice, PartyRoom } from '@ace/shared';
 import { useMemo, useState } from 'react';
@@ -18,18 +19,29 @@ import { notify } from '../../notices/index.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Switch } from '../../ui/Field.tsx';
 import { Icon } from '../../ui/Icon.tsx';
+import { SignalBadge } from '../../ui/SignalBadge.tsx';
 import { matchStatus, matchTitle } from '../agenda/domain.ts';
 import { useLibraryQuery, useNow, useSchedule } from '../agenda/data.ts';
 import type { PartyClient } from './client.ts';
-import { bestSourceOf, groupSources, useLiveSources } from './live.ts';
+import { bestSourceOf } from './live.ts';
+import type { RoomSourceRow } from './liveSources.ts';
+import { LIVE_TEXT } from './liveTexts.ts';
 import { JUNTOS_TEXT } from './texts.ts';
+import { useRoomSources } from './useRoomSources.ts';
+import './live.css';
 
 const HASH_RE = /^[a-f0-9]{40}$/;
 
-function put(client: PartyClient, live: PartyLiveChoice): Promise<void> {
-  return client.control({ action: 'live', live }).catch((error: unknown) => {
-    notify(describeFailure(error), { tone: 'err' });
-  });
+/**
+ * «Poner» para todos. Con `from` (lo que suena según esta pantalla): si otro ya la ha cambiado,
+ * el servidor ignora este cambio (gana el primero, sin dos saltos seguidos).
+ */
+function put(client: PartyClient, live: PartyLiveChoice, from?: string): Promise<void> {
+  return client
+    .control({ action: 'live', live, ...(from ? { from } : {}) })
+    .catch((error: unknown) => {
+      notify(describeFailure(error), { tone: 'err' });
+    });
 }
 
 function Origin({ source }: { source: PartyLiveChoice['source'] }) {
@@ -40,35 +52,107 @@ function Origin({ source }: { source: PartyLiveChoice['source'] }) {
   );
 }
 
-/** El partido de la sala en la agenda de hoy (o null: un canal suelto, o ya no está). */
-export function useRoomMatch(room: PartyRoom): FootballMatch | null {
-  const schedule = useSchedule();
-  const matchId = room.live?.matchId ?? null;
-  return useMemo(() => {
-    if (!matchId) return null;
-    for (const day of schedule.data?.days ?? []) {
-      const found = day.matches.find((match) => match.id === matchId);
-      if (found) return found;
-    }
-    return null;
-  }, [schedule.data, matchId]);
+/** Una fila de Fuentes: número estable, nombre, calidad, señal y «Poner» (o «En la sala»). */
+function SourceRowView({
+  item,
+  busy,
+  onPut,
+}: {
+  item: RoomSourceRow;
+  busy: string | null;
+  onPut(item: RoomSourceRow): void;
+}) {
+  const hash = item.choice.hash;
+  return (
+    <li className="juntos-live__row" data-here={item.here ? 'true' : undefined}>
+      <span className="juntos-live__num">{item.row.number}</span>
+      <span className="juntos-live__text">
+        <span className="juntos-live__name">{item.name}</span>
+        <Origin source={item.choice.source} />
+        {item.meta ? <span className="juntos-live__meta">{item.meta}</span> : null}
+      </span>
+      {item.here ? null : (
+        <SignalBadge
+          state={item.row.signal.state}
+          label={item.row.signal.word}
+          size="sm"
+          className="juntos-live__sig"
+        />
+      )}
+      {item.here ? (
+        <span className="juntos-live__here">
+          <span className="juntos-chip__dot" aria-hidden="true" />
+          {JUNTOS_TEXT.liveHere}
+        </span>
+      ) : (
+        <Button
+          size="sm"
+          variant="quiet"
+          busy={busy === hash}
+          disabled={busy !== null && busy !== hash}
+          onClick={() => onPut(item)}
+        >
+          {JUNTOS_TEXT.livePut}
+        </Button>
+      )}
+    </li>
+  );
 }
 
-export function LiveSources({
-  room,
-  client,
-  match,
+function SourceFold({
+  summary,
+  items,
+  busy,
+  onPut,
 }: {
-  room: PartyRoom;
-  client: PartyClient;
-  match: FootballMatch | null;
+  summary: string;
+  items: readonly RoomSourceRow[];
+  busy: string | null;
+  onPut(item: RoomSourceRow): void;
 }) {
+  if (!items.length || !summary) return null;
+  return (
+    <details className="juntos-live__fold">
+      <summary>{summary}</summary>
+      <ul className="juntos-live__list">
+        {items.map((item) => (
+          <SourceRowView key={item.choice.hash} item={item} busy={busy} onPut={onPut} />
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/**
+ * Fuentes (directo §14): las IPTV, la que suena y las AceStream verificadas, con la lógica de la
+ * ficha del partido; las flojas y el resto, plegadas. Para el líder, los co-líderes y el
+ * anfitrión, también por el enlace de invitado (la ruta es de la sala).
+ */
+export function LiveSources({ room, client }: { room: PartyRoom; client: PartyClient }) {
   const live = room.live;
-  const sources = useLiveSources(match, true);
+  const sources = useRoomSources(room, client);
   const [busy, setBusy] = useState<string | null>(null);
-  const groups = useMemo(() => groupSources(sources.data ?? []), [sources.data]);
   if (!live) return null;
-  let number = 0;
+  const model = sources.model;
+  const onPut = (item: RoomSourceRow) => {
+    setBusy(item.choice.hash);
+    void put(client, item.choice, live.hash).finally(() => setBusy(null));
+  };
+  const searchMore = (
+    <button
+      type="button"
+      className="juntos-propose juntos-live__more"
+      disabled={sources.researching}
+      onClick={() =>
+        void sources
+          .research()
+          .catch((error: unknown) => notify(describeFailure(error), { tone: 'err' }))
+      }
+    >
+      <Icon name="buscar" size={18} />
+      {sources.researching ? LIVE_TEXT.searching : LIVE_TEXT.searchMore}
+    </button>
+  );
   return (
     <div className="juntos-live">
       <Switch
@@ -82,59 +166,97 @@ export function LiveSources({
         }
         className="juntos-live__auto"
       />
-      {!match ? (
-        <p className="juntos-live__empty">{JUNTOS_TEXT.liveNoMatch}</p>
-      ) : sources.isPending ? (
-        <p className="juntos-live__empty">{JUNTOS_TEXT.liveSearching}</p>
-      ) : sources.isError ? (
-        <p className="juntos-live__empty">{JUNTOS_TEXT.liveSourcesFailed}</p>
-      ) : groups.length === 0 ? (
-        <p className="juntos-live__empty">{JUNTOS_TEXT.liveNoSources}</p>
+      {live.matchId === null ? (
+        <p className="juntos-live__empty">{LIVE_TEXT.looseChannel}</p>
+      ) : null}
+      {sources.isPending ? (
+        <p className="juntos-live__empty">{LIVE_TEXT.searching}</p>
+      ) : sources.isError || !model ? (
+        <div className="juntos-live__status">
+          <span>{LIVE_TEXT.sourcesFailed}</span>
+          <Button size="sm" variant="quiet" onClick={sources.retry}>
+            {LIVE_TEXT.retry}
+          </Button>
+        </div>
       ) : (
-        groups.map((group) => (
-          <section key={group.name} className="juntos-live__group" aria-label={group.name}>
-            <h3 className="juntos-kicker">{group.name}</h3>
-            <ul className="juntos-live__list">
-              {group.sources.map((source) => {
-                number += 1;
-                const here = source.choice.hash === live.hash;
-                return (
-                  <li
-                    key={source.choice.hash}
-                    className="juntos-live__row"
-                    data-here={here ? 'true' : undefined}
-                  >
-                    <span className="juntos-live__num">{number}</span>
-                    <span className="juntos-live__text">
-                      <span className="juntos-live__name">{source.choice.channel}</span>
-                      <Origin source={source.choice.source} />
-                    </span>
-                    {here ? (
-                      <span className="juntos-live__here">
-                        <span className="juntos-chip__dot" aria-hidden="true" />
-                        {JUNTOS_TEXT.liveHere}
-                      </span>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="quiet"
-                        busy={busy === source.choice.hash}
-                        onClick={() => {
-                          setBusy(source.choice.hash);
-                          void put(client, source.choice).finally(() => setBusy(null));
-                        }}
-                      >
-                        {JUNTOS_TEXT.livePut}
-                      </Button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))
+        <>
+          {model.groups.map((group) => (
+            <section key={group.name} className="juntos-live__group" aria-label={group.name}>
+              <div className="juntos-live__group-head">
+                <h3 className="juntos-kicker">{group.name}</h3>
+                <span className="juntos-live__count">
+                  {LIVE_TEXT.groupCount(group.total, group.live)}
+                </span>
+              </div>
+              <ul className="juntos-live__list">
+                {group.rows.map((item) => (
+                  <SourceRowView key={item.choice.hash} item={item} busy={busy} onPut={onPut} />
+                ))}
+              </ul>
+            </section>
+          ))}
+          {model.groups.length === 0 ? (
+            <p className="juntos-live__empty">{LIVE_TEXT.noSources}</p>
+          ) : null}
+          {sources.scanning ? <p className="juntos-live__status">{LIVE_TEXT.checking}</p> : null}
+          <SourceFold
+            summary={LIVE_TEXT.weakFold(model.weak.length)}
+            items={model.weak}
+            busy={busy}
+            onPut={onPut}
+          />
+          <SourceFold
+            summary={LIVE_TEXT.restFold(model.failed, model.checking)}
+            items={model.rest}
+            busy={busy}
+            onPut={onPut}
+          />
+          <SourceFold
+            summary={LIVE_TEXT.foreignFold(model.foreign.length)}
+            items={model.foreign}
+            busy={busy}
+            onPut={onPut}
+          />
+        </>
       )}
+      {sources.isPending ? null : searchMore}
     </div>
+  );
+}
+
+/**
+ * «Recuperar el mando» (directo §14): quien creó la sala y no es el líder (la corona pasó a otro
+ * mientras no estaba) la recupera de un toque. Sin nada si ya es el líder.
+ */
+export function LiveReclaim({
+  room,
+  client,
+  selfId,
+}: {
+  room: PartyRoom | null;
+  client: PartyClient;
+  selfId: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  if (!room?.live || room.hostId !== selfId || room.leaderId === selfId) return null;
+  return (
+    <Button
+      size="sm"
+      variant="quiet"
+      icon="corona"
+      busy={busy}
+      className="juntos-live__reclaim"
+      onClick={() => {
+        setBusy(true);
+        void client
+          .member(selfId, 'lead')
+          .then(() => notify(LIVE_TEXT.reclaimDone, { tone: 'ok' }))
+          .catch((error: unknown) => notify(describeFailure(error), { tone: 'err' }))
+          .finally(() => setBusy(false));
+      }}
+    >
+      {LIVE_TEXT.reclaim}
+    </Button>
   );
 }
 
@@ -165,7 +287,7 @@ export function LiveMatches({ room, client }: { room: PartyRoom; client: PartyCl
     try {
       const choice = await bestSourceOf(match);
       if (!choice) notify(JUNTOS_TEXT.liveNoSourcesFor(matchTitle(match)), { tone: 'warn' });
-      else await put(client, choice);
+      else await put(client, choice, live.hash);
     } catch (error) {
       notify(describeFailure(error), { tone: 'err' });
     } finally {
@@ -208,7 +330,9 @@ export function LiveMatches({ room, client }: { room: PartyRoom; client: PartyCl
   return (
     <div className="juntos-live">
       {schedule.isError ? (
-        <p className="juntos-live__empty">{JUNTOS_TEXT.liveSourcesFailed}</p>
+        <p className="juntos-live__empty">{LIVE_TEXT.matchesFailed}</p>
+      ) : schedule.isPending ? (
+        <p className="juntos-live__empty">{LIVE_TEXT.matchesLoading}</p>
       ) : null}
       {onNow.length ? (
         <section className="juntos-live__group" aria-label={JUNTOS_TEXT.liveOnNow}>
@@ -259,6 +383,7 @@ export function LiveMatches({ room, client }: { room: PartyRoom; client: PartyCl
                       size="sm"
                       variant="quiet"
                       busy={busy === item.id}
+                      disabled={busy !== null && busy !== item.id}
                       onClick={() => {
                         setBusy(item.id);
                         void put(client, {

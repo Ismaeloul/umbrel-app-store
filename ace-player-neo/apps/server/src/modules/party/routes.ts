@@ -20,6 +20,7 @@
      la credencial en `token`.
    - partySettings, partyMember, partyQueue (§11 y §13): ajustes y personas
      (el líder y los co-líderes) y la lista; también POST con `token`.
+   - partyLiveSources (directo §14): GET con `?t=`; las fuentes del directo de la sala.
    - partyTyping (§13): «está escribiendo»; POST con `token`. Las
      reacciones (`partyReact`) se quitaron en el rediseño de escritorio. */
 
@@ -38,6 +39,7 @@ export const V1_ROUTE_IDS: readonly string[] = [
   'partyStream',
   'partyVideo',
   'partyControl',
+  'partyLiveSources',
   'partyStatus',
   'partyChat',
   'partyTyping',
@@ -89,6 +91,8 @@ export function registerV1Routes(router: V1Router, services: Services): void {
     });
   });
   router.handle('partyControl', (input) => party.control(input.params.code, input.body));
+  /* directo §14 */
+  router.handle('partyLiveSources', (input) => party.liveSources(input.params.code, input.query));
   router.handle('partyStatus', (input) => party.status(input.params.code, input.body));
   router.handle('partyChat', (input) => {
     party.chat(input.params.code, input.body);
