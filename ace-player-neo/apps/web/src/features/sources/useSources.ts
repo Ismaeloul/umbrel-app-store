@@ -56,6 +56,40 @@ export function useOnScreen(): OnScreen {
   return usePlayerSelector((state) => onScreenOf(state), shallowEqual);
 }
 
+/** Las filas sin estado (la ficha y la sala en directo): número estable, estado, señal y pliegue. */
+export function buildSourceRows(
+  entries: readonly SourceEntry[],
+  screen: OnScreen,
+  now: number,
+  activeHash: string | null,
+  hasScan: boolean,
+  webSources?: Parameters<typeof presentationOf>[1],
+): Pick<SourcesView, 'rows' | 'shown' | 'tucked' | 'effectiveById'> {
+  const effectiveById = new Map<string, Effective>();
+  const rows = entries.map((entry, index) => {
+    const effective = effectiveOf(entry, screen, now);
+    effectiveById.set(entry.id, effective);
+    const presentation = presentationOf(entry, webSources);
+    return {
+      entry,
+      number: index + 1,
+      effective,
+      signal: signalOf(effective, entry),
+      detail: detailOf(effective, entry),
+      presentation,
+      active: entry.id === activeHash,
+      onScreen: entry.id === screen.hash,
+      description: describeSource(entry, index + 1, effective, presentation, hasScan),
+    };
+  });
+  const shown = hasScan
+    ? rows.filter((row) => isShownWhileScanning(row.entry, row.effective, activeHash))
+    : rows;
+  const shownIds = new Set(shown.map((row) => row.entry.id));
+  const tucked = rows.filter((row) => !shownIds.has(row.entry.id));
+  return { rows, shown, tucked, effectiveById };
+}
+
 export function useSourcesView(): SourcesView {
   const state = useSession((s) => s);
   const screen = useOnScreen();
@@ -63,28 +97,14 @@ export function useSourcesView(): SourcesView {
   const webSources = useApiQuery('libraryGet').data?.webSources;
   return useMemo(() => {
     const hasScan = state.scan !== null;
-    const effectiveById = new Map<string, Effective>();
-    const rows = state.entries.map((entry, index) => {
-      const effective = effectiveOf(entry, screen, now);
-      effectiveById.set(entry.id, effective);
-      const presentation = presentationOf(entry, webSources);
-      return {
-        entry,
-        number: index + 1,
-        effective,
-        signal: signalOf(effective, entry),
-        detail: detailOf(effective, entry),
-        presentation,
-        active: entry.id === state.activeHash,
-        onScreen: entry.id === screen.hash,
-        description: describeSource(entry, index + 1, effective, presentation, hasScan),
-      };
-    });
-    const shown = hasScan
-      ? rows.filter((row) => isShownWhileScanning(row.entry, row.effective, state.activeHash))
-      : rows;
-    const shownIds = new Set(shown.map((row) => row.entry.id));
-    const tucked = rows.filter((row) => !shownIds.has(row.entry.id));
-    return { state, rows, shown, tucked, hasScan, screen, effectiveById };
+    const built = buildSourceRows(
+      state.entries,
+      screen,
+      now,
+      state.activeHash,
+      hasScan,
+      webSources,
+    );
+    return { state, ...built, hasScan, screen };
   }, [state, screen, now, webSources]);
 }

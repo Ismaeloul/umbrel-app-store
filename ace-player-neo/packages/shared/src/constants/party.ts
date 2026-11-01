@@ -49,8 +49,11 @@ export const PARTY = {
   driftRateS: 0.25,
   /** Velocidad para alcanzar o esperar a la sala sin saltar. */
   driftRate: 0.05,
-  /** Latido SSE de la sala (comentario `: ping`). */
-  heartbeatMs: 15_000,
+  /**
+   * Latido SSE de la sala: el comentario `: ping` y, a quien lo pide (`ping=1`), `party.ping`.
+   * Cada 10 s: el cliente da el SSE por muerto si pasa más del doble sin ninguna trama.
+   */
+  heartbeatMs: 10_000,
   /** Títulos en la lista de la sala (§11). */
   queueMax: 30,
   /** Al acabar, lo siguiente empieza tras esta cuenta atrás (el líder la puede cancelar). */

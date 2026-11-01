@@ -9,7 +9,8 @@
 
 import { z } from 'zod';
 import { PARTY } from '../../constants/party.js';
-import { HashSchema } from '../../primitives.js';
+import { HashSchema, ScanJobIdSchema } from '../../primitives.js';
+import { ResolutionCandidateSchema, ScanJobSchema } from '../common.js';
 import { ChannelStreamQuerySchema, StreamGrantSchema } from './playback.js';
 import { VodArtStampSchema, VodGrantSchema } from './vod.js';
 
@@ -133,8 +134,9 @@ export const PartyPlaybackSchema = z.strictObject({
   waitingFor: z.array(PartyMemberIdSchema).max(PARTY.maxMembers),
   /**
    * «Esperando a todos» (§13): aún no ha empezado. Arranca sola cuando todos
-   * los conectados están listos (con dos o más) o cuando quien controla da a
-   * reproducir («Empezar para todos»). Mientras, `playing` es false.
+   * los conectados han tocado «Estoy listo» y tienen el vídeo cargado (con dos
+   * o más), o cuando quien controla da a reproducir («Empezar ya»). Mientras,
+   * `playing` es false.
    */
   lobby: z.boolean().default(false),
 });
@@ -318,12 +320,31 @@ export const PartyPreviewSchema = z.strictObject({
 });
 export type PartyPreview = z.infer<typeof PartyPreviewSchema>;
 
+/**
+ * Qué tocó la persona para mandar una orden: el botón central (`button`), los saltos de ±10 s
+ * (`nudge`), la barra (`bar`), el teclado (`key`), un toque o clic sobre el vídeo (`surface`),
+ * «Empezar ya» en la espera (`lobby`) o las teclas multimedia, la pantalla de bloqueo o el Centro de
+ * control (`mediaSession`). Solo va al registro: el servidor no decide nada con él.
+ */
+export const PartyControlSourceSchema = z.enum([
+  'button',
+  'nudge',
+  'bar',
+  'key',
+  'surface',
+  'lobby',
+  'mediaSession',
+]);
+export type PartyControlSource = z.infer<typeof PartyControlSourceSchema>;
+
 /** POST /api/v1/party/:code/control: reproducir, pausar o saltar (para todos). */
 export const PartyControlBodySchema = z.discriminatedUnion('action', [
   z.strictObject({
     token: PartyTokenSchema,
     action: z.enum(['play', 'pause', 'seek']),
     positionS: z.number().min(0).max(86_400),
+    /** De dónde sale la orden (solo para el registro del servidor; las apps viejas no lo mandan). */
+    source: PartyControlSourceSchema.optional(),
   }),
   z.strictObject({
     token: PartyTokenSchema,
@@ -336,6 +357,11 @@ export const PartyControlBodySchema = z.discriminatedUnion('action', [
     token: PartyTokenSchema,
     action: z.literal('live'),
     live: PartyLiveChoiceSchema,
+    /**
+     * El hash que suena según quien cambia (directo §14): si la sala ya va por otro, el cambio se
+     * ignora. Así, con dos que controlan, gana el primero y no hay dos saltos seguidos.
+     */
+    from: HashSchema.optional(),
   }),
 ]);
 export type PartyControlBody = z.infer<typeof PartyControlBodySchema>;
@@ -348,12 +374,24 @@ export const PartyStatusBodySchema = z.strictObject({
   /** «Esperando a todos» (§13): si ya puede empezar y cuánto lleva cargado (las apps viejas no lo mandan). */
   ready: z.boolean().optional(),
   progress: z.number().int().min(0).max(100).optional(),
+  /**
+   * Pelis y series (§13): ha tocado «Estoy listo» (o algo que deja sonar el vídeo) desde que abrió
+   * esta página. La web lo manda siempre; al recargar vuelve a false (el navegador vuelve a pedir
+   * un toque). Las apps viejas no lo mandan y cuentan como que sí.
+   */
+  voted: z.boolean().optional(),
 });
 export type PartyStatusBody = z.infer<typeof PartyStatusBodySchema>;
 
 /** La hora del servidor sirve para estimar el desfase de reloj con la ida y vuelta. */
 export const PartyStatusResponseSchema = z.strictObject({
+  /**
+   * Hora del servidor (ms) al responder. Con `receivedAt`, el cliente tiene las cuatro marcas de
+   * NTP (su envío, la llegada, la respuesta y su recepción) y descuenta lo que tarda el servidor.
+   */
   serverNow: z.number().int().nonnegative(),
+  /** Hora del servidor (ms) al llegar la petición; los servidores viejos no la mandan. */
+  receivedAt: z.number().int().nonnegative().optional(),
   rev: z.number().int().nonnegative(),
   /**
    * Solo en `partyStatus`: el latido de la sesión de vídeo de la persona. `ok`,
@@ -454,8 +492,22 @@ export const PartyVideoParamsSchema = z.strictObject({
 export type PartyVideoParams = z.infer<typeof PartyVideoParamsSchema>;
 
 /** GET /api/v1/party/:code/events (SSE). */
-export const PartyEventsQuerySchema = z.strictObject({ t: PartyTokenSchema });
+export const PartyEventsQuerySchema = z.strictObject({
+  t: PartyTokenSchema,
+  /**
+   * `1`: además del comentario `: ping`, en cada latido un `party.ping` con la hora del servidor,
+   * que el JS sí ve (para saber que el SSE sigue vivo). Las apps viejas no lo piden.
+   */
+  ping: z.enum(['0', '1']).optional(),
+});
 export type PartyEventsQuery = z.infer<typeof PartyEventsQuerySchema>;
+
+/**
+ * GET /api/v1/party/:code/art/:artId: el cartel del título de la sala (o de lo que viene), por la
+ * ruta de la sala: el invitado de fuera no tiene `vodArt` (§9). Solo un `artId` que tenga la sala.
+ */
+export const PartyArtParamsSchema = z.strictObject({ code: PartyCodeSchema, artId: HashSchema });
+export type PartyArtParams = z.infer<typeof PartyArtParamsSchema>;
 
 /** GET /api/v1/party/:code/stream: el vídeo de la sala (una `VodGrant`). */
 export const PartyStreamQuerySchema = ChannelStreamQuerySchema.pick({
@@ -532,6 +584,18 @@ export const PartyEventSchema = z.discriminatedUnion('type', [
       live: PartyLiveSchema.nullable().default(null),
     }),
   }),
+  /**
+   * «Estoy listo» (§13, pelis y series): quién aún no lo ha tocado en esta visita. Va aparte de
+   * `members` (que es estricto) para que una página o app de antes, que no conoce el campo, no
+   * descarte las salas: este evento lo ignora sin más. Sale tras `party.snapshot` y con cada
+   * `party.room`. Sin él (un servidor viejo), todos cuentan como que sí.
+   */
+  z.strictObject({
+    type: z.literal('party.votes'),
+    data: z.strictObject({
+      unvoted: z.array(PartyMemberIdSchema).max(PARTY.maxMembers),
+    }),
+  }),
   /** «Ana está escribiendo…» (§13): como mucho uno cada `typingIntervalMs` por persona. */
   z.strictObject({
     type: z.literal('party.typing'),
@@ -544,6 +608,14 @@ export const PartyEventSchema = z.discriminatedUnion('type', [
     type: z.literal('party.chat'),
     data: z.strictObject({ message: PartyChatMessageSchema }),
   }),
+  /**
+   * El latido con nombre: solo a las conexiones con `ping=1`, cada `PARTY.heartbeatMs`. No cambia
+   * nada de la sala; el cliente sabe así que el SSE sigue vivo.
+   */
+  z.strictObject({
+    type: z.literal('party.ping'),
+    data: z.strictObject({ serverNow: z.number().int().nonnegative() }),
+  }),
   z.strictObject({
     type: z.literal('party.closed'),
     data: z.strictObject({ reason: PartyCloseReasonSchema }),
@@ -551,3 +623,27 @@ export const PartyEventSchema = z.discriminatedUnion('type', [
 ]);
 export type PartyEvent = z.infer<typeof PartyEventSchema>;
 export type PartyEventType = PartyEvent['type'];
+
+// --- Fuentes de una sala en directo (directo §14) ---
+
+/**
+ * GET /api/v1/party/:code/sources: las fuentes del partido o canal que suena, con la misma
+ * resolución que la ficha del partido y su trabajo del comprobador (uno por sala). Solo quien
+ * puede cambiar de fuente (el líder, los co-líderes y el anfitrión), también por el enlace.
+ */
+export const PartyLiveSourcesQuerySchema = z.strictObject({
+  t: PartyTokenSchema,
+  /** Solo el estado de este trabajo del comprobador (el sondeo barato mientras comprueba). */
+  job: ScanJobIdSchema.optional(),
+  /** `1`: «Buscar más fuentes» (una pasada nueva, sin la caché de la sala). */
+  research: z.enum(['0', '1']).optional(),
+});
+export type PartyLiveSourcesQuery = z.infer<typeof PartyLiveSourcesQuerySchema>;
+
+export const PartyLiveSourcesResponseSchema = z.strictObject({
+  /** En el orden del servidor (IPTV primero, la mejor arriba), como `footballResolve`. */
+  candidates: z.array(ResolutionCandidateSchema),
+  /** El trabajo del comprobador de la sala, o null si no hay (comprobador apagado o ya olvidado). */
+  scan: ScanJobSchema.nullable(),
+});
+export type PartyLiveSourcesResponse = z.infer<typeof PartyLiveSourcesResponseSchema>;

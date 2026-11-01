@@ -84,6 +84,9 @@ const TIMEOUTS: Partial<Record<JsonRouteId, number>> = {
   vodBrowse: VOD_CLIENT.browseMs,
   vodTitle: VOD_CLIENT.titleMs,
   vodStream: VOD_CLIENT.streamMs,
+  /* El vídeo de la sala (docs/ver-juntos.md §6): la misma apertura que `channelStream` y
+     `vodStream` (en el iPhone, el remux). Con 12 s, una apertura lenta parecía un error. */
+  partyStream: 55_000,
   engineRestart: 20_000,
   healthLive: 4_000,
 };

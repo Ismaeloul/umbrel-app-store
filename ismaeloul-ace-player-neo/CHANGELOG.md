@@ -2,6 +2,17 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 1.1.2 (2026-11-01)
+
+Version 1.1.2. Ver juntos mucho mas fiable: el movil ya no va un segundo
+por detras, no salen ordenes que nadie ha dado y la portada se ve tambien
+desde fuera. Pelis y series empiezan cuando todos le dan a Estoy listo (y
+suena en todos); en los directos arranca con uno y los demas lo ven en
+silencio con Activar sonido. En los directos salen las fuentes de la IPTV y
+solo las AceStream verificadas, el lider y los co-lideres pueden cambiarlas
+desde cualquier aparato, y si se cae la fuente el NAS cambia solo. El
+directo ya no se queda cargando en el iPhone.
+
 ## 1.1.1 (2026-11-01)
 
 Version 1.1.1. Ver juntos ya no se queda parado en el iPhone: la sala se

@@ -7,6 +7,7 @@
    reciben `party.closed` y también la olvidan. */
 
 import type { PartyRoom } from '@ace/shared';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import joined from '@fixtures/web/v1/partyJoin.json';
@@ -25,10 +26,9 @@ import { JUNTOS_TEXT } from './texts.ts';
 
 /* Las opciones con las que se crea cada reproductor (el invitado pide las dos calidades, §17). */
 const playerOptions = vi.hoisted(() => [] as unknown[]);
-
-/* El reproductor de verdad pide el vídeo y monta hls.js: aquí no hace falta. */
-vi.mock('./player.ts', () => {
-  const view = {
+/* Lo que dice el reproductor de pega y lo que se le pide (desbloquear o quitar el silencio). */
+const playerState = vi.hoisted(() => ({
+  view: {
     phase: 'ready',
     error: null,
     positionS: 0,
@@ -37,7 +37,15 @@ vi.mock('./player.ts', () => {
     buffering: false,
     quality: null,
     sounded: false,
-  };
+    soundBlocked: false,
+    voted: false,
+    localError: false,
+  } as Record<string, unknown>,
+  calls: [] as string[],
+}));
+
+/* El reproductor de verdad pide el vídeo y monta hls.js: aquí no hace falta. */
+vi.mock('./player.ts', () => {
   return {
     RoomPlayer: class {
       constructor(_video: unknown, _client: unknown, options: unknown) {
@@ -45,12 +53,20 @@ vi.mock('./player.ts', () => {
       }
       start(): void {}
       destroy(): void {}
-      unlock(): void {}
+      unlock(): void {
+        playerState.calls.push('unlock');
+      }
+      unmute(): void {
+        playerState.calls.push('unmute');
+      }
+      vote(): void {
+        playerState.calls.push('vote');
+      }
       subscribe(): () => void {
         return () => undefined;
       }
       getView() {
-        return view;
+        return playerState.view;
       }
     },
   };
@@ -102,6 +118,8 @@ function setViewport(width: number) {
 let net: ReturnType<typeof mockFetch> | undefined;
 
 beforeEach(() => {
+  playerState.view = { ...playerState.view, phase: 'ready', soundBlocked: false, voted: false };
+  playerState.calls = [];
   resetMode();
   setMode('live', 'bootstrap');
   FakeSource.last = null;
@@ -120,7 +138,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mountRoom(selfId: string, onLeft = vi.fn(), guest = false) {
+function mountRoom(selfId: string, onLeft = vi.fn(), guest = false, room: PartyRoom = ROOM) {
   saveCredential(CODE, credential(selfId));
   rememberRoom(CODE);
   render(
@@ -133,7 +151,7 @@ function mountRoom(selfId: string, onLeft = vi.fn(), guest = false) {
       guest={guest}
     />,
   );
-  act(() => FakeSource.last?.emit('party.snapshot', { room: ROOM, chat: [], serverNow: 1 }));
+  act(() => FakeSource.last?.emit('party.snapshot', { room, chat: [], serverNow: 1 }));
   return onLeft;
 }
 
@@ -283,7 +301,12 @@ describe('la sala en el móvil (ver-juntos.html y ver-juntos-pelis.html)', () =>
     );
     fireEvent.click(screen.getByRole('tab', { name: /Siguiente/ }));
     fireEvent.click(screen.getByRole('button', { name: JUNTOS_TEXT.skipNext }));
-    await waitFor(() => expect(net?.calls.at(-1)?.body).toMatchObject({ action: 'next' }));
+    /* La de la lista (el cliente también manda sus latidos de `status`). */
+    await waitFor(() =>
+      expect(net?.calls.filter((call) => call.url.endsWith('/queue')).at(-1)?.body).toMatchObject({
+        action: 'next',
+      }),
+    );
   });
 
   it('el invitado: «Salir» arriba, sin «Invitar» ni «Pasar al siguiente»', () => {
@@ -354,5 +377,155 @@ describe('el reproductor de la sala y las dos calidades (§17)', () => {
     expect(playerOptions.at(-1)).toEqual({ guest: false });
     mountRoom(ANA, vi.fn(), true);
     expect(playerOptions.at(-1)).toEqual({ guest: true });
+  });
+});
+
+describe('el cartel de la sala (docs/ver-juntos.md §9)', () => {
+  it('va por la ruta de la sala (`partyArt`), nunca por el catálogo', () => {
+    setViewport(1280);
+    mountRoom(ANA);
+    const sources = [...document.querySelectorAll('img')].map((img) => img.getAttribute('src'));
+    const art = `/api/v1/party/${CODE}/art/${ROOM.title.artId}?v=${ROOM.title.poster}`;
+    expect(sources).toContain(art);
+    expect(sources.filter((src) => src?.includes('/vod/'))).toEqual([]);
+  });
+});
+
+describe('«Esperando a todos»: «Estoy listo» (§13)', () => {
+  const LOBBY: PartyRoom = { ...ROOM, playback: { ...ROOM.playback, lobby: true, playing: false } };
+
+  it('«Estoy listo» es el voto y el toque que deja sonar (player.vote); tocar la tarjeta, no', () => {
+    setViewport(1280);
+    mountRoom(ANA, vi.fn(), false, LOBBY);
+    fireEvent.click(document.querySelector('.juntos-lobby') as HTMLElement);
+    expect(playerState.calls).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Estoy listo' }));
+    expect(playerState.calls).toEqual(['vote']);
+  });
+
+  it('ya votado en esta página (el título siguiente): «Estás listo» y la marca en mi cara', () => {
+    setViewport(1280);
+    playerState.view = { ...playerState.view, voted: true };
+    mountRoom(ANA, vi.fn(), false, LOBBY);
+    expect(screen.getByRole('button', { name: 'Estás listo' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.queryByRole('button', { name: 'Estoy listo' })).toBeNull();
+    const mine = document.querySelector('.juntos-faces .juntos-av[data-voted="true"]');
+    expect(mine).not.toBeNull();
+  });
+
+  it('al bajar el dedo no vota (en el iPhone aún no cuenta como gesto)', () => {
+    setViewport(390);
+    mountRoom(ANA, vi.fn(), false, LOBBY);
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Estoy listo' }), {
+      pointerType: 'touch',
+    });
+    expect(playerState.calls).toEqual([]);
+  });
+});
+
+describe('la sala que no contesta', () => {
+  it('a los 10 s sin la foto de la sala, «Reintentar» abre otra conexión', () => {
+    vi.useFakeTimers();
+    try {
+      setViewport(1280);
+      saveCredential(CODE, credential(ANA));
+      render(
+        <Room
+          code={CODE}
+          credential={credential(ANA)}
+          onForbidden={() => undefined}
+          onLeft={() => undefined}
+          exitAction={null}
+        />,
+      );
+      const first = FakeSource.last;
+      expect(screen.queryByText(JUNTOS_TEXT.connectSlow)).toBeNull();
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(screen.getByText(JUNTOS_TEXT.connectSlow)).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: JUNTOS_TEXT.retry }));
+      expect(FakeSource.last).not.toBe(first);
+      expect(first?.readyState).toBe(2);
+      expect(screen.queryByText(JUNTOS_TEXT.connectSlow)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+/* directo §14: lo que ve cada uno en una sala en directo. */
+describe('sala en directo', () => {
+  const LIVE_ROOM: PartyRoom = {
+    ...ROOM,
+    live: {
+      hash: 'a'.repeat(40),
+      channel: 'DAZN 1 · 1080p',
+      source: 'engine',
+      matchId: 'fltv-1',
+      match: 'Real Madrid – Barcelona',
+      auto: true,
+    },
+  };
+  const withRole = (role: 'coleader' | 'guest'): PartyRoom => ({
+    ...LIVE_ROOM,
+    members: LIVE_ROOM.members.map((member) => (member.id === ANA ? { ...member, role } : member)),
+  });
+
+  function mountLive(selfId: string, room: PartyRoom) {
+    saveCredential(CODE, credential(selfId));
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Room
+          code={CODE}
+          credential={credential(selfId)}
+          onForbidden={() => undefined}
+          onLeft={() => undefined}
+          exitAction={null}
+        />
+      </QueryClientProvider>,
+    );
+    act(() => FakeSource.last?.emit('party.snapshot', { room, chat: [], serverNow: 1 }));
+  }
+
+  it('al co-líder le quitan el co-liderazgo con Fuentes abierta: se ve el Chat y sus mensajes no cuentan como sin leer', () => {
+    setViewport(1280);
+    net = mockFetch({
+      [`GET /api/v1/party/${CODE}/sources`]: () => json({ candidates: [], scan: null }),
+    });
+    mountLive(ANA, withRole('coleader'));
+    fireEvent.click(screen.getByRole('tab', { name: JUNTOS_TEXT.tabSources }));
+    act(() =>
+      FakeSource.last?.emit('party.snapshot', { room: withRole('guest'), chat: [], serverNow: 2 }),
+    );
+    expect(screen.queryByRole('tab', { name: JUNTOS_TEXT.tabSources })).toBeNull();
+    act(() =>
+      FakeSource.last?.emit('party.chat', {
+        message: { id: 7, at: 3, kind: 'chat', memberId: HOST, name: 'Isma', text: 'Gol' },
+      }),
+    );
+    expect(screen.getByRole('tab', { selected: true }).textContent).toBe(JUNTOS_TEXT.tabChat);
+  });
+
+  it('Fuentes se baja al abrirla (lazy) y Partidos solo sale en casa (`liveTools`)', async () => {
+    setViewport(1280);
+    net = mockFetch({
+      [`GET /api/v1/party/${CODE}/sources`]: () => json({ candidates: [], scan: null }),
+    });
+    mountLive(ANA, withRole('coleader'));
+    expect(screen.queryByRole('tab', { name: JUNTOS_TEXT.tabMatches })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: JUNTOS_TEXT.tabSources }));
+    expect(await screen.findByText(JUNTOS_TEXT.liveAuto)).toBeTruthy();
+  });
+
+  it('el anfitrión al que se le ha ido la corona no es «Co-líder»', () => {
+    setViewport(1280);
+    net = mockFetch({
+      [`GET /api/v1/party/${CODE}/sources`]: () => json({ candidates: [], scan: null }),
+    });
+    mountLive(HOST, { ...LIVE_ROOM, leaderId: ANA });
+    expect(screen.getByText('Has creado la sala · ahora manda Ana')).toBeTruthy();
+    expect(screen.queryByText(/Co-líder/)).toBeNull();
   });
 });

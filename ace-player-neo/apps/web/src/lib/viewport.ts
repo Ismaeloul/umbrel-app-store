@@ -5,7 +5,11 @@
    - Safari de iOS no: el teclado tapa la parte de abajo de la «layout
      viewport». Aquí se mide con visualViewport cuánto tapa y se publica en la
      variable CSS --kb, que usan las hojas y los campos fijos abajo. Además, al
-     enfocar un campo se lleva a la vista si el teclado lo tapa. */
+     enfocar un campo se lleva a la vista si el teclado lo tapa.
+   - También se publican --vvh (el alto de lo que se ve: sin la barra de Safari
+     ni el teclado) y --vvtop (cuánto se ha desplazado lo que se ve): la página
+     del invitado pone la sala justo ahí (guest.css), con la caja del chat por
+     encima de la barra flotante de Safari. */
 
 let installed = false;
 
@@ -26,6 +30,11 @@ export function installViewportWatcher(win: Window = window): () => void {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
       root.style.setProperty('--kb', `${keyboardInset(win)}px`);
+      const vv = win.visualViewport;
+      if (vv) {
+        root.style.setProperty('--vvh', `${Math.round(vv.height)}px`);
+        root.style.setProperty('--vvtop', `${Math.max(0, Math.round(vv.offsetTop))}px`);
+      }
     });
   };
   const onFocusIn = (event: FocusEvent) => {
@@ -54,5 +63,7 @@ export function installViewportWatcher(win: Window = window): () => void {
     win.visualViewport?.removeEventListener('scroll', update);
     win.document.removeEventListener('focusin', onFocusIn);
     root.style.removeProperty('--kb');
+    root.style.removeProperty('--vvh');
+    root.style.removeProperty('--vvtop');
   };
 }

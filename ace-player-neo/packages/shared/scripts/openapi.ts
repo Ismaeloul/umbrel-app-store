@@ -108,6 +108,15 @@ const BINARY_RESPONSES: Readonly<Record<string, JsonObject>> = {
       'image/webp': { schema: { type: 'string', format: 'binary' } },
     },
   },
+  partyArt: {
+    description:
+      'El cartel del título de la sala, con las mismas cabeceras que `vodArt` (docs/ver-juntos.md §9).',
+    content: {
+      'image/jpeg': { schema: { type: 'string', format: 'binary' } },
+      'image/png': { schema: { type: 'string', format: 'binary' } },
+      'image/webp': { schema: { type: 'string', format: 'binary' } },
+    },
+  },
   footballCompetitionLogo: {
     description:
       'Logo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).',

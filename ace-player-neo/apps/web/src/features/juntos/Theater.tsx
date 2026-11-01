@@ -25,6 +25,18 @@
      la pantalla completa.
    - Teclado: espacio o K, reproducir y pausa; ← →, 10 s; F, pantalla
      completa; M, silencio.
+   - Órdenes solo de toques de verdad (1.1.2): con el dedo, los controles
+     despiertan con el clic (no con `pointerup`, que dejaba que el clic de
+     después cayera en el botón que acababa de salir) y los clics en los
+     controles del mismo toque que los enseña se tiran. Con el ratón, el clic
+     reproduce o pausa a los `CLICK_DELAY_MS` y un doble clic lo anula (solo
+     pone la pantalla completa). La posición se calcula al pulsar y cada
+     orden dice de dónde sale (`source`, para el registro del servidor).
+   - Si el navegador lo ha empezado en silencio (`view.soundBlocked`), la
+     píldora «Activar sonido» sale siempre, aunque los controles estén
+     escondidos; y el primer toque sobre el vídeo también lo quita.
+   - Con `?debug=juntos`, una capa con lo último del reproductor
+     (`player.debug()`).
    - En directo (§14): ni pausa, ni ±10 s, ni barra de tiempo. Abajo, la
      píldora roja DIRECTO con el canal que suena y el volumen; arriba, «● En
      directo». Cambiar de canal va en la pestaña Fuentes.
@@ -34,7 +46,7 @@
      la sala (`player.setQuality`, ni `client.control`) y lo puede tocar
      cualquiera, controle o no. */
 
-import type { PartyRoom } from '@ace/shared';
+import type { PartyControlSource, PartyRoom } from '@ace/shared';
 import {
   useCallback,
   useEffect,
@@ -63,6 +75,21 @@ import { JUNTOS_TEXT } from './texts.ts';
 
 const HIDE_AFTER_MS = 3_000;
 const STEP_S = 10;
+/** Con el ratón, el clic sobre el vídeo espera esto por si es un doble clic (pantalla completa). */
+export const CLICK_DELAY_MS = 250;
+/** Un clic en los controles que llega antes de esto tras enseñarlos es del toque que los enseñó. */
+export const WAKE_GUARD_MS = 350;
+/** Lo que se esconde con los controles y no debe recibir el clic del toque que los enseña. */
+const GUARDED = '.juntos-center__controls, .juntos-chrome__bottom';
+
+/** ¿Hay `?debug=juntos` en la dirección? (la capa de depuración). */
+function debugLayer(): boolean {
+  try {
+    return new URLSearchParams(globalThis.location?.search ?? '').get('debug') === 'juntos';
+  } catch {
+    return false;
+  }
+}
 
 export function Theater({
   player,
@@ -104,24 +131,39 @@ export function Theater({
 
   const [visible, setVisible] = useState(true);
   const hideTimer = useRef<number | null>(null);
+  /* El clic del ratón sobre el vídeo, aplazado por si llega el segundo (doble clic). */
+  const clickTimer = useRef<number | null>(null);
+  /* Lo último de la sala, para las órdenes que salen después del render (el clic aplazado). */
+  const latest = useRef({ playback, duration });
+  latest.current = { playback, duration };
+
+  /* La posición de la sala al pulsar (no la del último render, de hasta 500 ms antes). */
+  const positionNow = useCallback(() => {
+    const { playback: now, duration: total } = latest.current;
+    return targetPosition(now, client.serverNow(), total || null);
+  }, [client]);
 
   const order = useCallback(
-    (action: 'play' | 'pause' | 'seek', positionS: number) => {
+    (action: 'play' | 'pause' | 'seek', positionS: number, source: PartyControlSource) => {
       if (!steer) return;
       void client
-        .control({ action, positionS: Math.max(0, positionS) })
+        .control({ action, positionS: Math.max(0, positionS) }, source)
         .catch((error: unknown) => notify(describeFailure(error), { tone: 'err' }));
     },
     [client, steer],
   );
   const togglePlay = useCallback(
-    () => order(playback.playing ? 'pause' : 'play', position),
-    [order, playback.playing, position],
+    (source: PartyControlSource) =>
+      order(latest.current.playback.playing ? 'pause' : 'play', positionNow(), source),
+    [order, positionNow],
   );
   const nudge = useCallback(
-    (delta: number) =>
-      order('seek', Math.min(Math.max(0, position + delta), duration || position + delta)),
-    [order, position, duration],
+    (delta: number, source: PartyControlSource) => {
+      const at = positionNow();
+      const total = latest.current.duration;
+      order('seek', Math.min(Math.max(0, at + delta), total || at + delta), source);
+    },
+    [order, positionNow],
   );
 
   /* Enseñar los controles y programar que se escondan. */
@@ -135,9 +177,57 @@ export function Theater({
   useEffect(
     () => () => {
       if (hideTimer.current !== null) globalThis.clearTimeout(hideTimer.current);
+      if (clickTimer.current !== null) globalThis.clearTimeout(clickTimer.current);
     },
     [],
   );
+  const cancelClick = () => {
+    if (clickTimer.current === null) return false;
+    globalThis.clearTimeout(clickTimer.current);
+    clickTimer.current = null;
+    return true;
+  };
+
+  /* Cuándo se enseñaron los controles (de escondidos a visibles) y cómo empezó el último toque. */
+  const chrome = useRef<HTMLDivElement>(null);
+  const shownRef = useRef(shown);
+  const shownAt = useRef(Number.NEGATIVE_INFINITY);
+  const press = useRef<{ hidden: boolean; pointer: string }>({ hidden: false, pointer: 'mouse' });
+  useEffect(() => {
+    if (shown && !shownRef.current) shownAt.current = performance.now();
+    shownRef.current = shown;
+  }, [shown]);
+
+  /* Defensa: un clic en los controles del mismo toque que los ha enseñado no es una orden (en el
+     iPhone, el clic que sigue al dedo caía en el botón central recién salido). Se tira en la
+     captura, antes de que llegue al botón, y ese toque solo los enseña. */
+  useEffect(() => {
+    const element = chrome.current;
+    if (!element) return;
+    const onDown = (event: PointerEvent) => {
+      press.current = { hidden: !shownRef.current, pointer: event.pointerType || 'mouse' };
+    };
+    const onClick = (event: MouseEvent) => {
+      const { hidden, pointer } = press.current;
+      press.current = { hidden: false, pointer };
+      /* Intro o espacio sobre un botón (sin puntero): siempre vale. */
+      if (event.detail === 0) return;
+      const target = event.target as Element | null;
+      if (!target?.closest(GUARDED)) return;
+      /* Con el ratón, los controles salen al moverlo: solo cuenta si bajó con ellos escondidos. */
+      const early = pointer !== 'mouse' && performance.now() - shownAt.current < WAKE_GUARD_MS;
+      if (!hidden && !early) return;
+      event.preventDefault();
+      event.stopPropagation();
+      wake();
+    };
+    element.addEventListener('pointerdown', onDown, true);
+    element.addEventListener('click', onClick, true);
+    return () => {
+      element.removeEventListener('pointerdown', onDown, true);
+      element.removeEventListener('click', onClick, true);
+    };
+  }, [wake]);
 
   /* Teclado, mientras no se escribe en el chat. */
   useEffect(() => {
@@ -153,14 +243,23 @@ export function Theater({
         return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const key = event.key.toLowerCase();
+      /* Una tecla que se queda pulsada repite el evento (unas 30 veces por segundo): cada
+         repetición sería otra orden para toda la sala. Solo cuenta la primera. */
+      if (
+        event.repeat &&
+        (key === ' ' || key === 'k' || key === 'arrowleft' || key === 'arrowright')
+      ) {
+        event.preventDefault();
+        return;
+      }
       if (key === ' ' || key === 'k') {
         if (target?.closest('button')) return;
         event.preventDefault();
-        togglePlay();
+        togglePlay('key');
       } else if (key === 'arrowleft' || key === 'arrowright') {
         if (target?.closest('.vod-bar')) return;
         event.preventDefault();
-        nudge(key === 'arrowleft' ? -STEP_S : STEP_S);
+        nudge(key === 'arrowleft' ? -STEP_S : STEP_S, 'key');
       } else if (key === 'f') {
         onFullscreen();
       } else if (key === 'm' && video) {
@@ -174,11 +273,19 @@ export function Theater({
     return () => globalThis.removeEventListener('keydown', onKey);
   }, [togglePlay, nudge, onFullscreen, video, wake]);
 
-  const onSurface = (event: React.PointerEvent<HTMLDivElement>) => {
+  const soundBlocked = view.soundBlocked;
+  const onSurface = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
-    if (event.pointerType === 'mouse') {
-      togglePlay();
+    /* En silencio por el navegador: este toque (un clic de verdad) ya deja sonar. */
+    if (soundBlocked) player.unmute();
+    if (press.current.pointer === 'mouse') {
       wake();
+      /* El segundo clic de un doble clic: ni reproduce ni pausa (lo hace el `dblclick`). */
+      if (cancelClick()) return;
+      clickTimer.current = globalThis.setTimeout(() => {
+        clickTimer.current = null;
+        togglePlay('surface');
+      }, CLICK_DELAY_MS);
       return;
     }
     /* Con el dedo: el primer toque enseña los controles; con ellos a la vista, los esconde. */
@@ -249,8 +356,10 @@ export function Theater({
 
   return (
     <div
+      ref={chrome}
       className="juntos-chrome"
       data-visible={shown ? 'true' : 'false'}
+      data-sound={soundBlocked ? 'off' : 'on'}
       data-phase={view.phase}
       data-lobby={playback.lobby ? 'true' : 'false'}
       onPointerMove={(event) => {
@@ -259,12 +368,27 @@ export function Theater({
     >
       <div
         className="juntos-chrome__surface"
-        onPointerUp={onSurface}
+        onClick={onSurface}
         onDoubleClick={(event) => {
-          if (event.target === event.currentTarget) onFullscreen();
+          if (event.target !== event.currentTarget) return;
+          /* La pantalla completa no toca la reproducción. */
+          cancelClick();
+          onFullscreen();
         }}
         aria-hidden="true"
       />
+      {soundBlocked ? (
+        <button
+          type="button"
+          className="juntos-chip juntos-sound"
+          title={JUNTOS_TEXT.soundOffHint}
+          onClick={() => player.unmute()}
+        >
+          <Icon name="mute" size={16} />
+          {JUNTOS_TEXT.soundOff}
+        </button>
+      ) : null}
+      {debugLayer() ? <DebugLayer player={player} /> : null}
 
       <div className="juntos-chrome__top">
         <span className="juntos-chip">
@@ -285,12 +409,13 @@ export function Theater({
         running={running}
         waitingNames={waitingNames}
         reconnecting={reconnecting}
+        fullscreen={fullscreen}
         onToggle={() => {
-          togglePlay();
+          togglePlay('button');
           wake();
         }}
         onNudge={(delta) => {
-          nudge(delta);
+          nudge(delta, 'nudge');
           wake();
         }}
       />
@@ -327,8 +452,8 @@ export function Theater({
                   durationS: duration,
                   bufferedEndS: Math.max(position, view.bufferedS),
                 }}
-                onSeek={(seconds) => order('seek', seconds)}
-                onNudge={nudge}
+                onSeek={(seconds) => order('seek', seconds, 'bar')}
+                onNudge={(delta) => nudge(delta, 'bar')}
               />
             ) : (
               <ReadOnlyBar position={position} duration={duration} buffered={view.bufferedS} />
@@ -381,6 +506,7 @@ function Center({
   running,
   waitingNames,
   reconnecting,
+  fullscreen,
   onToggle,
   onNudge,
 }: {
@@ -391,6 +517,8 @@ function Center({
   running: boolean;
   waitingNames: readonly string[];
   reconnecting: boolean;
+  /** En pantalla completa no se ve la tarjeta de la sala (Lobby): su «Estoy listo» va aquí. */
+  fullscreen: boolean;
   onToggle(): void;
   onNudge(delta: number): void;
 }) {
@@ -418,6 +546,28 @@ function Center({
         <Button variant="primary" icon="play" onClick={() => player.retry()}>
           {view.phase === 'error' ? JUNTOS_TEXT.retry : JUNTOS_TEXT.resumeHere}
         </Button>
+      </div>
+    );
+  } else if (room.playback.lobby && fullscreen) {
+    /* «Esperando a todos» (§13) en pantalla completa: la tarjeta de la sala no se pinta, así que
+       quien no ha tocado tendría dónde hacerlo solo saliendo. El mismo botón pasa a «Estás listo»
+       (aria-disabled: el foco no se pierde) y el voto es el toque, dentro del clic. */
+    body = (
+      <div className="juntos-center__card">
+        <span className="juntos-center__text">{JUNTOS_TEXT.lobbyTitle}</span>
+        <Button
+          variant={view.voted ? 'quiet' : 'primary'}
+          icon="check"
+          className={cx('juntos-center__vote', view.voted && 'juntos-lobby__vote--done')}
+          aria-disabled={view.voted ? 'true' : undefined}
+          onClick={view.voted ? undefined : () => player.vote()}
+        >
+          {view.voted ? JUNTOS_TEXT.youAreReady : JUNTOS_TEXT.imReady}
+        </Button>
+        <span className="sr-only" role="status">
+          {view.voted ? JUNTOS_TEXT.youAreReady : ''}
+        </span>
+        {view.voted ? null : <span className="juntos-center__hint">{JUNTOS_TEXT.imReadyHint}</span>}
       </div>
     );
   } else if (room.playback.lobby) {
@@ -557,5 +707,50 @@ function Volume({ video, onActivity }: { video: HTMLVideoElement; onActivity: ()
         saveVolume(value);
       }}
     />
+  );
+}
+
+/** Lo que se pinta de `player.debug()` (A9): lo último de cada lista, sin fiarse de la forma. */
+interface DebugData {
+  readonly ticks?: readonly Record<string, unknown>[];
+  readonly orders?: readonly Record<string, unknown>[];
+  readonly native?: readonly Record<string, unknown>[];
+}
+
+/** Un número con 3 decimales; lo demás, tal cual. */
+function debugValue(value: unknown): string {
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(3);
+  if (value === null || value === undefined) return '—';
+  return typeof value === 'object' ? JSON.stringify(value) : String(value as string);
+}
+
+function debugLine(record: Record<string, unknown> | undefined): string {
+  if (!record) return '—';
+  return Object.entries(record)
+    .map(([key, value]) => `${key}=${debugValue(value)}`)
+    .join(' ');
+}
+
+/**
+ * La capa de `?debug=juntos` (§16): el último tic (desfase, velocidad, reloj, latencia de salto y
+ * motor), las últimas órdenes con su `source` y los eventos nativos del <video>. Se relee cada
+ * segundo; si el reproductor no tiene `debug()`, no pinta nada. Sin textos para nadie más.
+ */
+function DebugLayer({ player }: { player: RoomPlayer }) {
+  const [, setBeat] = useState(0);
+  useEffect(() => {
+    const timer = globalThis.setInterval(() => setBeat((n) => n + 1), 1_000);
+    return () => globalThis.clearInterval(timer);
+  }, []);
+  const read = (player as unknown as { debug?: () => DebugData | undefined }).debug;
+  const data = typeof read === 'function' ? read.call(player) : undefined;
+  if (!data) return null;
+  const orders = (data.orders ?? []).slice(-3);
+  return (
+    <pre className="juntos-debug" aria-hidden="true">
+      {`tic ${debugLine(data.ticks?.at(-1))}\n`}
+      {orders.map((record) => `orden ${debugLine(record)}\n`).join('')}
+      {`nativo ${data.native?.length ?? 0} · ${debugLine(data.native?.at(-1))}`}
+    </pre>
   );
 }

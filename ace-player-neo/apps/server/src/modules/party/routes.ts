@@ -16,16 +16,23 @@
    - partyVideo: GET /api/v1/party/:code/v/:key/:file (la lista y los segmentos;
      también `master.m3u8`, `lo.m3u8` y los `lo_*`, que la ruta de vídeo de
      siempre no sirve)
+   - partyArt: GET /api/v1/party/:code/art/:artId (el cartel del título de la
+     sala para el invitado de fuera, que no tiene `vodArt`; las mismas
+     cabeceras y el mismo 304)
    - partyControl, partyStatus, partyChat, partyLeave, partyClose: POST con
      la credencial en `token`.
    - partySettings, partyMember, partyQueue (§11 y §13): ajustes y personas
      (el líder y los co-líderes) y la lista; también POST con `token`.
+   - partyLiveSources (directo §14): GET con `?t=`; las fuentes del directo de la sala.
    - partyTyping (§13): «está escribiendo»; POST con `token`. Las
      reacciones (`partyReact`) se quitaron en el rediseño de escritorio. */
 
+import { isAppError } from '../../core/errors.js';
 import { ORIGIN_HEADER, isGuestOrigin } from '../../core/origin.js';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
+import { ifNoneMatchOf, sendArt } from '../iptv/art-reply.js';
+import type { ArtReply } from '../iptv/vod/art.js';
 import { browserDeviceName } from '../playback/device-name.js';
 
 export const LEGACY_ROUTES: readonly string[] = [];
@@ -37,7 +44,9 @@ export const V1_ROUTE_IDS: readonly string[] = [
   'partyEvents',
   'partyStream',
   'partyVideo',
+  'partyArt',
   'partyControl',
+  'partyLiveSources',
   'partyStatus',
   'partyChat',
   'partyTyping',
@@ -58,7 +67,9 @@ export function registerV1Routes(router: V1Router, services: Services): void {
   router.handle('partyPreview', (input) => party.preview(input.params.code));
   router.handle('partyJoin', (input) => party.join(input.params.code, input.body.name));
   router.handle('partyEvents', async (input, ctx) => {
-    await party.connect(input.params.code, input.query.t, ctx.reply, ctx.signal);
+    await party.connect(input.params.code, input.query.t, ctx.reply, ctx.signal, {
+      ping: input.query.ping === '1',
+    });
   });
   router.handle('partyStream', (input, ctx) =>
     party.stream(
@@ -88,7 +99,26 @@ export function registerV1Routes(router: V1Router, services: Services): void {
       party: true,
     });
   });
+  router.handle('partyArt', async (input, ctx) => {
+    let reply: ArtReply;
+    try {
+      reply = await party.art(
+        input.params.code,
+        input.params.artId,
+        input.query.v,
+        ifNoneMatchOf(ctx),
+      );
+    } catch (error) {
+      /* La cola de carteles llena (docs/vod.md §8): 503 con `Retry-After`, como `vodArt`. */
+      if (isAppError(error) && error.code === 'vod_unavailable')
+        ctx.reply.header('retry-after', '2');
+      throw error;
+    }
+    await sendArt(ctx.reply, reply);
+  });
   router.handle('partyControl', (input) => party.control(input.params.code, input.body));
+  /* directo §14 */
+  router.handle('partyLiveSources', (input) => party.liveSources(input.params.code, input.query));
   router.handle('partyStatus', (input) => party.status(input.params.code, input.body));
   router.handle('partyChat', (input) => {
     party.chat(input.params.code, input.body);

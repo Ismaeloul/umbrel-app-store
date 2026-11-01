@@ -58,6 +58,36 @@ describe('teclado que no tapa campos (installViewportWatcher)', () => {
     }
     expect(document.documentElement.style.getPropertyValue('--kb')).toBe('');
   });
+
+  it('publica en --vvh el alto de lo que se ve y en --vvtop cuánto se ha movido (la sala del invitado)', async () => {
+    vi.useFakeTimers();
+    const viewport = Object.assign(new EventTarget(), { height: 760.4, offsetTop: 0 });
+    const fakeWindow = {
+      innerHeight: 844,
+      visualViewport: viewport,
+      document,
+    } as unknown as Window;
+    const stop = installViewportWatcher(fakeWindow);
+    const style = document.documentElement.style;
+    try {
+      await vi.advanceTimersByTimeAsync(20);
+      /* La barra de Safari abajo: lo que se ve es menos que la ventana. */
+      expect(style.getPropertyValue('--vvh')).toBe('760px');
+      expect(style.getPropertyValue('--vvtop')).toBe('0px');
+      // El teclado: menos alto y lo visible bajado 120 px.
+      viewport.height = 420;
+      viewport.offsetTop = 120;
+      viewport.dispatchEvent(new Event('scroll'));
+      await vi.advanceTimersByTimeAsync(20);
+      expect(style.getPropertyValue('--vvh')).toBe('420px');
+      expect(style.getPropertyValue('--vvtop')).toBe('120px');
+    } finally {
+      stop();
+      vi.useRealTimers();
+    }
+    expect(style.getPropertyValue('--vvh')).toBe('');
+    expect(style.getPropertyValue('--vvtop')).toBe('');
+  });
 });
 
 describe('keyboardInset', () => {

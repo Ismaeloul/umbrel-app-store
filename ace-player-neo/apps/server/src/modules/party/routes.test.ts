@@ -6,6 +6,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { PartyJoinResponseSchema, PartyPreviewSchema, type VodGrant } from '@ace/shared';
 import { createTestApp, web } from '../../../test/helpers/index.js';
+import { AppError } from '../../core/errors.js';
+import type { ArtReply } from '../iptv/vod/art.js';
 
 const PELI = '4b5c6d7e8f9012345678abcdef0123457a8b9c0d';
 
@@ -306,5 +308,70 @@ describe('«Calidad ligera para invitados» por HTTP (docs/ver-juntos.md §17)',
       expect(response.statusCode, file).toBeGreaterThanOrEqual(400);
     }
     expect(serve).not.toHaveBeenCalled();
+  });
+
+  it('partyArt: el cartel de la sala (200 y 304 como vodArt); otro título, 404; sin sala, party_not_found', async () => {
+    const { app, services, code } = await room();
+    const vod = services.iptv.vod;
+    if (!vod) throw new Error('sin VOD');
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+    const artOf = vi
+      .spyOn(vod, 'artOf')
+      .mockImplementation(async (_id, _art, _v, ifNoneMatch): Promise<ArtReply> =>
+        ifNoneMatch === '"abc"'
+          ? { status: 304, headers: { etag: '"abc"' } }
+          : {
+              status: 200,
+              headers: {
+                'content-type': 'image/jpeg',
+                etag: '"abc"',
+                'x-content-type-options': 'nosniff',
+              },
+              body: jpeg,
+            },
+      );
+    const guest = { 'x-ace-origin': 'guest' };
+    const ok = await app.inject({
+      method: 'GET',
+      url: `/api/v1/party/${code}/art/${PELI}?v=0a1b2c3d`,
+      headers: guest,
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.headers['content-type']).toBe('image/jpeg');
+    expect(ok.rawPayload).toEqual(jpeg);
+    /* Siempre el cartel, con la `v` que se pidió. */
+    expect(artOf.mock.calls.at(-1)?.slice(0, 3)).toEqual([PELI, 'poster', '0a1b2c3d']);
+    const cached = await app.inject({
+      method: 'GET',
+      url: `/api/v1/party/${code}/art/${PELI}`,
+      headers: { ...guest, 'if-none-match': '"abc"' },
+    });
+    expect(cached.statusCode).toBe(304);
+    /* Un título que no es de la sala: no abre el catálogo. */
+    artOf.mockClear();
+    const other = await app.inject({
+      method: 'GET',
+      url: `/api/v1/party/${code}/art/${'f'.repeat(40)}`,
+      headers: guest,
+    });
+    expect(other.statusCode).toBe(404);
+    expect(other.json().error.code).toBe('vod_not_found');
+    expect(artOf).not.toHaveBeenCalled();
+    const noRoom = await app.inject({
+      method: 'GET',
+      url: `/api/v1/party/${'Z'.repeat(16)}/art/${PELI}`,
+      headers: guest,
+    });
+    expect(noRoom.statusCode).toBe(404);
+    expect(noRoom.json().error.code).toBe('party_not_found');
+    /* La cola de carteles llena: 503 con `Retry-After`, como `vodArt`. */
+    artOf.mockRejectedValueOnce(new AppError('vod_unavailable'));
+    const busy = await app.inject({
+      method: 'GET',
+      url: `/api/v1/party/${code}/art/${PELI}`,
+      headers: guest,
+    });
+    expect(busy.statusCode).toBe(503);
+    expect(busy.headers['retry-after']).toBe('2');
   });
 });

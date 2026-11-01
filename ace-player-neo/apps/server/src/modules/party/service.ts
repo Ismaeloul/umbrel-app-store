@@ -29,10 +29,13 @@
    Co-líderes, «Esperando a todos» y «está escribiendo» (§13): el líder hace
    co-líder a quien quiera; con `settings.coleaders` controla como él, pero no
    echa ni pasa la corona. Cada título empieza en `lobby` (el reloj parado en
-   el principio) y arranca solo cuando todos los conectados están listos (al
-   crear la sala, con dos o más: si no, empezaría antes de que entre nadie), o
-   cuando quien controla da a reproducir. «Está escribiendo» no se guarda: se
-   reenvía, como mucho uno cada `typingIntervalMs` por persona. */
+   el principio) y arranca solo cuando todos los conectados han tocado «Estoy
+   listo» (`voted`, el toque que deja sonar el vídeo en su aparato; dura toda
+   la visita, así que el siguiente título solo lo vuelve a pedir a quien no lo
+   ha dado nunca) y tienen el vídeo cargado (al crear la sala, con dos o más:
+   si no, empezaría antes de que entre nadie), o cuando quien controla da a
+   reproducir («Empezar ya»). «Está escribiendo» no se guarda: se reenvía,
+   como mucho uno cada `typingIntervalMs` por persona. */
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
@@ -53,6 +56,7 @@ import {
   type PartyMember,
   type PartyPlayback,
   type PartyQueueBody,
+  type PartyStatusResponse,
   type PartyStreamQuery,
   type StreamGrant,
   type VodGrant,
@@ -62,14 +66,40 @@ import {
   type PartySettings,
   type PartyTitle,
   type PartyUpNext,
+  type ResolutionCandidate,
+  type ScanJob,
+  type VerdictState,
 } from '@ace/shared';
 import type { FastifyReply } from 'fastify';
 import type { TimerHandle } from '../../core/clock.js';
 import { AppError } from '../../core/errors.js';
 import type { Unsubscribe } from '../../core/bus.js';
 import type { ViewerIdentity } from '../playback/types.js';
-import type { PartyDeps, PartyService, PartySink } from './types.js';
+import type { PartyConnectOptions, PartyDeps, PartyService, PartySink } from './types.js';
 import type { RemuxLiteOffer } from '../remux/types.js';
+/* directo §14 */
+import {
+  AUTO_IPTV_BUSY_TEXT,
+  AUTO_NONE_TEXT,
+  AUTO_SCAN_RETRY_MS,
+  decide,
+  heardSound,
+  jumpedInStreak,
+  manualSwitch,
+  newStreak,
+  refreshStreak,
+  soundLost,
+  waitForScan,
+  type AutoHouse,
+  type AutoStreak,
+} from './live-auto.js';
+import { createLiveSources } from './live-sources.js';
+
+/**
+ * En directo, el líder que se queda sin conexión conserva la corona este rato (directo §14): un
+ * iPhone que se bloquea o un cambio de wifi no le quita el mando a media parte.
+ */
+export const LIVE_LEADER_GRACE_MS = 3 * 60_000;
 
 /** Tras dejar de esperar a alguien, no se le vuelve a esperar durante esto. */
 const HOLD_COOLDOWN_MS = 30_000;
@@ -77,6 +107,19 @@ const HOLD_COOLDOWN_MS = 30_000;
 const AUDIO_SWITCH_WINDOW_MS = 45_000;
 /** Cada cuánto se revisan esperas, ausencias y caducidades. */
 const SWEEP_MS = 1_000;
+/**
+ * Una pausa sobre una sala ya en pausa, o un salto con la sala en marcha, a menos de esto de donde
+ * va la sala no cambia nada: no se fija, ni se avisa en el chat, ni se manda a nadie.
+ */
+const NOOP_ORDER_S = 1.5;
+/**
+ * Freno de órdenes por persona: con `ORDER_MAX` órdenes aplicadas en `ORDER_WINDOW_MS`, las de más
+ * dan `rate_limited` (un bucle de órdenes de un aparato no mueve a todos cada medio segundo). Solo
+ * cuentan las que cambian algo, y una pausa pasa siempre: es la intención de parar, y no hace
+ * bucle (otra pausa ya no cambia nada).
+ */
+const ORDER_WINDOW_MS = 10_000;
+const ORDER_MAX = 12;
 
 const SSE_HEADERS: Readonly<Record<string, string>> = {
   'content-type': 'text/event-stream; charset=utf-8',
@@ -117,17 +160,33 @@ interface Member {
   /** «Esperando a todos» (§13): lo que dice su reproductor; null si no lo dice (una app vieja). */
   readyReported: boolean | null;
   progress: number | null;
+  /**
+   * Pelis y series (§13): ha tocado «Estoy listo» en esta visita (lo dice su `status`); null si
+   * no lo dice (una app vieja): cuenta como que sí.
+   */
+  votedReported: boolean | null;
   /** El último «está escribiendo» que se reenvió. */
   typingAt: number;
   /** Clave de vídeo (`partyVideo`): va en la ruta de la lista y de los segmentos. */
   readonly videoKey: string;
   /** Su visor de playback: el latido de la sesión lo da `status` (docs/ver-juntos.md §9). */
   viewer: { readonly identity: ViewerIdentity; readonly sessionId: string } | null;
+  /**
+   * Cuándo perdió su visor (falló el latido de la sesión) sin que la sala cambiara de título, o
+   * null. Hasta que vuelva a abrir, `status` dice `lost` y no `none`.
+   */
+  viewerLostAt: number | null;
+  /** Las órdenes aplicadas de los últimos `ORDER_WINDOW_MS` (el freno, `ORDER_MAX`). */
+  readonly orderTimes: number[];
+  /** La última vez que se apuntó en el registro que se le frenan las órdenes. */
+  orderMutedLoggedAt: number;
 }
 
 interface Connection {
   readonly memberId: string;
   readonly sink: PartySink;
+  /** Pidió `ping=1`: en cada latido recibe también `party.ping`. */
+  readonly ping: boolean;
   closed: boolean;
   done: () => void;
   detach: () => void;
@@ -170,6 +229,13 @@ interface Room {
   audioSwitchUntil: number;
   /** Sala en directo (§14): el canal que suena para todos; null en pelis y series. */
   live: PartyLive | null;
+  /* directo §14 */
+  /** El anfitrión perdió la corona por no estar (no porque la pasara): al volver, la recupera. */
+  leaderLostBy: 'absence' | null;
+  /** La racha del cambio automático del servidor. */
+  readonly autoStreak: AutoStreak;
+  /** El reintento pendiente del automático (hueco entre saltos o margen tras un «Poner»). */
+  autoTimer: TimerHandle | null;
   closed: boolean;
 }
 
@@ -257,7 +323,11 @@ export function formatPosition(seconds: number): string {
 }
 
 export function createPartyRuntime(deps: PartyDeps): PartyService {
-  const { clock, logger, bus, playback, config, remux } = deps;
+  const { clock, logger, bus, playback, config, remux, art, scanner } = deps;
+  /* directo §14: las fuentes de cada sala en directo, con su propia clave del comprobador. */
+  const liveSources = deps.football
+    ? createLiveSources({ clock, football: deps.football, ...(scanner ? { scanner } : {}) })
+    : null;
   const publicUrl = config.party.publicUrl;
   /** «Calidad ligera para invitados» (§17): `ACE_PARTY_LITE=1` y el remux que la hace. */
   const partyLite = config.party.lite && remux !== undefined;
@@ -307,6 +377,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   /** Listo para empezar: lo que diga su reproductor o, si no dice nada, con vídeo y sin cargar. */
   function isReady(member: Member): boolean {
     return member.readyReported ?? (member.viewer !== null && !member.buffering);
+  }
+
+  /** Ha tocado «Estoy listo» (§13); quien no lo dice (una app vieja), sí. */
+  function hasVoted(member: Member): boolean {
+    return member.votedReported ?? true;
   }
 
   function roleOf(room: Room, memberId: string): PartyMember['role'] {
@@ -414,6 +489,22 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     });
   }
 
+  /**
+   * «Estoy listo» (§13): quién no ha tocado aún. Va en su propio evento, no en `members`, porque
+   * `PartyMember` es estricto y una página de antes (abierta antes de actualizar el NAS) descartaría
+   * todas las salas por un campo que no conoce; este evento, en cambio, lo ignora.
+   */
+  function votesEvent(room: Room): PartyEvent {
+    return {
+      type: 'party.votes',
+      data: {
+        unvoted: [...room.members.values()]
+          .filter((member) => !hasVoted(member))
+          .map((member) => member.id),
+      },
+    };
+  }
+
   function sendRoom(room: Room): void {
     broadcast(room, {
       type: 'party.room',
@@ -429,6 +520,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         live: room.live,
       },
     });
+    broadcast(room, votesEvent(room));
   }
 
   function connections(): number {
@@ -446,13 +538,32 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     if (heartbeat) return;
     heartbeat = clock.setInterval(
       () => {
+        /* El comentario lo ve el navegador (y los proxys), no el JS; `party.ping`, sí. */
+        const ping = frameOf({ type: 'party.ping', data: { serverNow: clock.now() } });
         for (const room of rooms.values()) {
-          for (const connection of [...room.connections]) write(room, connection, ': ping\n\n');
+          for (const connection of [...room.connections]) {
+            write(room, connection, ': ping\n\n');
+            if (connection.ping && ping) write(room, connection, ping);
+          }
         }
       },
       PARTY.heartbeatMs,
       { unref: true },
     );
+  }
+
+  /**
+   * Los carteles que se ven en la sala (`partyArt`): el del título, el del siguiente episodio, el de
+   * lo que viene y los de la lista. En directo, ninguno (el «cartel» sería el canal).
+   */
+  function roomArtIds(room: Room): Set<string> {
+    const ids = new Set<string>();
+    if (room.live) return ids;
+    ids.add(room.title.artId);
+    if (room.nextEpisode) ids.add(room.nextEpisode.artId);
+    if (room.upNext) ids.add(room.upNext.title.artId);
+    for (const item of room.queue) ids.add(item.title.artId);
+    return ids;
   }
 
   // --- Chat ---
@@ -508,6 +619,24 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     if (!manages(room, member)) throw new AppError('party_leader_only');
   }
 
+  /**
+   * Cambiar la fuente o el partido en directo (directo §14): el líder, cualquier co-líder (aunque
+   * los co-líderes no controlen el vídeo: si se cae el partido, tienen que poder arreglarlo), el
+   * anfitrión y, con «Controlan todos», todos.
+   */
+  function canSwitchLive(room: Room, member: Member): boolean {
+    return (
+      member.id === room.leaderId ||
+      room.coleaders.has(member.id) ||
+      member.host ||
+      room.settings.control === 'everyone'
+    );
+  }
+
+  function requireLiveSwitch(room: Room, member: Member): void {
+    if (!canSwitchLive(room, member)) throw new AppError('party_leader_only');
+  }
+
   function requireLeader(room: Room, member: Member): void {
     if (member.id !== room.leaderId) throw new AppError('party_leader_only');
   }
@@ -522,19 +651,48 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   function setLeader(room: Room, member: Member, text: string): void {
     room.coleaders.delete(member.id);
     room.leaderId = member.id;
+    room.leaderLostBy = null;
     say(room, text, null);
     sendRoom(room);
   }
 
-  /** Si el líder se ha ido, lo es quien lleva más tiempo en la sala y sigue conectado. */
-  function handOver(room: Room, now: number): void {
+  /**
+   * Si el líder se ha ido, lo es quien lleva más tiempo en la sala y sigue conectado. Con
+   * `absence` (el barrido: solo ha perdido la conexión), en directo espera `LIVE_LEADER_GRACE_MS`
+   * y, si era el anfitrión, la corona le vuelve al reconectarse (directo §14).
+   */
+  function handOver(room: Room, now: number, why: 'absence' | 'gone' = 'gone'): void {
     const leader = room.members.get(room.leaderId);
     if (leader && online(leader, now)) return;
-    for (const member of room.members.values()) {
-      if (member.id === room.leaderId || !online(member, now)) continue;
-      setLeader(room, member, `${member.name} es ahora el líder.`);
+    /* directo §14 */
+    if (why === 'absence' && room.live && leader && now - leader.lastSeen < LIVE_LEADER_GRACE_MS) {
       return;
     }
+    for (const member of room.members.values()) {
+      if (member.id === room.leaderId || !online(member, now)) continue;
+      /* Si el anfitrión ya la había perdido por no estar, sigue fuera: aunque ahora se vaya el
+         líder provisional, la corona le tiene que volver a él al reconectarse. */
+      const hostAway =
+        room.live !== null &&
+        ((why === 'absence' && leader?.host === true) || room.leaderLostBy === 'absence');
+      setLeader(room, member, `${member.name} es ahora el líder.`);
+      room.leaderLostBy = hostAway ? 'absence' : null;
+      return;
+    }
+  }
+
+  /* directo §14 */
+  /** El anfitrión que perdió la corona por no estar ha vuelto: vuelve a ser el líder. */
+  function giveBack(room: Room, now: number): void {
+    if (room.leaderLostBy !== 'absence') return;
+    const host = room.members.get(room.hostId);
+    if (!host || !online(host, now)) return;
+    room.leaderLostBy = null;
+    if (room.leaderId === host.id) return;
+    const provisional = room.leaderId;
+    /* El líder provisional sigue pudiendo arreglar el directo: pasa a co-líder. */
+    if (room.members.has(provisional)) room.coleaders.add(provisional);
+    setLeader(room, host, `${host.name} vuelve a ser el líder.`);
   }
 
   function uniqueName(room: Room, name: string): string {
@@ -573,9 +731,13 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       chatTimes: [],
       readyReported: null,
       progress: null,
+      votedReported: null,
       typingAt: Number.NEGATIVE_INFINITY,
       videoKey: randomId(24),
       viewer: null,
+      viewerLostAt: null,
+      orderTimes: [],
+      orderMutedLoggedAt: Number.NEGATIVE_INFINITY,
     };
     room.members.set(id, member);
     return { member, token: `${id}.${secret}` };
@@ -594,6 +756,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   function releaseViewer(member: Member): void {
     const viewer = member.viewer;
     member.viewer = null;
+    /* Soltarlo adrede (otro título, salir, cerrar) no es perderlo. */
+    member.viewerLostAt = null;
     if (!viewer) return;
     void playback
       .release(
@@ -608,6 +772,10 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     if (room.closed) return;
     broadcast(room, { type: 'party.closed', data: { reason } });
     room.closed = true;
+    /* directo §14 */
+    clock.clearTimeout(room.autoTimer);
+    room.autoTimer = null;
+    liveSources?.forget(room.code);
     rooms.delete(room.code);
     for (const member of room.members.values()) releaseViewer(member);
     for (const connection of [...room.connections]) closeConnection(room, connection);
@@ -697,6 +865,25 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     const live = room.live;
     if (!live) return;
     const otherMatch = choice.matchId !== live.matchId;
+    /* directo §14: el otro partido va por el mismo canal (el mismo hash). Soltar a todos sin que
+       cambie `title.id` dejaba la imagen congelada (el reproductor no reabre): solo cambia el
+       partido de la sala, y el vídeo sigue como iba. */
+    if (choice.hash === live.hash) {
+      if (choice.matchId === live.matchId && choice.match === live.match) return;
+      room.live = {
+        ...live,
+        matchId: choice.matchId,
+        match: choice.match,
+        channel: choice.channel,
+      };
+      room.title = liveTitle(choice);
+      sendRoom(room);
+      const what = choice.match ? `${choice.match} (${choice.channel})` : choice.channel;
+      say(room, by ? `${by.name} ha cambiado a ${what}.` : `Ahora, ${what}.`, null);
+      return;
+    }
+    clock.clearTimeout(room.autoTimer);
+    room.autoTimer = null;
     room.live = { ...choice, auto: live.auto };
     room.title = liveTitle(choice);
     room.interrupted = null;
@@ -880,7 +1067,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         stopWaiting(room, memberId, now);
       }
       for (const member of room.members.values()) maybeWait(room, member, now);
-      handOver(room, now);
+      giveBack(room, now);
+      handOver(room, now, 'absence');
       maybeStart(room, now);
       const duration = room.title.durationS;
       if (
@@ -907,14 +1095,15 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   }
 
   /**
-   * «Esperando a todos» (§13): si todos los conectados están listos, empieza
-   * sola. («Empezar para todos» es un `play` de quien controla: `control`.)
+   * «Esperando a todos» (§13): si todos los conectados han tocado «Estoy listo» y tienen el vídeo
+   * cargado, empieza sola. Quien se va o pierde la conexión deja de contar (`online`). («Empezar
+   * ya» es un `play` de quien controla: `control`.)
    */
   function maybeStart(room: Room, now: number): void {
     if (room.lobby === null || room.interrupted) return;
     const present = [...room.members.values()].filter((member) => online(member, now));
     if (present.length < (room.lobby === 'create' ? 2 : 1)) return;
-    if (!present.every(isReady)) return;
+    if (!present.every((member) => isReady(member) && hasVoted(member))) return;
     room.lobby = null;
     fix(room, room.playback.positionS, now);
     room.playback.playing = true;
@@ -1035,6 +1224,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     room.viewers.add(viewer.viewerId);
     if (member.viewer && member.viewer.identity.viewerId !== viewer.viewerId) releaseViewer(member);
     member.viewer = { identity: viewer, sessionId: grant.session.id };
+    member.viewerLostAt = null;
     /* Quien eligió el canal pudo no saber de dónde sale: lo dice la concesión. */
     const source = grant.source === 'iptv' ? 'iptv' : 'engine';
     let changed = false;
@@ -1073,6 +1263,12 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       if (kind === 'taken' && hash === room.title.id && now < room.audioSwitchUntil) continue;
       for (const id of viewerIds) room.viewers.delete(id);
       if (room.interrupted) continue;
+      /* directo §14: se ha caído el vídeo de UN aparato (su remux, su variante) y los demás
+         siguen viendo la fuente: no es la fuente. Ni se para la sala, ni salta el automático, ni
+         se apunta «Sin señal»: ese aparato vuelve a abrir solo (`status` dice `lost`). Si la
+         fuente cae de verdad, cae para todos (en un aviso o en uno por visor: el último ya no
+         deja a nadie viéndola y entonces sí es de la sala). */
+      if (kind === 'failed' && room.live && localFailure(room, viewerIds, now)) continue;
       room.interrupted = kind;
       const wasPlaying = room.playback.playing;
       fix(room, positionNow(room, now), now);
@@ -1091,7 +1287,160 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         { room: room.code, kind, wasPlaying },
         'Ver juntos: la sala se ha quedado sin vídeo',
       );
+      /* directo §14: la ficha aprende de la sala, y el automático lo decide el servidor. */
+      soundLost(room.autoStreak);
+      if (kind === 'failed' && room.live) {
+        /* No se apunta «Sin señal» si el corte no es de la fuente: con el motor caído (o
+           reiniciándose) todas fallan igual, y las que pone el propio automático en la misma
+           racha caen por lo mismo que la primera. Si no, cuatro fuentes buenas quedaban
+           marcadas para siempre en la ficha y en Fuentes. */
+        const engineDown = room.live.source === 'engine' && engineUnwell();
+        if (!engineDown && !jumpedInStreak(room.autoStreak, room.live.hash)) {
+          try {
+            scanner?.recordVerdict(room.live.hash, {
+              state: 'failed',
+              reason: 'party_failed',
+              by: 'player',
+            });
+          } catch {
+            /* Sin comprobador: no pasa nada. */
+          }
+        }
+        liveAuto(room);
+      }
     }
+  }
+
+  /* directo §14 */
+  /**
+   * ¿El corte es solo de esos visores? Sí si alguien más de la sala (conectado) sigue con su
+   * visor de la fuente. Entonces a los que han caído se les da por perdidos, para que vuelvan a
+   * abrir (`status` → `lost`), y la sala sigue.
+   */
+  function localFailure(room: Room, viewerIds: readonly string[], now: number): boolean {
+    const hit = new Set(viewerIds);
+    const others = [...room.members.values()].some(
+      (member) =>
+        member.viewer !== null && !hit.has(member.viewer.identity.viewerId) && online(member, now),
+    );
+    if (!others) return false;
+    for (const member of room.members.values()) {
+      if (member.viewer && hit.has(member.viewer.identity.viewerId)) {
+        member.viewer = null;
+        member.viewerLostAt = now;
+      }
+    }
+    logger.info(
+      { room: room.code, viewers: viewerIds.length },
+      'Ver juntos: se ha caído el vídeo de un aparato, no la fuente',
+    );
+    return true;
+  }
+
+  /**
+   * «Cambio automático si se cae» (live-auto.ts): con la sala parada por un corte, salta a la
+   * siguiente fuente buena con las de la sala (la caché de Fuentes) y los veredictos del
+   * comprobador. Sin `football` (tests viejos), no hace nada.
+   */
+  function liveAuto(room: Room): void {
+    const live = room.live;
+    if (!live?.auto || !liveSources) return;
+    const sources = liveSources;
+    const failed = live.hash;
+    refreshStreak(room.autoStreak, clock.now());
+    const verdictOf = (hash: string): VerdictState | null => {
+      try {
+        return scanner?.verdict(hash)?.state ?? null;
+      } catch {
+        return null;
+      }
+    };
+    const run = (candidates: readonly ResolutionCandidate[], scan: ScanJob | null): void => {
+      const current = room.live;
+      if (room.closed || !current?.auto || current.hash !== failed) return;
+      if (room.interrupted !== 'failed') return;
+      const now = clock.now();
+      const decision = decide(room.autoStreak, candidates, current, verdictOf, now, houseOf(room));
+      if (decision.kind === 'switch') {
+        switchLive(room, decision.choice, null);
+        return;
+      }
+      /* Sin otra buena todavía, pero el comprobador de la sala sigue: se le espera un rato
+         (una sala creada sin pasar por la ficha aún no tiene veredictos). */
+      const scanning =
+        decision.kind === 'none' &&
+        decision.reason === 'no_source' &&
+        waitForScan(
+          room.autoStreak,
+          scan !== null && (scan.status === 'queued' || scan.status === 'running'),
+          now,
+        );
+      const later =
+        decision.kind === 'wait'
+          ? decision.ms
+          : decision.reason === 'grace'
+            ? room.autoStreak.graceUntil - now
+            : scanning
+              ? AUTO_SCAN_RETRY_MS
+              : null;
+      if (later !== null) {
+        clock.clearTimeout(room.autoTimer);
+        room.autoTimer = clock.setTimeout(
+          () => {
+            room.autoTimer = null;
+            liveAuto(room);
+          },
+          Math.max(1_000, later),
+          { unref: true },
+        );
+        return;
+      }
+      const busy = decision.kind === 'none' && decision.reason === 'iptv_busy';
+      say(room, busy ? AUTO_IPTV_BUSY_TEXT : AUTO_NONE_TEXT, null);
+      logger.info(
+        { room: room.code, reason: decision.kind === 'none' ? decision.reason : 'wait' },
+        'Ver juntos: sin otra fuente',
+      );
+    };
+    sources
+      .get(room.code, live)
+      .then((result) => run(result.candidates, result.scan))
+      .catch(() => run(sources.cached(room.code)?.candidates ?? [], null));
+  }
+
+  /** ¿El motor está caído o reiniciándose? Sin vigilante (tests viejos), se da por sano. */
+  function engineUnwell(): boolean {
+    try {
+      const state = deps.engine?.status().status;
+      return state === 'offline' || state === 'restarting';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * El canal que OTRO aparato de casa ve por la IPTV (la única plaza), de «Dónde se está
+   * reproduciendo»: lo de esta sala no cuenta (como `houseLanes` en la ficha).
+   */
+  function houseOf(room: Room): AutoHouse {
+    let status: ReturnType<NonNullable<typeof playback.status>> | undefined;
+    try {
+      status = playback.status?.();
+    } catch {
+      status = undefined;
+    }
+    if (!status) return { busyIptv: null };
+    const own = new Set(room.viewers);
+    for (const member of room.members.values()) {
+      if (member.viewer) own.add(member.viewer.identity.viewerId);
+    }
+    for (const session of status.sessions) {
+      if (session.source !== 'iptv') continue;
+      if (session.viewers.some((viewer) => !own.has(viewer.viewerId))) {
+        return { busyIptv: session.hash.toLowerCase() };
+      }
+    }
+    return { busyIptv: null };
   }
 
   function subscribe(): void {
@@ -1112,6 +1461,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     token: string,
     sink: PartySink,
     signal: AbortSignal,
+    options: PartyConnectOptions = {},
   ): Promise<void> {
     const room = find(code);
     const member = authenticate(room, token);
@@ -1121,6 +1471,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       const connection: Connection = {
         memberId: member.id,
         sink,
+        ping: options.ping === true,
         closed: false,
         done: resolve,
         detach: () => signal.removeEventListener('abort', onAbort),
@@ -1140,6 +1491,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         data: { room: roomView(room), chat: [...room.chat], serverNow: clock.now() },
       });
       if (frame) write(room, connection, frame);
+      const votes = frameOf(votesEvent(room));
+      if (votes) write(room, connection, votes);
       ensureHeartbeat();
       /* Los demás ven que ha vuelto. */
       if (member.connections === 1) sendRoom(room);
@@ -1208,6 +1561,9 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         viewers: new Set(),
         audioSwitchUntil: 0,
         live: live ? { ...live, auto: true } : null,
+        leaderLostBy: null,
+        autoStreak: newStreak(),
+        autoTimer: null,
         closed: false,
       };
       rooms.set(code, room);
@@ -1241,11 +1597,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       return joined(room, credential);
     },
 
-    connect(code, token, reply: FastifyReply, signal) {
+    connect(code, token, reply: FastifyReply, signal, options = {}) {
       /* Se comprueba ANTES del hijack: un 404 o un 403 salen como JSON normal. */
       authenticate(find(code), token);
       reply.hijack();
-      return attach(code, token, reply.raw as unknown as PartySink, signal);
+      return attach(code, token, reply.raw as unknown as PartySink, signal, options);
     },
 
     attach,
@@ -1338,6 +1694,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       if (member.viewer && member.viewer.identity.viewerId !== viewer.viewerId)
         releaseViewer(member);
       member.viewer = { identity: viewer, sessionId: grant.session.id };
+      member.viewerLostAt = null;
       const vod = grant.vod;
       const tracks = vod.audio.map((track) => ({ index: track.index, label: track.label }));
       const title: PartyTitle = {
@@ -1376,6 +1733,16 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       return { ...grant, url };
     },
 
+    async art(code, artId, version, ifNoneMatch) {
+      const room = find(code);
+      /* Solo un cartel que se ve en la sala: el enlace no abre el catálogo entero. */
+      if (!roomArtIds(room).has(artId)) {
+        throw new AppError('vod_not_found', { detail: 'party_art_not_in_room' });
+      }
+      if (!art) throw new AppError('vod_unavailable', { detail: 'sin servicio VOD' });
+      return art.artOf(artId, 'poster', version, ifNoneMatch);
+    },
+
     videoSession(code, key) {
       const room = find(code);
       for (const member of room.members.values()) {
@@ -1392,32 +1759,114 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     },
 
     control(code, body) {
+      /* La hora de llegada (C2): con ella y `serverNow`, el cliente descuenta lo que tarda esto. */
+      const receivedAt = clock.now();
       const room = find(code);
       const member = authenticate(room, body.token);
-      requireControl(room, member);
-      const now = clock.now();
+      const now = receivedAt;
+      const answer = (): PartyStatusResponse => ({
+        serverNow: clock.now(),
+        rev: room.playback.rev,
+        receivedAt,
+      });
       /* En directo (§14) solo se cambia de canal: ni pausa, ni saltos, ni idioma. */
       if (room.live || body.action === 'live') {
+        /* directo §14: el permiso propio del directo (el co-líder también, y el anfitrión). */
+        if (room.live) requireLiveSwitch(room, member);
+        else requireControl(room, member);
         if (body.action !== 'live' || !room.live) {
           throw new AppError('validation_error', { detail: 'party_live' });
         }
+        /* Dos que controlan a la vez: gana el primero (el segundo cambiaba lo ya cambiado). */
+        if (body.from && body.from !== room.live.hash) return answer();
+        if (body.live.hash !== room.live.hash) manualSwitch(room.autoStreak, now);
         switchLive(room, body.live, member);
-        return { serverNow: now, rev: room.playback.rev };
+        return answer();
       }
-      fix(room, body.positionS, now);
+      requireControl(room, member);
+      const source = 'source' in body ? (body.source ?? null) : null;
+      const log = (noop: boolean, positionS: number): void => {
+        logger.info(
+          {
+            room: room.code,
+            member: member.id,
+            action: body.action,
+            positionS: Math.round(positionS * 1000) / 1000,
+            rev: room.playback.rev,
+            source,
+            noop,
+          },
+          noop ? 'Ver juntos: orden que no cambia nada' : 'Ver juntos: orden',
+        );
+      };
+      const current = positionNow(room, now);
+      const running = room.playback.playing && room.waiting.size === 0 && room.lobby === null;
+      const off = Math.abs(body.positionS - current);
+      /* Órdenes que no cambian nada (el segundo toque de un doble clic, el `play` de quien llega
+         tarde): ni se fijan, ni salen en el chat, ni paran a nadie. «Empezar para todos» (la espera)
+         y un `play` mientras se espera a alguien sí son órdenes. */
+      const noop =
+        (body.action === 'play' && running && off < PARTY.driftSeekS) ||
+        (body.action === 'pause' && !room.playback.playing && off < NOOP_ORDER_S) ||
+        (body.action === 'seek' && running && off < NOOP_ORDER_S);
+      if (noop) {
+        log(true, body.positionS);
+        return answer();
+      }
+      /* El freno: un aparato que manda órdenes en bucle no mueve a todos. Cuentan solo las que
+         cambian algo (arriba); la pausa pasa siempre. La de más da `rate_limited`, para que quien
+         la mandó vea el aviso (antes se tiraba en silencio y su interfaz seguía como si nada). */
+      const times = member.orderTimes;
+      while (times.length && now - (times[0] ?? 0) >= ORDER_WINDOW_MS) times.shift();
+      if (body.action !== 'pause') {
+        if (times.length >= ORDER_MAX) {
+          if (now - member.orderMutedLoggedAt >= ORDER_WINDOW_MS) {
+            member.orderMutedLoggedAt = now;
+            logger.warn(
+              { room: room.code, member: member.id, action: body.action, source },
+              'Ver juntos: demasiadas órdenes seguidas, se rechazan las de más',
+            );
+          }
+          throw new AppError('rate_limited');
+        }
+        times.push(now);
+      }
+      /* Reproducir o pausar donde va la sala: la posición del aparato es la de alguien que va un
+         poco por detrás (o por delante), y fijarla movería a todos los demás. */
+      const near = (body.action === 'play' || body.action === 'pause') && off < PARTY.driftSeekS;
+      const positionS = near ? current : body.positionS;
+      fix(room, positionS, now);
       let action: PartyAction = body.action;
       switch (body.action) {
         case 'play':
-          /* «Empezar para todos» (§13): reproducir en la espera la acaba. */
+          /* «Empezar ya» (§13): reproducir en la espera la acaba, aunque falte alguien por
+             tocar «Estoy listo» (se ha ido a por palomitas): a ese, «Toca para empezar». */
           room.playback.playing = true;
           if (room.lobby !== null) {
             room.lobby = null;
-            say(room, `${member.name} ha empezado para todos.`, null);
+            /* Su «Empezar ya» vale como su «Estoy listo»: su voto (el siguiente latido) aún no ha
+               llegado, así que no cuenta como alguien a quien no se esperó. */
+            if (member.votedReported === false) member.votedReported = true;
+            const forced = [...room.members.values()].some(
+              (other) => other.id !== member.id && online(other, now) && !hasVoted(other),
+            );
+            say(
+              room,
+              forced
+                ? `${member.name} ha empezado sin esperar a todos.`
+                : `${member.name} ha empezado para todos.`,
+              null,
+            );
             break;
           }
           say(room, `${member.name} ha dado a reproducir.`, null);
           break;
         case 'pause':
+          if (!room.playback.playing) {
+            /* Ya estaba en pausa: solo se recoloca, sin «ha pausado». */
+            action = 'seek';
+            break;
+          }
           room.playback.playing = false;
           room.waiting.clear();
           say(room, `${member.name} ha pausado.`, null);
@@ -1435,14 +1884,31 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
           break;
         }
       }
+      log(false, positionS);
       sendPlayback(room, action, member.id);
-      return { serverNow: now, rev: room.playback.rev };
+      return answer();
+    },
+
+    /* directo §14 */
+    async liveSources(code, query) {
+      const room = find(code);
+      const member = authenticate(room, query.t);
+      requireLiveSwitch(room, member);
+      const live = room.live;
+      if (!live) throw new AppError('validation_error', { detail: 'party_live' });
+      if (!liveSources) return { candidates: [], scan: null };
+      return liveSources.get(code, live, {
+        research: query.research === '1',
+        ...(query.job ? { job: query.job } : {}),
+      });
     },
 
     async status(code, body) {
+      /* La hora de llegada (C2); `serverNow` se toma al responder, después del latido del vídeo. */
+      const receivedAt = clock.now();
       const room = find(code);
       const member = authenticate(room, body.token);
-      const now = clock.now();
+      const now = receivedAt;
       let changed = false;
       /* Dónde va su vídeo: si se atasca, la sala se para ahí y no más adelante (§16). */
       member.reportedPositionS = body.positionS;
@@ -1466,6 +1932,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         /* Fuera de la espera, el % no le importa a nadie: no se reparte. */
         if (room.lobby !== null) changed = true;
       }
+      /* «Estoy listo» (§13): lo que diga (la web lo manda siempre; al recargar, otra vez false). */
+      if (body.voted !== undefined && body.voted !== member.votedReported) {
+        member.votedReported = body.voted;
+        if (room.lobby !== null) changed = true;
+      }
       if (changed) sendRoom(room);
       maybeStart(room, now);
       /* El latido de su sesión de vídeo: los invitados no tienen las rutas de playback. */
@@ -1482,12 +1953,23 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
             viewer.identity,
           );
           stream = 'ok';
+          /* directo §14: la fuente que puso el automático suena; seguida un rato, la racha acaba. */
+          if (room.live && !room.interrupted) {
+            if (body.buffering) soundLost(room.autoStreak);
+            else heardSound(room.autoStreak, now);
+          }
         } catch {
-          if (member.viewer === viewer) member.viewer = null;
+          if (member.viewer === viewer) {
+            member.viewer = null;
+            member.viewerLostAt = clock.now();
+          }
           stream = 'lost';
         }
+      } else if (member.viewerLostAt !== null) {
+        /* Lo perdió y aún no ha vuelto a abrir: sigue perdido (no «aún no ha abierto»). */
+        stream = 'lost';
       }
-      return { serverNow: clock.now(), rev: room.playback.rev, stream };
+      return { serverNow: clock.now(), rev: room.playback.rev, receivedAt, stream };
     },
 
     chat(code, body) {
@@ -1515,7 +1997,9 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       if (control !== undefined || coleaders !== undefined) requireLeader(room, member);
       if (queueMode !== undefined) requireManager(room, member);
       if (auto !== undefined) {
-        requireControl(room, member);
+        /* directo §14 */
+        if (room.live) requireLiveSwitch(room, member);
+        else requireControl(room, member);
         if (room.live && room.live.auto !== auto) {
           room.live = { ...room.live, auto };
           say(

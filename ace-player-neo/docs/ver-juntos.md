@@ -49,6 +49,7 @@ de terceros) y Tailscale (el invitado tendría que instalar algo).
 | `partyJoin`    | `POST /api/v1/party/:code/join`     | entrar con un nombre                                                                |
 | `partyEvents`  | `GET /api/v1/party/:code/events?t=` | SSE: `party.snapshot`, `party.playback`, `party.room`, `party.chat`, `party.closed` |
 | `partyStream`  | `GET /api/v1/party/:code/stream`    | el vídeo (una `VodGrant`)                                                           |
+| `partyArt`     | `GET /api/v1/party/:code/art/:artId` | el cartel de un título de la sala (1.1.2, §9)                                      |
 | `partyControl` | `POST /api/v1/party/:code/control`  | `play`, `pause`, `seek` o `audio` para todos                                        |
 | `partyStatus`  | `POST /api/v1/party/:code/status`   | latido de cada uno: posición y si carga                                             |
 | `partyChat`    | `POST /api/v1/party/:code/chat`     | un mensaje                                                                          |
@@ -56,7 +57,10 @@ de terceros) y Tailscale (el invitado tendría que instalar algo).
 | `partyLeave`   | `POST /api/v1/party/:code/leave`    | salir                                                                               |
 | `partyClose`   | `POST /api/v1/party/:code/close`    | cerrar (solo el anfitrión)                                                          |
 
-El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 salen como JSON normal.
+El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 salen como JSON normal. Con `ping=1`
+(1.1.2), además del comentario `: ping`, cada `PARTY.heartbeatMs` (10 s) llega `party.ping` con `serverNow`: el
+comentario no lo ve el JS, el evento sí, y la web da el SSE por muerto si pasan 25 s sin ninguna trama. Las apps
+viejas no lo piden y no lo reciben.
 
 ## 5. El vídeo: una sesión para todos
 
@@ -77,18 +81,45 @@ El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 sale
 - **El servidor manda.** `playback = { playing, positionS, at, rev, waitingFor }`; la posición «ahora» es
   `positionS + (ahora − at) / 1000` si reproduce y nadie carga. Cada orden fija una posición nueva y sube `rev`.
 - **Reloj**: el desfase con el servidor se estima con la ida y vuelta de `status` y `control` (la muestra de menor ida
-  y vuelta de las 8 últimas).
+  y vuelta de las 8 últimas). Desde la 1.1.2 las dos respuestas traen `receivedAt` (la hora al llegar) además de
+  `serverNow` (la hora al responder, en `status` después del latido del vídeo): con las cuatro marcas de NTP la web
+  descuenta lo que tarda el servidor. Un servidor viejo no manda `receivedAt` y la web usa la fórmula de antes.
 - **Corrección** (cada 500 ms): más de 1 s de diferencia, se salta; entre 0,25 y 1 s, velocidad ±5 %; en pausa, se
   coloca el vídeo si se aparta más de 0,3 s. Medido en local con dos pestañas: 0,12 s de diferencia reproduciendo y el
-  mismo fotograma en pausa.
+  mismo fotograma en pausa. **En la web, desde la 1.1.2** (el «segundo de retraso» entre el PC y el iPhone): control
+  proporcional (`rate = 1 + drift / 4 s`, desde 0,06 s y hasta 0,02 s con histéresis, tope ±10 % con hls.js y ±6-8 %
+  con el HLS nativo) y el salto compensa lo que tarda en caer y arrancar (la latencia medida de cada motor, media
+  móvil). La absorción de 60 s tras una reanudación (`WAITED_STAY_S`) queda solo para el HLS nativo. La app del iPhone
+  y las constantes de `PARTY` (`driftRate`, `driftRateS`, `driftSeekS`) no cambian.
+- **Órdenes que no cambian nada** (1.1.2, `party/service.ts`): un `play` con la sala ya reproduciendo (sin espera ni
+  «Esperando a todos») a menos de `driftSeekS`, una pausa con la sala ya en pausa a menos de 1,5 s y un salto a menos
+  de 1,5 s con la sala en marcha no se fijan, ni salen en el chat, ni se mandan a nadie (el doble clic, el `play` de
+  quien llega tarde). Una pausa en pausa más lejos solo recoloca, sin «ha pausado». Un `play` o una pausa que sí
+  cambian, a menos de `driftSeekS` de la sala, se fijan donde va la sala, no donde va el aparato que la manda (que va
+  un poco por detrás). Freno: con 12 órdenes que cambian algo en 10 s de una persona, la siguiente da `rate_limited`
+  (quien la manda ve el aviso) y deja una línea de aviso; las que no cambian nada no cuentan y la pausa pasa siempre.
+  Una tecla que se queda pulsada solo manda la primera. Cada orden deja una línea en el registro con la sala, la persona, la acción, la posición, el `rev` y de
+  dónde sale (`source`: `button`, `nudge`, `bar`, `key`, `surface`, `lobby`, `mediaSession`; solo para el registro).
+  «Empezar ya» y un `play` mientras se espera a alguien siguen siendo órdenes.
 - **Esperar al que carga**: un cliente avisa al momento si su vídeo se queda sin datos. Si dura más de 0,8 s con la
   sala reproduciendo, el reloj se para (`waitingFor`, «Esperando a Ana…») hasta que vuelve, o hasta 20 s: entonces la
   sala sigue sin esa persona y no la vuelve a esperar en 30 s. Quien entra a mitad de película también se espera.
-- **Controles nativos** (pantalla completa del iPhone, teclas multimedia): un play, una pausa o un salto del vídeo que
-  no coincide con la sala se manda como orden. Lo que coincide (lo que hace el propio reproductor, el salto de una
-  recarga) no. Con la página oculta, tampoco: el navegador pausa solo al bloquear el iPhone.
+- **Controles nativos** (hasta la 1.1.1): un play, una pausa o un salto del vídeo que no coincidía con la sala se
+  mandaba como orden si había habido un toque en cualquier parte de la página en los últimos 1,5 s. Eso daba las
+  «órdenes fantasma» del chat del iPhone («ha dado a reproducir / ha pausado» varias veces seguidas). **Desde la
+  1.1.2** los eventos del `<video>` (`onNative`) solo se apuntan en `__aceJuntosDebug.native` para depurar; la única
+  vía de órdenes fuera de la interfaz es **Media Session** (teclas multimedia del PC, pantalla de bloqueo y Centro de
+  control del iPhone), con la posición de la sala. Pendiente: una pausa del sistema sin gesto (quitarse los AirPods)
+  la sigue deshaciendo el tic.
 - **El primer play necesita un toque** («Toca para empezar»): sin él, los navegadores no dejan sonar un vídeo. Ese
-  play no es una orden de la sala.
+  play no es una orden de la sala. Con la 1.1.2 a medias, a quien no había tocado le arrancaba en silencio con la
+  píldora «Activar sonido». **Desde el 1-11-2026** (decisión de Isma) depende de la sala:
+  - **Pelis y series**: el toque es «Estoy listo» en «Esperando a todos» y la sala no arranca sola hasta que lo han
+    dado todos los presentes (§13), así que al empezar suena en todos. Nada de arrancar en silencio: si aun así el
+    navegador no deja (o se entra con la peli en marcha), «Toca para empezar» (`blocked`), solo para ese aparato.
+  - **Directo**: con que uno le dé, arranca. A los demás les arranca en silencio (eso sí se permite en iOS y
+    Chrome; también al invitado de fuera en el iPhone, con el HLS nativo) con «Activar sonido»; `blocked` queda de
+    respaldo, cuando ni en silencio se deja.
 
 ## 7. Web
 
@@ -118,7 +149,7 @@ El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 sale
 ```
 iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:8443 ── Caddy (servicio sala)
                                                                    ├─ /s/<código>, invitado.html, assets → ficheros de la release
-                                                                   ├─ /api/v1/party/<código>[/join|events|stream|control|status|chat|react|settings|member|queue|leave|v/<clave>/<fichero>]
+                                                                   ├─ /api/v1/party/<código>[/join|events|stream|control|status|chat|typing|settings|member|queue|leave|sources|v/<clave>/<fichero>|art/<artId>]
                                                                    │      → storage:3000 con X-Ace-Origin: guest
                                                                    └─ todo lo demás → 404 (y rutas raras, 400)
 ```
@@ -131,23 +162,34 @@ iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:84
   registro tapa `?t=` y la clave de vídeo y no guarda IPs. Cabeceras: HSTS, CSP, `noindex`, `nosniff`.
 - **Dos cerraduras**: aunque Caddy dejara pasar algo, al backend le llega con `X-Ace-Origin: guest`, que trata como
   `native` (el origen más estricto): sin token de dispositivo solo valen las rutas con **credencial `party`**
-  (`partyPreview`, `partyJoin`, `partyEvents`, `partyStream`, `partyVideo`, `partyControl`, `partyStatus`,
-  `partyChat`, `partyLeave`), cuyo manejador comprueba la credencial de la sala. Crear y cerrar salas piden el
+  (`partyPreview`, `partyJoin`, `partyEvents`, `partyStream`, `partyVideo`, `partyArt`, `partyControl`,
+  `partyStatus`, `partyChat`, `partyTyping`, `partySettings`, `partyMember`, `partyQueue`, `partyLiveSources` y
+  `partyLeave`), cuyo manejador comprueba la credencial de la sala. Crear y cerrar salas piden el
   token de un dispositivo emparejado (`bearer`): un invitado no puede (§10). Lo fija `test/security.test.ts` y lo probé con un Caddy de verdad (ficheros 200; web de casa, ajustes,
   bootstrap, crear sala y `/native` 404; `%2f` 400).
+- **Cartel de la sala** (`partyArt`, 1.1.2): la miniatura del invitado salía morada porque pedía
+  `/api/v1/vod/titles/<id>/art/poster` (`vodArt`, con token de dispositivo), que Caddy no deja pasar (404). Ahora va
+  por `/api/v1/party/<código>/art/<artId>?v=…`: siempre el `poster`, y solo un `artId` que tenga la sala (el título,
+  el siguiente episodio, lo que viene o la lista); otro, o una sala en directo, `vod_not_found`. La caché, el ETag, el
+  304 y el 503 con `Retry-After` son los de `vodArt` (el mismo `sendArt`, `iptv/art-reply.ts`). En Caddy, `@sala`
+  deja pasar `/art/[a-f0-9]{40}` (la `?v=` no la mira `path_regexp`). La web de casa usa el mismo camino dentro de la
+  sala.
+- **`invitado.html` sin caché**: el `header @pagina Cache-Control no-cache` iba detrás del `rewrite` y no se aplicaba
+  nunca; desde la 1.1.2 va antes, para que una release nueva llegue al invitado sin borrar la caché de Safari.
 - **Vídeo con clave**: cada persona tiene una clave de vídeo (24 bytes); `partyStream` devuelve
   `/api/v1/party/<código>/v/<clave>/index.m3u8` y los segmentos, relativos, la heredan. `partyVideo` sirve los mismos
   ficheros que `video` (Range 206/416) de la sesión de esa persona.
 - **Latido por la sala**: `partyStatus` da el latido de la sesión de playback de la persona y dice `stream: ok | lost |
-none`; con `lost`, el reproductor vuelve a abrir (si la sala no está interrumpida). Así ni la web de casa ni el
+none`; con `lost`, el reproductor vuelve a abrir (si la sala no está interrumpida). Desde la 1.1.2, quien perdió su
+  visor sin que la sala cambiara de título sigue en `lost` (no `none`) hasta que vuelve a abrir. Así ni la web de casa ni el
   invitado llaman a las rutas de playback. Salir o cerrar suelta los visores.
 - **Enlace público**: `PARTY_PUBLIC_URL=https://sala.ismaeloul.es` en storage; `room.inviteUrl` es
   `https://sala.ismaeloul.es/s/<código>` y «Copiar enlace» lo usa (sin él, el de casa).
 - **Página de invitado** (`apps/web/invitado.html`, `src/guest/`): segunda entrada de Vite, sin armazón, bootstrap,
   SSE de casa ni service worker; los mismos `Join` y `Room` (ya no dependen del enrutador), tema oscuro, manifiesto
   propio (`invitado.webmanifest`, ámbito `/s/`) para añadirla a la pantalla de inicio del iPhone.
-- **Órdenes del navegador**: un play, una pausa o un salto del vídeo solo cuentan como orden si la persona acaba de
-  tocar o pulsar algo (1,5 s) o está en la pantalla completa nativa del iPhone; con la página oculta, nunca (§6).
+- **Órdenes del navegador**: hasta la 1.1.1, un play, una pausa o un salto del vídeo contaban como orden si la persona
+  acababa de tocar o pulsar algo (1,5 s); desde la 1.1.2, nunca: solo los mandos de la sala y Media Session (§6).
 
 ## 10. Desde la app del iPhone (0.9.6)
 
@@ -160,6 +202,10 @@ none`; con `lost`, el reproductor vuelve a abrir (si la sala no está interrumpi
   (salto > 1 s, velocidad ±5 % entre 0,25 y 1 s, en pausa a > 0,3 s), aviso al momento si se queda cargando,
   «Reanudar» tras una interrupción y reabrir con `stream: lost` (3 veces por minuto como mucho). Los mandos son
   órdenes para la sala; la velocidad, «Episodios» y «Siguiente episodio» no salen dentro de una sala.
+- **1.1.2: la app no cambia.** Los campos nuevos son opcionales (`receivedAt` en las respuestas, `source` en
+  `partyControl`, `ping=1` en el SSE, `party.ping` solo a quien lo pide) y los números de `PARTY` que la app copia
+  (`driftRate`, `driftRateS`, `driftSeekS`, `holdRewindMaxS`…) siguen igual; solo `heartbeatMs` baja de 15 a 10 s,
+  y es el latido del servidor. Las órdenes que no cambian nada (§6) también se ignoran si vienen de la app.
 - La credencial se guarda en el iPhone (`ace.juntos.<código>`): volver a la sala recupera el mismo sitio (y el
   anfitrión sigue siéndolo). Unirse: botón de personas en Pelis y series, pegando el enlace o el código.
 - Probado en el simulador contra esta rama con el proveedor falso (`--vod-muestras`) y un invitado por la API: crear
@@ -270,11 +316,46 @@ controla» en Ajustes) y «Esperando a todos».
   segundos. Cada propuesta lleva solo su voto, como la maqueta; «Poner ya» y «Quitar» van en su menú contextual
   (clic derecho, pulsación larga o la tecla de menú). En el móvil, la Lista de siempre con sus botones.
 - **«Esperando a todos»** (`playback.lobby`): cada título empieza parado y arranca solo cuando todos los conectados
-  están listos (al crear, en cuanto entra el segundo), o cuando quien controla pulsa «Empezar para todos». Cada uno
-  manda en `partyStatus` `ready` y `progress` (0-100, lo cargado); sin ellos (una app vieja), cuenta como lista al
+  están listos y han tocado «Estoy listo» (al crear, en cuanto entra el segundo), o cuando quien controla pulsa
+  «Empezar ya». Cada uno manda en `partyStatus` `ready` y `progress` (0-100, lo cargado); sin ellos (una app vieja), cuenta como lista al
   abrir el vídeo y no estar cargando. La web enseña quién está listo y a quién le falta, con su %. El paso a
   «listo» se manda al momento; el % va espaciado (un tramo de 10 puntos, como mucho uno por segundo, o con el
-  latido). Si quien crea la sala está solo, no arranca sola: espera a que entre alguien o a «Empezar para todos».
+  latido). Si quien crea la sala está solo, no arranca sola: espera a que entre alguien o a «Empezar ya».
+- **«Estoy listo»** (pelis y series, 1-11-2026, decisión de Isma: «todos tienen que darle para que se ejecute»): la
+  sala solo arranca sola cuando TODOS los presentes han tocado «Estoy listo» y además tienen el colchón. Ese toque es
+  el gesto que desbloquea el sonido de su aparato (`player.vote` → `unlock`, el play dentro del toque; con la sala
+  parada se vuelve a parar), así que al empezar suena en todos. Las reglas:
+  - **Quién cuenta**: los conectados (`online`). Quien se va, lo echan o pierde la conexión (30 s sin SSE ni
+    `status`) deja de contar y la sala puede arrancar sin él.
+  - **El voto lo lleva el servidor** por lo que dice cada página: la web manda `voted` en cada `partyStatus` (al
+    momento si cambia; al entrar, en la ráfaga del principio, `false`) y el servidor reparte quién falta en su
+    propio evento, `party.votes` (`unvoted`: ids), justo tras `party.snapshot` y con cada `party.room`. No va en
+    `members`: `PartyMember` es estricto y una página de la 1.1.1 abierta antes de actualizar el NAS (o una app de
+    iPhone o Android) descartaría todas las salas por un campo que no conoce; un evento que no conoce, en cambio, lo
+    ignora. Dura la visita de esa página: al recargar vuelve a `false` (el navegador vuelve a pedir el toque). Una
+    app vieja no lo manda y cuenta como que sí; con un servidor viejo (sin `party.votes`), todos cuentan como que sí.
+  - **Entra tarde**: con la peli ya en marcha no hay espera, así que no bloquea a nadie. Si su navegador no deja
+    sonar, su propio «Toca para empezar» (y ese toque cuenta como su voto para lo siguiente).
+  - **«Empezar ya»** (quien controla; antes «Empezar para todos», sigue siendo un `play` con `source: 'lobby'`):
+    arranca aunque falte alguien («se ha ido a por palomitas»). Si falta otro por tocar o por cargar, pide un segundo
+    toque («Toca otra vez: empieza sin esperar», regla 31, sin `confirm()`); si no falta nadie más, al primero. Vale
+    también como el «Estoy listo» de quien lo pulsa: su voto sale con el siguiente latido (hasta 500 ms), así que el
+    `play` llega antes; el servidor le da por votado al recibirlo y no le cuenta como alguien a quien no se esperó.
+    El chat dice «Isma ha empezado sin esperar a todos.» (o «… ha empezado para todos.» si no faltaba nadie más por
+    tocar). A quien no tocó, «Toca para empezar».
+  - **El título siguiente** (la lista, el siguiente episodio) vuelve a «Esperando a todos», pero el voto no se
+    borra: si todos ya tocaron en esta visita, arranca solo en cuanto lo tienen cargado; solo espera a quien no ha
+    tocado nunca (el que entró tarde, el que recargó).
+  - **En pantalla**: cada fila dice «Sin confirmar», el % o «Listo»; debajo, «Estoy listo» (que, al tocarlo, es el
+    mismo botón con «Estás listo» y `aria-disabled`: el foco no se pierde; una región de estado ya montada lo
+    anuncia) y, a quien controla, «Empezar ya». En pantalla completa la tarjeta no se pinta (solo el vídeo), así que
+    el «Estoy listo» va en el centro del reproductor. La pista: «Falta que le des a «Estoy listo»», «Faltáis Bea y
+    tú…», «Faltáis Ana, Bea y tú…», «Faltan Ana y
+    Bea por darle a «Estoy listo»» y, con todos votados, la de siempre («Esperando a Ana… empieza sola…»). En las
+    caras de arriba, una marca verde en quien ya ha tocado y atenuado quien no. Lo mío lo dice la página
+    (`view.voted`), no el servidor (que tarda una ida y vuelta). Tocar la tarjeta ya no vota: solo el botón, con el
+    clic (en el iPhone, bajar el dedo no cuenta como gesto).
+  - **En directo, nada de esto**: no hay espera (§14) y el sonido va como en §6.
 - **«X está escribiendo…»**: `partyTyping` y el evento `party.typing` (`memberId`, `name`). El cliente lo manda como
   mucho cada `PARTY.typingIntervalMs` (2 s) y el servidor ignora, sin error, lo que llegue más deprisa; se enseña
   `PARTY.typingShowMs` (4 s) y se quita al llegar un mensaje de esa persona.
@@ -290,8 +371,11 @@ controla» en Ajustes) y «Esperando a todos».
   «Quién controla», «Votar lo siguiente» (interruptor: `vote` o `autoplay`) y «Crear sala e invitar». Sin chat de
   voz: queda para otra fase y no se pinta nada de él (ni micros en las caras).
 - **Pruebas:** `modules/party/service.test.ts` y `routes.test.ts` (papeles, permisos del co-líder, lobby, typing y
-  que `react` ya no existe), `test/security.test.ts`, y en la web `Panels.test.tsx`, `Theater.test.tsx`,
-  `sync.test.ts` y `cine/Ficha.test.tsx`.
+  que `react` ya no existe; «arranque por votación»: hacen falta el voto y el colchón, quien se va o se desconecta
+  deja de contar, «Empezar ya», quien entra tarde, el título siguiente, recargar y las apps viejas),
+  `test/security.test.ts`, y en la web `Panels.test.tsx` (la espera con votos, la marca en las caras y `voted` en el
+  latido), `Room.test.tsx` (`player.vote` solo desde el botón), `player.test.ts` (pelis sin silencio; directo en
+  silencio, también el iPhone con HLS nativo), `Theater.test.tsx`, `sync.test.ts` y `cine/Ficha.test.tsx`.
 - **Pendiente:** la sala en directo de fútbol (otra fase); las apps de iPhone y Android aún no enseñan co-líderes,
   lobby ni «está escribiendo» (siguen funcionando con `leader` y sin `ready`/`progress`).
 
@@ -315,20 +399,51 @@ directo y a la vez. Sigue la maqueta `ver-juntos.html` (sala de fútbol).
   sala comparten la sesión sin traspaso aunque la política sea `handoff` (`liveParty` en `playback/service.ts`). Si
   alguien de casa abre ese canal con `handoff`, la sala queda «interrumpida» (`taken`), como en pelis y series. La
   concesión dice si es IPTV y corrige `live.source`.
-- **Cambiar de canal**: `partyControl` con `{ action: 'live', live }` (quien controla). Se sueltan los visores de
-  todos, `party.room` trae el canal nuevo y `party.playback` la acción `title`: cada reproductor vuelve a abrir. El
-  chat dice «Isma ha cambiado a M+ LaLiga».
+- **Quién cambia la fuente** (permiso propio del directo, `canSwitchLive`): el líder, cualquier co-líder (aunque
+  «Yo y co-líderes» esté apagado: si se cae el partido, tiene que poder arreglarlo), el anfitrión y, con «Controlan
+  todos», todos. Desde cualquier aparato: también por el enlace de invitado. Vale para «Poner», para el cambio
+  automático (`partySettings` con `auto`) y para Fuentes.
+- **Cambiar de canal**: `partyControl` con `{ action: 'live', live, from? }`. Se sueltan los visores de todos,
+  `party.room` trae el canal nuevo y `party.playback` la acción `title`: cada reproductor vuelve a abrir. El chat dice
+  «Isma ha cambiado a M+ LaLiga». Con `from` (lo que sonaba según quien cambia), si la sala ya va por otro el cambio
+  se ignora: con dos que controlan, gana el primero. Si el partido nuevo va por el MISMO hash, solo cambia el partido
+  de la sala (sin soltar a nadie: antes el reproductor no reabría y la imagen se congelaba).
+- **Fuentes de la sala** (`partyLiveSources`, `GET /api/v1/party/:code/sources?t=`): la misma resolución que la ficha
+  del partido (`football.resolve` con los canales de la agenda; con un canal suelto, `scope: 'channel'`), con la
+  clave del comprobador `party-<código>` (con la del navegador, abrir Fuentes cancelaba la comprobación de la ficha)
+  y 3 min de caché por sala (`party/live-sources.ts`). Con `job`, solo el estado del trabajo del comprobador; con
+  `research=1`, otra pasada. Está en la lista de `@sala` del Caddyfile.
+- **La corona en directo**: el líder sin conexión la conserva 3 min (`LIVE_LEADER_GRACE_MS`). Si el anfitrión la
+  pierde por no estar, al volver la recupera solo («Isma vuelve a ser el líder») y el líder provisional pasa a
+  co-líder. «Recuperar el mando» (junto a quién controla) hace lo mismo a mano.
 - **Web**: sin barra de tiempo, pausa ni ±10 s; abajo la píldora roja DIRECTO, el canal y el volumen; arriba «● En
-  directo». Quien controla tiene Chat, Fuentes, Partidos y Gente; los demás, Chat y Gente. Fuentes y Partidos usan la
-  agenda y las fuentes de casa, así que solo salen en casa (`liveTools`), no en la página del invitado.
-  - **Fuentes**: «Cambio automático si se cae» (`partySettings` con `auto`) y las conexiones del partido por canal,
-    con la calidad, IPTV o AceStream y «Poner» o «En la sala».
+  directo». Quien puede cambiar la fuente tiene Chat, Fuentes, Partidos y Gente; los demás, Chat y Gente (con la nota
+  de quién puede cambiarla). Fuentes va también en la página del invitado; Partidos usa la agenda de casa, así que
+  solo sale en casa (`liveTools`). La pestaña Chat cuenta los mensajes sin leer. Las dos se bajan al abrirlas
+  (`React.lazy`: `LivePanels.tsx` y `LiveMatches.tsx`; «Recuperar el mando» va aparte, en `LiveReclaim.tsx`, y
+  `canSwitchLive`/`liveSwitchers` en `client.ts`): tiran de Fuentes de la ficha y de la agenda, e `invitado.html`
+  ya no baja los trozos `agenda` ni `partidos` para una peli (comprobado con `vite build`, 1-11-2026).
+  - **Fuentes** (`juntos/liveSources.ts`, con `buildSourceRows` de la ficha): «Cambio automático si se cae» arriba
+    (fijo en escritorio, con la lista con scroll) y, por canal con la IPTV primero, todas las IPTV, la que suena y las
+    AceStream verificadas, con su número estable, calidad, Mb/s o pares y su señal. Plegadas: «Ver n flojas», «n sin
+    señal · n comprobándose» y los gemelos de otro país de la IPTV. Las reportadas y las de cuarentena, fuera. Al final,
+    «Buscar más fuentes».
   - **Partidos**: los de hoy en directo y los de más tarde con «Poner» (su mejor fuente) y «Poner un canal» (tus
     favoritos).
-  - **Cambio automático**: lo hace el navegador del líder (o de quien controle si el líder no está) cuando el vídeo
-    falla: la siguiente fuente no probada, sin repetir la IPTV si la caída fue de la IPTV. Con freno: un salto cada
-    30 s y 3 seguidos sin que suene ninguna (con el motor caído, en local se comía las siete fuentes en un minuto).
-- **Pruebas**: `modules/party/live.test.ts` y, a mano en el PC contra el motor del NAS, crear desde la ficha, ver el
+  - **Cambio automático**: lo decide el servidor (`party/live-auto.ts`) cuando la sala se corta (`failed`), con las
+    fuentes de la sala y los veredictos del comprobador: si cae una IPTV, otra variante del mismo canal y país; si no,
+    la mejor AceStream verificada (luego una floja); si cae una AceStream, la IPTV (no el gemelo de otro país) y luego
+    la verificada. Nunca una «Sin señal», en cuarentena o ya probada en la racha. Con freno: un salto cada 30 s, 3
+    seguidos y 45 s de margen tras un «Poner» a mano. El chat dice «Se ha caído la fuente: ahora, X» o, sin otra,
+    «No queda otra fuente buena». La caída se apunta como veredicto del reproductor: la ficha aprende de la sala.
+    **Un corte de un solo aparato no es la fuente** (1-11-2026; antes lo cubría la prueba de `LiveAutoSwitch` de
+    la web): si el `remux_failed`/`engine_failed` es de unos visores y otro conectado de la sala sigue viendo la
+    fuente (`localFailure`), ni se para la sala, ni salta el automático, ni se apunta «Sin señal»: a esos se les da
+    el visor por perdido (`status` → `lost`) y vuelven a abrir solos. Si cae de verdad, cae para todos (en un aviso
+    o en uno por visor: el último ya no deja a nadie viéndola y entonces sí es de la sala). Un fallo que solo ve el
+    navegador (el códec, `localError`) nunca llega al servidor como caída.
+- **Pruebas**: `modules/party/live.test.ts`, `live-sources.test.ts`, `live-auto.test.ts` (también el corte de un
+  solo aparato), `juntos/liveSources.test.tsx`, `juntos/Room.test.tsx` (Fuentes perezosa, Partidos solo en casa) y, a mano en el PC contra el motor del NAS, crear desde la ficha, ver el
   partido en la sala, Fuentes y «Poner», y cerrar la sala.
 - **Salir o cerrar** una sala en directo lleva a la Agenda (una de pelis y series, a Pelis y series).
 - **Pendiente**: las apps de iPhone y Android no entienden una sala en directo (esperan una `VodGrant`).
@@ -435,6 +550,20 @@ El arreglo:
 - **Pendiente**: un fotograma clave cada 2 s en la ligera (hoy uno por segmento: cada salto a mitad de trozo obliga a
   decodificar hasta 6 s), bajar a 540p la ligera de una fuente que ya es 720p, el 503 del borde que AVPlayer no
   reintenta y el fusible de «plaza» tras 60 s sin peticiones (§17).
+
+**Pulido de la 1.1.2 (1-11-2026).** Tras probar la 1.1.1 con el PC y un iPhone de fuera: el segundo de retraso, la
+portada morada, «empieza para uno y no para el otro», las órdenes fantasma del chat y la caja del chat bajo la barra
+de Safari. Lo que se hizo está en §6 (reloj con cuatro marcas, control proporcional, latencia de salto medida,
+arranque en silencio con «Activar sonido», Media Session, órdenes que no cambian nada) y §9 (`partyArt`, Caddy y el
+`no-cache`). Sigue pendiente:
+
+- Un fotograma clave cada 2 s en la ligera (`lite-args.ts`; riesgo con `tfdt` y `placeFragment`).
+- Un arranque programado (`at` en el futuro): cambia la semántica de `at` y choca con la app del iPhone,
+  `holdPosition` y `upNext`.
+- La pausa del sistema sin gesto (quitarse los AirPods): el tic la deshace; habría que mandarla como orden con
+  cuidado de no volver a las órdenes fantasma.
+- Probar en el iPhone de verdad: la píldora «Activar sonido», la caja del chat con la barra de Safari abajo, con el
+  teclado y en modo standalone, y `__aceJuntosDebug` (`ticks`, `orders`, `native`) con drift < 150 ms en régimen.
 
 ## 17. Calidad ligera para invitados
 

@@ -1,35 +1,35 @@
-/* La sala en directo (docs/ver-juntos.md §14): de dónde salen las fuentes y
-   los partidos que puede poner quien controla.
+/* La sala en directo (docs/ver-juntos.md §14): de dónde sale la fuente al
+   poner un partido.
 
-   - Fuentes: las mismas que la ficha del partido (`footballResolve` con sus
-     canales), por canal y en el orden del servidor (la mejor, primero).
    - Lo que suena para todos es un `PartyLiveChoice`: el hash, cómo se llama
      el canal («DAZN 1 · 1080p»), si es IPTV o AceStream y el partido.
-   - «Cambio automático si se cae»: la siguiente fuente que aún no se ha
-     probado en esta sala, saltando las de la IPTV si la que se cayó era de
-     la IPTV (la plaza es una: si se fue, la otra de la IPTV tampoco va). */
+   - Las fuentes de la sala que suena salen de su propia ruta
+     (`partyLiveSources`, useRoomSources.ts), y el «Cambio automático si se
+     cae» lo decide el servidor (party/live-auto.ts): aquí solo queda elegir
+     la fuente de OTRO partido («Poner» en Partidos, crear la sala). */
 
 import type { FootballMatch, PartyLiveChoice, ResolutionCandidate } from '@ace/shared';
-import { useQuery } from '@tanstack/react-query';
-import { api, getViewerId } from '../../api/index.ts';
+import { api } from '../../api/index.ts';
 import { matchTitle } from '../agenda/domain.ts';
 import { channelNameOf, entryFromCandidate, isIptv, qualityLabel } from '../sources/model.ts';
 
 /** Una fuente del partido, lista para «Poner». */
 export interface LiveSource {
   readonly choice: PartyLiveChoice;
-  /** El canal de la agenda con el que casó («M+ LaLiga»): agrupa la lista. */
+  /** El canal de la agenda con el que casó («M+ LaLiga»). */
   readonly group: string;
   /** «1080p», «720p»… o null si no se sabe. */
   readonly quality: string | null;
 }
 
-export interface LiveSourceGroup {
-  readonly name: string;
-  readonly sources: readonly LiveSource[];
-}
-
 const HASH_RE = /^[a-f0-9]{40}$/;
+
+/**
+ * La clave del comprobador al elegir la fuente de otro partido. No es la del navegador: el
+ * comprobador cancela el trabajo vivo de la misma clave, y con la del navegador «Poner» un
+ * partido en la sala cancelaba la comprobación de la ficha (directo §14).
+ */
+export const PICK_CLIENT = 'party-pick';
 
 /** Lo que va a la sala para una fuente del partido. */
 export function liveSourceOf(
@@ -54,70 +54,20 @@ export function liveSourceOf(
   };
 }
 
-/** Por canal, en el orden en que llegan (el del servidor: la mejor, primero). */
-export function groupSources(sources: readonly LiveSource[]): LiveSourceGroup[] {
-  const groups = new Map<string, LiveSource[]>();
-  for (const source of sources) {
-    const list = groups.get(source.group) ?? [];
-    list.push(source);
-    groups.set(source.group, list);
-  }
-  return [...groups].map(([name, list]) => ({ name, sources: list }));
-}
-
-/** Las fuentes de un partido para la sala (solo quien controla las pide). */
-export function useLiveSources(match: FootballMatch | null, enabled: boolean) {
-  return useQuery({
-    queryKey: ['juntos-live-sources', match?.id ?? null],
-    enabled: enabled && match !== null,
-    staleTime: 60_000,
-    retry: 1,
-    queryFn: async ({ signal }) => {
-      if (!match) return [];
-      const data = await api('footballResolve', {
-        query: {
-          match: match.id,
-          channel: (match.channels ?? []).map((channel) => channel.name),
-          client: getViewerId(),
-        },
-        signal,
-      });
-      return data.candidates
-        .map((candidate) => liveSourceOf(candidate, match))
-        .filter((source): source is LiveSource => source !== null);
-    },
-  });
-}
-
 /**
- * «Cambio automático si se cae»: la siguiente fuente buena que no se ha
- * probado aún. Si la que se cayó era de la IPTV, las demás de la IPTV no.
+ * «Poner» un partido: su mejor fuente. La primera que da el servidor (la IPTV va primero) que no
+ * esté reportada ni en cuarentena.
  */
-export function nextSource(
-  sources: readonly LiveSource[],
-  failed: PartyLiveChoice,
-  tried: ReadonlySet<string>,
-): LiveSource | null {
-  return (
-    sources.find(
-      (source) =>
-        source.choice.hash !== failed.hash &&
-        !tried.has(source.choice.hash) &&
-        !(failed.source === 'iptv' && source.choice.source === 'iptv'),
-    ) ?? null
-  );
-}
-
-/** «Poner» un partido: su mejor fuente (la primera que da el servidor). */
 export async function bestSourceOf(match: FootballMatch): Promise<PartyLiveChoice | null> {
   const data = await api('footballResolve', {
     query: {
       match: match.id,
       channel: (match.channels ?? []).map((channel) => channel.name),
-      client: getViewerId(),
+      client: PICK_CLIENT,
     },
   });
   for (const candidate of data.candidates) {
+    if (candidate.quarantined || candidate.reported) continue;
     const source = liveSourceOf(candidate, match);
     if (source) return source.choice;
   }

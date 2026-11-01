@@ -197,6 +197,39 @@ export default defineConfig({
               priority: 14,
               test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/]agenda[\\/](?:domain|data|score-reveal|state|MatchRow|demo)\.tsx?$/,
             },
+            // La página del invitado de «Ver juntos» (docs/ver-juntos.md §9) solo
+            // carga la sala: lo de la sala que también usan la agenda, la ficha y la
+            // búsqueda (crear una sala) va en trozos propios. Sin ellos, rolldown
+            // los metía en el trozo de la agenda y el invitado bajaba la agenda,
+            // los partidos y las listas (1.1.2):
+            // - juntos: el cliente, el reloj, los textos, los paneles y la hoja
+            //   de estilos de la sala (si no, iba con la agenda y el invitado la
+            //   importaba entera solo por el CSS);
+            // - carteles: el cartel de Películas y series (`Art`), sus datos y
+            //   si el navegador decodifica HEVC (play.ts);
+            // - controles: la barra de tiempo y el volumen del reproductor de
+            //   casa, que la sala también pinta;
+            // - toque: el «pulsa otra vez para confirmar» (listas, Ajustes y la sala).
+            {
+              name: 'toque',
+              priority: 17,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/]settings[\\/]second-tap\.ts$/,
+            },
+            {
+              name: 'juntos',
+              priority: 13,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/]juntos[\\/](?:(?:client|sync|texts|Panels)\.tsx?|juntos\.css)$/,
+            },
+            {
+              name: 'carteles',
+              priority: 13,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/]cine[\\/](?:Art|data|model|texts|demo-art|play)\.tsx?$/,
+            },
+            {
+              name: 'controles',
+              priority: 13,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]player[\\/](?:volume|constants|VolumeControl|vod[\\/](?:timeline|VodControls|texts))\.tsx?$/,
+            },
             {
               name: 'listas',
               priority: 14,

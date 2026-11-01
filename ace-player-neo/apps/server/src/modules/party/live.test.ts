@@ -267,6 +267,14 @@ describe('«Ver juntos» en directo (§14)', () => {
     await party.stop();
   });
 
+  it('partyArt: una sala en directo no da carteles (vod_not_found)', async () => {
+    const { party } = setup();
+    const host = party.create(BODY);
+    await expect(
+      party.art(host.room.code, host.room.title.artId, undefined, undefined),
+    ).rejects.toMatchObject({ code: 'vod_not_found' });
+  });
+
   it('en directo nadie espera al que carga', async () => {
     const { party, clock } = setup();
     const host = party.create(BODY);

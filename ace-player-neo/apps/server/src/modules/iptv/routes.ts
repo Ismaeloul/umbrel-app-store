@@ -25,12 +25,10 @@
    credenciales (docs/iptv.md §2.4) y la consulta del buscador, de la
    pestaña y de vodBrowse es lo que escribe Isma. */
 
-import type { FastifyReply } from 'fastify';
 import { AppError, isAppError } from '../../core/errors.js';
-import type { RequestContext } from '../../core/module.js';
-import { settleReply } from '../../core/reply.js';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
+import { ifNoneMatchOf, sendArt } from './art-reply.js';
 import { GUIDE_ROUTE_IDS, registerGuideRoutes } from './guide-routes.js';
 import type { VodApi } from './types.js';
 import type { ArtReply } from './vod/art.js';
@@ -109,17 +107,4 @@ export function registerV1Routes(router: V1Router, services: Services): void {
   router.handle('vodListGet', () => vod().listOf());
   router.handle('vodListAdd', (input) => vod().listAdd(input.params.id));
   router.handle('vodListRemove', (input) => vod().listRemove(input.params.id));
-}
-
-/** `If-None-Match` de la petición (la primera si viniera repetida). */
-function ifNoneMatchOf(ctx: RequestContext): string | undefined {
-  const value = ctx.request.headers['if-none-match'];
-  return Array.isArray(value) ? value[0] : value;
-}
-
-/** Manda una imagen de `vodArt` (o su 304) con las cabeceras de §8. */
-async function sendArt(reply: FastifyReply, art: ArtReply): Promise<void> {
-  if (art.status === 304) void reply.code(304).headers(art.headers).send();
-  else void reply.code(200).headers(art.headers).send(art.body);
-  await settleReply(reply);
 }

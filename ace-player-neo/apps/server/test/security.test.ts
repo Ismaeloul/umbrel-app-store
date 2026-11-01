@@ -17,6 +17,7 @@
    Los manejadores de los módulos no llegan a ejecutarse en ningún caso
    negativo: el acceso se decide antes. */
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   LEGACY_OPERATIONS,
@@ -51,6 +52,8 @@ const PARAM_VALUES: Record<string, string> = {
   code: 'k3J9xQ2mZpL8wR4t',
   /* Clave de vídeo de una persona de la sala. */
   key: 'k'.repeat(32),
+  /* Cartel de un título de la sala (`partyArt`). */
+  artId: HASH,
 };
 
 function concretePath(route: V1RouteDefinition): string {
@@ -197,6 +200,8 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'partyEvents',
       'partyStream',
       'partyVideo',
+      /* El cartel de la sala (sin la credencial: el código ya es secreto; solo carteles de la sala). */
+      'partyArt',
       'partyControl',
       'partyStatus',
       'partyChat',
@@ -204,6 +209,8 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'partySettings',
       'partyMember',
       'partyQueue',
+      /* directo §14: las fuentes del directo, también por el enlace de invitado. */
+      'partyLiveSources',
       'partyLeave',
     ]);
     const failures: string[] = [];
@@ -221,6 +228,31 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       }
     }
     expect(failures).toEqual([]);
+  });
+
+  it('«Ver juntos»: el proxy de la sala (Caddyfile, @sala) deja pasar las rutas con credencial de sala y nada más', () => {
+    const caddy = readFileSync(
+      new URL('../../../deploy/umbrel/Caddyfile', import.meta.url),
+      'utf8',
+    );
+    const line = /@sala path_regexp (\S+)/.exec(caddy)?.[1];
+    expect(line).toBeTruthy();
+    const sala = new RegExp(line ?? '$^');
+    const party = V1.filter(([, route]) => route.credential === 'party');
+    for (const [id, route] of party) {
+      expect(sala.test(concretePath(route)), id).toBe(true);
+    }
+    const code = PARAM_VALUES.code ?? '';
+    /* directo §14: las fuentes del directo, sí; las rutas de casa, no. */
+    expect(sala.test(`/api/v1/party/${code}/sources`)).toBe(true);
+    for (const path of [
+      `/api/v1/party/${code}/claim`,
+      `/api/v1/party/${code}/end`,
+      '/api/v1/party',
+      `/api/v1/football/resolve`,
+    ]) {
+      expect(sala.test(path), path).toBe(false);
+    }
   });
 
   it('con token válido, las rutas solo web (healthLive, copia de seguridad, configurar la IPTV, «Descargar fallos» y «Descargar logs») dan 403 origin_forbidden', async () => {

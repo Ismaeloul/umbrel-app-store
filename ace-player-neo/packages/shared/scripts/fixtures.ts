@@ -109,6 +109,8 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'partySettings',
   'partyMember',
   'partyQueue',
+  /* Las fuentes del directo (directo §14): el líder y los co-líderes, también por el enlace. */
+  'partyLiveSources',
   'partyLeave',
   /* Las salas abiertas y cerrarlas desde casa: solo la web de casa. */
   'partyList',
@@ -1531,13 +1533,14 @@ export const WEB_V1_FIXTURES = {
   },
   partyJoin: partyJoined('m_AnaInvitada01', [partyMember('m_AnaInvitada01', 'Ana', false)]),
   partyStream: vodDuneGrant,
-  partyControl: { serverNow: AT_MS + 60_000, rev: 3 },
-  partyStatus: { serverNow: AT_MS + 65_000, rev: 3, stream: 'ok' },
+  partyControl: { serverNow: AT_MS + 60_000, rev: 3, receivedAt: AT_MS + 59_998 },
+  partyStatus: { serverNow: AT_MS + 65_000, rev: 3, receivedAt: AT_MS + 64_996, stream: 'ok' },
   partyChat: { ok: true },
   partyTyping: { ok: true },
   partySettings: { ok: true },
   partyMember: { ok: true },
   partyQueue: { ok: true },
+  partyLiveSources: { candidates: [candidate], scan: scanJob },
   partyLeave: { ok: true },
   partyClose: { ok: true },
   partyList: {
@@ -2152,6 +2155,8 @@ export const NON_JSON_ROUTE_IDS: readonly V1RouteId[] = [
   'partyEvents',
   /* El vídeo de una sala (la misma respuesta que `video`). */
   'partyVideo',
+  /* El cartel de la sala (la misma respuesta que `vodArt`). */
+  'partyArt',
   /* Un tramo de película para la descarga en segundo plano del iPhone (0.9.8). */
   'vodDownload',
 ];

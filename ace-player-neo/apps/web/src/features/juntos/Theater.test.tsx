@@ -3,12 +3,12 @@
    minuto 10. El tiempo y la barra salen del reloj de la sala, no del vídeo. */
 
 import type { PartyRoom } from '@ace/shared';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import joined from '@fixtures/web/v1/partyJoin.json';
 import { PartyClient, type PartyEnv, type PartyState } from './client.ts';
 import type { PlayerQuality, PlayerView, RoomPlayer } from './player.ts';
-import { Theater } from './Theater.tsx';
+import { CLICK_DELAY_MS, Theater } from './Theater.tsx';
 import { resetMemoryStorage, STORAGE_KEYS } from '../../lib/storage.ts';
 import { readSavedVolume, saveVolume } from '../../player/volume.ts';
 
@@ -20,6 +20,8 @@ function setup(
   selfId: string,
   over: Partial<PartyRoom> = {},
   quality: PlayerQuality | null = null,
+  extra: Partial<PlayerView> = {},
+  fullscreen = false,
 ) {
   const env: PartyEnv = {
     now: () => NOW,
@@ -42,13 +44,22 @@ function setup(
     buffering: false,
     quality,
     sounded: true,
+    soundBlocked: false,
+    voted: false,
+    localError: false,
+    ...extra,
   };
   const setQuality = vi.fn();
+  const unmute = vi.fn();
+  const vote = vi.fn();
   const player = {
     subscribe: () => () => undefined,
     getView: () => view,
     setQuality,
+    unmute,
+    vote,
   } as unknown as RoomPlayer;
+  const onFullscreen = vi.fn();
   const control = vi.spyOn(client, 'control');
   const room: PartyRoom = {
     ...(joined.room as PartyRoom),
@@ -66,14 +77,42 @@ function setup(
       room={room}
       state={state}
       video={video}
-      fullscreen={false}
-      onFullscreen={() => undefined}
+      fullscreen={fullscreen}
+      onFullscreen={onFullscreen}
     />,
   );
-  return { setQuality, control, video };
+  return { setQuality, control, video, unmute, vote, onFullscreen };
 }
 
 describe('«Ver juntos»: el reproductor', () => {
+  it('«Esperando a todos» en pantalla completa: el «Estoy listo» va en el centro (la tarjeta no se ve)', () => {
+    const lobby = {
+      playback: { playing: false, positionS: 0, at: NOW, rev: 3, waitingFor: [], lobby: true },
+    };
+    const { vote } = setup(ANA, lobby, null, {}, true);
+    fireEvent.click(screen.getByRole('button', { name: 'Estoy listo' }));
+    expect(vote).toHaveBeenCalledTimes(1);
+  });
+
+  it('«Esperando a todos» en pantalla completa, ya votado: «Estás listo», que no vuelve a votar', () => {
+    const lobby = {
+      playback: { playing: false, positionS: 0, at: NOW, rev: 3, waitingFor: [], lobby: true },
+    };
+    const { vote } = setup(ANA, lobby, null, { voted: true }, true);
+    const done = screen.getByRole('button', { name: 'Estás listo' });
+    expect(done.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(done);
+    expect(vote).not.toHaveBeenCalled();
+  });
+
+  it('«Esperando a todos» fuera de la pantalla completa: el centro lo deja a la tarjeta', () => {
+    const lobby = {
+      playback: { playing: false, positionS: 0, at: NOW, rev: 3, waitingFor: [], lobby: true },
+    };
+    setup(ANA, lobby);
+    expect(screen.queryByRole('button', { name: 'Estoy listo' })).toBeNull();
+  });
+
   it('el tiempo es el de la sala (10:00), no el del vídeo de este aparato (0:10)', () => {
     setup(ANA);
     expect(screen.getByText('10:00')).toBeTruthy();
@@ -139,9 +178,20 @@ describe('«Ver juntos»: el reproductor', () => {
     expect(control).not.toHaveBeenCalled();
     /* Fuera de ellos, la flecha sí avanza 10 s. */
     fireEvent.keyDown(document.body, { key: 'ArrowRight' });
-    expect(control).toHaveBeenCalledWith({ action: 'seek', positionS: 610 });
+    expect(control).toHaveBeenCalledWith({ action: 'seek', positionS: 610 }, 'key');
     tabs.remove();
     group.remove();
+  });
+
+  it('una flecha que se queda pulsada es un salto, no uno por cada repetición', () => {
+    const { control } = setup(HOST);
+    control.mockResolvedValue(undefined);
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+    for (let i = 0; i < 10; i += 1) {
+      fireEvent.keyDown(document.body, { key: 'ArrowRight', repeat: true });
+      fireEvent.keyDown(document.body, { key: ' ', repeat: true });
+    }
+    expect(control).toHaveBeenCalledTimes(1);
   });
 
   it('en el móvil, sin volumen: mandan los botones del teléfono (la M silencia)', () => {
@@ -287,5 +337,120 @@ describe('«Ver juntos»: «Calidad» del invitado (§17)', () => {
       both,
     );
     expect(screen.queryByRole('button', { name: 'Calidad' })).toBeNull();
+  });
+});
+
+/** Con el vídeo reproduciendo, los controles se esconden a los 3 s de la última actividad. */
+function hideControls() {
+  const chrome = document.querySelector('.juntos-chrome') as HTMLElement;
+  fireEvent.pointerMove(chrome, { pointerType: 'mouse' });
+  act(() => vi.advanceTimersByTime(3_500));
+}
+
+describe('«Ver juntos»: el navegador lo ha empezado en silencio', () => {
+  it('sin silencio forzado no hay píldora', () => {
+    setup(ANA);
+    expect(screen.queryByRole('button', { name: 'Activar sonido' })).toBeNull();
+  });
+
+  it('«Activar sonido» sale aunque los controles se escondan y quita el silencio sin orden a la sala', () => {
+    vi.useFakeTimers();
+    try {
+      const { unmute, control } = setup(ANA, {}, null, { soundBlocked: true });
+      hideControls();
+      expect(document.querySelector('.juntos-chrome')).toHaveAttribute('data-visible', 'false');
+      fireEvent.click(screen.getByRole('button', { name: 'Activar sonido' }));
+      expect(unmute).toHaveBeenCalledTimes(1);
+      expect(control).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('el primer toque sobre el vídeo también lo quita', () => {
+    const { unmute } = setup(ANA, {}, null, { soundBlocked: true });
+    const surface = document.querySelector('.juntos-chrome__surface') as HTMLElement;
+    fireEvent.pointerDown(surface, { pointerType: 'touch' });
+    fireEvent.click(surface, { detail: 1 });
+    expect(unmute).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('«Ver juntos»: solo manda órdenes quien toca de verdad', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('con el dedo: el toque que enseña los controles no pulsa el botón que acaba de salir; el segundo, sí', () => {
+    vi.useFakeTimers();
+    const { control } = setup(HOST);
+    control.mockResolvedValue(undefined);
+    hideControls();
+    const chrome = document.querySelector('.juntos-chrome') as HTMLElement;
+    expect(chrome).toHaveAttribute('data-visible', 'false');
+    const pause = screen.getByRole('button', { name: 'Pausar' });
+    fireEvent.pointerDown(pause, { pointerType: 'touch' });
+    fireEvent.pointerUp(pause, { pointerType: 'touch' });
+    fireEvent.click(pause, { detail: 1 });
+    expect(control).not.toHaveBeenCalled();
+    expect(chrome).toHaveAttribute('data-visible', 'true');
+    /* Pasado el rato de guarda, un toque con ellos a la vista sí es una orden (y su fuente). */
+    act(() => vi.advanceTimersByTime(400));
+    fireEvent.pointerDown(pause, { pointerType: 'touch' });
+    fireEvent.pointerUp(pause, { pointerType: 'touch' });
+    fireEvent.click(pause, { detail: 1 });
+    expect(control).toHaveBeenCalledTimes(1);
+    expect(control).toHaveBeenCalledWith({ action: 'pause', positionS: 600 }, 'button');
+  });
+
+  it('con el dedo, un toque en el vídeo solo enseña o esconde los controles', () => {
+    const { control } = setup(HOST);
+    const surface = document.querySelector('.juntos-chrome__surface') as HTMLElement;
+    const chrome = document.querySelector('.juntos-chrome') as HTMLElement;
+    fireEvent.pointerDown(surface, { pointerType: 'touch' });
+    fireEvent.pointerUp(surface, { pointerType: 'touch' });
+    /* Con `pointerup` ya no pasa nada: hasta el clic. */
+    expect(chrome).toHaveAttribute('data-visible', 'true');
+    fireEvent.click(surface, { detail: 1 });
+    expect(chrome).toHaveAttribute('data-visible', 'false');
+    expect(control).not.toHaveBeenCalled();
+  });
+
+  it('con el ratón, un clic suelto reproduce o pausa a los 250 ms', () => {
+    vi.useFakeTimers();
+    const { control, onFullscreen } = setup(HOST);
+    control.mockResolvedValue(undefined);
+    const surface = document.querySelector('.juntos-chrome__surface') as HTMLElement;
+    fireEvent.pointerDown(surface, { pointerType: 'mouse' });
+    fireEvent.click(surface, { detail: 1 });
+    act(() => vi.advanceTimersByTime(CLICK_DELAY_MS - 10));
+    expect(control).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(10));
+    expect(control).toHaveBeenCalledTimes(1);
+    expect(control).toHaveBeenCalledWith({ action: 'pause', positionS: 600 }, 'surface');
+    expect(onFullscreen).not.toHaveBeenCalled();
+  });
+
+  it('con el ratón, un doble clic pone la pantalla completa y no manda ninguna orden', () => {
+    vi.useFakeTimers();
+    const { control, onFullscreen } = setup(HOST);
+    control.mockResolvedValue(undefined);
+    const surface = document.querySelector('.juntos-chrome__surface') as HTMLElement;
+    fireEvent.pointerDown(surface, { pointerType: 'mouse' });
+    fireEvent.click(surface, { detail: 1 });
+    fireEvent.pointerDown(surface, { pointerType: 'mouse' });
+    fireEvent.click(surface, { detail: 2 });
+    fireEvent.doubleClick(surface, { detail: 2 });
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(onFullscreen).toHaveBeenCalledTimes(1);
+    expect(control).not.toHaveBeenCalled();
+  });
+
+  it('los botones del centro mandan su fuente y la posición de la sala al pulsar', () => {
+    const { control } = setup(HOST);
+    control.mockResolvedValue(undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Avanzar 10 segundos' }), { detail: 1 });
+    expect(control).toHaveBeenCalledWith({ action: 'seek', positionS: 610 }, 'nudge');
+    /* Con el teclado (Intro sobre el botón, sin puntero) también vale. */
+    fireEvent.click(screen.getByRole('button', { name: 'Pausar' }), { detail: 0 });
+    expect(control).toHaveBeenLastCalledWith({ action: 'pause', positionS: 600 }, 'button');
   });
 });

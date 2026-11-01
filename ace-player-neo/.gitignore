@@ -14,3 +14,7 @@ apps/ios/DerivedData/
 # Datos de pruebas locales del servidor
 .data/
 .env
+
+# Lo que deja ffmpeg en la carpeta de trabajo (init.mp4 del HLS fMP4): un test de remux al
+# fallar o una prueba a mano
+apps/server/init.mp4
