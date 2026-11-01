@@ -37,23 +37,14 @@ import {
 import { buildSourceRows, type SourceRow } from '../sources/useSources.ts';
 import { LIVE_TEXT } from './liveTexts.ts';
 
+/* Lo de quién puede cambiar la fuente vive en client.ts (la sala lo usa sin bajar Fuentes). */
+export { canSwitchLive, liveSwitchers } from './client.ts';
+
 const HASH_RE = /^[a-f0-9]{40}$/;
 
 /** «DAZN 1 · 1080p» → «DAZN 1»: el canal de la sala sin la calidad. */
 export function liveChannelName(channel: string): string {
   return channel.split(' · ')[0]?.trim() || channel.trim();
-}
-
-/**
- * ¿Puede esta persona cambiar la fuente o el partido? Como `canSwitchLive` del servidor: el
- * líder, cualquier co-líder (aunque los co-líderes no controlen el vídeo), el anfitrión y, con
- * «Controlan todos», todos.
- */
-export function canSwitchLive(room: PartyRoom | null, selfId: string): boolean {
-  if (!room?.live) return false;
-  if (room.settings.control === 'everyone') return true;
-  if (room.leaderId === selfId || room.hostId === selfId) return true;
-  return room.members.some((member) => member.id === selfId && member.role === 'coleader');
 }
 
 /** Las entradas de la sala: sin repetidas, con el comprobador y con la que suena aunque no esté. */
@@ -248,16 +239,4 @@ export function scanRunning(scan: Pick<ScanJob, 'status'> | null | undefined): b
   return (
     !!scan && (scan.status === 'queued' || scan.status === 'running' || scan.status === 'waiting')
   );
-}
-
-/** Quién puede cambiar la fuente (los nombres, el líder primero), o null con «Controlan todos». */
-export function liveSwitchers(room: PartyRoom): string[] | null {
-  if (room.settings.control === 'everyone') return null;
-  return room.members
-    .filter(
-      (member) =>
-        member.id === room.leaderId || member.id === room.hostId || member.role === 'coleader',
-    )
-    .sort((a, b) => Number(b.id === room.leaderId) - Number(a.id === room.leaderId))
-    .map((member) => member.name);
 }

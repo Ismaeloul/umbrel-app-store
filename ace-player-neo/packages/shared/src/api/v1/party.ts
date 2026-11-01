@@ -134,8 +134,9 @@ export const PartyPlaybackSchema = z.strictObject({
   waitingFor: z.array(PartyMemberIdSchema).max(PARTY.maxMembers),
   /**
    * «Esperando a todos» (§13): aún no ha empezado. Arranca sola cuando todos
-   * los conectados están listos (con dos o más) o cuando quien controla da a
-   * reproducir («Empezar para todos»). Mientras, `playing` es false.
+   * los conectados han tocado «Estoy listo» y tienen el vídeo cargado (con dos
+   * o más), o cuando quien controla da a reproducir («Empezar ya»). Mientras,
+   * `playing` es false.
    */
   lobby: z.boolean().default(false),
 });
@@ -322,7 +323,7 @@ export type PartyPreview = z.infer<typeof PartyPreviewSchema>;
 /**
  * Qué tocó la persona para mandar una orden: el botón central (`button`), los saltos de ±10 s
  * (`nudge`), la barra (`bar`), el teclado (`key`), un toque o clic sobre el vídeo (`surface`),
- * «Empezar para todos» (`lobby`) o las teclas multimedia, la pantalla de bloqueo o el Centro de
+ * «Empezar ya» en la espera (`lobby`) o las teclas multimedia, la pantalla de bloqueo o el Centro de
  * control (`mediaSession`). Solo va al registro: el servidor no decide nada con él.
  */
 export const PartyControlSourceSchema = z.enum([
@@ -373,6 +374,12 @@ export const PartyStatusBodySchema = z.strictObject({
   /** «Esperando a todos» (§13): si ya puede empezar y cuánto lleva cargado (las apps viejas no lo mandan). */
   ready: z.boolean().optional(),
   progress: z.number().int().min(0).max(100).optional(),
+  /**
+   * Pelis y series (§13): ha tocado «Estoy listo» (o algo que deja sonar el vídeo) desde que abrió
+   * esta página. La web lo manda siempre; al recargar vuelve a false (el navegador vuelve a pedir
+   * un toque). Las apps viejas no lo mandan y cuentan como que sí.
+   */
+  voted: z.boolean().optional(),
 });
 export type PartyStatusBody = z.infer<typeof PartyStatusBodySchema>;
 
@@ -575,6 +582,18 @@ export const PartyEventSchema = z.discriminatedUnion('type', [
       queue: z.array(PartyQueueItemSchema).max(PARTY.queueMax),
       upNext: PartyUpNextSchema.nullable(),
       live: PartyLiveSchema.nullable().default(null),
+    }),
+  }),
+  /**
+   * «Estoy listo» (§13, pelis y series): quién aún no lo ha tocado en esta visita. Va aparte de
+   * `members` (que es estricto) para que una página o app de antes, que no conoce el campo, no
+   * descarte las salas: este evento lo ignora sin más. Sale tras `party.snapshot` y con cada
+   * `party.room`. Sin él (un servidor viejo), todos cuentan como que sí.
+   */
+  z.strictObject({
+    type: z.literal('party.votes'),
+    data: z.strictObject({
+      unvoted: z.array(PartyMemberIdSchema).max(PARTY.maxMembers),
     }),
   }),
   /** «Ana está escribiendo…» (§13): como mucho uno cada `typingIntervalMs` por persona. */

@@ -409,6 +409,7 @@ export function Theater({
         running={running}
         waitingNames={waitingNames}
         reconnecting={reconnecting}
+        fullscreen={fullscreen}
         onToggle={() => {
           togglePlay('button');
           wake();
@@ -505,6 +506,7 @@ function Center({
   running,
   waitingNames,
   reconnecting,
+  fullscreen,
   onToggle,
   onNudge,
 }: {
@@ -515,6 +517,8 @@ function Center({
   running: boolean;
   waitingNames: readonly string[];
   reconnecting: boolean;
+  /** En pantalla completa no se ve la tarjeta de la sala (Lobby): su «Estoy listo» va aquí. */
+  fullscreen: boolean;
   onToggle(): void;
   onNudge(delta: number): void;
 }) {
@@ -542,6 +546,28 @@ function Center({
         <Button variant="primary" icon="play" onClick={() => player.retry()}>
           {view.phase === 'error' ? JUNTOS_TEXT.retry : JUNTOS_TEXT.resumeHere}
         </Button>
+      </div>
+    );
+  } else if (room.playback.lobby && fullscreen) {
+    /* «Esperando a todos» (§13) en pantalla completa: la tarjeta de la sala no se pinta, así que
+       quien no ha tocado tendría dónde hacerlo solo saliendo. El mismo botón pasa a «Estás listo»
+       (aria-disabled: el foco no se pierde) y el voto es el toque, dentro del clic. */
+    body = (
+      <div className="juntos-center__card">
+        <span className="juntos-center__text">{JUNTOS_TEXT.lobbyTitle}</span>
+        <Button
+          variant={view.voted ? 'quiet' : 'primary'}
+          icon="check"
+          className={cx('juntos-center__vote', view.voted && 'juntos-lobby__vote--done')}
+          aria-disabled={view.voted ? 'true' : undefined}
+          onClick={view.voted ? undefined : () => player.vote()}
+        >
+          {view.voted ? JUNTOS_TEXT.youAreReady : JUNTOS_TEXT.imReady}
+        </Button>
+        <span className="sr-only" role="status">
+          {view.voted ? JUNTOS_TEXT.youAreReady : ''}
+        </span>
+        {view.voted ? null : <span className="juntos-center__hint">{JUNTOS_TEXT.imReadyHint}</span>}
       </div>
     );
   } else if (room.playback.lobby) {

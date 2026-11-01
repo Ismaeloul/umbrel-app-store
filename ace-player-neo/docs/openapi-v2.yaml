@@ -17548,7 +17548,7 @@ paths:
       tags:
         - party
       summary: "Tiempo real de la sala por SSE: estado, personas y chat"
-      description: Empieza con `party.snapshot` y luego manda `party.playback`, `party.room`, `party.chat`, `party.typing` y `party.closed`. Con `ping=1`, además, `party.ping` en cada latido (`PARTY.heartbeatMs`). Con la conexión abierta la persona cuenta como presente.
+      description: "Empieza con `party.snapshot` (y `party.votes`) y luego manda `party.playback`, `party.room` (cada uno con su `party.votes`: quién no ha tocado «Estoy listo»), `party.chat`, `party.typing` y `party.closed`. Con `ping=1`, además, `party.ping` en cada latido (`PARTY.heartbeatMs`). Con la conexión abierta la persona cuenta como presente."
       parameters:
         - name: code
           in: path
@@ -18673,6 +18673,8 @@ paths:
                   type: integer
                   minimum: 0
                   maximum: 100
+                voted:
+                  type: boolean
               required:
                 - token
                 - positionS

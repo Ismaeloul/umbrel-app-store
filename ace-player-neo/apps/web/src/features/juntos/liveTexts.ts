@@ -33,5 +33,7 @@ export const LIVE_TEXT = {
   reclaim: 'Recuperar el mando',
   reclaimDone: 'Vuelves a ser el líder.',
   matchesLoading: 'Cargando partidos…',
+  /** Fuentes o Partidos mientras se baja su código (se cargan al abrirlos). */
+  panelLoading: 'Cargando…',
   matchesFailed: 'No se ha podido cargar la agenda.',
 } as const;

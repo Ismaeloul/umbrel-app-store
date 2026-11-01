@@ -23,11 +23,15 @@
      dado (la 1.1.1 en el iPhone). Las órdenes salen de los controles de la
      sala y, fuera de la página, de Media Session (teclas multimedia, pantalla
      de bloqueo, Centro de control), con la posición de la sala.
-   - El sonido (los navegadores no dejan sonar un vídeo sin un toque): se
-     intenta con sonido y, si el navegador no deja, se arranca en silencio
-     (`soundBlocked`) para que vaya a la par con los demás; la interfaz ofrece
-     «Activar sonido» (`unmute`, dentro de un toque). Solo si ni en silencio
-     deja, «Toca para empezar» (`blocked`).
+   - El sonido (los navegadores no dejan sonar un vídeo sin un toque):
+     - en pelis y series, el toque es «Estoy listo» (`vote`, §13): la sala no
+       arranca hasta que lo han dado todos, así que al empezar suena en todos.
+       Si aun así el navegador no deja (o se entra con la peli en marcha),
+       «Toca para empezar» (`blocked`): nada de arrancar en silencio;
+     - en directo, con que uno le dé basta: se intenta con sonido y, si el
+       navegador no deja, se arranca en silencio (`soundBlocked`) para ir a la
+       par con los demás, con «Activar sonido» (`unmute`, dentro de un toque).
+       Solo si ni en silencio deja, «Toca para empezar».
    - Corrección (sync.ts): control proporcional de la velocidad y, al saltar
      reproduciendo, la posición de la sala más lo que tarda el salto en este
      aparato (`seekLead`, medido). Lo que quedó al colocarse se absorbe con la
@@ -199,6 +203,7 @@ export interface PlayerDebug {
   /** El sonido: si ya hubo un toque, si el silencio es nuestro y qué play está en curso. */
   readonly sound: {
     readonly unlocked: boolean;
+    readonly voted: boolean;
     readonly autoMuted: boolean;
     readonly autoStarting: boolean;
     readonly unlocking: boolean;
@@ -272,6 +277,11 @@ export interface PlayerView {
    * «Activar sonido» (`unmute`).
    */
   readonly soundBlocked: boolean;
+  /**
+   * «Estoy listo» (§13): esta página ya ha dado el toque que deja sonar el vídeo (`vote`, `unlock`
+   * o `unmute`). Dura lo que la página: el título siguiente no lo vuelve a pedir.
+   */
+  readonly voted: boolean;
   /**
    * El error es de este aparato, no del vídeo de la sala: este navegador no decodifica el códec
    * (`codecUnsupported`). Otro aparato lo puede estar viendo bien: el «Cambio automático si se
@@ -389,6 +399,7 @@ export class RoomPlayer {
     quality: null,
     sounded: false,
     soundBlocked: false,
+    voted: false,
     localError: false,
   };
   private readonly listeners = new Set<() => void>();
@@ -478,6 +489,12 @@ export class RoomPlayer {
   private generation = 0;
   /** Ya hubo un play con sonido dentro de un toque (`unlock`, `unmute`). */
   private unlocked = false;
+  /**
+   * «Estoy listo» (§13): esta página ya ha recibido un toque que deja sonar el vídeo (`vote`,
+   * `unlock` o `unmute`). Va en cada `status`; la sala de pelis y series no arranca sola sin el
+   * de todos. Al recargar, vuelve a false (el navegador vuelve a pedir el toque).
+   */
+  private voted = false;
   /** El play de «Toca para empezar» está en curso, hasta su propia pausa (para depurar). */
   private unlocking = false;
   /** Con `?debug=juntos`: el último toque o tecla en la página (solo para `NativeRecord`). */
@@ -547,6 +564,7 @@ export class RoomPlayer {
     engine: this.engine,
     sound: {
       unlocked: this.unlocked,
+      voted: this.voted,
       autoMuted: this.autoMuted,
       autoStarting: this.autoStarting,
       unlocking: this.unlocking,
@@ -1167,6 +1185,7 @@ export class RoomPlayer {
             durationS,
           )
         : null,
+      this.voted,
     );
     /* Lo que la sala quiere (reproducir), no si va ya: con la sala esperando a alguien, la tecla
        de alternar del sistema debe mandar «pausa», como el botón de la sala. */
@@ -1423,8 +1442,10 @@ export class RoomPlayer {
   /**
    * Reproducir, con freno: no otro play() mientras hay uno en curso, ni antes de `PLAY_RETRY_MS`
    * tras uno que falló (en directo se pedía en cada tic). Si el navegador no deja sonar
-   * (NotAllowedError) y no estaba en silencio, se arranca en silencio (`autoStart`); si ni así,
-   * «Toca para empezar» (`blocked`). En silencio y con la página oculta, se espera a que vuelva.
+   * (NotAllowedError): en directo, y sin estar ya en silencio, se arranca en silencio
+   * (`autoStart`) y, si ni así, «Toca para empezar» (`blocked`); en pelis y series, «Toca para
+   * empezar» directamente (§13: el arranque es por «Estoy listo», no en silencio). En silencio y
+   * con la página oculta, se espera a que vuelva.
    */
   private playVideo(force = false): void {
     const now = this.env.now();
@@ -1448,7 +1469,7 @@ export class RoomPlayer {
           this.playRetryAt = this.env.now() + PLAY_RETRY_MS;
           return;
         }
-        if (!video.muted) this.autoStart(generation);
+        if (!video.muted && this.room()?.live) this.autoStart(generation);
         else this.blockPlayback();
       },
     );
@@ -1507,6 +1528,7 @@ export class RoomPlayer {
   unlock(): void {
     const generation = this.generation;
     const video = this.video;
+    this.markVoted();
     this.unlocking = true;
     this.heldPause = false;
     if (this.autoMuted) {
@@ -1552,9 +1574,29 @@ export class RoomPlayer {
     video.muted = false;
     this.autoMuted = false;
     this.unlocked = true;
+    this.markVoted();
     if (this.view.soundBlocked) this.set({ soundBlocked: false });
     const room = this.room();
     if (room && (room.live || isRunning(room.playback)) && video.paused) this.playVideo(true);
+  }
+
+  /**
+   * «Estoy listo» (§13, pelis y series; solo dentro de un toque): el voto de este aparato (lo
+   * manda el tic siguiente, al momento por ser un cambio: `client.report`) y en el mismo toque el
+   * play que deja sonar el vídeo cuando empiece la sala (con la sala aún parada, se vuelve a parar
+   * al empezar a sonar, no antes: una pausa en el mismo toque lo cortaría). Aunque el vídeo aún no
+   * esté abierto: el play dentro del toque ya desbloquea este `<video>` en Safari, y Chrome se
+   * acuerda del toque en la página.
+   */
+  vote(): void {
+    if (this.destroyed) return;
+    this.unlock();
+  }
+
+  private markVoted(): void {
+    if (this.voted) return;
+    this.voted = true;
+    this.set({ voted: true });
   }
 
   /**

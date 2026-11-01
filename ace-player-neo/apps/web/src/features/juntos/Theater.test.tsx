@@ -21,6 +21,7 @@ function setup(
   over: Partial<PartyRoom> = {},
   quality: PlayerQuality | null = null,
   extra: Partial<PlayerView> = {},
+  fullscreen = false,
 ) {
   const env: PartyEnv = {
     now: () => NOW,
@@ -44,16 +45,19 @@ function setup(
     quality,
     sounded: true,
     soundBlocked: false,
+    voted: false,
     localError: false,
     ...extra,
   };
   const setQuality = vi.fn();
   const unmute = vi.fn();
+  const vote = vi.fn();
   const player = {
     subscribe: () => () => undefined,
     getView: () => view,
     setQuality,
     unmute,
+    vote,
   } as unknown as RoomPlayer;
   const onFullscreen = vi.fn();
   const control = vi.spyOn(client, 'control');
@@ -73,14 +77,42 @@ function setup(
       room={room}
       state={state}
       video={video}
-      fullscreen={false}
+      fullscreen={fullscreen}
       onFullscreen={onFullscreen}
     />,
   );
-  return { setQuality, control, video, unmute, onFullscreen };
+  return { setQuality, control, video, unmute, vote, onFullscreen };
 }
 
 describe('«Ver juntos»: el reproductor', () => {
+  it('«Esperando a todos» en pantalla completa: el «Estoy listo» va en el centro (la tarjeta no se ve)', () => {
+    const lobby = {
+      playback: { playing: false, positionS: 0, at: NOW, rev: 3, waitingFor: [], lobby: true },
+    };
+    const { vote } = setup(ANA, lobby, null, {}, true);
+    fireEvent.click(screen.getByRole('button', { name: 'Estoy listo' }));
+    expect(vote).toHaveBeenCalledTimes(1);
+  });
+
+  it('«Esperando a todos» en pantalla completa, ya votado: «Estás listo», que no vuelve a votar', () => {
+    const lobby = {
+      playback: { playing: false, positionS: 0, at: NOW, rev: 3, waitingFor: [], lobby: true },
+    };
+    const { vote } = setup(ANA, lobby, null, { voted: true }, true);
+    const done = screen.getByRole('button', { name: 'Estás listo' });
+    expect(done.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(done);
+    expect(vote).not.toHaveBeenCalled();
+  });
+
+  it('«Esperando a todos» fuera de la pantalla completa: el centro lo deja a la tarjeta', () => {
+    const lobby = {
+      playback: { playing: false, positionS: 0, at: NOW, rev: 3, waitingFor: [], lobby: true },
+    };
+    setup(ANA, lobby);
+    expect(screen.queryByRole('button', { name: 'Estoy listo' })).toBeNull();
+  });
+
   it('el tiempo es el de la sala (10:00), no el del vídeo de este aparato (0:10)', () => {
     setup(ANA);
     expect(screen.getByText('10:00')).toBeTruthy();

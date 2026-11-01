@@ -56,10 +56,6 @@
   color: var(--text-3);
   font-size: 13.5px;
 }
-.juntos-live__reclaim {
-  justify-self: start;
-}
-
 /* Móvil: cada canal es una tarjeta (juntos.css). Su cabecera ya no es el título suelto
    (`.juntos-live__group > .juntos-kicker`), así que el relleno va en ella. */
 @media (max-width: 767px) {

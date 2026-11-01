@@ -103,6 +103,24 @@
   fill: var(--accent);
   stroke: light-dark(var(--accent-edge), var(--accent));
 }
+/* «Esperando a todos» (§13): la marca de quien ya ha tocado «Estoy listo» (abajo a la izquierda:
+   el escudo del co-líder va a la derecha); quien no, un poco apagado. */
+.juntos-av__voted {
+  position: absolute;
+  bottom: -4px;
+  left: -4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #16a34a;
+  color: #fff;
+  box-shadow: 0 0 0 2px var(--bg-sunk);
+}
+.juntos-av--unvoted {
+  opacity: 0.6;
+}
 .juntos-av__shield {
   position: absolute;
   right: -4px;
@@ -242,6 +260,10 @@
   gap: 4px;
   color: #4ade80;
 }
+.juntos-lobby__state--wait {
+  color: rgb(255 255 255 / 0.65);
+  font-weight: 650;
+}
 .juntos-lobby__bar {
   display: block;
   width: 56px;
@@ -262,15 +284,25 @@
   font-family: var(--mono);
   text-align: right;
 }
-.juntos-lobby__start {
-  justify-self: start;
+/* «Estoy listo» (o «Estás listo») y, para quien controla, «Empezar ya». */
+.juntos-lobby__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+/* «Estás listo»: el mismo botón de «Estoy listo», ya hecho (aria-disabled, sigue en el Tab). */
+.juntos-lobby__vote--done,
+.juntos-lobby__vote--done:hover {
+  color: #4ade80;
+  cursor: default;
 }
 .juntos-lobby__hint {
   margin: 0;
   color: rgb(255 255 255 / 0.75);
   font-size: var(--fs-12, 12px);
 }
-/* «Toca aquí para que suene al empezar»: hasta el primer toque en la espera. */
+/* «Así suena en tu aparato cuando empiece»: bajo «Estoy listo», hasta tocarlo. */
 .juntos-lobby__sound {
   display: inline-flex;
   align-items: center;
@@ -1596,6 +1628,10 @@
   border-radius: 50%;
   background: #35c759;
 }
+/* «Recuperar el mando» (directo §14): va con la sala, no con Fuentes (live.css, perezosa). */
+.juntos-live__reclaim {
+  justify-self: start;
+}
 .juntos-live__empty {
   margin: 0;
   color: var(--text-3);
@@ -1820,7 +1856,7 @@
   }
 
   /* «Esperando a todos» (ver-juntos-pelis.html): casi a pantalla completa,
-     con el cartel grande en el centro y «Empezar para todos» abajo. */
+     con el cartel grande en el centro y «Estoy listo» y «Empezar ya» abajo. */
   .juntos__stage:has(> .juntos-lobby) {
     height: auto;
     min-height: max(480px, calc(100dvh - var(--safe-top) - 160px));
@@ -1855,10 +1891,14 @@
   .juntos-lobby__row {
     min-height: 48px;
   }
-  .juntos-lobby__start {
-    justify-self: stretch;
-    min-height: 52px;
+  .juntos-lobby__actions {
+    flex-direction: column;
+    align-items: stretch;
     margin-top: auto;
+  }
+  .juntos-lobby__vote,
+  .juntos-lobby__start {
+    min-height: 52px;
   }
 
   /* Fuentes y Partidos (ver-juntos.html): tarjetas con las filas dentro, la

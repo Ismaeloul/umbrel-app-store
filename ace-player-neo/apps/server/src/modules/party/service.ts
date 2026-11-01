@@ -29,10 +29,13 @@
    Co-líderes, «Esperando a todos» y «está escribiendo» (§13): el líder hace
    co-líder a quien quiera; con `settings.coleaders` controla como él, pero no
    echa ni pasa la corona. Cada título empieza en `lobby` (el reloj parado en
-   el principio) y arranca solo cuando todos los conectados están listos (al
-   crear la sala, con dos o más: si no, empezaría antes de que entre nadie), o
-   cuando quien controla da a reproducir. «Está escribiendo» no se guarda: se
-   reenvía, como mucho uno cada `typingIntervalMs` por persona. */
+   el principio) y arranca solo cuando todos los conectados han tocado «Estoy
+   listo» (`voted`, el toque que deja sonar el vídeo en su aparato; dura toda
+   la visita, así que el siguiente título solo lo vuelve a pedir a quien no lo
+   ha dado nunca) y tienen el vídeo cargado (al crear la sala, con dos o más:
+   si no, empezaría antes de que entre nadie), o cuando quien controla da a
+   reproducir («Empezar ya»). «Está escribiendo» no se guarda: se reenvía,
+   como mucho uno cada `typingIntervalMs` por persona. */
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
@@ -157,6 +160,11 @@ interface Member {
   /** «Esperando a todos» (§13): lo que dice su reproductor; null si no lo dice (una app vieja). */
   readyReported: boolean | null;
   progress: number | null;
+  /**
+   * Pelis y series (§13): ha tocado «Estoy listo» en esta visita (lo dice su `status`); null si
+   * no lo dice (una app vieja): cuenta como que sí.
+   */
+  votedReported: boolean | null;
   /** El último «está escribiendo» que se reenvió. */
   typingAt: number;
   /** Clave de vídeo (`partyVideo`): va en la ruta de la lista y de los segmentos. */
@@ -371,6 +379,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     return member.readyReported ?? (member.viewer !== null && !member.buffering);
   }
 
+  /** Ha tocado «Estoy listo» (§13); quien no lo dice (una app vieja), sí. */
+  function hasVoted(member: Member): boolean {
+    return member.votedReported ?? true;
+  }
+
   function roleOf(room: Room, memberId: string): PartyMember['role'] {
     if (memberId === room.leaderId) return 'leader';
     return room.coleaders.has(memberId) ? 'coleader' : 'guest';
@@ -476,6 +489,22 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     });
   }
 
+  /**
+   * «Estoy listo» (§13): quién no ha tocado aún. Va en su propio evento, no en `members`, porque
+   * `PartyMember` es estricto y una página de antes (abierta antes de actualizar el NAS) descartaría
+   * todas las salas por un campo que no conoce; este evento, en cambio, lo ignora.
+   */
+  function votesEvent(room: Room): PartyEvent {
+    return {
+      type: 'party.votes',
+      data: {
+        unvoted: [...room.members.values()]
+          .filter((member) => !hasVoted(member))
+          .map((member) => member.id),
+      },
+    };
+  }
+
   function sendRoom(room: Room): void {
     broadcast(room, {
       type: 'party.room',
@@ -491,6 +520,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         live: room.live,
       },
     });
+    broadcast(room, votesEvent(room));
   }
 
   function connections(): number {
@@ -701,6 +731,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       chatTimes: [],
       readyReported: null,
       progress: null,
+      votedReported: null,
       typingAt: Number.NEGATIVE_INFINITY,
       videoKey: randomId(24),
       viewer: null,
@@ -1064,14 +1095,15 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   }
 
   /**
-   * «Esperando a todos» (§13): si todos los conectados están listos, empieza
-   * sola. («Empezar para todos» es un `play` de quien controla: `control`.)
+   * «Esperando a todos» (§13): si todos los conectados han tocado «Estoy listo» y tienen el vídeo
+   * cargado, empieza sola. Quien se va o pierde la conexión deja de contar (`online`). («Empezar
+   * ya» es un `play` de quien controla: `control`.)
    */
   function maybeStart(room: Room, now: number): void {
     if (room.lobby === null || room.interrupted) return;
     const present = [...room.members.values()].filter((member) => online(member, now));
     if (present.length < (room.lobby === 'create' ? 2 : 1)) return;
-    if (!present.every(isReady)) return;
+    if (!present.every((member) => isReady(member) && hasVoted(member))) return;
     room.lobby = null;
     fix(room, room.playback.positionS, now);
     room.playback.playing = true;
@@ -1231,6 +1263,12 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       if (kind === 'taken' && hash === room.title.id && now < room.audioSwitchUntil) continue;
       for (const id of viewerIds) room.viewers.delete(id);
       if (room.interrupted) continue;
+      /* directo §14: se ha caído el vídeo de UN aparato (su remux, su variante) y los demás
+         siguen viendo la fuente: no es la fuente. Ni se para la sala, ni salta el automático, ni
+         se apunta «Sin señal»: ese aparato vuelve a abrir solo (`status` dice `lost`). Si la
+         fuente cae de verdad, cae para todos (en un aviso o en uno por visor: el último ya no
+         deja a nadie viéndola y entonces sí es de la sala). */
+      if (kind === 'failed' && room.live && localFailure(room, viewerIds, now)) continue;
       room.interrupted = kind;
       const wasPlaying = room.playback.playing;
       fix(room, positionNow(room, now), now);
@@ -1274,6 +1312,31 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   }
 
   /* directo §14 */
+  /**
+   * ¿El corte es solo de esos visores? Sí si alguien más de la sala (conectado) sigue con su
+   * visor de la fuente. Entonces a los que han caído se les da por perdidos, para que vuelvan a
+   * abrir (`status` → `lost`), y la sala sigue.
+   */
+  function localFailure(room: Room, viewerIds: readonly string[], now: number): boolean {
+    const hit = new Set(viewerIds);
+    const others = [...room.members.values()].some(
+      (member) =>
+        member.viewer !== null && !hit.has(member.viewer.identity.viewerId) && online(member, now),
+    );
+    if (!others) return false;
+    for (const member of room.members.values()) {
+      if (member.viewer && hit.has(member.viewer.identity.viewerId)) {
+        member.viewer = null;
+        member.viewerLostAt = now;
+      }
+    }
+    logger.info(
+      { room: room.code, viewers: viewerIds.length },
+      'Ver juntos: se ha caído el vídeo de un aparato, no la fuente',
+    );
+    return true;
+  }
+
   /**
    * «Cambio automático si se cae» (live-auto.ts): con la sala parada por un corte, salta a la
    * siguiente fuente buena con las de la sala (la caché de Fuentes) y los veredictos del
@@ -1428,6 +1491,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         data: { room: roomView(room), chat: [...room.chat], serverNow: clock.now() },
       });
       if (frame) write(room, connection, frame);
+      const votes = frameOf(votesEvent(room));
+      if (votes) write(room, connection, votes);
       ensureHeartbeat();
       /* Los demás ven que ha vuelto. */
       if (member.connections === 1) sendRoom(room);
@@ -1774,11 +1839,24 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       let action: PartyAction = body.action;
       switch (body.action) {
         case 'play':
-          /* «Empezar para todos» (§13): reproducir en la espera la acaba. */
+          /* «Empezar ya» (§13): reproducir en la espera la acaba, aunque falte alguien por
+             tocar «Estoy listo» (se ha ido a por palomitas): a ese, «Toca para empezar». */
           room.playback.playing = true;
           if (room.lobby !== null) {
             room.lobby = null;
-            say(room, `${member.name} ha empezado para todos.`, null);
+            /* Su «Empezar ya» vale como su «Estoy listo»: su voto (el siguiente latido) aún no ha
+               llegado, así que no cuenta como alguien a quien no se esperó. */
+            if (member.votedReported === false) member.votedReported = true;
+            const forced = [...room.members.values()].some(
+              (other) => other.id !== member.id && online(other, now) && !hasVoted(other),
+            );
+            say(
+              room,
+              forced
+                ? `${member.name} ha empezado sin esperar a todos.`
+                : `${member.name} ha empezado para todos.`,
+              null,
+            );
             break;
           }
           say(room, `${member.name} ha dado a reproducir.`, null);
@@ -1852,6 +1930,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         member.readyReported = ready;
         member.progress = progress;
         /* Fuera de la espera, el % no le importa a nadie: no se reparte. */
+        if (room.lobby !== null) changed = true;
+      }
+      /* «Estoy listo» (§13): lo que diga (la web lo manda siempre; al recargar, otra vez false). */
+      if (body.voted !== undefined && body.voted !== member.votedReported) {
+        member.votedReported = body.voted;
         if (room.lobby !== null) changed = true;
       }
       if (changed) sendRoom(room);

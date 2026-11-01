@@ -13,7 +13,9 @@
      acabe» bajo el vídeo (va en Siguiente). Quién controla y la regla de
      «Al acabar» están donde en escritorio: Gente y Siguiente.
    - Antes de empezar, «Esperando a todos» (Lobby) encima del vídeo, que ya
-     va cargando por debajo.
+     va cargando por debajo. En pelis y series cada uno toca «Estoy listo»
+     (el toque que deja sonar su vídeo, `player.vote`): la sala arranca sola
+     cuando le han dado todos y lo tienen cargado.
    - Pantalla completa: solo el vídeo (sin chat). En el iPhone no hay
      pantalla completa para un trozo de página: allí el vídeo ocupa toda la
      pantalla con CSS. En Android, además, se gira a horizontal.
@@ -22,17 +24,18 @@
      Partidos y Gente; los demás, Chat y Gente. Fuentes es una ruta de la
      sala: también en la página del invitado. Partidos tira de la agenda de
      casa: solo en casa (`liveTools`). El «Cambio automático si se cae» lo
-     decide el servidor (party/live-auto.ts).
+     decide el servidor (party/live-auto.ts). Fuentes y Partidos se bajan
+     al abrirlos (`lazy`): tiran de Fuentes de la ficha y de la agenda, que la
+     página del invitado no necesita para una peli.
    - Los carteles van por la ruta de la sala (`partyArt`, PartyArt): el
      invitado de fuera no tiene `vodArt` (§9).
-   - Un toque en «Esperando a todos» deja sonar el vídeo luego: si el
-     navegador lo ha empezado en silencio, quita el silencio; si no ha dejado
-     ni eso, lo desbloquea.
    - Si la sala no contesta en `CONNECT_SLOW_MS`, «Reintentar» (otro cliente
      y otro reproductor desde cero). */
 
 import type { PartyCloseReason, PartyCredential, PartyRoom } from '@ace/shared';
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -51,19 +54,36 @@ import { Tabs, tabPanelProps } from '../../ui/Segmented.tsx';
 import { Art } from '../cine/Art.tsx';
 import { useSecondTap } from '../settings/second-tap.ts';
 import { Chat } from './Chat.tsx';
-import { canControl, controllers, inviteUrl, PartyClient, rememberRoom, roleOf } from './client.ts';
+import {
+  canControl,
+  canSwitchLive,
+  controllers,
+  inviteUrl,
+  PartyClient,
+  rememberRoom,
+  roleOf,
+} from './client.ts';
 import { Icon } from '../../ui/Icon.tsx';
 import { MEDIA, useMediaQuery } from '../../lib/media.ts';
 import { MobileFaces, MobileSkip } from './Mobile.tsx';
 import { Faces, joinNames, Lobby, NextCard, NextPanel, People } from './Panels.tsx';
 import { PartyArt } from './Join.tsx';
-import { LiveMatches, LiveReclaim, LiveSources } from './LivePanels.tsx';
-import { canSwitchLive } from './liveSources.ts';
+import { LiveReclaim } from './LiveReclaim.tsx';
 import { LIVE_TEXT } from './liveTexts.ts';
 import { RoomPlayer } from './player.ts';
 import { useUnread } from './useUnread.ts';
 import { Theater } from './Theater.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
+
+/* directo §14: Fuentes (la lógica de la ficha) y Partidos (la agenda de casa), al abrirlos. */
+const LiveSources = lazy(() =>
+  import('./LivePanels.tsx').then((module) => ({ default: module.LiveSources })),
+);
+const LiveMatches = lazy(() =>
+  import('./LiveMatches.tsx').then((module) => ({ default: module.LiveMatches })),
+);
+
+const noPlayer = (): (() => void) => () => undefined;
 
 const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
   host: JUNTOS_TEXT.closedByHost,
@@ -147,8 +167,6 @@ export function Room({
   }, [code, credential, attempt]);
   const state = useSyncExternalStore(client.subscribe, client.getState);
   const [slow, setSlow] = useState(false);
-  /* El primer toque en la espera ya ha preparado el vídeo para sonar. */
-  const [primed, setPrimed] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const [player, setPlayer] = useState<RoomPlayer | null>(null);
@@ -202,16 +220,11 @@ export function Room({
     setAttempt((n) => n + 1);
   };
 
-  /* Un toque en «Esperando a todos»: lo que haga falta para que luego suene. */
-  const onLobbyGesture = () => {
-    if (!player) return;
-    const now = player.getView();
-    if (now.phase === 'blocked') player.unlock();
-    else if (now.soundBlocked) player.unmute();
-    else if (!primed && now.phase === 'ready') player.unlock();
-    else return;
-    setPrimed(true);
-  };
+  /* «Estoy listo» (§13): esta página ya ha dado el toque (lo sabe antes que el servidor). */
+  const voted = useSyncExternalStore(
+    player?.subscribe ?? noPlayer,
+    () => player?.getView().voted ?? false,
+  );
 
   /* Salir de la pantalla completa del navegador (Esc, el gesto de atrás) también la quita aquí. */
   useEffect(() => {
@@ -333,11 +346,13 @@ export function Room({
 
   const livePanel = (which: 'fuentes' | 'partidos') =>
     room ? (
-      which === 'fuentes' ? (
-        <LiveSources room={room} client={client} />
-      ) : (
-        <LiveMatches room={room} client={client} />
-      )
+      <Suspense fallback={<p className="juntos-live__empty">{LIVE_TEXT.panelLoading}</p>}>
+        {which === 'fuentes' ? (
+          <LiveSources room={room} client={client} />
+        ) : (
+          <LiveMatches room={room} client={client} />
+        )}
+      </Suspense>
     ) : null;
 
   const stageContent = (
@@ -354,13 +369,15 @@ export function Room({
           onFullscreen={toggleFullscreen}
         />
       ) : null}
+      {/* En pantalla completa, solo el vídeo: el «Estoy listo» va en el centro (Theater). */}
       {room?.playback.lobby && !fullscreen ? (
         <Lobby
           room={room}
           client={client}
           selfId={selfId}
-          soundHint={!primed}
-          onGesture={onLobbyGesture}
+          voted={voted}
+          unvoted={state.unvoted}
+          onVote={() => player?.vote()}
         />
       ) : null}
     </div>
@@ -480,7 +497,7 @@ export function Room({
               live && !desk ? (
                 <MobileFaces room={room} selfId={selfId} />
               ) : (
-                <Faces room={room} selfId={selfId} />
+                <Faces room={room} selfId={selfId} selfVoted={voted} unvoted={state.unvoted} />
               )
             ) : null}
             <div className="juntos__side-head">

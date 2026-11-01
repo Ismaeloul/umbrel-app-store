@@ -11,7 +11,7 @@ import joined from '@fixtures/web/v1/partyJoin.json';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { json, mockFetch } from '../../test/fetch.ts';
 import { canControl, controllers, PartyClient, roleOf, type PartyEnv } from './client.ts';
-import { Lobby, NextPanel, People } from './Panels.tsx';
+import { Faces, Lobby, NextPanel, People } from './Panels.tsx';
 
 const HOST = 'm_IsmaAnfitrion';
 const ANA = 'm_AnaInvitada01';
@@ -105,6 +105,16 @@ describe('«Ver juntos»: «está escribiendo» (§13)', () => {
       message: { id: 9, at: 1, kind: 'chat', memberId: ANA, name: 'Ana', text: 'hola' },
     });
     expect(party.getState().typing).toEqual([]);
+    party.stop();
+  });
+
+  it('«Estoy listo» de los demás llega en `party.votes` (aparte de `members`); sin él, todos sí', () => {
+    const { client: party, source } = client(HOST);
+    party.start();
+    source.emit('party.snapshot', { room: room(), chat: [], serverNow: 1_000 });
+    expect(party.getState().unvoted).toEqual([]);
+    source.emit('party.votes', { unvoted: [ANA] });
+    expect(party.getState().unvoted).toEqual([ANA]);
     party.stop();
   });
 
@@ -239,52 +249,176 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
     ],
   });
 
-  it('quién está listo y quién cargando; «Empezar para todos» para quien controla', async () => {
+  it('quién está listo y quién cargando; «Empezar ya» sin nadie por tocar sale al primer toque', async () => {
     net = mockFetch({
       'POST /api/v1/party/:code/control': () => json({ serverNow: 1, rev: 2 }),
     });
     const { client: party } = client(HOST);
-    render(<Lobby room={lobby} client={party} selfId={HOST} />);
+    const onVote = vi.fn();
+    render(<Lobby room={lobby} client={party} selfId={HOST} voted onVote={onVote} />);
     expect(screen.getByText('Esperando a todos')).toBeTruthy();
     expect(within(screen.getByText(/Isma/).closest('li')!).getByText('Listo')).toBeTruthy();
     expect(within(screen.getByText('Ana').closest('li')!).getByText('63 %')).toBeTruthy();
     expect(screen.getByText(/Esperando a Ana… empieza sola/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Empezar para todos' }));
+    /* Ya he tocado: el mismo botón dice «Estás listo» y no hace nada (aria-disabled, sin perder
+       el foco); la región de estado, que ya estaba montada, lo anuncia. */
+    const done = screen.getByRole('button', { name: 'Estás listo' });
+    expect(done.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(done);
+    expect(screen.queryByRole('button', { name: 'Estoy listo' })).toBeNull();
+    expect(screen.getAllByRole('status').some((node) => node.textContent === 'Estás listo')).toBe(
+      true,
+    );
+    /* Ana carga: forzar pide el segundo toque. */
+    fireEvent.click(screen.getByRole('button', { name: 'Empezar ya' }));
+    expect(net?.calls ?? []).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Toca otra vez: empieza sin esperar' }));
     /* Con su fuente, para el registro del servidor. */
     await waitFor(() =>
       expect(net?.calls.at(-1)?.body).toMatchObject({ action: 'play', source: 'lobby' }),
     );
+    expect(onVote).not.toHaveBeenCalled();
   });
 
-  it('el toque que deja sonar va con el clic, no al bajar el dedo (en el iPhone eso no cuenta)', () => {
+  it('«Faltan Ana…»: cada uno su «Estoy listo», con el clic (en el iPhone, bajar el dedo no cuenta)', () => {
     const { client: party } = client(ANA);
-    const onGesture = vi.fn();
-    render(<Lobby room={lobby} client={party} selfId={ANA} onGesture={onGesture} soundHint />);
-    const card = document.querySelector('.juntos-lobby') as HTMLElement;
-    expect(screen.getByText('Toca aquí para que suene al empezar')).toBeTruthy();
-    fireEvent.pointerDown(card, { pointerType: 'touch' });
-    expect(onGesture).not.toHaveBeenCalled();
-    fireEvent.click(card);
-    expect(onGesture).toHaveBeenCalledTimes(1);
-    /* Con el teclado, Intro o espacio; otra tecla, no. */
-    fireEvent.keyDown(card, { key: 'Tab' });
-    expect(onGesture).toHaveBeenCalledTimes(1);
-    fireEvent.keyDown(card, { key: 'Enter' });
-    fireEvent.keyDown(card, { key: ' ' });
-    expect(onGesture).toHaveBeenCalledTimes(3);
+    const onVote = vi.fn();
+    const unvoted = room({
+      playback: { ...BASE.playback, lobby: true, playing: false },
+      members: [
+        { ...BASE.members[0]!, ready: true, progress: 100 },
+        { ...ana, ready: true, progress: 100 },
+        { ...bea, ready: true, progress: 100 },
+      ],
+    });
+    render(
+      <Lobby
+        room={unvoted}
+        client={party}
+        selfId={ANA}
+        voted={false}
+        unvoted={[BEA]}
+        onVote={onVote}
+      />,
+    );
+    /* Lo mío, como lo sabe esta página (el servidor aún no se ha enterado de que recargué). */
+    expect(within(screen.getByText(/Ana/).closest('li')!).getByText('Sin confirmar')).toBeTruthy();
+    expect(within(screen.getByText('Bea').closest('li')!).getByText('Sin confirmar')).toBeTruthy();
+    expect(screen.getByText('Faltáis Bea y tú por darle a «Estoy listo»')).toBeTruthy();
+    expect(screen.getByText('Así suena en tu aparato cuando empiece.')).toBeTruthy();
+    const button = screen.getByRole('button', { name: 'Estoy listo' });
+    fireEvent.pointerDown(button, { pointerType: 'touch' });
+    expect(onVote).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    expect(onVote).toHaveBeenCalledTimes(1);
+    /* Tocar en otro sitio de la espera no es votar. */
+    fireEvent.click(document.querySelector('.juntos-lobby') as HTMLElement);
+    expect(onVote).toHaveBeenCalledTimes(1);
   });
 
-  it('ya tocada la espera, sin el aviso del sonido', () => {
+  it('con dos o más por tocar además de mí: «Faltáis Ana, Bea y tú…»', () => {
+    const { client: party } = client(HOST);
+    const three = room({
+      playback: { ...BASE.playback, lobby: true, playing: false },
+      members: [
+        { ...BASE.members[0]!, ready: true, progress: 100 },
+        { ...ana, ready: true, progress: 100 },
+        { ...bea, ready: true, progress: 100 },
+      ],
+    });
+    render(
+      <Lobby
+        room={three}
+        client={party}
+        selfId={HOST}
+        voted={false}
+        unvoted={[HOST, ANA, BEA]}
+        onVote={() => undefined}
+      />,
+    );
+    expect(screen.getByText('Faltáis Ana, Bea y tú por darle a «Estoy listo»')).toBeTruthy();
+  });
+
+  it('votar no deja el foco en el aire: el mismo botón pasa a «Estás listo» y el estado se anuncia', () => {
     const { client: party } = client(ANA);
-    render(<Lobby room={lobby} client={party} selfId={ANA} onGesture={() => undefined} />);
-    expect(screen.queryByText('Toca aquí para que suene al empezar')).toBeNull();
+    const props = { room: lobby, client: party, selfId: ANA, onVote: () => undefined };
+    const { rerender } = render(<Lobby {...props} voted={false} />);
+    const status = screen
+      .getAllByRole('status')
+      .find((node) => node.classList.contains('sr-only'))!;
+    /* Montada y vacía antes del voto: así el cambio se lee. */
+    expect(status.textContent).toBe('');
+    const button = screen.getByRole('button', { name: 'Estoy listo' });
+    button.focus();
+    rerender(<Lobby {...props} voted />);
+    expect(document.activeElement).toBe(button);
+    expect(button.textContent).toContain('Estás listo');
+    expect(status.textContent).toBe('Estás listo');
+  });
+
+  it('sola y sin tocar: «Empezar ya» al primer toque, y vale como su «Estoy listo»', async () => {
+    net = mockFetch({
+      'POST /api/v1/party/:code/control': () => json({ serverNow: 1, rev: 2 }),
+    });
+    const { client: party } = client(HOST);
+    const onVote = vi.fn();
+    const alone = room({
+      playback: { ...BASE.playback, lobby: true, playing: false },
+      members: [{ ...BASE.members[0]!, ready: true, progress: 100 }],
+    });
+    render(<Lobby room={alone} client={party} selfId={HOST} voted={false} onVote={onVote} />);
+    expect(screen.getByText('Falta que le des a «Estoy listo»')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Empezar ya' }));
+    expect(onVote).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(net?.calls.at(-1)?.body).toMatchObject({ action: 'play' }));
   });
 
   it('el invitado no puede empezar', () => {
     const { client: party } = client(ANA);
-    render(<Lobby room={lobby} client={party} selfId={ANA} />);
-    expect(screen.queryByRole('button', { name: 'Empezar para todos' })).toBeNull();
+    const ready = room({
+      playback: { ...BASE.playback, lobby: true, playing: false },
+      members: [
+        { ...BASE.members[0]!, ready: true, progress: 100 },
+        { ...ana, ready: true, progress: 100 },
+      ],
+    });
+    render(<Lobby room={ready} client={party} selfId={ANA} voted onVote={() => undefined} />);
+    expect(screen.queryByRole('button', { name: 'Empezar ya' })).toBeNull();
     expect(screen.getByText(/cuando Isma le dé/)).toBeTruthy();
+  });
+
+  it('las caras llevan la marca de quien ya ha tocado (la mía, la de esta página); fuera de la espera, no', () => {
+    const marks = room({
+      playback: { ...BASE.playback, lobby: true, playing: false },
+      members: [{ ...BASE.members[0]! }, { ...ana }, { ...bea }],
+    });
+    /* Lo de los demás, del evento `party.votes` (no va en `members`). */
+    const { rerender } = render(
+      <Faces room={marks} selfId={ANA} selfVoted={false} unvoted={[ANA, BEA]} />,
+    );
+    const face = (name: string) =>
+      screen.getByText(name, { exact: false }).closest('li')!.querySelector('.juntos-av')!;
+    expect(face('Isma').getAttribute('data-voted')).toBe('true');
+    expect(face('Ana').getAttribute('data-voted')).toBe('false');
+    expect(face('Bea').getAttribute('data-voted')).toBe('false');
+    expect(document.querySelectorAll('.juntos-av__voted')).toHaveLength(1);
+    rerender(<Faces room={room()} selfId={ANA} selfVoted={false} />);
+    expect(document.querySelectorAll('[data-voted]')).toHaveLength(0);
+  });
+
+  it('el latido lleva siempre «Estoy listo» y, si cambia, sale al momento', async () => {
+    net = mockFetch({
+      'POST /api/v1/party/:code/status': () => json({ serverNow: 1, rev: 2, stream: 'ok' }),
+    });
+    const { client: party } = client(ANA);
+    party.report(0, true, null, false);
+    await waitFor(() => expect(net?.calls).toHaveLength(1));
+    expect(net?.calls[0]?.body).toMatchObject({ voted: false });
+    /* Lo mismo otra vez: nada. */
+    party.report(0, true, null, false);
+    party.report(0, true, null, true);
+    await waitFor(() => expect(net?.calls).toHaveLength(2));
+    expect(net?.calls[1]?.body).toMatchObject({ voted: true });
   });
 
   it('en la espera, el latido lleva si está listo y su %; fuera de ella, no', async () => {

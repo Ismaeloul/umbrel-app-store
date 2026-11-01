@@ -38,6 +38,7 @@ const playerState = vi.hoisted(() => ({
     quality: null,
     sounded: false,
     soundBlocked: false,
+    voted: false,
     localError: false,
   } as Record<string, unknown>,
   calls: [] as string[],
@@ -57,6 +58,9 @@ vi.mock('./player.ts', () => {
       }
       unmute(): void {
         playerState.calls.push('unmute');
+      }
+      vote(): void {
+        playerState.calls.push('vote');
       }
       subscribe(): () => void {
         return () => undefined;
@@ -114,7 +118,7 @@ function setViewport(width: number) {
 let net: ReturnType<typeof mockFetch> | undefined;
 
 beforeEach(() => {
-  playerState.view = { ...playerState.view, phase: 'ready', soundBlocked: false };
+  playerState.view = { ...playerState.view, phase: 'ready', soundBlocked: false, voted: false };
   playerState.calls = [];
   resetMode();
   setMode('live', 'bootstrap');
@@ -387,33 +391,35 @@ describe('el cartel de la sala (docs/ver-juntos.md §9)', () => {
   });
 });
 
-describe('«Esperando a todos»: el toque que deja sonar', () => {
+describe('«Esperando a todos»: «Estoy listo» (§13)', () => {
   const LOBBY: PartyRoom = { ...ROOM, playback: { ...ROOM.playback, lobby: true, playing: false } };
 
-  it('si el navegador no ha dejado ni empezar, lo desbloquea', () => {
+  it('«Estoy listo» es el voto y el toque que deja sonar (player.vote); tocar la tarjeta, no', () => {
     setViewport(1280);
-    playerState.view = { ...playerState.view, phase: 'blocked' };
     mountRoom(ANA, vi.fn(), false, LOBBY);
     fireEvent.click(document.querySelector('.juntos-lobby') as HTMLElement);
-    expect(playerState.calls).toEqual(['unlock']);
+    expect(playerState.calls).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Estoy listo' }));
+    expect(playerState.calls).toEqual(['vote']);
   });
 
-  it('si lo ha empezado en silencio, quita el silencio', () => {
+  it('ya votado en esta página (el título siguiente): «Estás listo» y la marca en mi cara', () => {
     setViewport(1280);
-    playerState.view = { ...playerState.view, soundBlocked: true };
+    playerState.view = { ...playerState.view, voted: true };
     mountRoom(ANA, vi.fn(), false, LOBBY);
-    expect(screen.getByText('Toca aquí para que suene al empezar')).toBeTruthy();
-    fireEvent.click(document.querySelector('.juntos-lobby') as HTMLElement);
-    expect(playerState.calls).toEqual(['unmute']);
-    /* Ya tocado: sin el aviso. */
-    expect(screen.queryByText('Toca aquí para que suene al empezar')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Estás listo' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.queryByRole('button', { name: 'Estoy listo' })).toBeNull();
+    const mine = document.querySelector('.juntos-faces .juntos-av[data-voted="true"]');
+    expect(mine).not.toBeNull();
   });
 
-  it('al bajar el dedo no hace nada (en el iPhone aún no cuenta como gesto)', () => {
+  it('al bajar el dedo no vota (en el iPhone aún no cuenta como gesto)', () => {
     setViewport(390);
-    playerState.view = { ...playerState.view, phase: 'blocked' };
     mountRoom(ANA, vi.fn(), false, LOBBY);
-    fireEvent.pointerDown(document.querySelector('.juntos-lobby') as HTMLElement, {
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Estoy listo' }), {
       pointerType: 'touch',
     });
     expect(playerState.calls).toEqual([]);
@@ -500,6 +506,17 @@ describe('sala en directo', () => {
       }),
     );
     expect(screen.getByRole('tab', { selected: true }).textContent).toBe(JUNTOS_TEXT.tabChat);
+  });
+
+  it('Fuentes se baja al abrirla (lazy) y Partidos solo sale en casa (`liveTools`)', async () => {
+    setViewport(1280);
+    net = mockFetch({
+      [`GET /api/v1/party/${CODE}/sources`]: () => json({ candidates: [], scan: null }),
+    });
+    mountLive(ANA, withRole('coleader'));
+    expect(screen.queryByRole('tab', { name: JUNTOS_TEXT.tabMatches })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: JUNTOS_TEXT.tabSources }));
+    expect(await screen.findByText(JUNTOS_TEXT.liveAuto)).toBeTruthy();
   });
 
   it('el anfitrión al que se le ha ido la corona no es «Co-líder»', () => {

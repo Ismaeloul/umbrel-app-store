@@ -285,6 +285,50 @@ describe('el automático en el servicio', () => {
     await party.stop();
   });
 
+  it('un corte de UN aparato (los demás siguen viendo la fuente) no cambia el canal de toda la sala', async () => {
+    const { core, party, recorded } = setup([candidate(H(4)), candidate(H(5))], {
+      [H(5)]: 'working',
+    });
+    await party.start();
+    const host = party.create(BODY);
+    const room = host.room.code;
+    const ana = party.join(room, 'Ana');
+    const events = listen(party, room, host.member.token);
+    listen(party, room, ana.member.token);
+    await openVideo(party, room, host.member.token);
+    await party.stream(
+      room,
+      { client: 'web', viewer: 'v_ana', t: ana.member.token, hevc: '0', abr: '1' },
+      { viewerId: 'v_ana', deviceId: 'iphone', device: null },
+      new AbortController().signal,
+    );
+    /* Solo el visor de Ana (su remux, su variante): la sala sigue con la misma fuente. */
+    core.bus.emit('stream.closed', {
+      sessionId: GRANT.session.id,
+      viewerIds: ['v_ana'],
+      reason: 'remux_failed',
+    } as never);
+    await flush();
+    const after = party.join(room, 'Leo').room;
+    expect(after.live?.hash).toBe(H(9));
+    expect(after.interrupted).toBeNull();
+    expect(recorded).toEqual([]);
+    expect(chatText(events())).not.toContain('Se ha cortado el vídeo. La sala está en pausa.');
+    /* Ana vuelve a abrir sola: su `status` dice `lost`. */
+    const beat = await party.status(room, {
+      token: ana.member.token,
+      positionS: 0,
+      buffering: false,
+    });
+    expect(beat.stream).toBe('lost');
+    /* Si cae también el de Isma, ya no queda nadie viéndola: es la fuente y salta. */
+    fail(core);
+    await flush();
+    expect(party.join(room, 'Eva').room.live?.hash).toBe(H(5));
+    expect(recorded).toEqual([H(9)]);
+    await party.stop();
+  });
+
   it('con `from` viejo, el segundo cambio se ignora; el mismo hash no suelta a nadie', async () => {
     const { party } = setup([], {});
     const host = party.create(BODY);

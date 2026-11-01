@@ -1085,6 +1085,211 @@ describe('«Ver juntos»: líder, co-líderes y lista (§11 y §13)', () => {
   });
 });
 
+/* «Estoy listo» (docs/ver-juntos.md §13, 1-11-2026): en pelis y series la sala solo arranca sola
+   cuando todos los presentes han tocado «Estoy listo» (el toque que deja sonar el vídeo en su
+   aparato) y tienen el vídeo cargado. */
+describe('«Ver juntos»: arranque por votación (§13)', () => {
+  const OTRA = '0123456789abcdef0123456789abcdef01234567';
+
+  function room3() {
+    const s = setup();
+    const host = s.party.create(BODY);
+    const room = host.room.code;
+    const ana = s.party.join(room, 'Ana');
+    const sse = listen(s.party, room, host.member.token);
+    listen(s.party, room, ana.member.token);
+    /* Listo y cargado (o no), con o sin «Estoy listo». */
+    const status = (token: string, voted: boolean | undefined, ready = true) =>
+      s.party.status(room, {
+        token,
+        positionS: 0,
+        buffering: false,
+        ready,
+        progress: ready ? 100 : 40,
+        ...(voted === undefined ? {} : { voted }),
+      });
+    /* Quién falta por tocar (por nombre), como lo dice el último `party.votes`. */
+    const unvoted = () => {
+      const ids = sse.of('party.votes').at(-1)?.unvoted ?? [];
+      const members = sse.of('party.room').at(-1)?.members ?? [];
+      return ids.map((id) => members.find((m) => m.id === id)?.name ?? id);
+    };
+    return { ...s, host, ana, room, sse, status, unvoted };
+  }
+
+  const addTitle = (token: string, titleId: string, title: string) => ({
+    token,
+    action: 'add' as const,
+    titleId,
+    kind: 'movie' as const,
+    artId: titleId,
+    poster: null,
+    title,
+    subtitle: null,
+  });
+
+  it('con el vídeo cargado no basta: espera a que todos toquen «Estoy listo» y se ve quién falta', async () => {
+    const { host, ana, sse, status, unvoted } = room3();
+    await status(host.member.token, true);
+    await status(ana.member.token, false);
+    expect(sse.of('party.playback')).toEqual([]);
+    const members = sse.of('party.room').at(-1)?.members;
+    expect(members?.map((m) => [m.name, m.ready])).toEqual([
+      ['Isma', true],
+      ['Ana', true],
+    ]);
+    expect(unvoted()).toEqual(['Ana']);
+    /* Votar sin el vídeo cargado tampoco: hacen falta las dos cosas. */
+    await status(ana.member.token, true, false);
+    expect(sse.of('party.playback')).toEqual([]);
+    await status(ana.member.token, true);
+    expect(sse.of('party.playback').at(-1)).toMatchObject({
+      action: 'play',
+      by: null,
+      playback: { playing: true, lobby: false },
+    });
+  });
+
+  it('quien se va o pierde la conexión deja de contar', async () => {
+    const { party, clock, host, ana, room, sse, status } = room3();
+    const leo = party.join(room, 'Leo');
+    const eva = party.join(room, 'Eva');
+    await status(host.member.token, true);
+    await status(ana.member.token, true);
+    await status(leo.member.token, false);
+    await status(eva.member.token, false);
+    expect(sse.of('party.playback')).toEqual([]);
+    /* Eva se va: sigue faltando Leo. */
+    party.leave(room, eva.member.token);
+    await status(host.member.token, true);
+    expect(sse.of('party.playback')).toEqual([]);
+    /* Leo cierra la pestaña sin decir nada: pasado `memberTimeoutMs` ya no está. */
+    for (let left = PARTY.memberTimeoutMs; left >= 0; left -= 5_000) {
+      clock.advance(5_000);
+      await status(host.member.token, true);
+      await status(ana.member.token, true);
+    }
+    expect(sse.of('party.playback').at(-1)?.playback).toMatchObject({
+      playing: true,
+      lobby: false,
+    });
+  });
+
+  it('«Empezar ya»: quien controla arranca aunque falte alguien por tocar (y el chat lo dice)', async () => {
+    const { party, host, ana, room, sse, status } = room3();
+    await status(host.member.token, true);
+    await status(ana.member.token, false);
+    expect(
+      code(
+        catchError(() =>
+          party.control(room, { token: ana.member.token, action: 'play', positionS: 0 }),
+        ),
+      ),
+    ).toBe('party_leader_only');
+    party.control(room, {
+      token: host.member.token,
+      action: 'play',
+      positionS: 0,
+      source: 'lobby',
+    });
+    expect(sse.of('party.playback').at(-1)?.playback).toMatchObject({
+      playing: true,
+      lobby: false,
+    });
+    expect(sse.of('party.chat').at(-1)?.message.text).toBe('Isma ha empezado sin esperar a todos.');
+  });
+
+  it('«Empezar ya» de quien aún no había tocado, sin que falte nadie más: «ha empezado para todos»', async () => {
+    /* Su voto sale con el siguiente latido (500 ms): el `play` llega antes y no debe contarle. */
+    const { party, host, ana, room, sse, status } = room3();
+    await status(host.member.token, false);
+    await status(ana.member.token, true);
+    expect(sse.of('party.playback')).toEqual([]);
+    party.control(room, {
+      token: host.member.token,
+      action: 'play',
+      positionS: 0,
+      source: 'lobby',
+    });
+    expect(sse.of('party.playback').at(-1)?.playback).toMatchObject({ playing: true });
+    expect(sse.of('party.chat').at(-1)?.message.text).toBe('Isma ha empezado para todos.');
+  });
+
+  it('`party.votes` sale al conectarse y con cada `party.room`; `members` no lleva el voto', async () => {
+    const { party, host, ana, room, sse, status, unvoted } = room3();
+    /* Al conectarse, justo detrás de la foto: nadie ha dicho nada aún (cuenta como que sí). */
+    const types = sse.events().map((event) => event.type);
+    expect(types.slice(0, 2)).toEqual(['party.snapshot', 'party.votes']);
+    expect(sse.of('party.votes')[0]?.unvoted).toEqual([]);
+    await status(ana.member.token, false);
+    expect(unvoted()).toEqual(['Ana']);
+    /* Una página de antes (PartyMember estricto) puede leer las salas: sin campos nuevos. */
+    for (const member of sse.of('party.room').at(-1)?.members ?? []) {
+      expect(Object.keys(member)).not.toContain('voted');
+    }
+    const late = listen(party, room, host.member.token);
+    expect(late.of('party.votes')[0]?.unvoted).toEqual([ana.member.id]);
+  });
+
+  it('quien entra con la peli en marcha no para a nadie; el siguiente título solo espera a quien nunca ha tocado', async () => {
+    const { party, clock, host, ana, room, sse, status, unvoted } = room3();
+    await status(host.member.token, true);
+    await status(ana.member.token, true);
+    expect(sse.of('party.playback').at(-1)?.action).toBe('play');
+    /* Leo entra tarde: la sala sigue (su «Toca para empezar» es solo suyo). */
+    const leo = party.join(room, 'Leo');
+    listen(party, room, leo.member.token);
+    await status(leo.member.token, false);
+    expect(sse.of('party.playback').at(-1)?.playback).toMatchObject({ playing: true });
+    /* Otro título: Isma y Ana ya tocaron en esta visita; Leo no. */
+    party.queue(room, addTitle(host.member.token, OTRA, 'Otra'));
+    const item = sse.of('party.room').at(-1)!.queue[0]!;
+    party.queue(room, { token: host.member.token, action: 'play', itemId: item.id });
+    expect(sse.of('party.playback').at(-1)?.playback).toMatchObject({ lobby: true });
+    clock.advance(1_000);
+    await status(host.member.token, true);
+    await status(ana.member.token, true);
+    await status(leo.member.token, false);
+    expect(sse.of('party.playback').at(-1)?.playback).toMatchObject({ lobby: true });
+    expect(unvoted()).toEqual(['Leo']);
+    await status(leo.member.token, true);
+    expect(sse.of('party.playback').at(-1)).toMatchObject({
+      action: 'play',
+      playback: { playing: true, lobby: false },
+    });
+
+    /* Todos han tocado: el título siguiente arranca solo con el vídeo cargado, sin pedir nada. */
+    party.queue(room, addTitle(host.member.token, PELI, 'Dune'));
+    const again = sse.of('party.room').at(-1)!.queue[0]!;
+    party.queue(room, { token: host.member.token, action: 'play', itemId: again.id });
+    expect(sse.of('party.playback').at(-1)?.playback).toMatchObject({ lobby: true });
+    for (const token of [host.member.token, ana.member.token, leo.member.token]) {
+      await status(token, true);
+    }
+    expect(sse.of('party.playback').at(-1)).toMatchObject({
+      action: 'play',
+      playback: { playing: true, lobby: false },
+    });
+  });
+
+  it('al recargar la página vuelve a pedir el toque (la web manda `voted: false` otra vez)', async () => {
+    const { host, ana, sse, status, unvoted } = room3();
+    await status(ana.member.token, true, false);
+    await status(host.member.token, true);
+    /* Ana recarga: su página nueva aún no ha tocado nada. */
+    await status(ana.member.token, false);
+    expect(sse.of('party.playback')).toEqual([]);
+    expect(unvoted()).toEqual(['Ana']);
+  });
+
+  it('una app vieja (sin `voted`) cuenta como que ha tocado', async () => {
+    const { host, ana, sse, status } = room3();
+    await status(host.member.token, true);
+    await status(ana.member.token, undefined);
+    expect(sse.of('party.playback').at(-1)?.action).toBe('play');
+  });
+});
+
 /* «Calidad ligera para invitados» (docs/ver-juntos.md §17): qué lista recibe cada uno. La decisión
    del remux es la de verdad (`liteOfferFor`); el remux y el playback, de mentira. */
 describe('«Ver juntos»: calidad ligera para invitados (§17)', () => {

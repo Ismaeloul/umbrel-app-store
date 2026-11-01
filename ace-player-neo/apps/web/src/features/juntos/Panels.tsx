@@ -19,12 +19,19 @@ import { notify } from '../../notices/index.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Icon } from '../../ui/Icon.tsx';
 import { Menu, MenuButton, useContextMenu, type MenuItem } from '../../ui/Menu.tsx';
-import { canControl, controllers, isManager, roleOf, type PartyClient } from './client.ts';
+import {
+  canControl,
+  canSwitchLive,
+  controllers,
+  isManager,
+  liveSwitchers,
+  roleOf,
+  type PartyClient,
+} from './client.ts';
 import { Art } from '../cine/Art.tsx';
 import { clock, targetPosition } from './sync.ts';
 import { useSecondTap } from '../settings/second-tap.ts';
 import { JUNTOS_TEXT } from './texts.ts';
-import { canSwitchLive, liveSwitchers } from './liveSources.ts';
 
 /** Una orden de la sala: si falla, se dice por qué (p. ej. «Solo el líder…»). */
 function attempt(run: () => Promise<void>): void {
@@ -100,17 +107,26 @@ export function Avatar({
   member,
   room,
   size = 'md',
+  voted,
 }: {
   member: Pick<PartyMember, 'id' | 'name' | 'online'>;
   room: PartyRoom;
   size?: 'sm' | 'md';
+  /** En «Esperando a todos» (§13): con la marca de «Estoy listo» (true) o atenuada (false). */
+  voted?: boolean;
 }) {
   const role = roleOf(room, member.id);
   return (
     <span
-      className={cx('juntos-av', `juntos-av--${size}`, !member.online && 'juntos-av--off')}
+      className={cx(
+        'juntos-av',
+        `juntos-av--${size}`,
+        !member.online && 'juntos-av--off',
+        voted === false && 'juntos-av--unvoted',
+      )}
       style={{ '--av': faceColor(room, member.id) } as CSSProperties}
       aria-hidden="true"
+      data-voted={voted === undefined ? undefined : voted ? 'true' : 'false'}
     >
       {initials(member.name)}
       {size === 'md' && role === 'leader' ? (
@@ -123,25 +139,56 @@ export function Avatar({
           <Icon name="colider" size={16} />
         </span>
       ) : null}
+      {size === 'md' && voted ? (
+        <span className="juntos-av__voted">
+          <Icon name="check" size={16} />
+        </span>
+      ) : null}
     </span>
   );
 }
 
-/** Arriba del panel: las caras de todos con su nombre. */
-export function Faces({ room, selfId }: { room: PartyRoom; selfId: string }) {
+/**
+ * Arriba del panel: las caras de todos con su nombre. En «Esperando a todos» (§13, pelis y series),
+ * con la marca de quien ya ha tocado «Estoy listo» (`selfVoted`: lo mío, como lo sabe esta página;
+ * lo de los demás, `unvoted`, del evento `party.votes`).
+ */
+export function Faces({
+  room,
+  selfId,
+  selfVoted,
+  unvoted = [],
+}: {
+  room: PartyRoom;
+  selfId: string;
+  selfVoted?: boolean;
+  unvoted?: readonly string[];
+}) {
+  const lobby = room.playback.lobby && !room.live;
   return (
     <ul className="juntos-faces" aria-label={JUNTOS_TEXT.people}>
       {room.members.map((member) => {
         const role = roleOf(room, member.id);
         const tag =
           role === 'leader' ? JUNTOS_TEXT.leader : role === 'coleader' ? JUNTOS_TEXT.coleader : '';
+        const voted = !lobby
+          ? undefined
+          : member.id === selfId && selfVoted !== undefined
+            ? selfVoted
+            : !unvoted.includes(member.id);
         return (
           <li key={member.id} className="juntos-faces__item">
-            <Avatar member={member} room={room} />
+            <Avatar member={member} room={room} voted={voted} />
             <span className="juntos-faces__name">
               {member.name}
               {member.id === selfId ? <span className="sr-only"> {JUNTOS_TEXT.you}</span> : null}
               {tag ? <span className="sr-only"> · {tag}</span> : null}
+              {voted === undefined ? null : (
+                <span className="sr-only">
+                  {' '}
+                  · {voted ? JUNTOS_TEXT.votedTag : JUNTOS_TEXT.notVotedTag}
+                </span>
+              )}
             </span>
           </li>
         );
@@ -722,29 +769,47 @@ function duration(seconds: number): string {
   return h > 0 ? `${h} h ${m} min` : `${m} min`;
 }
 
-/** Antes de empezar: quién está listo y quién cargando; «Empezar para todos» para quien controla. */
+/** «Empezar ya» queda armado este rato tras el primer toque. */
+const START_CONFIRM_MS = 5_000;
+
+/**
+ * Antes de empezar (§13, pelis y series): quién ha tocado «Estoy listo», quién carga y quién
+ * falta. Cada uno tiene su «Estoy listo» (el toque que deja sonar el vídeo en su aparato); la
+ * sala arranca sola cuando le han dado todos y lo tienen cargado. Quien controla puede «Empezar
+ * ya» (con un segundo toque si falta alguien: se ha ido a por palomitas).
+ */
 export function Lobby({
   room,
   client,
   selfId,
-  onGesture,
-  soundHint = false,
+  voted,
+  unvoted = [],
+  onVote,
 }: {
   room: PartyRoom;
   client: PartyClient;
   selfId: string;
+  /** Esta página ya ha dado el toque (lo sabe el reproductor antes que el servidor). */
+  voted: boolean;
+  /** Quién de los demás no ha tocado aún (`party.votes`; vacío con un servidor viejo). */
+  unvoted?: readonly string[];
   /**
-   * Un toque en la espera (el navegador lo necesita para que luego suene el vídeo). Con el clic
-   * (o Intro y espacio), no con `pointerdown`: en el iPhone, un dedo que baja aún no cuenta como
-   * gesto para el sonido y al otro le empezaba sin él.
+   * «Estoy listo», con el clic (o Intro y espacio en el botón), no con `pointerdown`: en el
+   * iPhone, un dedo que baja aún no cuenta como gesto para el sonido.
    */
-  onGesture?: () => void;
-  /** «Toca aquí para que suene al empezar»: aún no ha tocado nada en la espera. */
-  soundHint?: boolean;
+  onVote(): void;
 }) {
+  const startTap = useSecondTap(START_CONFIRM_MS);
   const control = canControl(room, selfId);
+  /* Lo mío, como lo sabe esta página; lo de los demás, como lo dice el servidor. */
+  const hasVoted = (member: PartyMember) =>
+    member.id === selfId ? voted : !unvoted.includes(member.id);
   const present = room.members.filter((member) => member.online);
-  const missing = present.filter((member) => !member.ready).map((member) => member.name);
+  const othersUnvoted = present
+    .filter((member) => member.id !== selfId && !hasVoted(member))
+    .map((member) => member.name);
+  const selfUnvoted = present.some((member) => member.id === selfId) && !voted;
+  const loading = present.filter((member) => !member.ready).map((member) => member.name);
   const leader = room.members.find((m) => m.id === room.leaderId)?.name ?? '';
   const kind = room.title.kind === 'episode' ? JUNTOS_TEXT.episode : JUNTOS_TEXT.movie;
   const meta = [
@@ -754,20 +819,29 @@ export function Lobby({
   ]
     .filter(Boolean)
     .join(' · ');
-  const hint = missing.length
-    ? JUNTOS_TEXT.lobbyWaiting(joinNames(missing))
-    : present.length < 2
-      ? JUNTOS_TEXT.lobbyAlone
-      : JUNTOS_TEXT.lobbyAllReady;
+  const hint = selfUnvoted
+    ? othersUnvoted.length
+      ? JUNTOS_TEXT.lobbyMissingYouAnd(joinNames([...othersUnvoted, JUNTOS_TEXT.youWord]))
+      : JUNTOS_TEXT.lobbyMissingYou
+    : othersUnvoted.length
+      ? JUNTOS_TEXT.lobbyMissingVotes(joinNames(othersUnvoted), othersUnvoted.length > 1)
+      : loading.length
+        ? JUNTOS_TEXT.lobbyWaiting(joinNames(loading))
+        : present.length < 2
+          ? JUNTOS_TEXT.lobbyAlone
+          : control
+            ? JUNTOS_TEXT.lobbyAllReady
+            : JUNTOS_TEXT.lobbyGuest(leader);
+  /* Forzar con otro sin tocar o cargando pide un segundo toque; si no falta nadie más, no. */
+  const forcing = othersUnvoted.length > 0 || loading.length > 0;
+  const startArmed = startTap.armed === 'start';
+  const start = () => {
+    /* El toque de quien fuerza también deja sonar su vídeo. */
+    if (!voted) onVote();
+    attempt(() => client.control({ action: 'play', positionS: room.playback.positionS }, 'lobby'));
+  };
   return (
-    <section
-      className="juntos-lobby"
-      aria-labelledby="juntos-lobby-title"
-      onClick={onGesture}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') onGesture?.();
-      }}
-    >
+    <section className="juntos-lobby" aria-labelledby="juntos-lobby-title">
       <Poster stamp={room.title.poster} artId={room.title.artId} title={room.title.title} />
       <div className="juntos-lobby__body">
         <p className="juntos-kicker juntos-kicker--accent">{JUNTOS_TEXT.lobbyTitle}</p>
@@ -780,6 +854,7 @@ export function Lobby({
             <li
               key={member.id}
               className={cx('juntos-lobby__row', !member.online && 'juntos-lobby__row--off')}
+              data-voted={hasVoted(member) ? 'true' : 'false'}
             >
               <Avatar member={member} room={room} size="sm" />
               <span className="juntos-lobby__name">
@@ -788,6 +863,10 @@ export function Lobby({
               </span>
               {!member.online ? (
                 <span className="juntos-lobby__state">{JUNTOS_TEXT.offline}</span>
+              ) : !hasVoted(member) ? (
+                <span className="juntos-lobby__state juntos-lobby__state--wait">
+                  {JUNTOS_TEXT.notVoted}
+                </span>
               ) : member.ready ? (
                 <span className="juntos-lobby__state juntos-lobby__state--ok">
                   <Icon name="check" size={16} />
@@ -808,29 +887,38 @@ export function Lobby({
             </li>
           ))}
         </ul>
-        {control ? (
+        <div className="juntos-lobby__actions">
+          {/* Un solo botón que pasa a «Estás listo» (desactivado con aria-disabled, que no lo
+              saca del orden del Tab): el foco no se pierde al votar con el teclado. */}
           <Button
-            variant="primary"
-            icon="play"
-            className="juntos-lobby__start"
-            onClick={() =>
-              attempt(() =>
-                client.control({ action: 'play', positionS: room.playback.positionS }, 'lobby'),
-              )
-            }
+            variant={voted ? 'quiet' : 'primary'}
+            icon="check"
+            className={cx('juntos-lobby__vote', voted && 'juntos-lobby__vote--done')}
+            aria-disabled={voted ? 'true' : undefined}
+            onClick={voted ? undefined : onVote}
           >
-            {JUNTOS_TEXT.startForAll}
+            {voted ? JUNTOS_TEXT.youAreReady : JUNTOS_TEXT.imReady}
           </Button>
-        ) : null}
-        <p className="juntos-lobby__hint" role="status">
-          {control ? hint : JUNTOS_TEXT.lobbyGuest(leader)}
+          {control ? (
+            <Button
+              variant={startArmed ? 'danger' : 'quiet'}
+              icon="play"
+              className="juntos-lobby__start"
+              onClick={() => (forcing ? startTap.tap('start', start) : start())}
+            >
+              {startArmed ? JUNTOS_TEXT.startNowConfirm : JUNTOS_TEXT.startNow}
+            </Button>
+          ) : null}
+        </div>
+        {voted ? null : <p className="juntos-lobby__sound">{JUNTOS_TEXT.imReadyHint}</p>}
+        {/* Siempre montada (vacía antes de votar): un lector de pantalla solo lee los cambios de
+            una región que ya estaba. */}
+        <p className="sr-only" role="status">
+          {voted ? JUNTOS_TEXT.youAreReady : ''}
         </p>
-        {soundHint && onGesture ? (
-          <p className="juntos-lobby__sound">
-            <Icon name="vol" size={16} />
-            {JUNTOS_TEXT.lobbySoundHint}
-          </p>
-        ) : null}
+        <p className="juntos-lobby__hint" role="status">
+          {hint}
+        </p>
       </div>
     </section>
   );

@@ -57,7 +57,6 @@ export const JUNTOS_TEXT = {
   /* El navegador lo ha empezado en silencio (no deja sonar sin un toque). */
   soundOff: 'Activar sonido',
   soundOffHint: 'Tu navegador lo ha empezado en silencio.',
-  lobbySoundHint: 'Toca aquí para que suene al empezar',
   connectSlow: 'La sala no contesta',
   connectSlowHint: 'Puede ser la conexión. Vuelve a intentarlo en un momento.',
   preparing: 'Preparando el vídeo…',
@@ -219,7 +218,22 @@ export const JUNTOS_TEXT = {
   lobbyFrom: (position: string) => `seguís desde ${position}`,
   ready: 'Listo',
   loadingPercent: (n: number) => `${n} %`,
-  startForAll: 'Empezar para todos',
+  /* «Estoy listo» (§13, 1-11-2026): en pelis y series empieza cuando le han dado todos. */
+  imReady: 'Estoy listo',
+  imReadyHint: 'Así suena en tu aparato cuando empiece.',
+  youAreReady: 'Estás listo',
+  /** «tú» al final de «Faltáis Ana, Bea y tú…». */
+  youWord: 'tú',
+  notVoted: 'Sin confirmar',
+  votedTag: 'listo',
+  notVotedTag: 'sin confirmar',
+  startNow: 'Empezar ya',
+  startNowConfirm: 'Toca otra vez: empieza sin esperar',
+  lobbyMissingVotes: (names: string, many: boolean) =>
+    `${many ? 'Faltan' : 'Falta'} ${names} por darle a «Estoy listo»`,
+  lobbyMissingYou: 'Falta que le des a «Estoy listo»',
+  /* «Faltáis Bea y tú…», «Faltáis Ana, Bea y tú…»: los demás, con «tú» al final de la lista. */
+  lobbyMissingYouAnd: (names: string) => `Faltáis ${names} por darle a «Estoy listo»`,
   lobbyWaiting: (names: string) => `Esperando a ${names}… empieza sola cuando estén todos`,
   lobbyAlone: 'Empieza sola cuando entren los demás y estén listos',
   lobbyAllReady: 'Ya estáis todos listos',

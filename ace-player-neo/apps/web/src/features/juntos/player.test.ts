@@ -182,6 +182,7 @@ function fakeClient(selfId: string, room: PartyRoom) {
     offsetMs: 0,
     stream: 'ok',
     typing: [],
+    unvoted: [],
   } as unknown as PartyState;
   const control = vi.fn(async () => undefined);
   const resetStream = vi.fn();
@@ -863,73 +864,68 @@ async function openWith(options: {
 /** Deja que acaben las promesas de play() (varias vueltas de microtareas). */
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-describe('«Ver juntos» 1.1.2: arranque para todos (sonido)', () => {
-  it('sin toque, arranca en silencio: «ready» con soundBlocked, y unmute() lo quita', async () => {
-    const video = new PickyVideo();
-    const { player } = await openWith({ video });
-    tick();
-    await vi.waitFor(() => expect(player.getView().soundBlocked).toBe(true));
-    expect(player.getView().phase).toBe('ready');
-    expect(video.muted).toBe(true);
-    expect(video.paused).toBe(false);
-    /* «Activar sonido», dentro del toque. */
-    video.gesture = true;
-    player.unmute();
-    expect(video.muted).toBe(false);
-    expect(player.getView().soundBlocked).toBe(false);
-    /* Con el volumen a 0, el guardado (o 1). */
-    video.volume = 0;
-    video.muted = true;
-    player.unmute();
-    expect(video.volume).toBeGreaterThan(0);
-    player.destroy();
-  });
+/** Una sala en directo (§14) con su concesión de canal, para lo del sonido. */
+const SOUND_LIVE = {
+  hash: 'a'.repeat(40),
+  channel: 'DAZN 1',
+  source: 'iptv' as const,
+  matchId: null,
+  match: null,
+  auto: false,
+};
+const soundLiveRoom = (): PartyRoom => ({ ...makeRoom(), live: SOUND_LIVE });
+const soundLiveGrant = () =>
+  ({
+    ...structuredClone(channelFixture),
+    codec: { ...channelFixture.codec, video: 'h264' },
+  }) as unknown as PartyStreamGrant;
+const openLive = (options: Parameters<typeof openWith>[0] = {}) =>
+  openWith({ grant: soundLiveGrant(), room: soundLiveRoom(), ...options });
 
-  it('si tampoco deja en silencio, «Toca para empezar» (blocked); unlock() lo arranca', async () => {
+describe('«Ver juntos»: el sonido en pelis y series (§13: «Estoy listo», nunca en silencio)', () => {
+  it('sin toque, «Toca para empezar»: no arranca en silencio ni ofrece «Activar sonido»', async () => {
     const video = new PickyVideo();
-    video.mutedBlocked = true;
     const { player } = await openWith({ video });
     tick();
     await vi.waitFor(() => expect(player.getView().phase).toBe('blocked'));
     expect(player.getView().soundBlocked).toBe(false);
-    /* En «blocked» el tic no insiste. */
-    const plays = video.plays;
-    tick();
-    expect(video.plays).toBe(plays);
+    expect(video.muted).toBe(false);
+    expect(video.paused).toBe(true);
+    /* El toque (de quien entra con la peli en marcha) lo arranca con sonido y cuenta como su voto. */
     video.gesture = true;
     player.unlock();
-    expect(player.getView().phase).toBe('ready');
-    /* El silencio era nuestro: el toque lo quita. */
-    expect(video.muted).toBe(false);
     await settle();
     expect(video.paused).toBe(false);
-    expect(player.getView().phase).toBe('ready');
+    expect(video.muted).toBe(false);
+    expect(player.getView()).toMatchObject({ phase: 'ready', voted: true });
     player.destroy();
   });
 
-  it('unlock() que el navegador rechaza vuelve a «blocked»', async () => {
+  it('«Estoy listo» (vote) en la espera: el play del toque y se vuelve a parar; el voto va en el latido', async () => {
+    const room = makeRoom();
+    const lobby: PartyRoom = {
+      ...room,
+      playback: { ...room.playback, playing: false, positionS: 0, lobby: true },
+    };
     const video = new PickyVideo();
-    video.mutedBlocked = true;
-    const { player } = await openWith({ video });
+    const { player, client } = await openWith({ video, room: lobby });
+    const reports: unknown[][] = [];
+    (client as unknown as { report: (...args: unknown[]) => void }).report = (...args) =>
+      reports.push(args);
     tick();
-    await vi.waitFor(() => expect(player.getView().phase).toBe('blocked'));
-    player.unlock();
-    expect(player.getView().phase).toBe('ready');
-    await vi.waitFor(() => expect(player.getView().phase).toBe('blocked'));
-    player.destroy();
-  });
-
-  it('subir el volumen desde la sala quita el aviso; quitar el vídeo no toca `muted`', async () => {
-    const video = new PickyVideo();
-    const { player } = await openWith({ video });
+    expect(reports.at(-1)?.[3]).toBe(false);
+    expect(player.getView().voted).toBe(false);
+    video.gesture = true;
+    player.vote();
+    /* La interfaz lo sabe ya; el servidor, con el tic siguiente (un cambio sale al momento). */
+    expect(player.getView().voted).toBe(true);
+    expect(video.plays).toBe(1);
+    await settle();
     tick();
-    await vi.waitFor(() => expect(player.getView().soundBlocked).toBe(true));
-    api.mockResolvedValue(grantFor('index'));
-    player.retry();
-    expect(video.muted).toBe(true);
-    video.muted = false;
-    video.dispatchEvent(new Event('volumechange'));
-    expect(player.getView().soundBlocked).toBe(false);
+    expect(reports.at(-1)?.[3]).toBe(true);
+    /* La sala sigue parada: el vídeo, también. */
+    expect(video.paused).toBe(true);
+    expect(video.muted).toBe(false);
     player.destroy();
   });
 
@@ -959,11 +955,98 @@ describe('«Ver juntos» 1.1.2: arranque para todos (sonido)', () => {
     expect(video.plays).toBe(2);
     player.destroy();
   });
+});
+
+describe('«Ver juntos»: el sonido en directo (con que uno le dé, arranca; los demás, en silencio)', () => {
+  it('sin toque, arranca en silencio: «ready» con soundBlocked, y unmute() lo quita', async () => {
+    const video = new PickyVideo();
+    const { player } = await openLive({ video });
+    tick();
+    await vi.waitFor(() => expect(player.getView().soundBlocked).toBe(true));
+    expect(player.getView().phase).toBe('ready');
+    expect(video.muted).toBe(true);
+    expect(video.paused).toBe(false);
+    /* «Activar sonido», dentro del toque. */
+    video.gesture = true;
+    player.unmute();
+    expect(video.muted).toBe(false);
+    expect(player.getView().soundBlocked).toBe(false);
+    /* Con el volumen a 0, el guardado (o 1). */
+    video.volume = 0;
+    video.muted = true;
+    player.unmute();
+    expect(video.volume).toBeGreaterThan(0);
+    player.destroy();
+  });
+
+  it('el invitado de fuera en el iPhone (HLS nativo, sin hls.js): también en silencio', async () => {
+    Object.assign(platform, { ios: true, mse: false, nativeHls: true });
+    const video = new PickyVideo();
+    video.canPlayType = () => 'maybe';
+    const { player } = await openLive({ video, guest: true, selfId: ANA });
+    tick();
+    await vi.waitFor(() => expect(player.getView().soundBlocked).toBe(true));
+    expect(video.muted).toBe(true);
+    expect(video.paused).toBe(false);
+    expect(FakeHls.last).toBeNull();
+    video.gesture = true;
+    player.unmute();
+    expect(video.muted).toBe(false);
+    player.destroy();
+  });
+
+  it('si tampoco deja en silencio, «Toca para empezar» (blocked); unlock() lo arranca', async () => {
+    const video = new PickyVideo();
+    video.mutedBlocked = true;
+    const { player } = await openLive({ video });
+    tick();
+    await vi.waitFor(() => expect(player.getView().phase).toBe('blocked'));
+    expect(player.getView().soundBlocked).toBe(false);
+    /* En «blocked» el tic no insiste. */
+    const plays = video.plays;
+    tick();
+    expect(video.plays).toBe(plays);
+    video.gesture = true;
+    player.unlock();
+    expect(player.getView().phase).toBe('ready');
+    /* El silencio era nuestro: el toque lo quita. */
+    expect(video.muted).toBe(false);
+    await settle();
+    expect(video.paused).toBe(false);
+    expect(player.getView().phase).toBe('ready');
+    player.destroy();
+  });
+
+  it('unlock() que el navegador rechaza vuelve a «blocked»', async () => {
+    const video = new PickyVideo();
+    video.mutedBlocked = true;
+    const { player } = await openLive({ video });
+    tick();
+    await vi.waitFor(() => expect(player.getView().phase).toBe('blocked'));
+    player.unlock();
+    expect(player.getView().phase).toBe('ready');
+    await vi.waitFor(() => expect(player.getView().phase).toBe('blocked'));
+    player.destroy();
+  });
+
+  it('subir el volumen desde la sala quita el aviso; quitar el vídeo no toca `muted`', async () => {
+    const video = new PickyVideo();
+    const { player } = await openLive({ video });
+    tick();
+    await vi.waitFor(() => expect(player.getView().soundBlocked).toBe(true));
+    api.mockResolvedValue(soundLiveGrant());
+    player.retry();
+    expect(video.muted).toBe(true);
+    video.muted = false;
+    video.dispatchEvent(new Event('volumechange'));
+    expect(player.getView().soundBlocked).toBe(false);
+    player.destroy();
+  });
 
   it('en silencio y con la página oculta, no se reintenta play() en cada tic', async () => {
     let visible = true;
     const video = new PickyVideo();
-    const { player } = await openWith({ video, env: { visible: () => visible } });
+    const { player } = await openLive({ video, env: { visible: () => visible } });
     tick();
     await vi.waitFor(() => expect(player.getView().soundBlocked).toBe(true));
     visible = false;

@@ -133,6 +133,11 @@ export interface PartyState {
   readonly stream: 'ok' | 'lost' | 'none';
   /** Quién está escribiendo (§13); cada uno hasta `until` (hora de este aparato). */
   readonly typing: readonly Typing[];
+  /**
+   * «Estoy listo» (§13, pelis y series): quién no lo ha tocado aún, como lo dice el último
+   * `party.votes`. Vacío hasta que llega (o con un servidor viejo): todos cuentan como que sí.
+   */
+  readonly unvoted: readonly string[];
 }
 
 export interface Typing {
@@ -149,6 +154,7 @@ const INITIAL: PartyState = {
   offsetMs: 0,
   stream: 'none',
   typing: [],
+  unvoted: [],
 };
 
 /** El papel de alguien en la sala (§13): el líder por `leaderId`, aunque el servidor sea viejo. */
@@ -169,6 +175,32 @@ export function isManager(room: PartyRoom | null, selfId: string): boolean {
 /** ¿Puede esta persona mandar en el vídeo? El líder (y los co-líderes), o todos si así lo ha dejado. */
 export function canControl(room: PartyRoom | null, selfId: string): boolean {
   return !!room && (room.settings.control === 'everyone' || isManager(room, selfId));
+}
+
+/* directo §14 */
+/**
+ * ¿Puede esta persona cambiar la fuente o el partido? Como `canSwitchLive` del servidor: el
+ * líder, cualquier co-líder (aunque los co-líderes no controlen el vídeo), el anfitrión y, con
+ * «Controlan todos», todos. Vive aquí (y no en liveSources.ts, que tira de Fuentes de la ficha)
+ * para que la sala no baje Fuentes ni la agenda sin abrirlas.
+ */
+export function canSwitchLive(room: PartyRoom | null, selfId: string): boolean {
+  if (!room?.live) return false;
+  if (room.settings.control === 'everyone') return true;
+  if (room.leaderId === selfId || room.hostId === selfId) return true;
+  return room.members.some((member) => member.id === selfId && member.role === 'coleader');
+}
+
+/** Quién puede cambiar la fuente (los nombres, el líder primero), o null con «Controlan todos». */
+export function liveSwitchers(room: PartyRoom): string[] | null {
+  if (room.settings.control === 'everyone') return null;
+  return room.members
+    .filter(
+      (member) =>
+        member.id === room.leaderId || member.id === room.hostId || member.role === 'coleader',
+    )
+    .sort((a, b) => Number(b.id === room.leaderId) - Number(a.id === room.leaderId))
+    .map((member) => member.name);
 }
 
 /** Quiénes controlan, por su nombre («Ismael y Yassin»); null si controlan todos. */
@@ -267,6 +299,7 @@ const EVENT_TYPES: readonly PartyEvent['type'][] = [
   'party.room',
   'party.chat',
   'party.typing',
+  'party.votes',
   'party.ping',
   'party.closed',
 ];
@@ -304,10 +337,17 @@ export class PartyClient {
   private streamResetAt = Number.NEGATIVE_INFINITY;
   private stopped = false;
   /** Lo que el reproductor dice de sí mismo para el latido. */
-  private local: { positionS: number; buffering: boolean; lobby: LobbyReport | null } = {
+  private local: {
+    positionS: number;
+    buffering: boolean;
+    lobby: LobbyReport | null;
+    voted: boolean;
+  } = {
     positionS: 0,
     buffering: false,
     lobby: null,
+    /* «Estoy listo» (§13): esta página aún no ha tocado nada (al recargar, otra vez). */
+    voted: false,
   };
   /** Lo último que se mandó de la espera (para no repetirlo) y cuándo. */
   private sentLobby: LobbyReport | null = null;
@@ -592,6 +632,9 @@ export class PartyClient {
         });
         break;
       }
+      case 'party.votes':
+        this.set({ unvoted: event.data.unvoted });
+        break;
       case 'party.ping':
         /* Solo dice que el SSE sigue vivo (`lastFrameAt`, arriba): nada que pintar. */
         break;
@@ -673,9 +716,16 @@ export class PartyClient {
    * El reproductor cuenta dónde va y si está cargando; un cambio de «cargando»
    * sale al momento. En «Esperando a todos», también si ya puede empezar y su
    * % (al momento si cambia `ready` o el % sube un tramo, uno por segundo).
+   * `voted` («Estoy listo», §13; null: lo de antes) sale siempre y, si cambia, al momento.
    */
-  report(positionS: number, buffering: boolean, lobby: LobbyReport | null = null): void {
-    let urgent = buffering !== this.local.buffering;
+  report(
+    positionS: number,
+    buffering: boolean,
+    lobby: LobbyReport | null = null,
+    voted: boolean | null = null,
+  ): void {
+    const vote = voted ?? this.local.voted;
+    let urgent = buffering !== this.local.buffering || vote !== this.local.voted;
     if (lobby) {
       const sent = this.sentLobby;
       /* «Listo» sale siempre al momento (la sala arranca con él); el % va espaciado. */
@@ -687,7 +737,7 @@ export class PartyClient {
         urgent = true;
       }
     }
-    this.local = { positionS, buffering, lobby };
+    this.local = { positionS, buffering, lobby, voted: vote };
     if (urgent) void this.sendStatus().catch(() => undefined);
   }
 
@@ -706,6 +756,7 @@ export class PartyClient {
           token: this.credential.token,
           positionS: Math.max(0, Math.min(86_400, this.local.positionS)),
           buffering: this.local.buffering,
+          voted: this.local.voted,
           ...(lobby
             ? {
                 ready: lobby.ready,
