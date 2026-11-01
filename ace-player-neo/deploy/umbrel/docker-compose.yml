@@ -122,19 +122,39 @@ services:
       # deja suya la carpeta de datos (core/privileges.ts). Desde fuera llega
       # la sala de Ver juntos: mejor que no sea root.
       ACE_RUN_AS: "1000:1000"
+      # Al dejar de ser root se conservan los grupos duenos de /dev/dri (render
+      # 991 y video 44 en este NAS): sin ellos ffmpeg no abre la grafica
+      # (docs/ver-juntos.md §17.6). "dri" los lee de los propios nodos.
+      ACE_RUN_GROUPS: "dri"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # La grafica Intel del NAS (N300, i915) para lo que se recodifica: la
+    # calidad ligera de Ver juntos y el desentrelazado (docs/ver-juntos.md
+    # §17.6). El backend la ensaya al arrancar y, si no sale, sigue con x264.
+    # Sin "devices": un dispositivo que falta (Umbrel en una maquina virtual,
+    # sin grafica, i915 sin cargar tras una actualizacion) no deja crear el
+    # contenedor y, sin storage, nginx tampoco arranca: se pierde la app
+    # entera. Asi, /dev/dri entra como carpeta (si no existe, sale vacia) y la
+    # regla de cgroup deja abrir los nodos DRM (mayor 226) que haya.
+    device_cgroup_rules:
+      - "c 226:* rmw"
+    group_add:
+      - "991"
+      - "44"
     # ffmpeg: re-empaqueta HEVC de TS a fMP4 para iOS (sin transcodificar).
     # Los paquetes quedan en apk-cache, asi que tras la primera instalacion
     # ffmpeg se reinstala sin internet. Si aun asi falla, la app funciona
     # igual (solo se pierde la adaptacion para iPhone de canales HEVC).
     # timeout 60: sin red, apk podia comerse el start_period entero y nginx,
     # que espera a que storage este sano, no arrancaba nunca.
-    command: sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/1.1.0/server.js"
+    # intel-media-driver (VAAPI iHD) va aparte y con su propio plazo: si falta
+    # (otra arquitectura, sin red) no se pierde ffmpeg, solo la grafica.
+    command: sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; timeout 25 apk add intel-media-driver >/dev/null 2>&1 || echo 'sin intel-media-driver, video por x264'; exec node /releases/1.1.0/server.js"
     volumes:
       - ${APP_DATA_DIR}/releases:/releases:ro
       - ${APP_DATA_DIR}/data:/data
       - ${APP_DATA_DIR}/apk-cache:/etc/apk/cache
+      - /dev/dri:/dev/dri
     # /api/v1/health/live responde en cuanto el servidor escucha y no sale a la
     # red (el /api/health de siempre espera a las sondas del motor y de Ollama).
     # El start_period cubre la instalacion de ffmpeg. nginx no arranca hasta

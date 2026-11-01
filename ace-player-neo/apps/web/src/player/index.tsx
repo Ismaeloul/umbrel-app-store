@@ -77,6 +77,7 @@ import {
 } from './favorite-zap.ts';
 import { playChannel } from '../features/library/play.ts';
 import { VOD_SEEK_STEP_S } from './vod/timeline.ts';
+import { applySavedVolume, readSavedVolume, saveVolume } from './volume.ts';
 import './player.css';
 import './vod/vod.css';
 
@@ -113,6 +114,8 @@ function usePlayerRuntime(videoRef: RefObject<HTMLVideoElement | null>): PlayerR
       // runtime: si no, su estado inicial diría «sin silencio» como si lo hubiera quitado alguien.
       const pendingMute = peekPendingMuted();
       if (pendingMute !== null) video.muted = pendingMute;
+      // El volumen que dejó este aparato (volume.ts), también antes: el estado inicial lo lee.
+      applySavedVolume(video);
       current = new PlayerRuntime({ video });
       shared.runtime = current;
     }
@@ -388,10 +391,11 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
       const el = video();
       if (!el) return;
       haptic('light');
-      // Quitar el silencio con el volumen a 0 lo sube a la mitad (si no, no se oiría nada).
-      if (el.muted && el.volume === 0) el.volume = 0.5;
-      const unmute = el.muted;
-      runtime?.setMuted(!el.muted);
+      /* Quitar el silencio con el volumen a 0 lo devuelve al guardado o, si no
+         hay, a la mitad (si no, no se oiría nada). */
+      const unmute = el.muted || el.volume === 0;
+      if (el.volume === 0) el.volume = readSavedVolume() ?? 0.5;
+      runtime?.setMuted(!unmute);
       // Quitar el silencio es un gesto (la vista previa del partido en el móvil termina ahí).
       if (unmute && runtime) notePlayerGesture('unmute');
     },
@@ -399,6 +403,7 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
       const el = video();
       const unmute = Boolean(el?.muted) && value > 0;
       runtime?.setVolume(value);
+      saveVolume(value);
       if (unmute && runtime) notePlayerGesture('unmute');
     },
     toggleFullscreen: () => {

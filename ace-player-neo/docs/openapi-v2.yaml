@@ -973,6 +973,63 @@ paths:
                           - source
                           - last
                         additionalProperties: false
+                      video:
+                        type: object
+                        properties:
+                          hwaccel:
+                            type: string
+                            enum:
+                              - vaapi
+                              - none
+                              - probing
+                          reason:
+                            type:
+                              - string
+                              - "null"
+                          device:
+                            type:
+                              - string
+                              - "null"
+                          encoder:
+                            type: string
+                            enum:
+                              - h264_vaapi
+                              - libx264
+                          lowPower:
+                            type:
+                              - boolean
+                              - "null"
+                          rateControl:
+                            anyOf:
+                              - type: string
+                                enum:
+                                  - VBR
+                                  - CQP
+                              - type: "null"
+                          deinterlace:
+                            type: string
+                            enum:
+                              - vaapi
+                              - bwdif
+                          recodeSlots:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          failures:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - hwaccel
+                          - reason
+                          - device
+                          - encoder
+                          - lowPower
+                          - rateControl
+                          - deinterlace
+                          - recodeSlots
+                          - failures
+                        additionalProperties: false
                     required:
                       - backend
                       - engine
@@ -11005,6 +11062,63 @@ paths:
                                       - matchId
                                       - source
                                       - last
+                                    additionalProperties: false
+                                  video:
+                                    type: object
+                                    properties:
+                                      hwaccel:
+                                        type: string
+                                        enum:
+                                          - vaapi
+                                          - none
+                                          - probing
+                                      reason:
+                                        type:
+                                          - string
+                                          - "null"
+                                      device:
+                                        type:
+                                          - string
+                                          - "null"
+                                      encoder:
+                                        type: string
+                                        enum:
+                                          - h264_vaapi
+                                          - libx264
+                                      lowPower:
+                                        type:
+                                          - boolean
+                                          - "null"
+                                      rateControl:
+                                        anyOf:
+                                          - type: string
+                                            enum:
+                                              - VBR
+                                              - CQP
+                                          - type: "null"
+                                      deinterlace:
+                                        type: string
+                                        enum:
+                                          - vaapi
+                                          - bwdif
+                                      recodeSlots:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      failures:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                    required:
+                                      - hwaccel
+                                      - reason
+                                      - device
+                                      - encoder
+                                      - lowPower
+                                      - rateControl
+                                      - deinterlace
+                                      - recodeSlots
+                                      - failures
                                     additionalProperties: false
                                 required:
                                   - backend

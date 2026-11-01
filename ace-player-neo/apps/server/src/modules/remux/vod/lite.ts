@@ -10,9 +10,9 @@
      y la sincronía no cambian.
    - Perezosa: se crea con la primera petición `lo_*` de la sesión y solo
      trabaja mientras alguien las pide. Un trabajo a la vez, en orden, como
-     mucho `aheadSegments` (3) y `aheadMaxS` (20 s) por delante del último
-     `lo_index<N>` pedido (el cursor ligero), por debajo de los 30 s de
-     `restartAheadS`: nunca pide un reinicio al productor.
+     mucho `aheadSegments` (8) y `aheadMaxS` (48 s) por delante del último
+     `lo_index<N>` pedido (el cursor ligero). Solo lee lo que el productor ya
+     tiene (abajo): adelantarse no le pide ningún reinicio.
    - Varios invitados en la misma ligera (cada uno con su búfer: uno 30 s por
      delante, otro que acaba de entrar) no se pisan: se recuerdan los cursores
      de las peticiones recientes (`recentMs`, al menos 10 s y dos segmentos) y
@@ -36,7 +36,15 @@
    - Plaza: cuenta en el tope de recodificaciones del remux (`MAX_DEINTERLACE`,
      con el desentrelazado y la ligera del directo); la coge con la primera
      petición, sin quitársela a nadie, y la suelta tras `idleMs` (60 s) sin
-     peticiones `lo_*`.
+     peticiones `lo_*`. Con la gráfica (remux/hwaccel.ts, §17.6) el tope es
+     mayor (`MAX_RECODE_HW`).
+   - Codificador: la gráfica si el ensayo del arranque salió (`h264_vaapi`),
+     si no x264. Se elige al anunciar su CODECS (la maestra o la oferta,
+     `announce`) o, si no, con el primer trabajo, y la sesión no lo cambia (los
+     init no casarían). Si la gráfica falla antes del primer init: con el
+     CODECS ya anunciado, se funde (Safari no vuelve a pedir la maestra); si
+     no, la sesión pasa a x264 sin contarlo en el fusible, y si en x264 ya no
+     cabe (el tope de CPU, `slot.fits`), se funde por plaza.
    - Fusible (para toda la sesión, `tripped`): 3 trabajos seguidos fallidos o
      inválidos, menos de 1,5× el tiempo real de media en 3 segmentos, un init
      que no casa, sin plaza o sin ffmpeg. Con el fusible, `lo_*` da 404 y el
@@ -54,6 +62,8 @@ import { LITE_VOD, VOD_PLAY } from '@ace/shared';
 import type { Clock, TimerHandle } from '../../../core/clock.js';
 import { AppError } from '../../../core/errors.js';
 import type { Logger } from '../../../core/logger.js';
+import type { VaapiProfile } from '../args.js';
+import type { VideoAccel } from '../hwaccel.js';
 import { RingLog } from '../process.js';
 import { Fmp4Splitter, type Fmp4FragmentInfo, type Fmp4Init } from './fmp4.js';
 import { LITE_VIDEO_CODECS, buildVodLiteArgs } from './lite-args.js';
@@ -122,6 +132,8 @@ export interface LiteOfferInput {
   readonly index: VodIndex;
   /** El invitado decodifica HEVC. */
   readonly hevcOk: boolean;
+  /** Códec de la ligera que se anuncia (el del ensayo de la gráfica); por defecto el de x264. */
+  readonly liteCodecs?: string;
 }
 
 /** La decisión entera de `vodLiteOffer` (remux/service.ts), pura: null es `index.m3u8`. */
@@ -130,11 +142,12 @@ export function liteOfferFor(input: LiteOfferInput): LiteOffer | null {
   const kind = liteVariantFor(input.index, input.hevcOk);
   if (!kind) return null;
   const { video } = input.index;
+  const liteCodecs = input.liteCodecs ?? LITE_VIDEO_CODECS;
   return {
     kind,
     file: kind === 'master' ? VOD_MASTER_FILE : LITE_PLAYLIST_FILE,
-    variants: { hd: kind === 'master' ? video.codecs.slice(0, 64) : null, lite: LITE_VIDEO_CODECS },
-    lite: { codecs: LITE_VIDEO_CODECS, ...liteResolution(video.width, video.height) },
+    variants: { hd: kind === 'master' ? video.codecs.slice(0, 64) : null, lite: liteCodecs },
+    lite: { codecs: liteCodecs, ...liteResolution(video.width, video.height) },
   };
 }
 
@@ -167,9 +180,17 @@ export interface LiteSource {
 
 /** La plaza de recodificación (el tope `MAX_DEINTERLACE` del remux). */
 export interface LiteSlot {
-  /** true si la hay (y queda cogida); false si no cabe otra recodificación. */
-  acquire(): boolean;
+  /**
+   * true si la hay (y queda cogida); false si no cabe otra recodificación. `hardware`: irá por la
+   * gráfica (no cuenta en el tope de CPU).
+   */
+  acquire(hardware: boolean): boolean;
   release(): void;
+  /**
+   * Con la plaza ya cogida y el codificador cambiado (la gráfica falló y pasa a x264), ¿sigue
+   * cabiendo? Sin esto, se da por buena.
+   */
+  fits?(): boolean;
 }
 
 export interface LiteLimits {
@@ -210,6 +231,11 @@ export interface LiteRenditionDeps {
   readonly redact?: (text: string) => string;
   /** Se ha fundido (una vez). */
   readonly onTrip?: (reason: LiteTripReason) => void;
+  /**
+   * La gráfica del NAS (remux/hwaccel.ts, §17.6). Se mira con el primer trabajo y la sesión se
+   * queda con ese codificador (un init de h264_vaapi no casa con uno de x264). Sin ella, x264.
+   */
+  readonly accel?: VideoAccel;
 }
 
 export interface LiteRenditionOptions {
@@ -218,6 +244,11 @@ export interface LiteRenditionOptions {
   readonly dir: string;
   readonly source: LiteSource;
   readonly limits?: Partial<LiteLimits>;
+  /**
+   * El codificador cuyo CODECS ya se anunció antes de crear la ligera (la maestra o la oferta): la
+   * sesión se queda con él (`announce`). Sin esto, se elige con el primer trabajo.
+   */
+  readonly encoder?: VaapiProfile | null;
 }
 
 export type LiteFileResult =
@@ -343,12 +374,20 @@ export class LiteRendition {
   private idleTimer: TimerHandle | null = null;
   private closed = false;
   private jobs = 0;
+  /** El codificador de la sesión: la gráfica, x264 (null) o aún sin elegir (undefined). */
+  private encoder: VaapiProfile | null | undefined = undefined;
+  /** ¿Ya se anunció su CODECS (maestra u oferta)? Entonces el codificador no cambia nunca. */
+  private announced = false;
 
   constructor(
     private readonly deps: LiteRenditionDeps,
     private readonly options: LiteRenditionOptions,
   ) {
     this.limits = { ...DEFAULT_LITE_LIMITS, ...options.limits };
+    if (options.encoder !== undefined) {
+      this.encoder = options.encoder;
+      this.announced = true;
+    }
     this.plan = options.source.plan;
     /* Un invitado al día pide un segmento por cada uno que ve: su cursor tiene que durar más
        que eso, o el de otro le mataría lo que se le adelanta. */
@@ -374,6 +413,27 @@ export class LiteRendition {
   /** ¿Tiene ahora una plaza de recodificación? (cuenta en el tope del remux). */
   get holdsSlot(): boolean {
     return this.slotHeld;
+  }
+
+  /** ¿Codifica (o codificará) con la gráfica? Cuenta en el tope de la gráfica, no en el de CPU. */
+  get hardware(): boolean {
+    return this.encoder === undefined ? !!this.deps.accel?.vaapi() : this.encoder !== null;
+  }
+
+  /**
+   * Fija el codificador de la sesión (si aún no lo estaba) y devuelve su CODECS: lo que va en la
+   * maestra o en la oferta tiene que ser el `avcC` de `lo_init.mp4`, y Safari no vuelve a pedirla.
+   */
+  announce(): string {
+    if (this.encoder === undefined) this.encoder = this.deps.accel?.vaapi() ?? null;
+    this.announced = true;
+    return this.codecs;
+  }
+
+  /** El códec RFC 6381 de su vídeo (el del ensayo con la gráfica; el de x264 si no). */
+  get codecs(): string {
+    const encoder = this.encoder === undefined ? this.deps.accel?.vaapi() : this.encoder;
+    return encoder?.liteCodecs ?? LITE_VIDEO_CODECS;
   }
 
   /** Por qué se fundió, o null. */
@@ -505,7 +565,7 @@ export class LiteRendition {
     if (this.closed || this.trippedBy) return;
     this.touchActivity();
     if (!this.slotHeld) {
-      if (!this.deps.slot.acquire()) {
+      if (!this.deps.slot.acquire(this.hardware)) {
         this.trip('plaza', 'no queda plaza de recodificación');
         return;
       }
@@ -647,10 +707,15 @@ export class LiteRendition {
       return;
     }
     const durationS = planned.endS - planned.startS;
+    /* El codificador se elige con el primer trabajo y no cambia (salvo que la gráfica falle antes
+       del primer init: entonces x264 para toda la sesión, ver `failJob`). */
+    if (this.encoder === undefined) this.encoder = this.deps.accel?.vaapi() ?? null;
+    const hw = this.encoder;
     const result = await this.execute(
       job,
       input,
       Math.max(LITE_JOB_MIN_TIMEOUT_MS, durationS * 3 * 1000),
+      hw,
     );
     if (job.aborted || this.closed || this.trippedBy) return;
     if (result.missing) {
@@ -658,19 +723,19 @@ export class LiteRendition {
       return;
     }
     if (result.code !== 0 || !result.output) {
-      this.fail(segment, result.detail ?? `ffmpeg salió con ${result.code}`);
+      this.failJob(segment, result.detail ?? `ffmpeg salió con ${result.code}`, hw);
       return;
     }
     let output: LiteOutput;
     try {
       output = splitFmp4(result.output);
     } catch {
-      this.fail(segment, 'salida fMP4 rota');
+      this.failJob(segment, 'salida fMP4 rota', hw);
       return;
     }
     const mismatch = this.checkTimes(output.first, original);
     if (mismatch) {
-      this.fail(segment, mismatch);
+      this.failJob(segment, mismatch, hw);
       return;
     }
     if (!this.init) {
@@ -691,6 +756,7 @@ export class LiteRendition {
     }
     this.done.set(segment, output.media.length);
     this.failures = 0;
+    if (hw) this.deps.accel?.succeeded();
     this.reportBytes();
     this.wake(segment);
     this.speeds.push({ mediaS: durationS, wallMs: this.deps.clock.now() - started });
@@ -723,6 +789,39 @@ export class LiteRendition {
     return null;
   }
 
+  /**
+   * Un trabajo que ha fallado. Con la gráfica, se le cuenta a ella (hwaccel.ts) y, si aún no hay
+   * `lo_init.mp4`, la sesión pasa a x264 sin tirar el segmento ni contar para el fusible: el
+   * siguiente `pump` lo repite con x264. Con el init ya escrito no se cambia (no casaría). Con el
+   * CODECS de la gráfica ya anunciado, tampoco: Safari tiene el `avcC` de ella y el de x264 es
+   * otro (se funde). Y si en x264 no cabe (el tope de CPU), se funde por plaza.
+   */
+  private failJob(segment: number, detail: string, hw: VaapiProfile | null): void {
+    if (hw && !this.closed && !this.trippedBy) {
+      this.deps.accel?.failed(detail);
+      if (!this.init) {
+        if (this.announced) {
+          this.trip(
+            'init',
+            `la gráfica ha fallado antes del primer init y su CODECS ya se anunció: ${detail}`,
+          );
+          return;
+        }
+        this.encoder = null;
+        if (this.slotHeld && this.deps.slot.fits?.() === false) {
+          this.trip('plaza', 'la gráfica ha fallado y con x264 no queda plaza');
+          return;
+        }
+        this.deps.logger.warn(
+          { sessionId: this.options.sessionId, segment, detail },
+          'Ver juntos: la gráfica no ha podido con la ligera; esta sesión sigue con x264',
+        );
+        return;
+      }
+    }
+    this.fail(segment, detail);
+  }
+
   /** Un trabajo fallido o inválido: el segmento queda sin ligero (404) y cuenta para el fusible. */
   private fail(segment: number, detail: string): void {
     if (this.closed || this.trippedBy) return;
@@ -750,7 +849,12 @@ export class LiteRendition {
   }
 
   /** Lanza ffmpeg, le da la entrada y recoge la salida entera (un segmento ligero: unos MB). */
-  private execute(job: Job, input: Buffer, timeoutMs: number): Promise<JobRun> {
+  private execute(
+    job: Job,
+    input: Buffer,
+    timeoutMs: number,
+    vaapi: VaapiProfile | null,
+  ): Promise<JobRun> {
     return new Promise((resolve) => {
       let settled = false;
       let timer: TimerHandle | null = null;
@@ -762,7 +866,9 @@ export class LiteRendition {
       };
       let child: LiteProcess;
       try {
-        child = this.deps.launcher.spawn(buildVodLiteArgs({ sessionId: this.options.sessionId }));
+        child = this.deps.launcher.spawn(
+          buildVodLiteArgs({ sessionId: this.options.sessionId, vaapi }),
+        );
       } catch (error) {
         const code = (error as { code?: string } | null)?.code;
         settle({ code: null, output: null, missing: code === 'ENOENT', detail: 'no se lanzó' });

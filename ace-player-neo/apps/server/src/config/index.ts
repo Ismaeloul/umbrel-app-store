@@ -10,7 +10,8 @@
    - Variables nuevas: `ACE_SEED`, `ACE_SAME_CHANNEL_POLICY`, `ACE_LOG_LEVEL`,
      `ACE_LOOPBACK` (solo desarrollo: el relé de la IPTV en `::1`),
      `ACE_PARTY_LITE` (la calidad ligera de los invitados de «Ver juntos»,
-     docs/ver-juntos.md §17) y `APP_VERSION` (la inyecta el build, T-102).
+     docs/ver-juntos.md §17), `ACE_HWACCEL` y `ACE_VAAPI_DEVICE` (la gráfica del
+     NAS para lo que se recodifica, §17.6) y `APP_VERSION` (la inyecta el build, T-102).
    - Un valor que no vale se sustituye por el defecto y queda un aviso en
      `warnings` (main.ts los escribe en el log). Solo las de seguridad hacen
      fallar el arranque (`ConfigError`): un `ACE_SEED` demasiado corto. */
@@ -162,6 +163,15 @@ export interface AppConfig {
      */
     readonly lite: boolean;
   };
+  readonly video: {
+    /**
+     * La gráfica del NAS para lo que el remux recodifica (docs/ver-juntos.md §17.6): `ACE_HWACCEL`
+     * `auto` (defecto: se ensaya al arrancar y, si no sale, x264) u `off` (x264 siempre).
+     */
+    readonly hwaccel: 'auto' | 'off';
+    /** `ACE_VAAPI_DEVICE`: el nodo de la gráfica (`/dev/dri/renderD128` por defecto). */
+    readonly vaapiDevice: string;
+  };
   readonly security: {
     /** De dónde sale el material de las claves. `ephemeral` = aleatorio de este arranque. */
     readonly seedSource: 'ACE_SEED' | 'ENGINE_CONTROL_TOKEN' | 'ephemeral';
@@ -291,6 +301,25 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
     warnings.push(`ACE_PARTY_LITE=${JSON.stringify(rawPartyLite)} no vale ("0" o "1"); se usa "0"`);
   }
 
+  // --- La gráfica (§17.6) ---
+  const rawHwaccel = String(env.ACE_HWACCEL || '')
+    .trim()
+    .toLowerCase();
+  const hwaccel: 'auto' | 'off' = rawHwaccel === 'off' ? 'off' : 'auto';
+  if (rawHwaccel && rawHwaccel !== 'off' && rawHwaccel !== 'auto') {
+    warnings.push(
+      `ACE_HWACCEL=${JSON.stringify(rawHwaccel)} no vale ("auto" u "off"); se usa "auto"`,
+    );
+  }
+  const rawDevice = String(env.ACE_VAAPI_DEVICE || '').trim();
+  let vaapiDevice = '/dev/dri/renderD128';
+  if (/^\/dev\/dri\/renderD\d{1,4}$/.test(rawDevice)) vaapiDevice = rawDevice;
+  else if (rawDevice) {
+    warnings.push(
+      `ACE_VAAPI_DEVICE=${JSON.stringify(rawDevice)} no vale (/dev/dri/renderD<N>); se usa ${vaapiDevice}`,
+    );
+  }
+
   // --- Nivel de log ---
   let logLevel: LogLevel = 'info';
   const rawLevel = String(env.ACE_LOG_LEVEL || '')
@@ -407,6 +436,7 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
     },
     playback: { sameChannelPolicy, relayLoopback },
     party: { publicUrl: partyPublicUrl, lite: partyLite },
+    video: { hwaccel, vaapiDevice },
     security: { seedSource, keys },
   };
 

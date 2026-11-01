@@ -10,8 +10,10 @@
      el aviso del momento («Toca para empezar», un error).
    - Abajo: la barra de tiempo del reproductor de casa (`VodTimeline`: arrastrar,
      tiempo flotante y salto al soltar), el tiempo en mono, idioma y pantalla
-     completa (sin volumen: la maqueta no lo trae; M silencia; en el móvil
-     manda el botón del teléfono).
+     completa. En el ordenador (≥ 768 px y con ratón), también el silencio y el volumen
+     (VolumeControl: el deslizador sale al pasar el ratón; la maqueta no lo
+     traía y no había forma de bajarlo); en el móvil, nada: mandan los
+     botones del teléfono (M silencia en cualquier caso).
    - Quien no controla ve una barra de solo lectura (sin tirador, sin foco y
      sin anunciarse como deslizador): no puede mover la sala.
    - Sin reacciones ni chat encima: en pantalla completa, solo el vídeo.
@@ -44,9 +46,12 @@ import {
 } from 'react';
 import { describeFailure } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
+import { MEDIA, useMediaQuery } from '../../lib/media.ts';
 import { notify } from '../../notices/index.ts';
 import { VodTimeline } from '../../player/vod/VodControls.tsx';
 import '../../player/vod/vod.css';
+import { VolumeControl } from '../../player/VolumeControl.tsx';
+import { applySavedVolume, readSavedVolume, saveVolume } from '../../player/volume.ts';
 import { Button, IconButton } from '../../ui/Button.tsx';
 import { Icon } from '../../ui/Icon.tsx';
 import { MenuButton } from '../../ui/Menu.tsx';
@@ -92,6 +97,10 @@ export function Theater({
     .filter((member) => playback.waitingFor.includes(member.id))
     .map((member) => member.name);
   const reconnecting = state.connection === 'reconnecting';
+  /* Ordenador (≥ 768 px y con ratón): el volumen también con una película. Solo el ancho no
+     basta: el iPhone en horizontal también pasa de 768 px y allí mandan los botones del teléfono. */
+  const wide = useMediaQuery(MEDIA.tablet);
+  const fine = useMediaQuery(MEDIA.finePointer);
 
   const [visible, setVisible] = useState(true);
   const hideTimer = useRef<number | null>(null);
@@ -155,7 +164,7 @@ export function Theater({
       } else if (key === 'f') {
         onFullscreen();
       } else if (key === 'm' && video) {
-        video.muted = !video.muted;
+        toggleVideoMute(video);
       } else {
         return;
       }
@@ -298,7 +307,7 @@ export function Theater({
               <span className="juntos-chrome__channel">{live.channel}</span>
             </div>
             <div className="juntos-chrome__group">
-              {video ? <Volume video={video} /> : null}
+              {video ? <Volume video={video} onActivity={wake} /> : null}
               <IconButton
                 icon="full"
                 label={fullscreen ? JUNTOS_TEXT.exitFullscreen : JUNTOS_TEXT.fullscreen}
@@ -347,6 +356,8 @@ export function Theater({
                   items={qualityItems}
                 />
               ) : null}
+              {/* En el ordenador no hay botones de volumen; en el móvil, los del teléfono. */}
+              {video && wide && fine ? <Volume video={video} onActivity={wake} /> : null}
               <IconButton
                 icon="full"
                 label={fullscreen ? JUNTOS_TEXT.exitFullscreen : JUNTOS_TEXT.fullscreen}
@@ -500,8 +511,21 @@ function ReadOnlyBar({
   );
 }
 
-/** Silencio y volumen de ESTE aparato (no es de la sala). En el iPhone solo hay silencio. */
-function Volume({ video }: { video: HTMLVideoElement }) {
+/**
+ * Silencio de ESTE aparato, el botón y la M: quitarlo con el volumen a 0 lo devuelve al nivel
+ * guardado (si no, la M dejaba `muted` en false con el volumen a 0 y no sonaba nada).
+ */
+function toggleVideoMute(video: HTMLVideoElement): void {
+  const muted = video.muted || video.volume === 0;
+  if (muted && video.volume === 0) video.volume = readSavedVolume() ?? 1;
+  video.muted = !muted;
+}
+
+/** Silencio y volumen de ESTE aparato (no es de la sala): no manda nada a nadie.
+    El deslizador, solo con ratón; en el iPhone solo hay silencio. El nivel se
+    recuerda en este navegador (el mismo que el del reproductor de casa). */
+function Volume({ video, onActivity }: { video: HTMLVideoElement; onActivity: () => void }) {
+  const fine = useMediaQuery(MEDIA.finePointer);
   const subscribe = useCallback(
     (listener: () => void) => {
       video.addEventListener('volumechange', listener);
@@ -511,30 +535,27 @@ function Volume({ video }: { video: HTMLVideoElement }) {
   );
   const muted = useSyncExternalStore(subscribe, () => video.muted || video.volume === 0);
   const volume = useSyncExternalStore(subscribe, () => video.volume);
+  /* El <video> de la sala lo crea player.ts: el volumen guardado se le pone al llegar. */
+  useEffect(() => {
+    if (fine) applySavedVolume(video);
+  }, [video, fine]);
   return (
-    <span className="juntos-volume">
-      <IconButton
-        icon={muted ? 'mute' : 'vol'}
-        label={muted ? JUNTOS_TEXT.unmute : JUNTOS_TEXT.mute}
-        variant="video"
-        onClick={() => {
-          video.muted = !muted;
-          if (!video.muted && video.volume === 0) video.volume = 1;
-        }}
-      />
-      <input
-        className="juntos-volume__slider"
-        type="range"
-        min={0}
-        max={1}
-        step={0.05}
-        value={muted ? 0 : volume}
-        aria-label={JUNTOS_TEXT.volume}
-        onChange={(event) => {
-          video.volume = Number(event.currentTarget.value);
-          video.muted = video.volume === 0;
-        }}
-      />
-    </span>
+    <VolumeControl
+      className="juntos-volume"
+      muted={muted}
+      volume={volume}
+      slider={fine}
+      shortcut="M"
+      muteLabel={JUNTOS_TEXT.mute}
+      unmuteLabel={JUNTOS_TEXT.unmute}
+      sliderLabel={JUNTOS_TEXT.volume}
+      onActivity={onActivity}
+      onToggleMute={() => toggleVideoMute(video)}
+      onVolume={(value) => {
+        video.volume = value;
+        video.muted = value === 0;
+        saveVolume(value);
+      }}
+    />
   );
 }

@@ -105,9 +105,14 @@ services:
       # deja suya la carpeta de datos (core/privileges.ts). Desde fuera llega
       # la sala de Ver juntos: mejor que no sea root.
       ACE_RUN_AS: "1000:1000"
+      # Los grupos de /dev/dri, como en el NAS (docs/ver-juntos.md §17.6).
+      ACE_RUN_GROUPS: "dri"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/${ACE_VERSION:-0.7.0}/server.js"
+    # Sin devices: /dev/dri ni group_add: Docker Desktop no tiene la grafica
+    # Intel del NAS (y un dispositivo que falta no deja crear el contenedor).
+    # El ensayo del arranque falla y se recodifica con x264.
+    command: sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; timeout 25 apk add intel-media-driver >/dev/null 2>&1 || echo 'sin intel-media-driver, video por x264'; exec node /releases/${ACE_VERSION:-0.7.0}/server.js"
     volumes:
       - ./.work/releases:/releases:ro
       - ./.work/data:/data

@@ -281,8 +281,10 @@ controla» en Ajustes) y «Esperando a todos».
 - **Fuera las reacciones**: ni bandeja ni emojis encima del vídeo; tampoco `partyReact`, `party.reaction`, su
   límite ni la ruta en la lista blanca del Caddyfile del proxy. El chat es solo texto (los emojis, del teclado).
 - **Pantalla completa**: solo el vídeo, sin chat encima (también en el móvil).
-- **Escritorio, lo que no trae la maqueta**: sin volumen en la barra del vídeo (globo y pantalla completa; la M
-  silencia) y sin la X junto a «Invitar»: quien creó la sala la cierra con «Cerrar sala» al final de Gente; los
+- **Escritorio, lo que no trae la maqueta**: el volumen sí va en la barra del vídeo desde el 1-11-2026 (≥ 768 px:
+  silencio y, al pasar el ratón o con el foco, el deslizador; ↑ ↓ y la rueda; se recuerda en ese navegador,
+  `aceneo-volumen`, el mismo que el del reproductor de casa; en el móvil, nada: mandan los botones del teléfono; la M
+  silencia siempre) y sin la X junto a «Invitar»: quien creó la sala la cierra con «Cerrar sala» al final de Gente; los
   demás tienen «Salir» en esa fila.
 - **Crear sala** (desde la ficha): tu nombre, «Quién entra» solo «Con enlace» (no hay amigos ni sala pública),
   «Quién controla», «Votar lo siguiente» (interruptor: `vote` o `autoplay`) y «Crear sala e invitar». Sin chat de
@@ -377,6 +379,63 @@ confirmada, el bucle de la espera, y descartó o rebajó otras 16 hipótesis.
 - **Pruebas**: `features/juntos/sync.test.ts` (detector) y `modules/party/service.test.ts` (reanudar tras 700 ms y
   el margen de quien se atasca a menudo).
 
+**«Va bien y, ¡pum!, se para» (1.1.0, 1-11-2026).** Con la ligera ya en marcha, un iPhone (Safari iOS 18.7, de fuera)
+iba sincronizado y de repente se quedaba parado sin salir. En el registro de Caddy, el iPhone pidió el mismo
+`lo_index24.m4s` unas 45 veces en 18 s (siempre 200 y entero, sin pedir ninguna lista: no hubo cambio de `src`), con su
+`status` cada 5 s sin envíos urgentes (no cambió de «cargando»). El segmento estaba bien (ffprobe: 6 s, IDR al
+principio, `tfdt` continuo) y el servidor de la ligera iba 3 por delante. Dos defectos que se alimentan:
+
+- **La colocación en pausa no tenía freno.** Con la sala esperando, el vídeo está en pausa y se colocaba en cada tic
+  (cada 500 ms) si se apartaba más de 0,3 s; el freno de 4 s era solo reproduciendo. AVPlayer no cae justo donde se
+  le pide (el fotograma clave, o unas décimas al lado): cada salto vaciaba lo cargado y volvía a bajar el trozo
+  entero. Sin colchón no salía del atasco (§16: hacen falta 4, 6 o 10 s, y parado no «avanza»), así que la espera
+  llegaba siempre al tope de 20 s.
+- **La sala se paraba por delante de quien carga.** La espera salta en el barrido, pasada la gracia, y fijaba la sala
+  en `positionNow` (0,8-2 s por delante del punto donde se atascó el iPhone): el primer salto en pausa tiraba justo
+  lo que tenía cargado. El servidor descartaba el `positionS` de cada `status`.
+- **Y el ciclo de 20 s parados y 30 s en marcha.** Al llegar al tope, el enfriamiento de 30 s no tocaba
+  `bufferingSince`: pasados los 30 s, el barrido volvía a parar la sala al momento (la gracia ya se cumplía de
+  sobra), y en marcha el iPhone saltaba por deriva y volvía a tirar su búfer. Los demás veían «¡pum!, se para»; el
+  iPhone no se recuperaba nunca.
+
+El arreglo:
+
+- **Servidor** (`party/service.ts`): cada `status` guarda la posición del que lo manda; la sala se para donde se
+  atascó él si va hasta `PARTY.holdRewindMaxS` (8 s) por detrás (los demás retroceden 1-2 s en pausa; con hls.js lo
+  de detrás sigue cargado); más atrasado, donde va la sala. Tras esperar hasta el tope, el mismo atasco no vuelve a
+  parar la sala (`holdEndedAt`): tiene que decir «ya no cargo» y atascarse otra vez. Cada espera deja una línea en el
+  registro al empezar y al acabar (sala, persona, dónde se paró, `positionNow`, lo que dijo y el motivo: `settled`,
+  `holdMax`), para casarla con Caddy.
+- **Web** (`sync.ts`, `pausedSeek`; `player.ts`): en pausa, un salto por orden de la sala (`rev`) y objetivo; si
+  Safari cae a unas décimas, se da por colocado. Un solo reintento, si quedó a más de 1 s y pasados 4 s. Si la sala
+  espera a este aparato y está a 2 s o menos, no se mueve (cubre también un servidor viejo). Una orden nueva (un salto
+  del líder) salta al momento. En el iPhone, con el vídeo en pausa, el colchón pedido para darse por recuperado no
+  pasa de 4 s (`pausedMaxS`): AVPlayer puede no llenar 10 s parado y el `resumeSettleMs` ya cubre un «ya no cargo»
+  corto.
+- **Revisión (1-11-2026): una orden es otra posición, no otro `rev`.** «Esperando a…», «entra…» y «sigue» suben el
+  `rev` sin mover la sala, y cada uno contaba como orden nueva: al reanudar, el iPhone al que se esperó (y que se
+  quedó a 1-2 s, `WAITED_STAY_S`) saltaba en el primer tic saltándose el freno de 4 s, tiraba el colchón recién
+  lleno, se atascaba y paraba la sala otra vez; en pausa, cada «entra…» volvía a colocar a todos los Safari. Ahora
+  `player.ts` recuerda el `positionS` de la última orden atendida (saltando o quedándose) y solo otra posición es
+  orden; `pausedSeek` ya no mira el `rev`. Y al seguir la sala (o tras colocarse por una orden), durante 60 s lo que
+  quede hasta `WAITED_STAY_S` se corrige con la velocidad del 5 % (`correction(…, seekS)`) en vez de saltar: otro
+  salto caería en el mismo fotograma clave. Pruebas: `player.test.ts` (esperado a 1,5 s y reanudar: ninguna
+  petición más en 20 s; por delante de la sala; un `rev` nuevo en pausa; pasados los 60 s se salta como siempre).
+- **Depurar en el aparato**: con `?debug=juntos` en la URL, `window.__aceJuntosDebug.seeks` tiene los últimos 50 saltos
+  de corrección (cuándo, desde dónde, a dónde, `rev`, `readyState` y dónde cayó al llegar `seeked`). Sirve con el
+  inspector web del iPhone o con Safari del Mac (el mismo AVFoundation).
+- **La ligera va más adelantada**: 8 segmentos y 48 s por delante del último pedido (eran 3 y 20 s, §17), para que
+  la ráfaga de Safari tras una pausa o un salto no espere `waitMs` en el borde.
+- **Pruebas**: `features/juntos/player.test.ts` simula el Safari del iPhone (`FakeSafariVideo`: cada salto pone
+  `seeking`, vacía lo cargado y cuenta una petición; cae en el fotograma clave, a +0,4 s o justo). Con la sala
+  esperando, el código de antes daba 40 peticiones en 20 s (como el registro); ahora, 2 como mucho. También: a 1,2 s
+  esperando a este aparato, ninguna; una orden nueva, al momento. `sync.test.ts` (`pausedSeek`, `pausedMaxS`) y
+  `modules/party/service.test.ts` (la sala se para donde se atascó, el mismo atasco no la vuelve a parar tras el tope y
+  el registro). Lo que no se ha podido ver: dónde cae AVPlayer de verdad tras cada salto (por eso el registro de saltos).
+- **Pendiente**: un fotograma clave cada 2 s en la ligera (hoy uno por segmento: cada salto a mitad de trozo obliga a
+  decodificar hasta 6 s), bajar a 540p la ligera de una fuente que ya es 720p, el 503 del borde que AVPlayer no
+  reintenta y el fusible de «plaza» tras 60 s sin peticiones (§17).
+
 ## 17. Calidad ligera para invitados
 
 Lo que faltaba en §16: el invitado de fuera con poca conexión recibe una versión 720p H.264 a unos 2,5 Mbit/s y
@@ -392,15 +451,16 @@ servidor; la web, al final de la sección.
   `EXTINF` y los tiempos son los de la original por construcción: el reloj de la sala, `placeFragment` y la
   sincronía (§6) no cambian.
 - **Cuándo**: perezosa. Se crea con la primera petición `lo_*` de la sesión; un trabajo a la vez, en orden, como mucho
-  3 segmentos y 20 s por delante del último `lo_index<N>` pedido (`LITE_VOD`), por debajo de los 30 s de
-  `restartAheadS`: nunca pide un reinicio al productor. Fija en el productor `[cursor − 1, cursor + 3]` para que el
+  8 segmentos y 48 s por delante del último `lo_index<N>` pedido (`LITE_VOD`; eran 3 y 20 s hasta el 1-11-2026, §16).
+  Solo lee lo que el productor ya tiene en disco y no le mueve el cursor, así que adelantarse no le pide ningún
+  reinicio (el productor va hasta 120 s por delante). Fija en el productor `[cursor − 1, cursor + 8]` para que el
   recorte no le borre lo que aún tiene que leer; sus ficheros, en la misma carpeta `vod-<sid>`, cuentan en el tope de
   1,5 GiB y se recortan con la ventana de 120 s.
 - **Varios invitados en la ligera**: cada uno pide desde su búfer (uno 30 s por delante, otro que acaba de entrar),
   así que se recuerdan los cursores de las peticiones recientes (al menos 10 s y dos segmentos, `recentMs`) y la cola
-  es la unión de sus ventanas: se fija `[min − 1, max + 3]`, se codifica primero lo que alguien espera y luego lo más
+  es la unión de sus ventanas: se fija `[min − 1, max + 8]`, se codifica primero lo que alguien espera y luego lo más
   bajo, y un trabajo solo se mata si cae fuera de TODAS las ventanas y nadie lo espera. Con un único cursor, dos
-  invitados a más de 3 segmentos se mataban el trabajo el uno al otro hasta el 404 de los dos.
+  invitados a más de la ventana (entonces, 3 segmentos) se mataban el trabajo el uno al otro hasta el 404 de los dos.
 - **Un solo cursor**: la versión ligera lee del productor sin moverlo (`readySegment`, `onSegmentReady`,
   `onRestart`). Un `lo_index<N>` de un invitado lo mueve desde la ruta con `touch(N)`, que es `file()` sin esperar:
   actividad, contrapresión, recorte y la misma regla de reinicio (así una sala solo de invitados también tira del
@@ -431,8 +491,8 @@ servidor; la web, al final de la sección.
   rechazo de antes (`vod_unsupported`, `hevc`), nunca una concesión HEVC que no decodifica. En cualquier otro caso, `index.m3u8` como siempre. Con oferta, la
   `VodGrant` lleva `variants: { hd, lite }` (códecs de vídeo; `hd` null si solo hay ligera), que solo llega a quien
   manda `abr=1`: las apps no lo ven.
-- **Plaza**: los trabajos ligeros cuentan en `MAX_DEINTERLACE` (2) con el desentrelazado y la ligera del directo
-  (`deinterlacing()`). El primero que llega se queda la plaza, sin quitársela a nadie; se suelta tras 60 s sin
+- **Plaza**: los trabajos ligeros cuentan en el tope de recodificaciones con el desentrelazado y la ligera del
+  directo: `MAX_DEINTERLACE` (2) con x264, `MAX_RECODE_HW` (4) con la gráfica (§17.6). El primero que llega se queda la plaza, sin quitársela a nadie; se suelta tras 60 s sin
   peticiones `lo_*` y la siguiente la vuelve a coger.
 - **Fusible** (para toda la sesión): 3 trabajos seguidos fallidos o inválidos, menos de 1,5× el tiempo real de media
   en 3 segmentos, un init que no casa, sin plaza o sin ffmpeg. Con él, `lo_*` da 404 y las concesiones nuevas de la sala
@@ -445,7 +505,8 @@ servidor; la web, al final de la sección.
   otro fichero de ajustes, rutas y la pantalla de Ajustes; el interruptor del Compose cubre lo mismo con un reinicio.
 - **Despliegue**: storage pasa de `mem_limit` 768m a 1280m y de `pids_limit` 128 a 192 (decodificar más x264 son
   150-300 MB y unos hilos por trabajo; un OOM tumbaría el backend entero), en el Compose de Umbrel, su copia de la
-  tienda y la pila local (`deploy/test/compose.test.ts`). Solo x264 por software: `/dev/dri` sigue sin montarse.
+  tienda y la pila local (`deploy/test/compose.test.ts`). Desde nov 2026 se monta `/dev/dri` y lo recodificado va por
+  la gráfica si la hay (§17.6); si no, x264 por software como hasta entonces.
 - **Por medir en el NAS**: la velocidad y la memoria de un trabajo con una película 1080p H.264 y otra HEVC de 8 bits
   dentro del contenedor (sigue si un segmento de 6 s tarda 3 s o menos), y una sala de verdad con un invitado por 4G
   y otro con la red limitada a 3 Mbit/s.
@@ -454,6 +515,72 @@ servidor; la web, al final de la sección.
   mover el cursor, recorte con lo fijado), `remux/party-lite.test.ts` (servir por la sala y no por la ruta de vídeo,
   `ACE_PARTY_LITE=0`), `party/routes.test.ts` (origen `guest` y `abr`), `party/service.test.ts` (la tabla entera:
   origen × `abr` × interruptor × fuente × HEVC × plaza × fusible) y `vod/lite.ffmpeg.test.ts`.
+
+### 17.6 La gráfica del NAS (VAAPI, nov 2026)
+
+Lo que el remux RECODIFICA va por la gráfica Intel del NAS (N300, Alder Lake-N, `i915`, UHD Graphics) cuando la
+hay: la ligera de «Ver juntos» (`vod/lite-args.ts`), la ligera del directo y el desentrelazado de la IPTV para el
+iPhone (`remux/args.ts`). Copiar el vídeo (el remux de siempre, el productor del VOD) no la usa nunca. El ensayo y
+el estado están en `remux/hwaccel.ts`.
+
+- **Contenedor** (`deploy/umbrel/docker-compose.yml`, servicio `storage`): `/dev/dri:/dev/dri` como volumen y
+  `device_cgroup_rules: ["c 226:* rmw"]` (los nodos DRM), NO `devices`: un dispositivo que falta (Umbrel en una
+  máquina virtual, sin gráfica, `i915` sin cargar tras una actualización de umbrelOS) no deja crear el contenedor y,
+  sin `storage`, nginx tampoco arranca; así, sin gráfica la carpeta sale vacía y se sigue con x264. `group_add` 991 (render, el de `renderD128`) y 44 (video, el de `card0`), y `apk add intel-media-driver` (VAAPI
+  iHD) DESPUÉS del de ffmpeg, aparte y con su propio `timeout 25`: si falta (sin red, otra arquitectura), solo se
+  pierde la gráfica. Los dos plazos (60 + 25 s) caben en el `start_period` de 90 s. La pila local no monta
+  `/dev/dri` (Docker Desktop no la tiene y un dispositivo que falta no deja crear el contenedor): ahí el ensayo falla
+  y se usa x264. Sin imágenes nuevas ni `build:`.
+- **Sin root, con la gráfica** (`core/privileges.ts`): `setgroups([gid])` quitaba los grupos del `group_add` y
+  ffmpeg ya no podía abrir `/dev/dri/renderD128`. `ACE_RUN_GROUPS` (lista de gid y/o `dri`) los conserva; el Compose
+  pone `dri`, que lee los dueños de `/dev/dri/card*` y `/dev/dri/renderD*` (en el NAS, 44 y 991), sin el 0. El
+  registro del arranque («el servidor ya no es root») lleva `groups`.
+- **Ensayo al arrancar** (`createVideoAccel`, desde `remux.start()`, sin esperarlo: mientras, x264): un ffmpeg de un
+  segundo, `testsrc2` 1080p → `hwupload` → `scale_vaapi` a 720 → `h264_vaapi` con los parámetros de la ligera, en
+  fMP4 por la tubería. Se prueban, en orden, bajo consumo (VDENC, `-low_power 1`: en las Intel desde la Gen12 es el
+  único codificador H.264) con VBR, el normal con VBR, y los dos con CQP (VBR en VDENC necesita el firmware HuC). El
+  primero que sale es el que se usa; luego otro ensayo con `deinterlace_vaapi`. El códec RFC 6381 de la ligera sale
+  del `avcC` del propio ensayo (`h264_vaapi` marca las banderas de restricción 4 y 5, `avc1.640c28` en vez del
+  `avc1.640028` de x264) y es el que anuncian `master.m3u8` y la concesión. `ACE_HWACCEL=off` no ensaya;
+  `ACE_VAAPI_DEVICE` cambia el nodo (`/dev/dri/renderD<N>`).
+- **Para mirarlo desde la LAN**: `GET /api/v1/health` → `components.video`: `hwaccel` (`vaapi`, `none` o
+  `probing`), `reason` (por qué no, o por qué se apagó; con `deinterlace_vaapi` que no va, que se desentrelaza con
+  bwdif), `device`, `encoder` (`h264_vaapi` o `libx264`), `lowPower`, `rateControl`, `deinterlace` (`vaapi` o
+  `bwdif`), `recodeSlots` y `failures`. También en `remux.stats().video` y una línea en el registro al acabar el
+  ensayo («vídeo: la gráfica (VAAPI) recodifica» o «vídeo: sin la gráfica, se recodifica con x264»).
+- **La ligera del VOD con la gráfica**: `-init_hw_device vaapi=va:/dev/dri/renderD128 -hwaccel vaapi
+  -hwaccel_output_format vaapi` delante de `-i pipe:0`, `-vf format=nv12|vaapi,hwupload,scale_vaapi=w=-2:h='min(720,ih)'`
+  (decodifica, escala y codifica la gráfica; lo que no sepa decodificar lo hace la CPU y `hwupload` lo sube),
+  `h264_vaapi` High nivel 40, VBR con objetivo 1500k, techo 2500k y búfer 5000k (o CQP 25), `-bf 0 -g 9999`. Todo lo
+  demás igual que con x264: `-copyts -fps_mode passthrough`, un GOP por segmento que empieza en IDR (cada trabajo es
+  un ffmpeg nuevo), el audio copiado, el mismo `lo_init.mp4`/`lo_index<N>.m4s` y las mismas comprobaciones (tiempos,
+  `sameLiteInit`). Una sesión NO mezcla codificadores (los init no casarían): se fija al anunciar su CODECS (la
+  maestra o la oferta, `announceLite` en `remux/service.ts`, `LiteRendition.announce`), porque Safari no vuelve a
+  pedir la maestra: si se sirvió mientras se ensayaba, la sesión va en x264 aunque el ensayo salga después. Si la
+  gráfica falla antes del primer `lo_init.mp4` con el CODECS ya anunciado, la ligera de esa sesión se funde
+  (`init`); si aún no se había anunciado, sigue con x264 sin gastar el fusible, pero solo si cabe en el tope de CPU
+  (`slot.fits`; si no, se funde por `plaza`). La plaza se pide con el codificador de la sesión.
+- **El directo con la gráfica**: la ligera, `scale_vaapi` + `h264_vaapi` (mismo caudal); el desentrelazado,
+  `deinterlace_vaapi=rate=field` (50p, como `bwdif=send_field`) con objetivo 8M y techo 12M; los dos,
+  `rate=frame` y escalar. Sin B, `-g 250` y la clave cada 2 s exactos (`-force_key_frames`, que `h264_vaapi` cumple
+  como IDR); el audio, el AAC de siempre. Sin `deinterlace_vaapi`, lo entrelazado sigue con bwdif + x264.
+- **Fallos en uso**: cada ffmpeg con la gráfica que falla por ella (un trabajo ligero fallido; un remux del directo
+  que sale con error y con la gráfica en la cola del registro, `isVaapiFailure`: el fin de la entrada, un canal sin
+  pares o la IPTV caída no cuentan, ni una salida con 0) cuenta; 3 seguidos sin uno bueno entre medias la apagan hasta el siguiente arranque (`hwaccel:
+  'none'` con el motivo) y lo siguiente sale con x264.
+- **Plaza**: con la gráfica caben `MAX_RECODE_HW` (4) recodificaciones a la vez en vez de `MAX_DEINTERLACE` (2): ese
+  tope era por CPU (x264 1080p50, unos 2 núcleos del N300 cada una). Lo que siga en x264 cuenta además en el tope de
+  CPU (`recodes()` y `recodeFree()` de `remux/service.ts`). En la práctica, el tope de 3 remux (`MAX_REMUX_SESSIONS`)
+  llega antes.
+- **Por medir en el NAS**: que el ensayo salga dentro del contenedor (`components.video.hwaccel: 'vaapi'` y qué modo),
+  la velocidad de un trabajo ligero (el fusible de 1,5× sigue), la calidad de 1500k en VDENC frente al ~1 Mbit/s de
+  x264, y que Safari de iOS reproduce la ligera de `h264_vaapi` y cambia entre ella y la original. Sin poder probarlo
+  en este PC (Windows, sin VAAPI).
+- **Pruebas**: `remux/hwaccel.test.ts` (argumentos, orden del ensayo, sin gráfica/sin ffmpeg/`off`, sin
+  `deinterlace_vaapi`, apagado tras 3 fallos; el ensayo con el ffmpeg de verdad acaba en x264 fuera de Linux),
+  `vod/lite-args.test.ts` (la ligera con la gráfica), `vod/lite.test.ts` (la sesión con `h264_vaapi` y el paso a
+  x264 antes del primer init), `remux/lite.test.ts` (el directo con la gráfica, más plaza y vuelta a x264),
+  `core/privileges.test.ts` (`ACE_RUN_GROUPS`) y `deploy/test/compose.test.ts`.
 
 ### Web (`features/juntos/player.ts`, `Theater.tsx`, `player/engines/hls.ts`)
 

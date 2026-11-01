@@ -14,6 +14,14 @@
    2. `setgroups` + `setgid` + `setuid`: el proceso (y el ffmpeg que lance) ya
       no es root y no puede volver a serlo (`no-new-privileges` del compose).
 
+   Grupos de más (`ACE_RUN_GROUPS`, docs/ver-juntos.md §17.6): `setgroups`
+   dejaba solo el gid de `ACE_RUN_AS` y se perdían los del `group_add` del
+   compose (render y video), sin los que ffmpeg no abre la gráfica
+   (`/dev/dri/renderD128`). Lista separada por comas de gid y/o `dri`: `dri` son
+   los grupos dueños de `/dev/dri/card*` y `/dev/dri/renderD*` (los de este NAS
+   u otro, sin escribir números a mano). Nunca el 0 (root); lo que no vale se
+   ignora con un aviso en el resultado.
+
    Si algo falla se sigue como root y se avisa en el registro: una app que no
    arranca es peor que una app sin esta capa de más. */
 
@@ -38,7 +46,11 @@ export type DropResult =
       readonly status: 'dropped';
       readonly uid: number;
       readonly gid: number;
+      /** Todos los grupos que se quedan (el gid y los de `ACE_RUN_GROUPS`). */
+      readonly groups: readonly number[];
       readonly chowned: number;
+      /** Lo de `ACE_RUN_GROUPS` que no valía (se ignora). */
+      readonly ignored?: readonly string[];
     }
   | { readonly status: 'failed'; readonly reason: string };
 
@@ -49,6 +61,45 @@ export function parseRunAs(value: string | undefined): { uid: number; gid: numbe
   const uid = Number(match[1]);
   const gid = Number(match[2]);
   return uid > 0 && gid > 0 ? { uid, gid } : null;
+}
+
+/** Dónde están los nodos de la gráfica (para `dri`). */
+export const DRI_DIR = '/dev/dri';
+const DRI_NODE_RE = /^(card|renderD)\d+$/;
+
+/**
+ * `ACE_RUN_GROUPS` → los gid de más (sin repetir, sin 0) y lo que no valía. `dri` lee los dueños de
+ * los nodos de `/dev/dri` (sin `/dev/dri`, ninguno).
+ */
+export function resolveRunGroups(
+  value: string | undefined,
+  ops: Pick<PrivilegeOps, 'lstat' | 'readdir'>,
+): { groups: number[]; ignored: string[] } {
+  const groups = new Set<number>();
+  const ignored: string[] = [];
+  for (const raw of (value ?? '').split(',')) {
+    const token = raw.trim().toLowerCase();
+    if (!token) continue;
+    if (token === 'dri') {
+      let names: string[];
+      try {
+        names = ops.readdir(DRI_DIR);
+      } catch {
+        continue;
+      }
+      for (const name of names) {
+        if (!DRI_NODE_RE.test(name)) continue;
+        try {
+          const gid = ops.lstat(path.posix.join(DRI_DIR, name)).gid;
+          if (gid > 0) groups.add(gid);
+        } catch {}
+      }
+      continue;
+    }
+    if (/^\d{1,10}$/.test(token) && Number(token) > 0) groups.add(Number(token));
+    else ignored.push(raw.trim());
+  }
+  return { groups: [...groups], ignored };
 }
 
 function nodeOps(): PrivilegeOps | null {
@@ -108,10 +159,19 @@ export function dropRoot(
   if (ops.getuid() !== 0) return { status: 'not-root' };
   try {
     const chowned = chownTree(ops, dataDir, target.uid, target.gid);
-    ops.setgroups([target.gid]);
+    const extra = resolveRunGroups(env.ACE_RUN_GROUPS, ops);
+    const groups = [target.gid, ...extra.groups.filter((gid) => gid !== target.gid)];
+    ops.setgroups(groups);
     ops.setgid(target.gid);
     ops.setuid(target.uid);
-    return { status: 'dropped', uid: target.uid, gid: target.gid, chowned };
+    return {
+      status: 'dropped',
+      uid: target.uid,
+      gid: target.gid,
+      groups,
+      chowned,
+      ...(extra.ignored.length ? { ignored: extra.ignored } : {}),
+    };
   } catch (error) {
     return { status: 'failed', reason: (error as Error).message };
   }

@@ -3,12 +3,14 @@
    minuto 10. El tiempo y la barra salen del reloj de la sala, no del vídeo. */
 
 import type { PartyRoom } from '@ace/shared';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import joined from '@fixtures/web/v1/partyJoin.json';
 import { PartyClient, type PartyEnv, type PartyState } from './client.ts';
 import type { PlayerQuality, PlayerView, RoomPlayer } from './player.ts';
 import { Theater } from './Theater.tsx';
+import { resetMemoryStorage, STORAGE_KEYS } from '../../lib/storage.ts';
+import { readSavedVolume, saveVolume } from '../../player/volume.ts';
 
 const HOST = 'm_IsmaAnfitrion';
 const ANA = 'm_AnaInvitada01';
@@ -55,18 +57,20 @@ function setup(
     ...over,
   };
   const state = { ...client.getState(), room } as PartyState;
+  /* El de la sala lo crea player.ts: aquí, uno suelto. */
+  const video = document.createElement('video');
   render(
     <Theater
       player={player}
       client={client}
       room={room}
       state={state}
-      video={document.createElement('video')}
+      video={video}
       fullscreen={false}
       onFullscreen={() => undefined}
     />,
   );
-  return { setQuality, control };
+  return { setQuality, control, video };
 }
 
 describe('«Ver juntos»: el reproductor', () => {
@@ -140,11 +144,90 @@ describe('«Ver juntos»: el reproductor', () => {
     group.remove();
   });
 
-  it('en escritorio, como la maqueta: sin volumen (la M silencia)', () => {
+  it('en el móvil, sin volumen: mandan los botones del teléfono (la M silencia)', () => {
     setup(HOST);
     expect(screen.queryByRole('button', { name: 'Silenciar' })).toBeNull();
+    expect(screen.queryByRole('slider', { name: 'Volumen' })).toBeNull();
     expect(screen.getByRole('slider', { name: 'Posición' })).toBeTruthy();
   });
+
+  it('en el ordenador, silencio y volumen de este aparato: no mandan nada a la sala y se recuerda', async () => {
+    const realMatchMedia = window.matchMedia;
+    // 1280 px con ratón: casan las de ancho y la de puntero fino.
+    window.matchMedia = ((query: string) => ({
+      matches: /min-width|pointer: fine/.test(query),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      saveVolume(0.6);
+      const { control, video } = setup(ANA);
+      /* El nivel que dejó este navegador, puesto al llegar. */
+      expect(video.volume).toBeCloseTo(0.6);
+      const slider = screen.getByRole('slider', { name: 'Volumen' });
+      await waitFor(() => expect(slider).toHaveAttribute('aria-valuetext', '60 %'));
+      fireEvent.keyDown(slider, { key: 'ArrowDown' });
+      expect(video.volume).toBeCloseTo(0.55);
+      expect(readSavedVolume()).toBe(0.55);
+      fireEvent.click(screen.getByRole('button', { name: 'Silenciar' }));
+      expect(video.muted).toBe(true);
+      expect(control).not.toHaveBeenCalled();
+    } finally {
+      window.matchMedia = realMatchMedia;
+      localStorage.removeItem(STORAGE_KEYS.volume);
+      resetMemoryStorage();
+    }
+  });
+});
+
+describe('«Ver juntos»: el volumen según el aparato', () => {
+  /** matchMedia de pega: casan las consultas que digan `matches`. */
+  function withMedia(matches: RegExp, run: () => void | Promise<void>) {
+    const realMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: matches.test(query),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    const restore = () => {
+      window.matchMedia = realMatchMedia;
+      localStorage.removeItem(STORAGE_KEYS.volume);
+      resetMemoryStorage();
+    };
+    return Promise.resolve().then(run).finally(restore);
+  }
+
+  it('el iPhone en horizontal (≥ 768 px, sin ratón): tampoco hay volumen con la película', () =>
+    withMedia(/min-width: 768px/, () => {
+      setup(HOST);
+      expect(screen.queryByRole('button', { name: 'Silenciar' })).toBeNull();
+      expect(screen.queryByRole('slider', { name: 'Volumen' })).toBeNull();
+    }));
+
+  it('en el ordenador, la M con el volumen a 0 lo devuelve al guardado y suena (como el botón)', () =>
+    withMedia(/min-width|pointer: fine/, () => {
+      saveVolume(0.6);
+      const { video } = setup(ANA);
+      const slider = screen.getByRole('slider', { name: 'Volumen' });
+      fireEvent.keyDown(slider, { key: 'Home' });
+      expect(video.volume).toBe(0);
+      expect(video.muted).toBe(true);
+      fireEvent.keyDown(document.body, { key: 'm' });
+      expect(video.muted).toBe(false);
+      expect(video.volume).toBeCloseTo(0.6);
+      fireEvent.keyDown(document.body, { key: 'm' });
+      expect(video.muted).toBe(true);
+    }));
 });
 
 describe('«Ver juntos»: el reproductor en el móvil (ver-juntos-pelis.html)', () => {

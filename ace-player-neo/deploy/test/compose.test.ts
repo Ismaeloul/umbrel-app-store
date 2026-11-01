@@ -91,7 +91,12 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
     /* storage sube de memoria y de procesos por la calidad ligera de «Ver juntos»
        (docs/ver-juntos.md §17): x264 en el backend; lo demás, como en la 0.6.59. */
     const raised: Record<string, Record<string, unknown>> = {
-      storage: { mem_limit: '1280m', pids_limit: 192 },
+      /* Y la gráfica entra como carpeta (§17.6, ver la prueba de /dev/dri). */
+      storage: {
+        mem_limit: '1280m',
+        pids_limit: 192,
+        volumes: [...(legacy('storage').volumes ?? []), '/dev/dri:/dev/dri'],
+      },
     };
     for (const name of Object.keys(LEGACY.services)) {
       for (const key of kept) {
@@ -127,6 +132,7 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
       PARTY_PUBLIC_URL: 'https://sala.ismaeloul.es',
       ACE_PARTY_LITE: '1',
       ACE_RUN_AS: '1000:1000',
+      ACE_RUN_GROUPS: 'dri',
     });
     /* Encendida desde la 1.0.0 (docs/ver-juntos.md §17): si el NAS no da abasto, el fusible vuelve a la original. */
     expect(RAW).toContain('ACE_PARTY_LITE: "1"');
@@ -154,10 +160,36 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
     );
   });
 
-  it('storage: ffmpeg con plazo y node sobre el server.js CommonJS de la release', () => {
+  it('storage: ffmpeg y el driver VAAPI con plazo (cada uno el suyo) y node sobre el server.js CommonJS de la release', () => {
     expect(squash(service('storage').command)).toBe(
-      `sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/${VERSION}/server.js"`,
+      `sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; timeout 25 apk add intel-media-driver >/dev/null 2>&1 || echo 'sin intel-media-driver, video por x264'; exec node /releases/${VERSION}/server.js"`,
     );
+    /* Los dos plazos caben en el start_period: nginx no se queda esperando a storage. */
+    const period = Number(
+      /^(\d+)s$/.exec(String(service('storage').healthcheck?.start_period))?.[1],
+    );
+    expect(60 + 25).toBeLessThanOrEqual(period);
+  });
+
+  it('storage: la gráfica Intel (/dev/dri) con los grupos render y video, que conserva al dejar de ser root (docs/ver-juntos.md §17.6)', () => {
+    /* Sin `devices`: si falta /dev/dri (máquina virtual, i915 sin cargar), Docker no crearía el
+       contenedor y, sin storage, nginx no arranca. Una carpeta montada y la regla de cgroup de los
+       nodos DRM (mayor 226) no fallan si no hay gráfica. */
+    expect(service('storage').devices).toBeUndefined();
+    expect(service('storage').volumes).toContain('/dev/dri:/dev/dri');
+    expect(service('storage').device_cgroup_rules).toEqual(['c 226:* rmw']);
+    expect(RAW).not.toMatch(/^\s*devices:/m);
+    expect(service('storage').group_add).toEqual(['991', '44']);
+    expect(service('storage').environment?.ACE_RUN_GROUPS).toBe('dri');
+    /* Solo storage recodifica: nadie más ve la gráfica. */
+    for (const [name, definition] of Object.entries(COMPOSE.services)) {
+      if (name === 'storage') continue;
+      expect(definition.devices, name).toBeUndefined();
+      expect(definition.group_add, name).toBeUndefined();
+      expect(definition.device_cgroup_rules, name).toBeUndefined();
+      expect(definition.volumes ?? [], name).not.toContain('/dev/dri:/dev/dri');
+    }
+    expect(legacy('storage').devices).toBeUndefined();
   });
 
   it('storage: healthcheck a /api/v1/health/live con los plazos de siempre', () => {

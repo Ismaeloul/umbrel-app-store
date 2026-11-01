@@ -41,6 +41,12 @@ export interface RemuxArgsInput {
   readonly deinterlace?: boolean;
   /** 0.9.8: calidad ligera para un iPhone con poca conexión (ver `liteVideoArgs`). Con `deinterlace`, las dos. */
   readonly lite?: boolean;
+  /**
+   * La gráfica del NAS (hwaccel.ts), o nada: con `lite` o `deinterlace` (y `deinterlace_vaapi` si
+   * desentrelaza), decodifica, escala y codifica ella en vez de x264 (`vaapiLiveVideoArgs`). Copiar
+   * el vídeo no la usa nunca.
+   */
+  readonly vaapi?: VaapiProfile | null;
 }
 
 /** Hilos de x264 al desentrelazar: ~2 núcleos del N300 por canal 1080i (medido en la 0.9.2). */
@@ -126,6 +132,142 @@ export function liteVideoArgs(interlaced = false): string[] {
   ];
 }
 
+// --- La gráfica del NAS (VAAPI, docs/ver-juntos.md §17.6; el ensayo está en hwaccel.ts) ---
+
+/** Nombre del dispositivo dentro de ffmpeg (`-init_hw_device vaapi=va:…`). */
+export const VAAPI_DEVICE_NAME = 'va';
+
+/** Lo que el ensayo dejó listo para usar la gráfica. */
+export interface VaapiProfile {
+  readonly device: string;
+  /** `-low_power 1` (VDENC). */
+  readonly lowPower: boolean;
+  /** `VBR` (caudal, como la ligera de x264) o `CQP` (calidad fija, sin HuC). */
+  readonly rateControl: 'VBR' | 'CQP';
+  /** `deinterlace_vaapi` funciona: el desentrelazado de la IPTV también va por la gráfica. */
+  readonly deinterlace: boolean;
+  /** Códec RFC 6381 de la ligera del VOD con este codificador (del `avcC` del ensayo). */
+  readonly liteCodecs: string;
+}
+
+/** Caudales de un codificador de la gráfica. */
+export interface VaapiRate {
+  readonly bitrate: string;
+  readonly maxrate: string;
+  readonly bufsize: string;
+  /** Con `CQP`. */
+  readonly qp: number;
+}
+
+/**
+ * La ligera (VOD y directo): el techo y el búfer de la de x264 (`LITE_MAXRATE`, 5000k) y un
+ * objetivo de 1,5 Mb/s (x264 con CRF 23 sacaba ~1 Mb/s en 720p; VDENC necesita algo más).
+ */
+export const VAAPI_LITE_RATE: VaapiRate = {
+  bitrate: '1500k',
+  maxrate: LITE_MAXRATE,
+  bufsize: '5000k',
+  qp: 25,
+};
+/** El desentrelazado (1080p50): el techo de x264 (12M) con un objetivo de 8 Mb/s. */
+export const VAAPI_DEINTERLACE_RATE: VaapiRate = {
+  bitrate: '8M',
+  maxrate: '12M',
+  bufsize: '12M',
+  qp: 22,
+};
+
+/**
+ * Delante de `-i`: abre la gráfica, decodifica con ella y deja las imágenes en ella. Si el
+ * decodificador no puede (un perfil raro), ffmpeg decodifica en la CPU y `VAAPI_UPLOAD` las sube.
+ */
+export function vaapiInputArgs(device: string): string[] {
+  return [
+    ...['-init_hw_device', `vaapi=${VAAPI_DEVICE_NAME}:${device}`],
+    ...['-filter_hw_device', VAAPI_DEVICE_NAME],
+    ...['-hwaccel', 'vaapi', '-hwaccel_device', VAAPI_DEVICE_NAME],
+    ...['-hwaccel_output_format', 'vaapi'],
+  ];
+}
+
+/** Primer filtro: deja pasar lo que ya está en la gráfica y sube lo que no (decodificado en la CPU). */
+export const VAAPI_UPLOAD = 'format=nv12|vaapi,hwupload';
+
+/** `scale=-2:'min(720,ih)'` en la gráfica: el mismo ancho par y sin agrandar. */
+export function vaapiScale(height: number = LITE_HEIGHT): string {
+  return `scale_vaapi=w=-2:h='min(${height},ih)':format=nv12`;
+}
+
+/**
+ * `h264_vaapi` High 8 bits sin fotogramas B. `level` (solo la ligera del VOD) va en número
+ * (`40`): «4.0» no es ninguna de sus constantes y se leería como 4.
+ */
+export function vaapiEncoderArgs(
+  profile: Pick<VaapiProfile, 'lowPower' | 'rateControl'>,
+  rate: VaapiRate,
+  options: { readonly gop: number; readonly level?: string } = { gop: 250 },
+): string[] {
+  return [
+    ...['-c:v', 'h264_vaapi'],
+    ...(profile.lowPower ? ['-low_power', '1'] : []),
+    ...['-profile:v', 'high'],
+    ...(options.level ? ['-level:v', options.level] : []),
+    ...(profile.rateControl === 'VBR'
+      ? [
+          '-rc_mode',
+          'VBR',
+          '-b:v',
+          rate.bitrate,
+          '-maxrate',
+          rate.maxrate,
+          '-bufsize',
+          rate.bufsize,
+        ]
+      : ['-rc_mode', 'CQP', '-qp', String(rate.qp)]),
+    ...['-bf', '0', '-g', String(options.gop)],
+  ];
+}
+
+/** Nivel H.264 de la ligera del VOD con `h264_vaapi` (el 4.0 de x264, en número). */
+export const VAAPI_LITE_LEVEL = '40';
+
+/**
+ * ¿Puede ir por la gráfica una generación del directo que recodifica? La ligera progresiva, sí; lo
+ * entrelazado (desentrelazar, con o sin ligera), solo si el ensayo de `deinterlace_vaapi` salió.
+ */
+export function liveUsesVaapi(
+  vaapi: VaapiProfile | null | undefined,
+  recode: { readonly lite?: boolean; readonly deinterlace?: boolean },
+): vaapi is VaapiProfile {
+  if (!vaapi || !(recode.lite || recode.deinterlace)) return false;
+  return !recode.deinterlace || vaapi.deinterlace;
+}
+
+/**
+ * El vídeo del directo por la gráfica: lo mismo que `deinterlaceVideoArgs` / `liteVideoArgs` con
+ * `deinterlace_vaapi` (un campo por imagen al desentrelazar; una imagen por imagen en la ligera),
+ * `scale_vaapi` y `h264_vaapi`, sin B y con la clave cada 2 s exactos.
+ */
+export function vaapiLiveVideoArgs(
+  vaapi: VaapiProfile,
+  recode: { readonly lite?: boolean; readonly deinterlace?: boolean },
+): string[] {
+  const filters = [
+    VAAPI_UPLOAD,
+    ...(recode.deinterlace ? [`deinterlace_vaapi=rate=${recode.lite ? 'frame' : 'field'}`] : []),
+    ...(recode.lite ? [vaapiScale()] : []),
+  ];
+  return [
+    '-vf',
+    filters.join(','),
+    ...vaapiEncoderArgs(vaapi, recode.lite ? VAAPI_LITE_RATE : VAAPI_DEINTERLACE_RATE, {
+      gop: 250,
+    }),
+    '-force_key_frames',
+    'expr:gte(t,n_forced*2)',
+  ];
+}
+
 /** Marca que lleva cada ffmpeg del remux en su línea de órdenes. */
 export const ACE_SESSION_MARK = 'ace_session=';
 
@@ -182,6 +324,7 @@ function continuation(input: RemuxArgsInput): boolean {
 
 export function buildRemuxArgs(input: RemuxArgsInput): string[] {
   const next = continuation(input);
+  const hw = liveUsesVaapi(input.vaapi, input) ? input.vaapi : null;
   const reconnect =
     input.origin === 'iptv'
       ? iptvInputArgs(input)
@@ -217,6 +360,8 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     '5000000',
     '-thread_queue_size',
     '512',
+    /* La gráfica (§17.6): solo cuando se recodifica, y delante de -i (decodifica ella). */
+    ...(hw ? vaapiInputArgs(hw.device) : []),
     // server.js:274 (la entrada, ahora la de la sesión del backend)
     '-i',
     input.url,
@@ -230,11 +375,13 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
        audio se rehacía (p. ej. al pasar de 2.0 a 5.1), miles de tramas AAC en un solo segmento y un
        pico de CPU (diagnostico-iptv-0.8.2 P8, B1). Tampoco `-reinit_filter 0`: con un cambio de
        disposición de canales es fatal. La IPTV entrelazada para el iPhone, desentrelazada (0.9.2). */
-    ...(input.lite
-      ? liteVideoArgs(input.deinterlace)
-      : input.deinterlace
-        ? deinterlaceVideoArgs()
-        : ['-c:v', 'copy', '-copyinkf']),
+    ...(hw
+      ? vaapiLiveVideoArgs(hw, input)
+      : input.lite
+        ? liteVideoArgs(input.deinterlace)
+        : input.deinterlace
+          ? deinterlaceVideoArgs()
+          : ['-c:v', 'copy', '-copyinkf']),
     '-c:a',
     'aac',
     '-b:a',
@@ -246,7 +393,10 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     // Nuevo en la v2 (arquitectura §5.7)
     '-threads',
     '2',
-    ...(input.deinterlace || input.lite ? ['-threads:v', String(DEINTERLACE_THREADS)] : []),
+    /* Los hilos de x264; con la gráfica no codifica la CPU. */
+    ...((input.deinterlace || input.lite) && !hw
+      ? ['-threads:v', String(DEINTERLACE_THREADS)]
+      : []),
     '-metadata',
     `${ACE_SESSION_MARK}${input.sessionId}`,
     // server.js:313-317: HLS fMP4 de 2 s en ventana de 15 (B-225)

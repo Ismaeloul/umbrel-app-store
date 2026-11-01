@@ -51,6 +51,8 @@ export function testEnv(overrides: Env = {}): Env {
     DEFAULT_WEB_SYNC_URL: 'https://example.com/default.m3u',
     ACE_SEED: 'semilla-de-prueba-0123456789',
     APP_VERSION: '0.7.0-test',
+    /* Sin ensayo de la gráfica (remux/hwaccel.ts): lanzaría el ffmpeg de verdad en cada `remux.start()`. */
+    ACE_HWACCEL: 'off',
     ...overrides,
   };
 }

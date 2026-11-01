@@ -3,7 +3,9 @@
    un productor falso (los segmentos «en disco» de una carpeta temporal) y el
    reloj falso:
 
-   - en orden y como mucho 3 segmentos y 20 s por delante del cursor;
+   - en orden y como mucho `aheadSegments` (8) y `aheadMaxS` (48 s) por delante del
+     cursor; el resto de pruebas, con la ventana estrecha de antes (3 y 20 s), que
+     deja ver la mecánica con pocos segmentos;
    - un salto mueve la cola (y mata lo que se codificaba fuera de ella);
    - dos invitados a más de 3 segmentos el uno del otro no se matan los
      trabajos: la cola es la unión de las ventanas de los cursores recientes;
@@ -23,6 +25,7 @@ import { createSilentLogger } from '../../../core/logger.js';
 import { tempDir } from '../../../../test/helpers/index.js';
 import { initSegment, mediaFragment } from '../../../../test/fake-vod/mp4.js';
 import {
+  DEFAULT_LITE_LIMITS,
   LiteRendition,
   liteVariantFor,
   sameLiteInit,
@@ -34,6 +37,8 @@ import {
 import { parseInit } from './fmp4.js';
 import { planSegments, segmentAt, type VodPlan } from './plan.js';
 import type { LiteProcess, LiteProcessLauncher, VodIndex } from './types.js';
+import { softwareVideoAccel, type VideoAccel } from '../hwaccel.js';
+import type { VaapiProfile } from '../args.js';
 
 /* 2 minutos con una clave cada 2 s: 20 segmentos de 6 s. */
 const PLAN = planSegments(
@@ -129,6 +134,8 @@ interface Behavior {
 
 class FakeLiteLauncher implements LiteProcessLauncher {
   readonly jobs: number[] = [];
+  /** Los argumentos de cada ffmpeg lanzado. */
+  readonly argv: string[][] = [];
   readonly killed: number[] = [];
   missing = false;
   manual = false;
@@ -153,6 +160,7 @@ class FakeLiteLauncher implements LiteProcessLauncher {
       throw Object.assign(new Error('spawn ffmpeg ENOENT'), { code: 'ENOENT' });
     }
     expect(args).toContain('pipe:0');
+    this.argv.push([...args]);
     const stdout = new PassThrough();
     const chunks: Buffer[] = [];
     let exitListener: ((code: number | null, signal: string | null) => void) | null = null;
@@ -217,11 +225,22 @@ afterEach(async () => {
   while (lites.length) await lites.pop()?.close();
 });
 
-function rig(options: { limits?: Partial<LiteLimits>; slot?: () => boolean } = {}) {
+/** La ventana de antes (3 segmentos y 20 s): las pruebas de la mecánica la usan. */
+const NARROW: Partial<LiteLimits> = { aheadSegments: 3, aheadMaxS: 20 };
+
+function rig(
+  options: {
+    limits?: Partial<LiteLimits>;
+    slot?: () => boolean;
+    accel?: VideoAccel;
+    fits?: () => boolean;
+    encoder?: VaapiProfile | null;
+  } = {},
+) {
   const clock = new FakeClock();
   const source = new FakeSource();
   const launcher = new FakeLiteLauncher(clock);
-  const slot = { taken: 0, released: 0 };
+  const slot = { taken: 0, released: 0, hardware: [] as boolean[] };
   const trips: string[] = [];
   const lite = new LiteRendition(
     {
@@ -229,20 +248,24 @@ function rig(options: { limits?: Partial<LiteLimits>; slot?: () => boolean } = {
       logger: createSilentLogger(),
       launcher,
       slot: {
-        acquire: () => {
+        acquire: (hardware) => {
+          slot.hardware.push(hardware);
           const ok = options.slot ? options.slot() : true;
           if (ok) slot.taken += 1;
           return ok;
         },
         release: () => (slot.released += 1),
+        ...(options.fits ? { fits: options.fits } : {}),
       },
       onTrip: (reason) => trips.push(reason),
+      ...(options.accel ? { accel: options.accel } : {}),
     },
     {
       sessionId: 's_sala',
       dir: source.dir,
       source,
-      ...(options.limits ? { limits: options.limits } : {}),
+      limits: { ...NARROW, ...options.limits },
+      ...(options.encoder === undefined ? {} : { encoder: options.encoder }),
     },
   );
   lites.push(lite);
@@ -251,8 +274,8 @@ function rig(options: { limits?: Partial<LiteLimits>; slot?: () => boolean } = {
 
 const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
-async function until(check: () => boolean, what: string): Promise<void> {
-  for (let i = 0; i < 500; i += 1) {
+async function until(check: () => boolean, what: string, tries = 500): Promise<void> {
+  for (let i = 0; i < tries; i += 1) {
     if (check()) return;
     await new Promise((resolve) => setTimeout(resolve, 2));
   }
@@ -284,6 +307,26 @@ describe('LiteRendition', () => {
     expect(r.launcher.jobs.slice(6)).toEqual([15, 16, 17, 18]);
     expect(r.source.extraBytes).toBeGreaterThan(0);
     expect(r.lite.status()).toMatchObject({ state: 'on', reason: null, cursor: 15 });
+  });
+
+  it('la ventana de verdad (LITE_VOD, §16): 8 segmentos y 48 s por delante, y fija hasta cursor + 8', async () => {
+    const r = rig({ limits: DEFAULT_LITE_LIMITS });
+    expect(DEFAULT_LITE_LIMITS).toMatchObject({ aheadSegments: 8, aheadMaxS: 48 });
+    r.source.add(...PLAN.segments.map((s) => s.index));
+    expect((await r.lite.segmentFile(0)).kind).toBe('file');
+    const window = PLAN.segments
+      .filter((s) => s.index <= 8 && s.startS - PLAN.segments[0]!.startS <= 48)
+      .map((s) => s.index);
+    /* Nueve trabajos seguidos: con toda la batería a la vez tardan más que los cuatro de las otras. */
+    await until(
+      () => r.launcher.jobs.length === window.length && r.launcher.alive === 0,
+      'la cola',
+      5_000,
+    );
+    await tick();
+    expect(r.launcher.jobs).toEqual(window);
+    expect(window.length).toBeGreaterThan(4);
+    expect(r.source.pins.at(-1)).toEqual([0, 8]);
   });
 
   it('fija [cursor − 1, cursor + 3] en el productor; un salto mata lo que se codificaba fuera', async () => {
@@ -389,7 +432,7 @@ describe('LiteRendition', () => {
     await until(() => bad.trips.length === 1, 'el fusible');
     expect(bad.trips).toEqual(['fallos']);
     expect(bad.launcher.jobs).toEqual([4, 5, 6]);
-    expect(bad.slot).toEqual({ taken: 1, released: 1 });
+    expect(bad.slot).toMatchObject({ taken: 1, released: 1 });
   });
 
   it('menos de 1,5× el tiempo real de media en 3 segmentos funde la sesión', async () => {
@@ -528,5 +571,121 @@ describe('sameLiteInit', () => {
     const one = parseInit(liteInit('avc1'));
     expect(sameLiteInit(one, parseInit(liteInit('avc1')))).toBe(true);
     expect(sameLiteInit(one, parseInit(liteInit('hvc1')))).toBe(false);
+  });
+});
+
+/* La gráfica del NAS (§17.6): una gráfica de pega que cuenta lo que se le dice. */
+function fakeAccel(): VideoAccel & { failures: string[]; successes: number; on: boolean } {
+  const profile: VaapiProfile = {
+    device: '/dev/dri/renderD128',
+    lowPower: true,
+    rateControl: 'VBR',
+    deinterlace: true,
+    liteCodecs: 'avc1.640c28',
+  };
+  const base = softwareVideoAccel(2);
+  const accel = {
+    ...base,
+    failures: [] as string[],
+    successes: 0,
+    on: true,
+    vaapi: () => (accel.on ? profile : null),
+    failed: (detail: string) => void accel.failures.push(detail),
+    succeeded: () => void (accel.successes += 1),
+  };
+  return accel;
+}
+
+describe('LiteRendition con la gráfica', () => {
+  it('codifica con h264_vaapi, lo cuenta como bueno y anuncia el códec del ensayo', async () => {
+    const accel = fakeAccel();
+    const r = rig({ accel });
+    expect(r.lite.hardware).toBe(true);
+    expect(r.lite.codecs).toBe('avc1.640c28');
+    r.source.add(...PLAN.segments.map((s) => s.index));
+    expect((await r.lite.segmentFile(0)).kind).toBe('file');
+    await until(() => r.launcher.jobs.length === 4 && r.launcher.alive === 0, 'la cola');
+    for (const argv of r.launcher.argv) {
+      expect(argv[argv.indexOf('-c:v') + 1]).toBe('h264_vaapi');
+      expect(argv).toContain('-hwaccel');
+    }
+    expect(accel.successes).toBeGreaterThan(0);
+    /* La sesión se queda con la gráfica aunque se apague después (los init no casarían). */
+    accel.on = false;
+    expect(r.lite.hardware).toBe(true);
+  });
+
+  it('si la gráfica falla antes del primer init, la sesión sigue con x264 sin gastar el fusible', async () => {
+    const accel = fakeAccel();
+    const r = rig({ accel });
+    r.launcher.behave = (_segment, job) => {
+      const argv = r.launcher.argv[job] ?? [];
+      return argv.includes('h264_vaapi') ? { code: 1 } : {};
+    };
+    r.source.add(...PLAN.segments.map((s) => s.index));
+    const first = await r.lite.segmentFile(0);
+    expect(first.kind).toBe('file');
+    expect(accel.failures).toHaveLength(1);
+    expect(r.launcher.argv[0]).toContain('h264_vaapi');
+    expect(r.launcher.argv[1]).toContain('libx264');
+    expect(r.lite.hardware).toBe(false);
+    expect(r.lite.codecs).toBe('avc1.640028');
+    expect(r.lite.status()).toMatchObject({ failures: 0, state: 'on', reason: null });
+    expect(r.trips).toEqual([]);
+  });
+
+  it('la plaza se pide como de la gráfica (no cuenta en el tope de CPU)', async () => {
+    const r = rig({ accel: fakeAccel() });
+    r.source.add(0);
+    expect((await r.lite.segmentFile(0)).kind).toBe('file');
+    expect(r.slot.hardware).toEqual([true]);
+  });
+
+  it('con el CODECS de la gráfica ya anunciado, si falla antes del primer init se funde (no mezcla)', async () => {
+    const accel = fakeAccel();
+    const r = rig({ accel });
+    expect(r.lite.announce()).toBe('avc1.640c28');
+    r.launcher.behave = (_segment, job) => {
+      const argv = r.launcher.argv[job] ?? [];
+      return argv.includes('h264_vaapi') ? { code: 1 } : {};
+    };
+    r.source.add(...PLAN.segments.map((s) => s.index));
+    expect((await r.lite.segmentFile(0)).kind).not.toBe('file');
+    expect(r.trips).toEqual(['init']);
+    expect(accel.failures).toHaveLength(1);
+    expect(r.launcher.argv.some((argv) => argv.includes('libx264'))).toBe(false);
+  });
+
+  it('anunciado en x264 mientras se ensayaba: la sesión sigue en x264 aunque la gráfica salga luego', async () => {
+    const accel = fakeAccel();
+    const r = rig({ accel, encoder: null });
+    expect(r.lite.codecs).toBe('avc1.640028');
+    expect(r.lite.hardware).toBe(false);
+    r.source.add(0);
+    expect((await r.lite.segmentFile(0)).kind).toBe('file');
+    expect(r.launcher.argv[0]).toContain('libx264');
+    expect(r.slot.hardware).toEqual([false]);
+  });
+
+  it('si la gráfica falla antes del init y en x264 ya no cabe (tope de CPU), se funde por plaza', async () => {
+    const accel = fakeAccel();
+    const r = rig({ accel, fits: () => false });
+    r.launcher.behave = (_segment, job) => {
+      const argv = r.launcher.argv[job] ?? [];
+      return argv.includes('h264_vaapi') ? { code: 1 } : {};
+    };
+    r.source.add(...PLAN.segments.map((s) => s.index));
+    expect((await r.lite.segmentFile(0)).kind).not.toBe('file');
+    expect(r.trips).toEqual(['plaza']);
+    expect(r.slot.released).toBe(1);
+    expect(r.launcher.argv.some((argv) => argv.includes('libx264'))).toBe(false);
+  });
+
+  it('sin gráfica, x264 como siempre', async () => {
+    const r = rig({ accel: softwareVideoAccel(2) });
+    expect(r.lite.hardware).toBe(false);
+    r.source.add(0);
+    expect((await r.lite.segmentFile(0)).kind).toBe('file');
+    expect(r.launcher.argv[0]).toContain('libx264');
   });
 });

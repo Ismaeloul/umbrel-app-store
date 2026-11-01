@@ -9,7 +9,9 @@
    datos (`status` con `buffering`). Si dura más de `bufferingGraceMs` con la
    sala reproduciendo, el reloj se para (`waitingFor`) hasta que todos los
    que se esperan vuelven a tener datos, o hasta `holdMaxMs`: entonces la
-   sala sigue sin esa persona (y no vuelve a esperarla en `HOLD_COOLDOWN_MS`).
+   sala sigue sin esa persona (y no vuelve a esperarla en `HOLD_COOLDOWN_MS`,
+   ni por ese mismo atasco después: hasta que diga «ya no cargo»). El reloj se
+   para donde se atascó quien carga (su último `status`), no por delante (§16).
 
    Credenciales: `<memberId>.<secreto>`; se guarda el SHA-256 del secreto y
    se compara en tiempo constante. El vídeo va con otra clave de cada persona
@@ -101,6 +103,16 @@ interface Member {
   holdStarts: number[];
   /** No se le espera hasta esta hora (ya se le esperó `holdMaxMs`). */
   holdSkipUntil: number;
+  /**
+   * Cuándo acabó la última espera por él al llegar al tope (`holdMaxMs`) sin que se recuperase, o
+   * null. Mientras siga con el mismo atasco no se le vuelve a esperar (§16): antes, pasado el
+   * enfriamiento, el barrido volvía a parar la sala al momento y el iPhone no salía nunca del
+   * ciclo de 20 s parados y 30 s en marcha. Se borra con su «ya no cargo».
+   */
+  holdEndedAt: number | null;
+  /** La última posición que dijo su `status` (null si aún no dijo nada) y cuándo. */
+  reportedPositionS: number | null;
+  reportedAt: number;
   readonly chatTimes: number[];
   /** «Esperando a todos» (§13): lo que dice su reproductor; null si no lo dice (una app vieja). */
   readyReported: boolean | null;
@@ -555,6 +567,9 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       recoveredAt: null,
       holdStarts: [],
       holdSkipUntil: 0,
+      holdEndedAt: null,
+      reportedPositionS: null,
+      reportedAt: 0,
       chatTimes: [],
       readyReported: null,
       progress: null,
@@ -691,6 +706,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       releaseViewer(member);
       member.buffering = false;
       member.bufferingSince = null;
+      member.holdEndedAt = null;
+      member.reportedPositionS = null;
     }
     fix(room, 0);
     room.playback.playing = true;
@@ -732,6 +749,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       releaseViewer(member);
       member.buffering = false;
       member.bufferingSince = null;
+      member.holdEndedAt = null;
+      member.reportedPositionS = null;
       member.readyReported = null;
       member.progress = null;
     }
@@ -828,6 +847,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         if (away >= PARTY.memberTimeoutMs && member.buffering) {
           member.buffering = false;
           member.bufferingSince = null;
+          member.holdEndedAt = null;
           membersChanged = true;
         }
       }
@@ -842,14 +862,21 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         if (settled) {
           /* Se ha recuperado de verdad (§16): la sala sigue sin castigarle. */
           member.recoveredAt = null;
+          logHold(room, memberId, 'end', now, 'settled', since);
           stopWaiting(room, memberId, now);
           continue;
         }
         if (member && now - since < PARTY.holdMaxMs) continue;
         /* El enfriamiento, solo a quien sigue cargando: quien ya dijo «ya no cargo»
-           y no llegó a cumplir `resumeSettleMs` antes del tope sale sin castigo. */
-        if (member?.buffering) member.holdSkipUntil = now + HOLD_COOLDOWN_MS;
+           y no llegó a cumplir `resumeSettleMs` antes del tope sale sin castigo. A quien
+           sigue cargando, además, no se le vuelve a esperar por este mismo atasco
+           (`holdEndedAt`): tiene que recuperarse y volver a atascarse. */
+        if (member?.buffering) {
+          member.holdSkipUntil = now + HOLD_COOLDOWN_MS;
+          member.holdEndedAt = now;
+        }
         if (member) member.recoveredAt = null;
+        logHold(room, memberId, 'end', now, member ? 'holdMax' : 'gone', since);
         stopWaiting(room, memberId, now);
       }
       for (const member of room.members.values()) maybeWait(room, member, now);
@@ -902,6 +929,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     if (room.live || !room.playback.playing || room.interrupted) return;
     if (!member.buffering || member.bufferingSince === null) return;
     if (room.waiting.has(member.id) || now < member.holdSkipUntil) return;
+    /* Ya se le esperó hasta el tope por este mismo atasco (§16): sigue la sala sin él. */
+    if (member.holdEndedAt !== null && member.bufferingSince <= member.holdEndedAt) return;
     /* Quien ya ha parado la sala dos veces en el último minuto tiene más margen:
        sus atascos cortos los resuelve solo, sin parar a los demás cada vez (§16). */
     member.holdStarts = member.holdStarts.filter((at) => now - at < PARTY.repeatHoldWindowMs);
@@ -911,10 +940,57 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     member.holdStarts.push(now);
     member.recoveredAt = null;
     const first = room.waiting.size === 0;
-    if (first) fix(room, positionNow(room, now), now);
+    const current = positionNow(room, now);
+    if (first) fix(room, holdPosition(member, current), now);
     room.waiting.set(member.id, now);
     if (!first) room.playback.rev += 1;
+    logHold(room, member.id, 'start', now, first ? 'first' : 'joined', now, current);
     sendPlayback(room, 'wait', null);
+  }
+
+  /**
+   * Dónde se para la sala al esperar a alguien (§16): donde se atascó él (lo que dijo su `status`
+   * de «cargando»), no en `positionNow`. La espera salta en el barrido, pasada la gracia: la sala
+   * iba ya 1-2 s por delante, y el primer salto en pausa del que carga tiraba justo lo que tenía
+   * cargado. Si va más atrasado que `PARTY.holdRewindMaxS` (o por delante), donde va la sala:
+   * el que carga se pone al día solo y los demás no retroceden tanto.
+   */
+  function holdPosition(member: Member, current: number): number {
+    const own = member.reportedPositionS;
+    if (
+      own === null ||
+      member.bufferingSince === null ||
+      member.reportedAt < member.bufferingSince
+    ) {
+      return current;
+    }
+    const behind = current - own;
+    return behind >= 0 && behind <= PARTY.holdRewindMaxS ? own : current;
+  }
+
+  /** Una línea por espera (al empezar y al acabar), para casarla con el registro de Caddy (§16). */
+  function logHold(
+    room: Room,
+    memberId: string,
+    phase: 'start' | 'end',
+    now: number,
+    reason: 'first' | 'joined' | 'settled' | 'holdMax' | 'gone',
+    since: number,
+    current = positionNow(room, now),
+  ): void {
+    logger.info(
+      {
+        room: room.code,
+        member: memberId,
+        phase,
+        reason,
+        holdS: Math.round(room.playback.positionS * 1000) / 1000,
+        positionNowS: Math.round(current * 1000) / 1000,
+        reportedS: room.members.get(memberId)?.reportedPositionS ?? null,
+        waitedMs: now - since,
+      },
+      phase === 'start' ? 'Ver juntos: la sala espera a alguien' : 'Ver juntos: deja de esperar',
+    );
   }
 
   function ensureSweep(): void {
@@ -1368,9 +1444,14 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       const member = authenticate(room, body.token);
       const now = clock.now();
       let changed = false;
+      /* Dónde va su vídeo: si se atasca, la sala se para ahí y no más adelante (§16). */
+      member.reportedPositionS = body.positionS;
+      member.reportedAt = now;
       if (body.buffering !== member.buffering) {
         member.buffering = body.buffering;
         member.bufferingSince = body.buffering ? now : null;
+        /* Se ha recuperado: el próximo atasco ya es otro y puede volver a parar la sala. */
+        if (!body.buffering) member.holdEndedAt = null;
         /* La espera no acaba con el primer «ya no cargo»: el barrido la quita
            cuando lleva `resumeSettleMs` así (§16). */
         member.recoveredAt = body.buffering ? null : now;

@@ -34,6 +34,8 @@ import {
 import PlayerDock, { sharedRuntimeForTests } from './index.tsx';
 import { madridToday } from './PlayerSurface.tsx';
 import { stageSlotStore } from './stage-slot.ts';
+import { readSavedVolume, saveVolume } from './volume.ts';
+import { resetMemoryStorage, STORAGE_KEYS } from '../lib/storage.ts';
 import { zapBannerStore, ZAP_COMMIT_MS } from './favorite-zap.ts';
 import { setWatching } from '../notices/notify.ts';
 import { resetPlayGuard } from '../features/library/play.ts';
@@ -279,7 +281,7 @@ describe('reproductor en grande', () => {
     }
   });
 
-  it('escritorio (1B): silencio y barra de volumen junto a la barra del directo', () => {
+  it('escritorio (1B): silencio y barra de volumen junto a la barra del directo', async () => {
     const realMatchMedia = window.matchMedia;
     // 1280 px con ratón: casan las de ancho y la de puntero fino.
     window.matchMedia = ((query: string) => ({
@@ -303,8 +305,29 @@ describe('reproductor en grande', () => {
       const slider = within(bottom).getByRole('slider', { name: 'Volumen' });
       fireEvent.change(slider, { target: { value: '0.4' } });
       expect(video.volume).toBeCloseTo(0.4);
+      // El estado llega con «volumechange», que el navegador manda después.
+      await waitFor(() => expect(slider).toHaveAttribute('aria-valuetext', '40 %'));
+      /* Con el foco en el deslizador, ↑ sube el volumen (no cambia de favorito). */
+      fireEvent.keyDown(slider, { key: 'ArrowUp' });
+      expect(video.volume).toBeCloseTo(0.45);
+      /* Se recuerda en este navegador. */
+      expect(readSavedVolume()).toBe(0.45);
     } finally {
       window.matchMedia = realMatchMedia;
+      localStorage.removeItem(STORAGE_KEYS.volume);
+      resetMemoryStorage();
+    }
+  });
+
+  it('el volumen que dejó este navegador se pone en el <video> al montar', () => {
+    saveVolume(0.3);
+    try {
+      const { container } = renderDock();
+      const video = container.querySelector('video') as HTMLVideoElement;
+      expect(video.volume).toBeCloseTo(0.3);
+    } finally {
+      localStorage.removeItem(STORAGE_KEYS.volume);
+      resetMemoryStorage();
     }
   });
 

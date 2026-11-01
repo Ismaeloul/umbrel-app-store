@@ -132,6 +132,25 @@ export const HealthResponseSchema = z.strictObject({
         last: z.string().nullable(),
       })
       .optional(),
+    /**
+     * Vídeo que el remux recodifica (ligera de «Ver juntos», ligera del directo, desentrelazado;
+     * docs/ver-juntos.md §17.6): `vaapi` si va por la gráfica del NAS, `none` con x264 (y por
+     * qué), `probing` mientras dura el ensayo del arranque. Opcional: un servidor anterior no lo
+     * manda.
+     */
+    video: z
+      .strictObject({
+        hwaccel: z.enum(['vaapi', 'none', 'probing']),
+        reason: z.string().nullable(),
+        device: z.string().nullable(),
+        encoder: z.enum(['h264_vaapi', 'libx264']),
+        lowPower: z.boolean().nullable(),
+        rateControl: z.enum(['VBR', 'CQP']).nullable(),
+        deinterlace: z.enum(['vaapi', 'bwdif']),
+        recodeSlots: z.number().int().nonnegative(),
+        failures: z.number().int().nonnegative(),
+      })
+      .optional(),
   }),
   reports: z.strictObject({
     total: z.number().int().nonnegative(),

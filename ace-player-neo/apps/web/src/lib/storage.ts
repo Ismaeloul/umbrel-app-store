@@ -106,4 +106,6 @@ export const STORAGE_KEYS = {
   alertLead: 'aceneo-avisos-antes',
   /** Ajustes → «Idioma preferido» de los partidos: `es` (por defecto), `en` u `original`. */
   playbackLang: 'aceneo-idioma',
+  /** Volumen de este aparato en el ordenador (`0.05`…`1`), el del reproductor y el de «Ver juntos». */
+  volume: 'aceneo-volumen',
 } as const;

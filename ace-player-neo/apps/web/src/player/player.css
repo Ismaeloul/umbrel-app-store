@@ -707,54 +707,7 @@
   opacity: 0.45;
 }
 
-/* Volumen (solo con ratón y a partir de tableta). */
-.player-vol {
-  display: inline-flex;
-  align-items: center;
-  height: var(--tap);
-  padding: 0 14px 0 2px;
-}
-.player-vol input {
-  --v: 1;
-  width: 96px;
-  height: var(--tap);
-  margin: 0;
-  background: transparent;
-  -webkit-appearance: none;
-  appearance: none;
-  cursor: pointer;
-}
-.player-vol input::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, #fff calc(var(--v) * 100%), rgb(255 255 255 / 0.3) 0);
-}
-.player-vol input::-webkit-slider-thumb {
-  width: 14px;
-  height: 14px;
-  margin-top: -5px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
-  -webkit-appearance: none;
-}
-.player-vol input::-moz-range-track {
-  height: 4px;
-  border-radius: 4px;
-  background: rgb(255 255 255 / 0.3);
-}
-.player-vol input::-moz-range-progress {
-  height: 4px;
-  border-radius: 4px;
-  background: #fff;
-}
-.player-vol input::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border: 0;
-  border-radius: 50%;
-  background: #fff;
-}
+/* Volumen: el botón y el deslizador viven en volume.css (VolumeControl). */
 
 /* Botón de directo, dos estados (injerto B4; Palco: rojo en el borde). */
 .player-live {
@@ -806,8 +759,8 @@
   .player-stop {
     display: none;
   }
-  .player-vol input {
-    width: 64px;
+  .vol-ctl {
+    --vol-w: 64px;
   }
 }
 
