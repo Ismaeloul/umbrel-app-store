@@ -355,8 +355,9 @@ export function countLive(
 }
 
 /**
- * El partido del escenario si no has elegido otro: tu equipo en directo,
- * cualquiera en directo, el próximo por empezar o el primero.
+ * El partido del héroe del móvil: tu equipo en directo, cualquiera en
+ * directo, el próximo por empezar o el primero. En escritorio no hay
+ * destacado: el detalle enseña solo el que elijas.
  */
 export function featuredMatch(
   matches: readonly FootballMatch[],
@@ -383,24 +384,68 @@ export function featuredMatch(
   return upcoming.find(major)?.match ?? upcoming[0]?.match ?? matches[0] ?? null;
 }
 
-/** Los próximos partidos del día (para «Luego», corrección 5). */
-export function laterMatches(
+/** El estado de un partido para las píldoras de la lista de escritorio. */
+export type PhaseFilter = 'live' | 'done' | 'upcoming';
+
+/**
+ * Filtro solo visual de la lista de escritorio (al estilo SofaScore): en
+ * directo, terminados o próximos (lo que no ha empezado, también sin hora).
+ * Con null, todos.
+ */
+export function byPhase(
   matches: readonly FootballMatch[],
+  phase: PhaseFilter | null,
   now: number,
-  scores: Readonly<Record<string, LiveScore>>,
-  excludeId: string | null,
-  limit = 4,
+  scores: Readonly<Record<string, LiveScore>> = {},
 ): FootballMatch[] {
-  return matches
-    .filter((match) => match.id !== excludeId)
-    .filter((match) => {
-      const status = matchStatus(match, now, scores[match.id]);
-      return status === null
-        ? (minutesToMatch(match, now) ?? 1) > 0
-        : status.phase === 'soon' || status.phase === 'next';
-    })
-    .sort((a, b) => startOf(a) - startOf(b))
-    .slice(0, limit);
+  if (phase === null) return [...matches];
+  return matches.filter((match) => {
+    const current = matchStatus(match, now, scores[match.id])?.phase ?? null;
+    if (phase === 'live') return current === 'live';
+    if (phase === 'done') return current === 'done';
+    return current !== 'live' && current !== 'done';
+  });
+}
+
+/* País o zona de las competiciones que más salen, para la línea gris bajo su
+   nombre y las migas del detalle («Inglaterra › Premier League»). El `country`
+   del partido es el del canal (España), no el de la liga: por eso se saca del
+   nombre. Las primas de otros países van antes que las grandes («Premier
+   League Ucrania» no es Inglaterra). */
+const COMPETITION_AREAS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/ucrania|ukrain/i, 'Ucrania'],
+  [/egipt|egypt/i, 'Egipto'],
+  [/brasil|brazil|brasileir/i, 'Brasil'],
+  [/argentin/i, 'Argentina'],
+  [/m[eé]xic|liga mx/i, 'México'],
+  [/\bmls\b|major league soccer/i, 'Estados Unidos'],
+  [/saud/i, 'Arabia Saudí'],
+  [
+    /champions|europa league|conference league|nations league|eurocopa|\beuro\b|supercopa de europa|uefa/i,
+    'Europa',
+  ],
+  [/libertadores|sudamericana/i, 'Sudamérica'],
+  [/mundial|world cup|fifa/i, 'Mundo'],
+  [
+    /laliga|la liga|hypermotion|segunda divisi|primera rfef|copa del rey|supercopa de espa|liga f\b/i,
+    'España',
+  ],
+  [/premier league|championship|fa cup|carabao|efl/i, 'Inglaterra'],
+  [/serie a|serie b|coppa italia/i, 'Italia'],
+  [/bundesliga|dfb|2\. liga|3\. liga/i, 'Alemania'],
+  [/ligue 1|ligue 2|coupe de france/i, 'Francia'],
+  [/eredivisie/i, 'Países Bajos'],
+  [/liga portugal|primeira liga|ta[cç]a de portugal/i, 'Portugal'],
+  [/scottish|escocia/i, 'Escocia'],
+  [/s[uü]per lig|turqu/i, 'Turquía'],
+];
+
+/** País o zona de una competición («Premier League» → «Inglaterra»); null si no se sabe. */
+export function competitionArea(name: string | null | undefined): string | null {
+  const clean = name?.trim();
+  if (!clean) return null;
+  for (const [pattern, area] of COMPETITION_AREAS) if (pattern.test(clean)) return area;
+  return null;
 }
 
 // ---- Marcadores -----------------------------------------------------------------

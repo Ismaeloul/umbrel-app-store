@@ -11,7 +11,9 @@ import { fixture } from '../../test/fetch.ts';
 import {
   addDays,
   buildLibraryLookup,
+  byPhase,
   channelInfo,
+  competitionArea,
   countLive,
   dayLabel,
   defaultDay,
@@ -21,7 +23,6 @@ import {
   inPreheatWindow,
   isMine,
   keepUnitsTogether,
-  laterMatches,
   liveMinute,
   madridClock,
   madridHour,
@@ -204,7 +205,6 @@ describe('bloques por competición', () => {
     expect(featuredMatch([a, b, c], NOW, {}, prefs)?.id).toBe(b.id);
     expect(featuredMatch([a, b, c], NOW, {}, null)?.id).toBe(a.id);
     expect(featuredMatch([c], NOW, {}, null)?.id).toBe(c.id);
-    expect(laterMatches([a, b, c], NOW, {}, null).map((x) => x.id)).toEqual([c.id]);
   });
   it('en «Todos», primero lo tuyo y la cantera al final (fix/agenda-filtrado)', () => {
     const futures = matchAt(10, {
@@ -372,5 +372,37 @@ describe('«Ver canal» o «Buscar canal» (findFootballChannel)', () => {
     const match: FootballMatch = matchAt(0, { home: 'A', away: 'B', title: 'A - B' });
     expect(matchTitle(match)).toBe('A vs B');
     expect(matchTitle({ ...match, away: '' })).toBe('A - B');
+  });
+});
+
+describe('lista de escritorio (presentación)', () => {
+  it('byPhase: en directo, terminados y próximos (también sin hora); null, todos', () => {
+    const live = matchAt(-30);
+    const done = matchAt(-200);
+    const soon = matchAt(40);
+    const unknown = { ...matchAt(600), time: 'Por confirmar', start: undefined };
+    const day = [live, done, soon, unknown];
+    const ids = (phase: Parameters<typeof byPhase>[1]) =>
+      byPhase(day, phase, NOW).map((match) => match.id);
+    expect(ids(null)).toEqual(day.map((match) => match.id));
+    expect(ids('live')).toEqual([live.id]);
+    expect(ids('done')).toEqual([done.id]);
+    expect(ids('upcoming')).toEqual([soon.id, unknown.id]);
+    // Manda el marcador: un final antes de tiempo ya es «Terminados».
+    const ended = { ...liveScore(1, 0, 'FT', 'Final'), state: 'post' as const };
+    expect(byPhase(day, 'done', NOW, { [live.id]: ended })).toHaveLength(2);
+  });
+
+  it('competitionArea: el país o la zona de la liga (no el del canal); null si no se sabe', () => {
+    expect(competitionArea('LaLiga EA Sports')).toBe('España');
+    expect(competitionArea('Premier League')).toBe('Inglaterra');
+    expect(competitionArea('Premier League Ucrania')).toBe('Ucrania');
+    expect(competitionArea('Serie A Italiana')).toBe('Italia');
+    expect(competitionArea('Brasileirão Serie A')).toBe('Brasil');
+    expect(competitionArea('UEFA Champions League')).toBe('Europa');
+    expect(competitionArea('Copa Libertadores')).toBe('Sudamérica');
+    expect(competitionArea('MLS')).toBe('Estados Unidos');
+    expect(competitionArea('Amistoso')).toBeNull();
+    expect(competitionArea('  ')).toBeNull();
   });
 });

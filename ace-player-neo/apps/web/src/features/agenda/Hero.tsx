@@ -15,10 +15,9 @@
    navega al centro de partido. Si este dispositivo ya reproduce el partido,
    la tarjeta lleva «En pantalla» y el botón dice «Volver al vídeo».
 
-   Solo en el móvil y la tableta: en escritorio (≥ 1024 px) la agenda no
-   tiene héroe desde la 0.9.0 (toda la página es el calendario y el destacado
-   sale en el panel de la derecha); la banda compacta de la 0.8.4 se fue con
-   él.
+   Solo en el móvil (y el móvil en horizontal): desde 768 px la agenda no
+   tiene héroe ni destacado (la lista y el detalle del partido que elijas, al
+   estilo SofaScore; Isma, 1-11-2026).
 
    HeroView es de presentación (se prueba sola); AgendaHero la conecta con la
    señal y el tapado. */

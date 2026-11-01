@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
@@ -11,8 +11,8 @@ import {
   FOR_YOU_CHIP,
   splitLeagueChips,
 } from './DeskList.tsx';
-import { resetScoreRevealForTests } from './score-reveal.ts';
-import { resetAgendaUi, setAgendaChip } from './state.ts';
+import { hideScore, resetScoreRevealForTests } from './score-reveal.ts';
+import { resetAgendaUi, setAgendaStatus } from './state.ts';
 import { liveScore, matchAt, NOW, renderWithApp, scheduleOf, TODAY } from './test-utils.tsx';
 
 const CURRENT = matchAt(-40, { home: 'Real Madrid', away: 'Girona', competition: 'LaLiga' });
@@ -72,13 +72,37 @@ function renderColumn() {
 }
 
 describe('columna de la agenda junto al vídeo (escritorio)', () => {
-  it('la misma lista compacta del día, el partido abierto marcado y sin marcadores', async () => {
+  it('la misma lista compacta del día, el partido abierto marcado y su marcador tapado', async () => {
     const { container } = renderColumn();
     expect(screen.getByRole('heading', { name: 'Agenda' })).toBeInTheDocument();
     const current = await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
     expect(current).toHaveAttribute('aria-current', 'true');
     expect(container.querySelectorAll('.desk-row').length).toBe(3);
+    // Es el que tienes abierto (aunque el vídeo no haya arrancado): sin cifras (regla 29).
+    await waitFor(() => expect(current.querySelector('.desk-row__state')).toHaveTextContent("40'"));
+    expect(current.querySelector('.desk-row__score')).toBeNull();
     expect(container.querySelectorAll('.agenda-score .num')).toHaveLength(0);
+  });
+
+  it('un directo que NO tienes abierto enseña su marcador en la fila; tapado a mano, no', async () => {
+    history.replaceState(null, '', `/?vista=partido/${OTHER.id}`);
+    const measured = (element: HTMLDivElement | null) => {
+      if (!element) return;
+      Object.defineProperty(element, 'offsetWidth', { configurable: true, value: 300 });
+      Object.defineProperty(element, 'offsetHeight', { configurable: true, value: 800 });
+    };
+    renderWithApp(
+      <div className="app-column" ref={measured}>
+        <AgendaColumn route={{ vista: 'partido', id: OTHER.id, canal: null }} active />
+      </div>,
+      { kind: 'wide', search: `?vista=partido/${OTHER.id}` },
+    );
+    const live = await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    expect(await within(live).findByLabelText('Marcador: 3 a 0')).toHaveClass(
+      'desk-row__score--live',
+    );
+    act(() => hideScore(CURRENT.id));
+    expect(live.querySelector('.desk-row__score')).toBeNull();
   });
 
   it('cada fila dice dónde lo echan (solo el primer canal); sin canal, nada', async () => {
@@ -98,37 +122,60 @@ describe('columna de la agenda junto al vídeo (escritorio)', () => {
     expect(toastStore.get().map((t) => t.text)).toContain('El canal todavía no está anunciado');
   });
 
-  it('comparte el chip con la vista: «Directo» deja solo el que está en juego', async () => {
+  it('comparte los filtros con la vista: «En directo» deja solo el que está en juego', async () => {
     renderColumn();
     await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
-    setAgendaChip('live');
+    setAgendaStatus('live');
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: /^Betis contra Cádiz/ })).toBeNull(),
     );
     expect(screen.getByRole('button', { name: /^Real Madrid contra Girona/ })).toBeInTheDocument();
   });
 
-  it('tira de días de la maqueta: «Hoy» y el día de la semana, el elegido marcado', async () => {
+  it('el día en su píldora (‹ Hoy ›): las flechas y la lista de días lo cambian', async () => {
     const { container } = renderColumn();
     await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
-    const days = [...container.querySelectorAll('.desk-days__day')];
-    expect(days.map((day) => day.querySelector('.desk-days__name')?.textContent)).toEqual([
-      'Hoy',
-      'Jue',
-    ]);
-    expect(days[0]).toHaveAttribute('aria-pressed', 'true');
-    expect(days[0]).toHaveAccessibleName(/^Hoy, .*: 3 partidos$/);
-    fireEvent.click(days[1]!);
-    await waitFor(() => expect(days[1]).toHaveAttribute('aria-pressed', 'true'));
+    const picker = screen.getByRole('group', { name: 'Día' });
+    expect(within(picker).getByRole('button', { name: 'Día anterior' })).toBeDisabled();
+    const label = within(picker).getByRole('button', { name: /Elegir otro día$/ });
+    expect(label).toHaveTextContent('Hoy');
+    const next = within(picker).getByRole('button', { name: 'Día siguiente' });
+    next.focus();
+    fireEvent.click(next);
+    await waitFor(() => expect(label).toHaveTextContent('Mañana'));
+    // Era el último día: la flecha se apaga y el foco pasa al nombre del día.
+    expect(next).toBeDisabled();
+    expect(label).toHaveFocus();
+    expect(container.querySelectorAll('.desk-row')).toHaveLength(1);
+    // El nombre abre la lista de días, cada uno con cuántos partidos trae.
+    fireEvent.click(label);
+    const list = await screen.findByRole('dialog', { name: 'Días' });
+    const today = within(list).getByRole('button', { name: /^Hoy, .*: 3 partidos$/ });
+    expect(today).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(today);
+    await waitFor(() => expect(label).toHaveTextContent('Hoy'));
+    expect(container.querySelectorAll('.desk-row')).toHaveLength(3);
   });
 
-  it('cada liga con su insignia de color y «n partidos»', async () => {
+  it('en la columna un clic ABRE el partido (no hay detalle al lado)', async () => {
+    renderColumn();
+    const row = await screen.findByRole('button', { name: /^Betis contra Cádiz/ });
+    expect(row).not.toHaveAttribute('title');
+    fireEvent.click(row);
+    await waitFor(() => expect(location.search).toBe(`?vista=partido/${OTHER.id}`));
+  });
+
+  it('cada liga con su insignia de color, su país y el contador (en rojo, los directos)', async () => {
     const { container } = renderColumn();
     await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
     const badge = container.querySelector<HTMLElement>('.desk-comp__badge');
     expect(badge).toHaveTextContent('LL');
     expect(badge?.style.getPropertyValue('--bb')).toBe(competitionTone('LaLiga'));
-    expect(container.querySelector('.desk-comp__count')).toHaveTextContent('3 partidos');
+    expect(container.querySelector('.desk-comp__area')).toHaveTextContent('España');
+    const count = container.querySelector('.desk-comp__count');
+    expect(count).toHaveClass('desk-comp__count--live');
+    expect(count?.querySelector('[aria-hidden="true"]')).toHaveTextContent('1');
+    expect(count?.querySelector('.sr-only')).toHaveTextContent('3 partidos, 1 en directo');
   });
 });
 
@@ -218,10 +265,9 @@ describe('«Para ti» en el escritorio', () => {
   it('deja solo lo de tus gustos (tus equipos y ligas), como en el móvil', () => {
     const preferences = { leagues: [], teams: ['Betis'], nationalities: [] };
     const day = [CURRENT, OTHER, NONE];
-    expect(byChip(day, FOR_YOU_CHIP, NOW, {}, preferences).map((match) => match.id)).toEqual([
-      OTHER.id,
-    ]);
-    // Sin gustos no filtra nada.
-    expect(byChip(day, FOR_YOU_CHIP, NOW, {}, null)).toHaveLength(3);
+    expect(byChip(day, FOR_YOU_CHIP, preferences).map((match) => match.id)).toEqual([OTHER.id]);
+    // Sin gustos no filtra nada; una liga deja solo los suyos.
+    expect(byChip(day, FOR_YOU_CHIP, null)).toHaveLength(3);
+    expect(byChip(day, 'Premier League', null)).toHaveLength(0);
   });
 });

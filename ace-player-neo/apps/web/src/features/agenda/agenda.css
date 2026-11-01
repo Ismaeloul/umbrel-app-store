@@ -513,11 +513,8 @@
   }
 }
 
-/* ---- Cuerpo: filas (y, en escritorio, el panel lateral) ---------------------------- */
-.agenda__body {
-  min-width: 0;
-}
-/* Móvil y tableta: NADA de la lista se sale por los lados. La entrada del
+/* ---- Cuerpo: filas (móvil; el escritorio va en .agenda-desk) ------------------------ */
+/* Móvil: NADA de la lista se sale por los lados. La entrada del
    día nuevo (translateX de 24 px) y el arrastre del dedo (hasta 60 px)
    ensanchaban la página: Chrome y Safari del móvil agrandan entonces la
    ventana (414 px en un iPhone de 390), y en mitad de un deslizamiento la
@@ -525,7 +522,8 @@
    no» del punto 3). `overflow-x: clip` en el cuerpo (no en `body`: ahí el
    móvil no lo respeta), que ocupa todo el ancho para no recortar las filas
    a sangre; `clip` no crea contenedor de scroll, así que nada más cambia. */
-.agenda:not(.agenda--stage) .agenda__body {
+.agenda__body {
+  min-width: 0;
   margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
     calc(-1 * (var(--gutter) + var(--safe-right)));
   padding-inline: calc(var(--gutter) + var(--safe-left)) calc(var(--gutter) + var(--safe-right));
@@ -627,12 +625,10 @@
 /* La sombra de cartel (24 px de difuminado) no cabe en ese aire y la pista la
    cortaba en seco: en claro se veía un rectángulo gris detrás de la fila (y
    detrás de «Luego»). Aquí, la sombra corta del sistema. */
-.agenda-rail .versus,
-.agenda-later .versus {
+.agenda-rail .versus {
   box-shadow: var(--shadow-1);
 }
-.agenda-rail .versus.is-watching,
-.agenda-later .versus.is-watching {
+.agenda-rail .versus.is-watching {
   box-shadow:
     0 0 0 2px var(--accent),
     var(--shadow-1);
@@ -978,253 +974,6 @@
   font-weight: 650;
 }
 
-/* ---- Escritorio: filas + panel del partido elegido --------------------------------- */
-@media (min-width: 1024px) {
-  .agenda--stage .agenda__body--side {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
-    column-gap: var(--s-6);
-    align-items: start;
-  }
-  .agenda__side {
-    position: sticky;
-    top: calc(var(--topbar-h) + var(--safe-top) + var(--s-4));
-    display: grid;
-    gap: var(--s-5);
-    align-content: start;
-    min-width: 0;
-    max-height: calc(100dvh - var(--topbar-h) - var(--safe-top) - var(--s-8));
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    /* Aire para el anillo de foco, las sombras y el aura de «Tu equipo» sin
-       recortarlos. */
-    padding: 14px 14px var(--s-4);
-    margin: -14px -14px 0;
-  }
-}
-@media (min-width: 1280px) {
-  .agenda--stage .agenda__body--side {
-    grid-template-columns: minmax(0, 1fr) minmax(380px, 440px);
-    column-gap: var(--s-8);
-  }
-}
-
-/* ---- Panel del partido elegido ------------------------------------------------------ */
-.agenda-stage {
-  --ta: transparent;
-  --tb: transparent;
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  gap: var(--s-4);
-  min-width: 0;
-  overflow: hidden;
-  padding: 10px 10px var(--s-5);
-  border-radius: var(--r-xl);
-  background: var(--surface);
-  box-shadow:
-    inset 0 0 0 1px var(--line-soft),
-    var(--shadow-1);
-}
-.agenda-stage__light {
-  position: absolute;
-  z-index: -1;
-  inset: 0 0 auto;
-  height: 70%;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      60% 70% at 10% 0%,
-      color-mix(in oklch, var(--ta) 22%, transparent),
-      transparent 74%
-    ),
-    radial-gradient(
-      60% 70% at 90% 0%,
-      color-mix(in oklch, var(--tb) 18%, transparent),
-      transparent 74%
-    );
-}
-.agenda-stage__card {
-  position: relative;
-  min-width: 0;
-}
-.agenda-stage__corner {
-  position: absolute;
-  z-index: 2;
-  right: 12px;
-  bottom: 12px;
-  display: flex;
-}
-.agenda-stage__card:has(.agenda-stage__corner > *) .versus__bottom {
-  padding-right: 120px;
-}
-.agenda-stage__body {
-  display: grid;
-  gap: var(--s-5);
-  padding-inline: 10px;
-}
-.agenda-stage__sec {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-.agenda-stage__sec h3,
-.agenda-later__title {
-  color: var(--text-2);
-  font-size: var(--fs-kicker);
-  font-weight: 760;
-  letter-spacing: var(--tracking-kicker);
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-.agenda-stage__signal {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px var(--s-3);
-  font-size: var(--fs-13);
-  font-weight: var(--wght-medium);
-  line-height: 1.35;
-}
-.agenda-stage__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  min-width: 0;
-}
-.agenda-stage__muted {
-  color: var(--text-2);
-  font-size: var(--fs-13);
-}
-.agenda-stage__actions {
-  display: flex;
-}
-.agenda-stage__actions .btn {
-  flex: 1;
-  min-height: 52px;
-  font-size: var(--fs-17);
-}
-
-/* «Luego»: fila de tarjetas pequeñas bajo el panel. */
-.agenda-later {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-.agenda-later__title {
-  padding-inline: 4px;
-}
-/* Rejilla de tarjetas pequeñas: dos por fila en la columna, sin carrusel. */
-.agenda-later__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-  gap: 10px;
-  min-width: 0;
-}
-.agenda-later .agenda-row--compact .versus {
-  aspect-ratio: 3 / 2;
-}
-
-/* ---- Directos (B1, solo en pantallas anchas) ----------------------------------------
-   Arriba de la columna derecha: «● En directo N» y debajo una cápsula por
-   partido con escudos, siglas, marcador y minuto, DOS POR LÍNEA (con el
-   marcador ya no cabían en una fila y la segunda salía cortada). Como mucho
-   dos líneas a la vista y el asomo de la tercera: con diez directos a la vez
-   la tira medía 279 px y empujaba «Ver canal» fuera de la pantalla. El resto,
-   desplazando la tira (rueda o dedo); nada se mueve solo. */
-.agenda-strip {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-.agenda-strip__title {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding-inline: 4px;
-  color: var(--live-ink);
-  font-size: var(--fs-13);
-  font-weight: 760;
-}
-.agenda-strip__count {
-  margin-left: 6px;
-  color: var(--text-3);
-  font-weight: 600;
-}
-.agenda-strip__list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-2);
-  min-width: 0;
-}
-.agenda-strip__list--more {
-  /* Dos líneas enteras; las demás, desplazando. Con 4 px de aire (el margen
-     negativo lo devuelve) para el anillo de foco. */
-  max-height: calc(2 * var(--tap) + var(--s-2) + 8px);
-  margin: -4px;
-  padding: 4px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-}
-/* Mientras quedan directos por debajo, la segunda línea se funde abajo: se
-   ve que hay más (el número del título dice cuántos). */
-.agenda-strip__list--more[data-more-below] {
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
-}
-.agenda-strip__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  min-height: var(--tap);
-  padding: 0 14px 0 8px;
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
-  font-size: var(--fs-13);
-  font-weight: 680;
-  font-stretch: var(--w-tight);
-  white-space: nowrap;
-}
-.agenda-strip__chip[aria-current='true'] {
-  box-shadow: inset 0 0 0 2px var(--accent);
-}
-.agenda-strip__crests {
-  display: inline-flex;
-}
-.agenda-strip__crests > .team + .team {
-  margin-left: -5px;
-}
-/* «RSO 1–0 VIL · 33'»: siglas, marcador y, tras un punto, el minuto. */
-.agenda-strip__line {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.agenda-strip__score {
-  font-size: var(--fs-15);
-  font-weight: 800;
-}
-.agenda-strip__vs {
-  color: var(--text-3);
-  font-weight: 600;
-}
-.agenda-strip__minute {
-  color: var(--live-ink);
-  font-size: var(--fs-caption);
-  font-weight: 760;
-}
-.agenda-strip__minute::before {
-  content: '·';
-  margin-right: 6px;
-  color: var(--text-3);
-  font-weight: 700;
-}
-
 /* ---- Columna compacta del centro de partido ---------------------------------------- */
 .agenda-col {
   display: grid;
@@ -1288,112 +1037,291 @@
   aspect-ratio: 2 / 1;
 }
 
-/* ---- Agenda de escritorio (rediseño, pantalla 1) ------------------------------------
-   Dos paneles: la lista compacta (DeskList, ~380 px) y la ficha. La misma
-   lista va en la columna junto al vídeo del partido. */
-.agenda-desk {
-  display: grid;
-  grid-template-columns: var(--column-w) minmax(0, 1fr);
-  align-items: start;
-  margin-inline: calc(-1 * var(--gutter)) calc(-1 * (var(--gutter) + var(--safe-right)));
-}
-/* La lista, como la columna del partido: 380 px, su propio scroll y su filo. */
-.agenda-desk__list {
-  position: sticky;
-  top: calc(var(--topbar-h) + var(--safe-top));
-  height: calc(100dvh - var(--topbar-h) - var(--safe-top));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 16px 18px calc(var(--safe-bottom) + 24px);
-  border-right: 1px solid var(--line-soft);
-}
-.agenda-desk__side {
-  position: sticky;
-  top: calc(var(--topbar-h) + var(--safe-top));
-  min-width: 0;
-  padding: 0 0 var(--s-5);
-}
-/* La Agenda de escritorio va a sangre: la barra y los dos paneles. */
+/* ---- Agenda de escritorio (desde 768 px), al estilo SofaScore ---------------------
+   Dos tarjetas sobre el fondo, a lo ancho de la barra (la lista empieza bajo
+   «Agenda» y el detalle acaba bajo la campana): la lista (DeskList) y el detalle del
+   partido elegido (Detail.tsx), que se queda a la vista al bajar por la
+   lista. La misma lista, sin tarjeta, va en la columna junto al vídeo. */
 .agenda--desk {
   row-gap: 0;
 }
-/* La tarjeta de primer uso, entre la barra y los paneles. */
+/* La tarjeta de primer uso, entre la barra y las dos tarjetas. */
 .agenda--desk > .agenda-first {
-  margin-block: var(--s-4);
+  margin-block: var(--s-4) 0;
 }
+.agenda-desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: start;
+  width: 100%;
+  padding-block: var(--s-4) var(--s-6);
+}
+@media (min-width: 1280px) {
+  .agenda-desk {
+    gap: var(--s-5);
+  }
+}
+.agenda-desk__list,
+.agenda-detail {
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
+}
+.agenda-desk__list {
+  overflow: clip;
+}
+/* El detalle no se va al bajar por la lista: pegado bajo la barra, con su
+   propio scroll si no cabe (y aire para la sombra de la tarjeta). */
+.agenda-desk__side {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--safe-top) + var(--s-4));
+  display: grid;
+  gap: var(--s-4);
+  align-content: start;
+  min-width: 0;
+  max-height: calc(100dvh - var(--topbar-h) - var(--safe-top) - var(--s-6));
+  margin: -4px -4px 0;
+  padding: 4px 4px var(--s-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+/* El pie: de dónde salen los datos y, debajo, «Editar mis gustos» y
+   «Actualizar» (fuera de la barra, que es la misma con un partido abierto). */
+.agenda-desk__foot {
+  display: grid;
+  gap: 6px;
+  padding-inline: 6px;
+}
+.agenda-desk__tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-inline: -10px -8px;
+}
+
+/* ---- La lista (DeskList): cabecera con pestañas, día y píldoras -------------------- */
 .desk-agenda {
   display: grid;
-  /* Arriba y a su altura: con pocos partidos (una liga de tres) la columna es
-     más alta que lo que hay, y sin esto las filas se estiraban (días y chips
-     gigantes). */
+  /* Arriba y a su altura: con pocos partidos la columna es más alta que lo
+     que hay, y sin esto las filas se estiraban. */
   align-content: start;
-  gap: 12px;
+  min-width: 0;
+  /* Las píldoras se colocan según el ancho de la lista, no de la ventana. */
+  container: desk-agenda / inline-size;
+}
+.desk-agenda__head {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 12px 14px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.desk-agenda__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   min-width: 0;
 }
-.desk-agenda__chips {
-  margin-bottom: 2px;
+/* «Todo» y «Para ti»: pestañas de texto, la activa subrayada. */
+.desk-tabs {
+  display: flex;
+  min-width: 0;
 }
-/* La tira de días de la maqueta: siete huecos a lo ancho, la elegida en
-   amarillo (el número en grande, el día en pequeño encima). Con menos días
-   las pastillas no crecen: miden lo mismo y sobra hueco a la derecha. */
+.desk-tabs__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 10px;
+  color: var(--text-2);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  white-space: nowrap;
+}
+.desk-tabs__tab::after {
+  content: '';
+  position: absolute;
+  inset: auto 10px 2px;
+  height: 3px;
+  border-radius: 3px;
+  background: transparent;
+}
+.desk-tabs__tab[aria-pressed='true'] {
+  color: var(--text);
+}
+.desk-tabs__tab[aria-pressed='true']::after {
+  background: var(--accent-edge);
+}
+.desk-tabs__tab:focus-visible {
+  outline-offset: -2px;
+}
+.desk-tabs__count {
+  color: var(--text-3);
+  font-size: var(--fs-12);
+}
+@media (hover: hover) and (pointer: fine) {
+  .desk-tabs__tab:hover:not([aria-pressed='true']) {
+    color: var(--text);
+  }
+}
+/* El día en una píldora con borde: ‹ Hoy ›. */
+.desk-day {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.desk-day .icon-btn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+}
+.desk-day__label {
+  min-width: 64px;
+  min-height: 32px;
+  padding: 0 4px;
+  border-radius: var(--r-s);
+  color: var(--accent-ink);
+  font-size: var(--fs-13);
+  font-weight: 750;
+  white-space: nowrap;
+}
+.desk-day__label:focus-visible {
+  outline-offset: 0;
+}
+.desk-days-pop {
+  width: 260px;
+  padding: 8px;
+}
 .desk-days {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
+  gap: 2px;
+  max-height: min(440px, 60vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
 }
 .desk-days__day {
   display: grid;
-  justify-items: center;
-  gap: 1px;
-  min-width: 0;
-  padding: 7px 0;
-  border-radius: 12px;
-  color: var(--text-2);
-  font-size: var(--fs-11);
-  font-weight: 620;
-  text-transform: uppercase;
-}
-.desk-days__num {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 10px;
   color: var(--text);
-  font-size: 1rem;
-  font-weight: var(--wght-head);
-  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-13);
+  font-weight: 650;
+  text-align: left;
+}
+.desk-days__date {
+  color: var(--text-2);
+  font-weight: var(--wght-medium);
+}
+.desk-days__count {
+  min-width: 2ch;
+  color: var(--text-3);
+  font-size: var(--fs-12);
+  text-align: right;
 }
 .desk-days__day[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-.desk-days__day[aria-pressed='true'] .desk-days__num {
-  color: var(--on-accent);
-}
-.desk-days__day:focus-visible {
-  outline-offset: 2px;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
 }
 @media (hover: hover) and (pointer: fine) {
   .desk-days__day:hover:not([aria-pressed='true']) {
     background: var(--line-soft);
   }
 }
+/* Píldoras: «En directo (N)» en rojo, «Terminados», «Próximos» y, tras una
+   raya fina, las ligas. Dos grupos: el estado no se parte nunca; las ligas,
+   en la lista ancha, siguen en la misma fila y se deslizan (con un fundido
+   al final) en vez de dejar una píldora suelta en la segunda línea. */
 .desk-agenda__chips {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 4px;
+}
+.desk-agenda__status,
+.desk-agenda__leagues {
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
-/* Chips de la maqueta: 30 px, sin filo; «Todo · 9». */
+.desk-agenda__status {
+  flex: none;
+  flex-wrap: nowrap;
+}
+.desk-agenda__leagues {
+  flex: 1 1 0;
+  flex-wrap: nowrap;
+  min-width: 0;
+  /* Aire para el anillo del foco, que el desplazamiento recortaría. */
+  margin-block: -4px;
+  padding: 4px 16px 4px 9px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  border-left: 1px solid var(--line);
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+}
+.desk-agenda__leagues::-webkit-scrollbar {
+  display: none;
+}
+.desk-agenda__leagues .chip--button {
+  flex: none;
+  max-width: none;
+}
+/* Lista estrecha (768 px, o la columna junto al vídeo): las ligas, a
+   propósito en su propia fila, sin la raya (y deslizándose si aun así no
+   caben). */
+@container desk-agenda (max-width: 520px) {
+  .desk-agenda__chips {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .desk-agenda__leagues {
+    flex-basis: 100%;
+    /* El aire del foco, sin mover la primera píldora. */
+    margin-left: -4px;
+    padding-left: 4px;
+    border-left: 0;
+  }
+}
 .desk-agenda__chips .chip--button {
   min-height: 30px;
   padding-inline: 12px;
   font-size: var(--fs-12);
 }
 .desk-agenda__chips .chip--button[aria-pressed='true'] {
-  box-shadow: none;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-edge) 55%, transparent);
 }
-/* «Todo · 9»: el punto con su aire a los dos lados (un espacio duro en la
-   Martian Mono de la cifra apenas se veía). */
+/* «Más ligas · 3»: el punto con su aire a los dos lados. */
 .desk-agenda__chips .chip__count::before {
   content: '·';
   margin-right: 4px;
   font-family: var(--font);
+}
+.desk-pill--live.chip--button {
+  color: var(--live-ink);
+  background: color-mix(in oklab, var(--live) 13%, transparent);
+}
+.desk-pill--live.chip--button[aria-pressed='true'] {
+  color: var(--live-ink);
+  background: color-mix(in oklab, var(--live) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--live) 60%, transparent);
 }
 .desk-agenda__dot {
   display: inline-block;
@@ -1404,7 +1332,7 @@
   border-radius: 50%;
   background: var(--live);
 }
-/* «Más ligas»: las que no caben en chips, en una lista con su insignia y
+/* «Más ligas»: las que no caben en píldoras, en una lista con su insignia y
    cuántos partidos trae cada una. */
 .desk-leagues-pop {
   width: 320px;
@@ -1445,73 +1373,135 @@
   text-overflow: ellipsis;
 }
 .desk-leagues__count {
-  color: var(--text-2);
+  color: var(--text-3);
   font-size: var(--fs-12);
 }
-.desk-agenda__loading,
-.desk-agenda__groups {
+.desk-leagues .desk-comp__badge {
+  width: 26px;
+  height: 26px;
+}
+.desk-agenda__loading {
   display: grid;
   gap: var(--s-3);
+  padding: var(--s-3);
 }
 .desk-agenda__empty {
-  padding: var(--s-4) 4px;
+  padding: var(--s-6) var(--s-4);
   color: var(--text-2);
   font-size: var(--fs-13);
+  text-align: center;
+}
+
+/* ---- Grupos por competición --------------------------------------------------------- */
+.desk-agenda__groups {
+  display: grid;
 }
 .desk-comp {
-  overflow: hidden;
-  border-radius: var(--r-l);
-  background: var(--surface);
-  box-shadow:
-    inset 0 0 0 1px var(--line-soft),
-    var(--shadow-1);
+  min-width: 0;
+}
+.desk-comp + .desk-comp {
+  border-top: 1px solid var(--line-soft);
 }
 .desk-comp__head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px 10px;
-  font-size: var(--fs-15);
-  font-weight: var(--wght-strong);
+  gap: 12px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 8px 8px 4px 16px;
 }
-/* La insignia con el color de la liga (competitionTone en DeskList). */
+/* Logo de la liga o, sin él, la insignia con su color (competitionTone). */
+.desk-comp__logo,
+.desk-comp__badge {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+.desk-comp__logo {
+  object-fit: contain;
+}
 .desk-comp__badge {
   display: grid;
   place-items: center;
-  flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
   background: var(--bb, var(--surface-2));
   color: #fff;
   font-size: var(--fs-11);
   font-weight: 800;
   letter-spacing: 0.02em;
 }
-.desk-comp__name {
+.desk-comp__title {
+  display: grid;
   flex: 1;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.3;
+}
+.desk-comp__name,
+.desk-comp__area {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.desk-comp__count {
+.desk-comp__name {
+  font-size: var(--fs-13);
+  font-weight: 760;
+}
+.desk-comp__area {
   color: var(--text-3);
   font-size: var(--fs-12);
-  font-weight: var(--wght-text);
+  font-weight: var(--wght-medium);
+}
+/* El contador redondo: los partidos de la liga o, en rojo, los directos. */
+.desk-comp__count {
+  display: grid;
+  flex: none;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-11);
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+.desk-comp__count--live {
+  background: color-mix(in oklab, var(--live) 16%, transparent);
+  color: var(--live-ink);
+}
+.desk-comp__fold.icon-btn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  background: var(--line-soft);
+}
+.desk-comp__fold .icon {
+  transform: rotate(180deg);
+  transition: transform var(--dur-rapido) var(--ease-estandar);
+}
+.desk-comp__fold.is-folded .icon {
+  transform: none;
 }
 .desk-comp__rows {
   display: grid;
+  padding-bottom: 6px;
 }
+.desk-comp__rows[hidden] {
+  display: none;
+}
+
+/* ---- Filas de partido ------------------------------------------------------------------ */
 .desk-row {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  min-height: 64px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--line);
+  min-height: 56px;
+  padding: 8px 16px 8px 12px;
   text-align: left;
 }
 .desk-row--sel {
@@ -1521,20 +1511,35 @@
 .desk-row:focus-visible {
   outline-offset: -3px;
 }
+/* La hora y, debajo, el estado; separada de los equipos por una raya fina. */
 .desk-row__when {
   display: grid;
-  gap: 4px;
+  justify-items: center;
+  align-self: stretch;
+  align-content: center;
+  gap: 3px;
+  padding-right: 10px;
+  border-right: 1px solid var(--line-soft);
   color: var(--text-2);
   font-family: var(--mono);
-  font-size: var(--fs-12);
+  font-size: var(--fs-11);
   font-weight: 600;
   white-space: nowrap;
 }
-.desk-row__when--live {
+.desk-row__state {
+  color: var(--text-3);
+  font-family: var(--font);
+  font-size: var(--fs-11);
+  font-weight: 650;
+}
+.desk-row__when--live .desk-row__state {
   color: var(--live-ink);
+  font-family: var(--mono);
+  font-weight: 760;
 }
 .desk-row__bar {
-  height: 3px;
+  width: 30px;
+  height: 2px;
   overflow: hidden;
   border-radius: 2px;
   background: var(--line-soft);
@@ -1548,7 +1553,7 @@
 }
 .desk-row__teams {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 .desk-row__team {
@@ -1556,8 +1561,9 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  font-size: var(--fs-15);
+  font-size: 0.875rem;
   font-weight: 560;
+  line-height: 20px;
 }
 .desk-row--mine .desk-row__name {
   font-weight: 720;
@@ -1574,7 +1580,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-  color: var(--text-2);
+  color: var(--text-3);
   font-size: var(--fs-12);
   font-weight: 600;
 }
@@ -1587,36 +1593,44 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* Con el canal debajo, el resultado se queda a la altura de los equipos. */
+/* A la derecha, en fila: las barras de «sonando» o el play y, al final, el
+   resultado. Con el canal debajo, el resultado se queda a la altura de los
+   equipos. */
 .desk-row__end:has(.desk-row__score) {
   align-self: start;
 }
 .desk-row__end {
-  display: grid;
-  justify-items: end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
   min-width: 24px;
 }
 /* El resultado de un terminado: un número por equipo, a su altura. */
 .desk-row__score {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   justify-items: end;
   color: var(--text);
   font-family: var(--mono);
-  font-size: var(--fs-15);
+  font-size: 0.875rem;
   font-weight: 700;
   line-height: 20px;
 }
-/* Terminado: los equipos apagados, como en la maqueta. */
+/* En directo: el marcador en rojo, como el minuto. */
+.desk-row__score--live {
+  color: var(--live-ink);
+}
+/* Terminado: los equipos apagados. */
 .desk-row__teams--done {
-  opacity: 0.55;
+  opacity: 0.6;
 }
 /* En directo con señal: el play (la fila entera es el botón). */
 .desk-row__play {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--accent-wash);
   color: var(--accent-ink);
@@ -1636,9 +1650,388 @@
   border-radius: 50%;
   background: currentColor;
 }
+/* Las barras de «sonando»: 3 px, 12 de alto, en amarillo. */
+.desk-row__end .player-eq {
+  gap: 2px;
+  width: 13px;
+  height: 12px;
+  color: var(--accent-ink);
+}
+.desk-row__end .player-eq i {
+  width: 3px;
+}
 @media (hover: hover) and (pointer: fine) {
   .desk-row:hover:not(.desk-row--sel) {
     background: var(--line-soft);
+  }
+}
+
+/* La misma lista en la columna junto al vídeo: sin tarjeta, a ras de la columna. */
+.agenda-col .desk-agenda__head {
+  padding: 0 0 12px;
+}
+.agenda-col .desk-tabs {
+  margin-left: -10px;
+}
+.agenda-col .desk-agenda__chips {
+  flex-wrap: wrap;
+  row-gap: 8px;
+  padding-left: 0;
+}
+/* Junto al vídeo, aunque la columna sea ancha: las ligas en su fila. */
+.agenda-col .desk-agenda__leagues {
+  flex-basis: 100%;
+  margin-left: -4px;
+  padding-left: 4px;
+  border-left: 0;
+}
+.agenda-col .desk-comp__head {
+  padding-inline: 4px 0;
+}
+.agenda-col .desk-row {
+  padding-inline: 4px 8px;
+  border-radius: var(--r-s);
+}
+
+/* ---- El detalle del partido elegido (Detail.tsx) ------------------------------------- */
+.agenda-detail {
+  display: grid;
+  gap: var(--s-4);
+  align-content: start;
+  min-width: 0;
+  padding: 10px 16px 18px;
+}
+.agenda-detail__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin-right: -8px;
+}
+/* Migas «País › Competición». */
+.agenda-detail__crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--accent-ink);
+  font-size: var(--fs-12);
+  font-weight: 700;
+}
+.agenda-detail__crumbs > span:first-child,
+.agenda-detail__crumbs .icon {
+  flex: none;
+}
+.agenda-detail__comp {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.agenda-detail__close.icon-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  color: var(--accent-ink);
+}
+/* Escudos grandes con su nombre debajo y, en medio, la hora o el minuto. */
+.agenda-detail__versus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding-block: 4px;
+}
+.agenda-detail__team {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  min-width: 0;
+  text-align: center;
+}
+.agenda-detail__name {
+  max-width: 100%;
+  font-size: var(--fs-15);
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.agenda-detail.is-mine .agenda-detail__name {
+  font-weight: 800;
+}
+.agenda-detail__center {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 8px;
+  min-width: 88px;
+  padding-top: 8px;
+}
+.agenda-detail__time {
+  font-size: var(--fs-30);
+  font-weight: var(--wght-head);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.agenda-detail__day {
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.agenda-detail__minute {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--live-ink);
+  font-size: var(--fs-22);
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.agenda-detail__final {
+  color: var(--text-2);
+  font-size: var(--fs-17);
+  font-weight: 760;
+  line-height: 1.3;
+}
+/* El resultado a la vista (lo normal en la ficha): grande, en rojo si va en
+   directo. */
+.agenda-detail__result {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--fs-30);
+  font-weight: 760;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.agenda-detail__result--live {
+  color: var(--live-ink);
+}
+.agenda-detail__dash {
+  color: var(--text-3);
+  font-weight: 600;
+}
+/* «Marcador» del partido que estás viendo, tapado hasta que lo tocas: 32 px,
+   gris, sin cristal. */
+.agenda-detail__score.agenda-score.capsule {
+  height: 32px;
+  padding-inline: 12px;
+  border: 0;
+  background: var(--line-soft);
+  box-shadow: none;
+  color: var(--text-2);
+  font-size: var(--fs-12);
+}
+.agenda-detail__score.agenda-score.is-shown.capsule {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--fs-17);
+}
+/* «Ver partido» (el FULL PAGE VIEW) y «Ver juntos», centrados. */
+.agenda-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.agenda-detail__go.btn {
+  min-width: min(200px, 100%);
+  min-height: 44px;
+  padding-inline: 20px 24px;
+  border-radius: var(--r-pill);
+  font-size: 0.9375rem;
+}
+.agenda-detail__together.btn {
+  min-height: 44px;
+  padding-inline: 16px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+/* Sin opacidad, como en la ficha (ver .mc-dhead__together). */
+.agenda-detail__together[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+/* «Dónde se ve»: la única pestaña (la de SofaScore, subrayada). */
+.agenda-detail__where {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.agenda-detail__tab {
+  margin-inline: -16px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--fs-13);
+  font-weight: 760;
+}
+.agenda-detail__tab > span {
+  display: inline-block;
+  margin-bottom: -1px;
+  padding: 8px 2px 10px;
+  box-shadow: inset 0 -3px 0 var(--accent-edge);
+}
+.agenda-detail__signal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px var(--s-3);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+  line-height: 1.35;
+}
+.agenda-detail__muted {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: 1.45;
+}
+/* Los canales en filas, como las fuentes de la ficha. */
+.agenda-detail__rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--r-m);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  list-style: none;
+}
+.agenda-detail__rows li + li .agenda-detail__row {
+  border-top: 1px solid var(--line-soft);
+}
+.agenda-detail__row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+  text-align: left;
+}
+.agenda-detail__row:focus-visible {
+  outline-offset: -3px;
+}
+.agenda-detail__num {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+  font-weight: 700;
+}
+.agenda-detail__rtext {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-width: 0;
+}
+.agenda-detail__rname {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.agenda-detail__tag {
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-11);
+  font-weight: 650;
+}
+.agenda-detail__rend {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+@media (hover: hover) and (pointer: fine) {
+  .agenda-detail__row:hover {
+    background: var(--line-soft);
+  }
+}
+/* Sin partido elegido: la invitación y el resumen del día. */
+.agenda-detail--empty {
+  justify-items: center;
+  gap: 10px;
+  padding: 44px 28px 36px;
+  text-align: center;
+}
+.agenda-detail__icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+.agenda-detail__invite {
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
+  letter-spacing: -0.01em;
+}
+.agenda-detail--empty .agenda-detail__muted {
+  max-width: 38ch;
+}
+.agenda-detail__summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  margin-top: 6px;
+  padding: 8px 16px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  font-size: var(--fs-13);
+  font-weight: 650;
+}
+.agenda-detail__summary-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--live-ink);
+}
+
+/* Táctil desde 768: lo que se dibuja más pequeño que 44 (pestañas, flechas del
+   día, plegar, cerrar) gana su zona invisible de 44. Con ratón no cambia nada. */
+@media (min-width: 768px) and (pointer: coarse) {
+  .desk-tabs__tab {
+    min-height: var(--tap);
+  }
+  .desk-day .icon-btn::before,
+  .desk-comp__fold.icon-btn::before,
+  .agenda-detail__close.icon-btn::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+  }
+  .desk-day__label {
+    position: relative;
+  }
+  .desk-day__label::before {
+    content: '';
+    position: absolute;
+    inset: -6px 0;
   }
 }
 
@@ -1658,248 +2051,7 @@
   .agenda-row:active .agenda-row__card {
     transform: none;
   }
-}
-
-/* ---- La ficha del elegido en la Agenda de escritorio -------------------------------
-   Como la ficha del partido de al lado (rediseño, pantalla 1): el cartel a
-   sangre arriba, en 16:9, pegado a la barra, y lo demás con 20 px a los lados. */
-@media (min-width: 1024px) {
-  .app[data-vista='agenda'] .app-main {
-    padding-bottom: 0;
-  }
-  .agenda-desk__side .agenda-stage {
-    gap: 14px;
-    padding: 0 0 var(--s-5);
-    border-radius: 0;
-    background: none;
-    box-shadow: none;
-  }
-  .agenda-desk__side .agenda-stage__light {
-    display: none;
-  }
-  .agenda-desk__side .agenda-stage__versus {
-    aspect-ratio: 16 / 9;
-    height: auto;
-    max-height: calc((100dvh - var(--topbar-h)) * 0.72);
-    border-radius: 0;
-  }
-  .agenda-desk__side .agenda-stage__body {
-    gap: var(--s-4);
-    padding-inline: 20px;
-  }
-  /* El pie: de dónde salen los datos y, debajo, «Editar mis gustos» y
-     «Actualizar» (fuera de la barra, que es la misma con un partido abierto). */
-  .agenda-desk__foot {
-    display: grid;
-    gap: 6px;
-    margin: var(--s-4) 20px 0;
-  }
-  .agenda-desk__tools {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-inline: -10px -8px;
-  }
-}
-
-/* ---- El elegido con la forma de la ficha (AgendaStage `desk`) ----------------------
-   Maqueta 01, pantalla 1: el cartel en el sitio del vídeo, sin los nombres
-   (van en el titular de debajo) y con «Ver canal» en su esquina; el titular
-   en una línea con «Marcador» y «Ver juntos»; y los canales en filas como
-   las fuentes de la ficha (número, nombre y etiqueta). */
-@media (min-width: 1024px) {
-  .agenda-stage--desk {
-    container: agenda-side / inline-size;
-  }
-  .agenda-stage--desk .versus__names,
-  .agenda-stage--desk .versus__competition {
-    display: none;
-  }
-  .agenda-stage--desk .agenda-stage__corner {
-    right: 16px;
-    bottom: 16px;
-  }
-  .agenda-stage__go.btn {
-    min-height: 40px;
-    padding-inline: 16px 18px;
-    border-radius: var(--r-pill);
-    font-size: 0.875rem;
-  }
-  .agenda-stage__dhead {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 0;
-    padding: 6px 20px 0;
-  }
-  .agenda-stage__titles {
-    display: grid;
-    flex: 1;
-    gap: 3px;
-    min-width: 0;
-  }
-  .agenda-stage__title {
-    overflow: hidden;
-    font-size: 1.1875rem;
-    font-weight: var(--wght-head);
-    font-stretch: 110%;
-    letter-spacing: -0.01em;
-    line-height: var(--lh-tight);
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .agenda-stage__sub {
-    overflow: hidden;
-    color: var(--text-3);
-    font-size: var(--fs-12);
-    font-weight: var(--wght-medium);
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .agenda-stage__dactions {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 12px;
-  }
-  /* «Marcador» como el de la ficha: 32 px, gris, sin cristal. */
-  .agenda-stage__score.agenda-score.capsule {
-    height: 32px;
-    padding-inline: 12px;
-    border: 0;
-    background: var(--line-soft);
-    box-shadow: none;
-    color: var(--text-2);
-    font-size: var(--fs-12);
-  }
-  .agenda-stage__score.agenda-score.is-shown.capsule {
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: var(--fs-15);
-  }
-  .agenda-stage__together.btn {
-    min-height: 40px;
-    padding-inline: 16px;
-    border-radius: var(--r-pill);
-    background: var(--line-soft);
-    color: var(--text);
-    font-size: 0.875rem;
-  }
-  /* Sin opacidad, como en la maqueta (ver .mc-dhead__together). */
-  .agenda-stage__together[aria-disabled='true'] {
-    cursor: not-allowed;
-  }
-  .agenda-stage__where {
-    display: grid;
-    gap: 12px;
-    min-width: 0;
-    padding-inline: 20px;
-  }
-  .agenda-stage--desk .agenda-stage__signal {
-    color: var(--text-2);
-    font-size: var(--fs-13);
-  }
-  .agenda-stage__rows {
-    display: grid;
-    overflow: hidden;
-    border-radius: var(--r-l);
-    background: var(--surface);
-    box-shadow: inset 0 0 0 1px var(--line-soft);
-  }
-  .agenda-stage__rows li + li .agenda-stage__row {
-    border-top: 1px solid var(--line-soft);
-  }
-  .agenda-stage__row {
-    display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    min-height: 60px;
-    padding: 8px 14px;
-    text-align: left;
-  }
-  .agenda-stage__row:focus-visible {
-    outline-offset: -3px;
-  }
-  .agenda-stage__num {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: var(--surface-2);
-    color: var(--text-2);
-    font-family: var(--mono);
-    font-size: var(--fs-12);
-    font-weight: 700;
-  }
-  .agenda-stage__rtext {
-    display: grid;
-    gap: 4px;
-    min-width: 0;
-  }
-  .agenda-stage__rname {
-    overflow: hidden;
-    font-size: var(--fs-15);
-    font-weight: 650;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .agenda-stage__rmeta {
-    display: flex;
-  }
-  .agenda-stage__tag {
-    padding: 1px 7px;
-    border-radius: var(--r-pill);
-    background: var(--line-soft);
-    color: var(--text-2);
-    font-size: var(--fs-11);
-    font-weight: 650;
-  }
-  .agenda-stage__rend {
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--accent-wash);
-    color: var(--accent-ink);
-  }
-  /* Las barras de «sonando» de la maqueta: 3 px, 12 de alto, en amarillo. */
-  .desk-row__end .player-eq {
-    gap: 2px;
-    width: 13px;
-    height: 12px;
-    color: var(--accent-ink);
-  }
-  .desk-row__end .player-eq i {
-    width: 3px;
-  }
-}
-/* Panel estrecho (a 1024 se queda en unos 410 px): como en la ficha, los
-   botones bajan bajo el titular. */
-@container agenda-side (max-width: 539px) {
-  .agenda-stage__dhead {
-    flex-wrap: wrap;
-  }
-  .agenda-stage__titles {
-    flex-basis: 100%;
-  }
-}
-@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
-  .agenda-stage__row:hover {
-    background: var(--line-soft);
-  }
-}
-/* Táctil desde 768: «Ver canal» y «Ver juntos» de la ficha miden 40; su zona
-   invisible, 44. Con ratón no cambia nada. */
-@media (min-width: 768px) and (pointer: coarse) {
-  .agenda-stage__go.btn::before,
-  .agenda-stage__together.btn::before {
-    content: '';
-    position: absolute;
-    inset: -2px 0;
+  .desk-comp__fold .icon {
+    transition: none;
   }
 }
