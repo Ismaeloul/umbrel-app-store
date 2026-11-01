@@ -2,6 +2,19 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 1.0.0 (2026-11-01)
+
+Version 1.0.0. Agenda nueva al estilo SofaScore: al entrar ves las ligas
+y los partidos, sin ninguno abierto; al tocar uno se abre a la derecha su
+ficha con el marcador, Ver partido y donde se emite. Ver juntos tambien para
+los partidos en directo: el NAS abre una sola conexion y la reparte a todos.
+Salas abiertas: vuelve a una sala o cierrala aunque te hayas salido. Los
+invitados de fuera ya no ven a tirones en el iPhone y reciben una calidad
+ligera (720p) que sube sola a la original si su conexion aguanta. Pelis y
+series empieza en Mi lista, cada canal dice si es IPTV o AceStream, la
+agenda vuelve a sacar todos los partidos (futbolenlatv se ha mudado a .es) y
+un barrido de agentes ha corregido 31 fallos.
+
 ## 0.10.0 (2026-10-31)
 
 Rediseño de escritorio (primera parte): menu lateral con la Agenda, los
