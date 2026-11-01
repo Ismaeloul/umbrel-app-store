@@ -47,6 +47,17 @@
      publicarlo cortado. Una ejecución que falla se reintenta UNA vez desde el
      primer segmento que falte; la segunda, `vod_dropped`.
 
+   «Calidad ligera para invitados» (docs/ver-juntos.md §17): la versión
+   ligera (vod/lite.ts) LEE de aquí sin mover nada: `readySegment()` y
+   `onSegmentReady()` para los segmentos en disco, `onRestart()` cuando una
+   ejecución arranca en otro sitio y `pin()` para que el recorte no le borre
+   los que aún tiene que codificar (`setExtraBytes()`: sus ficheros cuentan en
+   el tope de la sesión). Nunca llama a `file()`: el cursor es UNO, el de las
+   peticiones de verdad. Las de `lo_index<N>` de un invitado lo mueven con
+   `touch()`, que es `file()` sin esperar: la misma regla de reinicio, la
+   contrapresión y el recorte, así una sala solo de invitados también tira
+   del productor.
+
    Lo que NO hace (VOD-5): servir los ficheros con Range (lo hace
    `files.ts` con la ruta que da `file()`), el registro de sesiones del
    remux, las plazas y el barrido al arrancar (`sweepVodDirs` está aquí para
@@ -271,6 +282,13 @@ export class VodProducer {
   /** Segmentos cerrados cuyo `.part` aún se está renombrando: cuentan como hechos. */
   private readonly finalizing = new Set<number>();
   private fsChain: Promise<void> = Promise.resolve();
+  /** Quien lee los segmentos en disco (la versión ligera, §17): avisos de listo y de reinicio. */
+  private readonly readyListeners = new Set<(segment: number) => void>();
+  private readonly restartListeners = new Set<(segment: number) => void>();
+  /** Segmentos que el recorte no toca (los que la versión ligera aún tiene que codificar). */
+  private pinned: { readonly from: number; readonly to: number } | null = null;
+  /** Bytes de otros ficheros de la carpeta (los ligeros): cuentan en `sessionDiskMaxBytes`. */
+  private extraBytes = 0;
 
   private constructor(
     private readonly deps: VodProducerDeps,
@@ -370,6 +388,83 @@ export class VodProducer {
     );
   }
 
+  /**
+   * Un invitado pide `lo_index<N>` (docs/ver-juntos.md §17): cuenta como pedir `index<N>.m4s`
+   * (actividad, contrapresión, recorte y la regla de reinicio, con el mismo cursor) pero no espera
+   * nada: lo que el invitado espera es el segmento ligero, que sale de este.
+   */
+  touch(segment: number): void {
+    if (this.closed || this.failure) return;
+    if (!Number.isInteger(segment) || segment < 0 || segment >= this.plan.segments.length) return;
+    this.lastRequested = segment;
+    this.armIdle();
+    this.applyBackpressure();
+    this.trimDisk();
+    if (this.produced(segment) || this.willProduce(segment)) this.cancelRestart();
+    else this.requestRestart({ segment, wanted: segment });
+  }
+
+  // --- Lectura de la versión ligera (§17): nada de esto mueve el cursor ---
+
+  /** La ruta de `index<N>.m4s` si está en disco (null si no). */
+  readySegment(segment: number): string | null {
+    const ready = this.segmentFile(segment);
+    return ready?.kind === 'file' ? ready.path : null;
+  }
+
+  /** La ruta de `init.mp4` si ya está escrito (null si no). */
+  initFilePath(): string | null {
+    return this.closed || this.failure ? null : this.initPath;
+  }
+
+  /** El último segmento pedido (por `file()` o `touch()`). */
+  requestedSegment(): number {
+    return this.lastRequested;
+  }
+
+  /** Avisa cada vez que un segmento queda en disco. Devuelve la baja. */
+  onSegmentReady(listener: (segment: number) => void): () => void {
+    this.readyListeners.add(listener);
+    return () => this.readyListeners.delete(listener);
+  }
+
+  /** Avisa cada vez que arranca una ejecución (en su segmento). Devuelve la baja. */
+  onRestart(listener: (segment: number) => void): () => void {
+    this.restartListeners.add(listener);
+    return () => this.restartListeners.delete(listener);
+  }
+
+  /** El recorte no borra los segmentos de `[from, to]` (hasta `unpin()` u otro `pin()`). */
+  pin(from: number, to: number): void {
+    this.pinned = { from: Math.min(from, to), to: Math.max(from, to) };
+  }
+
+  unpin(): void {
+    this.pinned = null;
+  }
+
+  /** Bytes de los ficheros ligeros de la carpeta, para el tope de la sesión. */
+  setExtraBytes(bytes: number): void {
+    this.extraBytes = Math.max(0, bytes);
+  }
+
+  private isPinned(segment: number): boolean {
+    return this.pinned !== null && segment >= this.pinned.from && segment <= this.pinned.to;
+  }
+
+  private emit(listeners: Set<(segment: number) => void>, segment: number): void {
+    for (const listener of [...listeners]) {
+      try {
+        listener(segment);
+      } catch (error) {
+        this.deps.logger.warn(
+          { sessionId: this.options.sessionId, err: error },
+          'VOD: un lector del productor ha fallado',
+        );
+      }
+    }
+  }
+
   /*
    * Arranque y tras un salto (auditoría 0.9.0): la ejecución de ahora aún no lleva `warmupS`
    * producidos desde lo que se le pidió, y este segmento es de los suyos. Isma prefiere esperar
@@ -418,6 +513,8 @@ export class VodProducer {
     this.deps.clock.clearTimeout(this.idleTimer);
     this.restartTimer = null;
     this.idleTimer = null;
+    this.readyListeners.clear();
+    this.restartListeners.clear();
     await this.stopRun();
     for (const set of [...this.waiters.values()]) for (const wake of [...set]) wake();
     this.waiters.clear();
@@ -604,6 +701,7 @@ export class VodProducer {
       { sessionId: this.options.sessionId, segment: target.segment, keyframeS: segment.keyframeS },
       'VOD: arranca ffmpeg',
     );
+    this.emit(this.restartListeners, target.segment);
   }
 
   private onInit(ctx: RunContext, init: Fmp4Init): void {
@@ -804,6 +902,7 @@ export class VodProducer {
       this.wake(writer.segment);
       this.trimDisk();
       this.applyBackpressure();
+      if (this.onDisk.has(writer.segment)) this.emit(this.readyListeners, writer.segment);
     });
   }
 
@@ -912,13 +1011,16 @@ export class VodProducer {
     else if (ahead < this.limits.aheadResumeS) ctx.run.resume('adelanto');
   }
 
-  /** Ventana: desde el último pedido − 120 s, ≤ 256 MiB por detrás y ≤ 1,5 GiB en total. */
+  /**
+   * Ventana: desde el último pedido − 120 s, ≤ 256 MiB por detrás y ≤ 1,5 GiB en total (con los
+   * ficheros ligeros, `extraBytes`). Los segmentos fijados por la versión ligera (§17) no se tocan.
+   */
   private trimDisk(): void {
     const requested = this.plan.segments[this.lastRequested];
     if (!requested) return;
     const doomed = new Set<number>();
     const behind = [...this.onDisk.keys()]
-      .filter((segment) => segment < this.lastRequested)
+      .filter((segment) => segment < this.lastRequested && !this.isPinned(segment))
       .sort((a, b) => a - b);
     let behindBytes = 0;
     for (const segment of behind) behindBytes += this.onDisk.get(segment) ?? 0;
@@ -932,11 +1034,14 @@ export class VodProducer {
         behindBytes -= this.onDisk.get(segment) ?? 0;
       }
     }
-    let total = 0;
+    let total = this.extraBytes;
     for (const [segment, size] of this.onDisk) if (!doomed.has(segment)) total += size;
     if (total > this.limits.sessionDiskMaxBytes) {
       const byDistance = [...this.onDisk.keys()]
-        .filter((segment) => !doomed.has(segment) && segment !== this.lastRequested)
+        .filter(
+          (segment) =>
+            !doomed.has(segment) && segment !== this.lastRequested && !this.isPinned(segment),
+        )
         .sort((a, b) => Math.abs(b - this.lastRequested) - Math.abs(a - this.lastRequested));
       for (const segment of byDistance) {
         if (total <= this.limits.sessionDiskMaxBytes) break;

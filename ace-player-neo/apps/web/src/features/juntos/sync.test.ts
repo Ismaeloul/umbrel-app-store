@@ -144,6 +144,27 @@ describe('StallDetector (§16)', () => {
     expect(stall.resumeAheadS).toBe(4);
   });
 
+  it('cuenta los atascos repetidos (los que suben el colchón; Safari baja a la ligera con el primero, §17)', () => {
+    const stall = new StallDetector(4);
+    const stallAt = (now: number) => {
+      stall.waiting(now);
+      stall.update({ ...base, now, currentTime: 0, readyState: 4, aheadS: 20 });
+    };
+    stallAt(0);
+    expect(stall.escalations).toBe(0);
+    stallAt(10_000);
+    expect(stall.escalations).toBe(1);
+    /* Provocado por un salto nuestro: no cuenta. */
+    stall.moved(20_000, true);
+    stallAt(20_500);
+    expect(stall.escalations).toBe(1);
+    stallAt(30_000);
+    expect(stall.escalations).toBe(2);
+    /* Lejos del anterior (más de 60 s): tampoco. */
+    stallAt(200_000);
+    expect(stall.escalations).toBe(2);
+  });
+
   it('en pausa (la sala parada) no cuenta como atasco aunque no avance', () => {
     const stall = new StallDetector(3);
     stall.update({ ...base, now: 0, currentTime: 5, paused: true });

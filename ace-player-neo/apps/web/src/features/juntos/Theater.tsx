@@ -27,7 +27,12 @@
      completa; M, silencio.
    - En directo (§14): ni pausa, ni ±10 s, ni barra de tiempo. Abajo, la
      píldora roja DIRECTO con el canal que suena y el volumen; arriba, «● En
-     directo». Cambiar de canal va en la pestaña Fuentes. */
+     directo». Cambiar de canal va en la pestaña Fuentes.
+   - «Calidad» (§17), junto a Idioma: solo el invitado de fuera con las dos
+     versiones (`view.quality`), y nunca en directo. Automática, Alta
+     (original) o Ligera (720p). Es de este aparato: no manda ninguna orden a
+     la sala (`player.setQuality`, ni `client.control`) y lo puede tocar
+     cualquiera, controle o no. */
 
 import type { PartyRoom } from '@ace/shared';
 import {
@@ -182,6 +187,37 @@ export function Theater({
         .control({ action: 'audio', positionS: position, audio: track.index })
         .catch((error: unknown) => notify(describeFailure(error), { tone: 'err' })),
   }));
+
+  /* «Calidad» (§17): de este aparato, sin orden a la sala. */
+  const quality = live ? null : view.quality;
+  const now =
+    quality?.current === 'hd'
+      ? JUNTOS_TEXT.qualityNowHd
+      : quality?.current === 'lite'
+        ? JUNTOS_TEXT.qualityNowLite
+        : null;
+  const qualityItems = quality
+    ? [
+        {
+          id: 'auto',
+          label: now ? JUNTOS_TEXT.qualityAutoNow(now) : JUNTOS_TEXT.qualityAuto,
+          checked: quality.choice === 'auto',
+          onSelect: () => player.setQuality('auto'),
+        },
+        {
+          id: 'hd',
+          label: JUNTOS_TEXT.qualityHd,
+          checked: quality.choice === 'hd',
+          onSelect: () => player.setQuality('hd'),
+        },
+        {
+          id: 'lite',
+          label: JUNTOS_TEXT.qualityLite,
+          checked: quality.choice === 'lite',
+          onSelect: () => player.setQuality('lite'),
+        },
+      ]
+    : [];
 
   let status: ReactNode = (
     <>
@@ -362,6 +398,14 @@ export function Theater({
                   label={JUNTOS_TEXT.language}
                   variant="video"
                   items={audioItems}
+                />
+              ) : null}
+              {qualityItems.length ? (
+                <MenuButton
+                  icon="senal"
+                  label={JUNTOS_TEXT.quality}
+                  variant="video"
+                  items={qualityItems}
                 />
               ) : null}
               <IconButton

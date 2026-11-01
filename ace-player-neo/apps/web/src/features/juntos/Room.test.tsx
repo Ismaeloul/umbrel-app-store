@@ -23,6 +23,9 @@ import {
 import { Room } from './Room.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
 
+/* Las opciones con las que se crea cada reproductor (el invitado pide las dos calidades, §17). */
+const playerOptions = vi.hoisted(() => [] as unknown[]);
+
 /* El reproductor de verdad pide el vídeo y monta hls.js: aquí no hace falta. */
 vi.mock('./player.ts', () => {
   const view = {
@@ -32,9 +35,13 @@ vi.mock('./player.ts', () => {
     durationS: 0,
     bufferedS: 0,
     buffering: false,
+    quality: null,
   };
   return {
     RoomPlayer: class {
+      constructor(_video: unknown, _client: unknown, options: unknown) {
+        playerOptions.push(options);
+      }
       start(): void {}
       destroy(): void {}
       unlock(): void {}
@@ -112,7 +119,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mountRoom(selfId: string, onLeft = vi.fn()) {
+function mountRoom(selfId: string, onLeft = vi.fn(), guest = false) {
   saveCredential(CODE, credential(selfId));
   rememberRoom(CODE);
   render(
@@ -122,6 +129,7 @@ function mountRoom(selfId: string, onLeft = vi.fn()) {
       onForbidden={() => undefined}
       onLeft={onLeft}
       exitAction={null}
+      guest={guest}
     />,
   );
   act(() => FakeSource.last?.emit('party.snapshot', { room: ROOM, chat: [], serverNow: 1 }));
@@ -254,5 +262,16 @@ describe('PartyClient.close', () => {
     rememberRoom('OTRA1234');
     await client().close();
     expect(lastRoom()?.code).toBe('OTRA1234');
+  });
+});
+
+describe('el reproductor de la sala y las dos calidades (§17)', () => {
+  it('solo la página del invitado lo crea con `guest` (que es lo que manda abr=1)', () => {
+    setViewport(1280);
+    playerOptions.length = 0;
+    mountRoom(ANA);
+    expect(playerOptions.at(-1)).toEqual({ guest: false });
+    mountRoom(ANA, vi.fn(), true);
+    expect(playerOptions.at(-1)).toEqual({ guest: true });
   });
 });

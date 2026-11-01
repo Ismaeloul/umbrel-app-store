@@ -53,6 +53,7 @@ import {
   type PartyQueueBody,
   type PartyStreamQuery,
   type StreamGrant,
+  type VodGrant,
   type PartyQueueItem,
   type PartyQueueTitle,
   type PartyRoom,
@@ -66,6 +67,7 @@ import { AppError } from '../../core/errors.js';
 import type { Unsubscribe } from '../../core/bus.js';
 import type { ViewerIdentity } from '../playback/types.js';
 import type { PartyDeps, PartyService, PartySink } from './types.js';
+import type { RemuxLiteOffer } from '../remux/types.js';
 
 /** Tras dejar de esperar a alguien, no se le vuelve a esperar durante esto. */
 const HOLD_COOLDOWN_MS = 30_000;
@@ -202,6 +204,36 @@ function sha256(text: string): Buffer {
   return createHash('sha256').update(text, 'utf8').digest();
 }
 
+/** ¿Es el «HEVC sin decodificador en el cliente» de `assertPlayable` (remux/vod/codecs.ts)? */
+function isHevcRefusal(error: unknown): boolean {
+  if (!(error instanceof AppError) || error.code !== 'vod_unsupported') return false;
+  const data = error.data as { reason?: unknown } | undefined;
+  return data?.reason === 'hevc';
+}
+
+/**
+ * La concesión con la oferta ligera (§17): `variants` y, si solo hay ligera (HEVC sin
+ * decodificador), el vídeo de la ligera, para que el reproductor la acepte.
+ */
+function withLiteOffer(grant: VodGrant, offer: RemuxLiteOffer): VodGrant {
+  const variants = { hd: offer.variants.hd, lite: offer.variants.lite };
+  if (offer.kind === 'master') return { ...grant, variants };
+  return {
+    ...grant,
+    codec: { ...grant.codec, video: 'h264' },
+    vod: {
+      ...grant.vod,
+      video: {
+        codec: 'h264',
+        codecs: offer.lite.codecs,
+        width: offer.lite.width,
+        height: offer.lite.height,
+      },
+    },
+    variants,
+  };
+}
+
 /** «43:12» o «1:05:09». */
 export function formatPosition(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds));
@@ -213,8 +245,10 @@ export function formatPosition(seconds: number): string {
 }
 
 export function createPartyRuntime(deps: PartyDeps): PartyService {
-  const { clock, logger, bus, playback, config } = deps;
+  const { clock, logger, bus, playback, config, remux } = deps;
   const publicUrl = config.party.publicUrl;
+  /** «Calidad ligera para invitados» (§17): `ACE_PARTY_LITE=1` y el remux que la hace. */
+  const partyLite = config.party.lite && remux !== undefined;
   const rooms = new Map<string, Room>();
   let sweepTimer: TimerHandle | null = null;
   let heartbeat: TimerHandle | null = null;
@@ -1132,26 +1166,77 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
 
     attach,
 
-    async stream(code, query, viewer, signal) {
+    async stream(code, query, viewer, signal, options = {}) {
       const room = find(code);
       const member = authenticate(room, query.t);
       if (room.live) return streamLive(room, member, query, viewer, signal);
-      const grant = await playback.acquireVod(
-        room.title.id,
-        {
-          client: query.client,
-          viewer: query.viewer,
-          device: query.device,
-          hevc: query.hevc,
-          start: Math.round(positionNow(room) * 10) / 10,
-          audio: room.audio.index ?? undefined,
-        },
-        viewer,
-        signal,
-        { partyKey: room.code },
-      );
-      /* La lista y los segmentos, por la ruta de la sala con la clave de la persona. */
-      const url = `/api/v1/party/${room.code}/v/${member.videoKey}/index.m3u8`;
+      /* La calidad ligera (§17) solo para el invitado de fuera que sabe elegir (`abr=1`). */
+      const wantsLite = partyLite && options.guest === true && query.abr === '1';
+      const acquire = (hevc: '0' | '1') =>
+        playback.acquireVod(
+          room.title.id,
+          {
+            client: query.client,
+            viewer: query.viewer,
+            device: query.device,
+            hevc,
+            start: Math.round(positionNow(room) * 10) / 10,
+            audio: room.audio.index ?? undefined,
+          },
+          viewer,
+          signal,
+          { partyKey: room.code },
+        );
+      let grant: VodGrant;
+      /* El rechazo de hoy si se abrió por la ligera (HEVC sin decodificador), para devolverlo. */
+      let refusal: unknown = null;
+      try {
+        grant = await acquire(query.hevc);
+      } catch (error) {
+        /* HEVC sin decodificador: hoy no puede verla. Si la ligera (H.264) la salva, se abre igual
+           (el productor copia la original para los demás) y esta persona solo recibe la ligera.
+           Se mira la sesión que la sala ya tenga: con su ligera fundida, no se abre nada. */
+        const roomSession =
+          [...room.members.values()].find((other) => other.viewer)?.viewer?.sessionId ?? null;
+        if (
+          !wantsLite ||
+          query.hevc !== '0' ||
+          !isHevcRefusal(error) ||
+          !(await remux.vodLiteCovers(room.title.id, roomSession))
+        ) {
+          throw error;
+        }
+        refusal = error;
+        grant = await acquire('1');
+      }
+      const offer = wantsLite ? remux.vodLiteOffer(grant.session.id, query.hevc === '1') : null;
+      if (refusal !== null && offer?.kind !== 'lite') {
+        /* Abierta por la ligera y sin ella al final (la ligera se fundió o se quedó sin plaza
+           mientras se abría): esta persona no puede ver la original. Se suelta lo que se acaba
+           de coger (sin visores, el productor para: nada leyendo del relé para nadie) y vuelve el
+           rechazo de antes, no una concesión HEVC que su navegador no decodifica. */
+        if (
+          member.viewer?.identity.viewerId === viewer.viewerId &&
+          member.viewer.sessionId === grant.session.id
+        ) {
+          member.viewer = null;
+          room.viewers.delete(viewer.viewerId);
+        }
+        await playback
+          .release(grant.session.id, { viewer: viewer.viewerId, reason: 'user' }, viewer)
+          .catch(() => undefined);
+        throw refusal;
+      }
+      /* La lista y los segmentos, por la ruta de la sala con la clave de la persona: `index.m3u8`
+         como siempre salvo que haya oferta ligera para este invitado. */
+      const url = `/api/v1/party/${room.code}/v/${member.videoKey}/${offer?.file ?? 'index.m3u8'}`;
+      if (offer) {
+        logger.info(
+          { room: room.code, kind: offer.kind, session: grant.session.id },
+          'Ver juntos: invitado con calidad ligera',
+        );
+        grant = withLiteOffer(grant, offer);
+      }
       if (room.closed || !room.members.has(member.id)) return { ...grant, url };
       room.viewers.add(viewer.viewerId);
       /* Un visor por persona: el de antes (otra pestaña, otro audio) se suelta. */

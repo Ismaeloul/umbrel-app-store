@@ -191,6 +191,7 @@ export class StallDetector {
   private needS: number;
   private lastStallAt = Number.NEGATIVE_INFINITY;
   private selfSeekAt = Number.NEGATIVE_INFINITY;
+  private repeats = 0;
 
   constructor(private readonly baseS: number) {
     this.needS = baseS;
@@ -203,6 +204,15 @@ export class StallDetector {
 
   get isStalled(): boolean {
     return this.stalled;
+  }
+
+  /**
+   * Atascos repetidos (a menos de 60 s del anterior y no provocados por un salto nuestro) desde
+   * que se creó: cada uno sube el colchón. En Safari, el primero pasa a la versión ligera
+   * (docs/ver-juntos.md §17).
+   */
+  get escalations(): number {
+    return this.repeats;
   }
 
   /** Un salto o una carga nuestra: el tiempo vuelve a contar desde aquí. */
@@ -270,6 +280,7 @@ export class StallDetector {
     /* Repetido y no provocado por un salto nuestro: más colchón la próxima vez. */
     if (now - this.lastStallAt < REPEAT_STALL_MS && now - this.selfSeekAt > SELF_SEEK_MS) {
       this.needS = Math.min(RESUME_AHEAD_MAX_S, this.needS === this.baseS ? 6 : RESUME_AHEAD_MAX_S);
+      this.repeats += 1;
     }
     this.lastStallAt = now;
   }

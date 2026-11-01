@@ -8601,6 +8601,21 @@ paths:
                       - next
                       - poster
                     additionalProperties: false
+                  variants:
+                    type: object
+                    properties:
+                      hd:
+                        anyOf:
+                          - type: string
+                            maxLength: 64
+                          - type: "null"
+                      lite:
+                        type: string
+                        maxLength: 64
+                    required:
+                      - hd
+                      - lite
+                    additionalProperties: false
                 required:
                   - session
                   - url
@@ -17539,6 +17554,15 @@ paths:
             enum:
               - "0"
               - "1"
+        - name: abr
+          in: query
+          required: false
+          schema:
+            default: "0"
+            type: string
+            enum:
+              - "0"
+              - "1"
       responses:
         "200":
           description: Correcto
@@ -17808,6 +17832,21 @@ paths:
                           - video
                           - next
                           - poster
+                        additionalProperties: false
+                      variants:
+                        type: object
+                        properties:
+                          hd:
+                            anyOf:
+                              - type: string
+                                maxLength: 64
+                              - type: "null"
+                          lite:
+                            type: string
+                            maxLength: 64
+                        required:
+                          - hd
+                          - lite
                         additionalProperties: false
                     required:
                       - session
@@ -18104,7 +18143,7 @@ paths:
           required: true
           schema:
             type: string
-            pattern: ^(?:index\.m3u8|init(?:_\d{1,6})?\.mp4|index\d{1,9}\.m4s)$
+            pattern: ^(?:index\.m3u8|init(?:_\d{1,6})?\.mp4|index\d{1,9}\.m4s|master\.m3u8|lo\.m3u8|lo_init\.mp4|lo_index\d{1,9}\.m4s)$
       responses:
         "200":
           description: "Lo mismo que `video` para la sesión de una sala de «Ver juntos»: lista m3u8 tal cual (segmentos relativos) o segmento fMP4. Admite Range (206/416)."

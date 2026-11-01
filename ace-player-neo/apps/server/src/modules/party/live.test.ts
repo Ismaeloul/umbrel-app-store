@@ -92,6 +92,7 @@ const query = (t: string, viewerId: string) => ({
   viewer: viewerId,
   t,
   hevc: '0' as const,
+  abr: '0' as const,
 });
 
 function code(error: unknown): string | undefined {

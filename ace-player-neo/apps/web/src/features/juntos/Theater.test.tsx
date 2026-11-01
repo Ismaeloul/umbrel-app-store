@@ -3,18 +3,23 @@
    minuto 10. El tiempo y la barra salen del reloj de la sala, no del vídeo. */
 
 import type { PartyRoom } from '@ace/shared';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import joined from '@fixtures/web/v1/partyJoin.json';
 import { PartyClient, type PartyEnv, type PartyState } from './client.ts';
-import type { PlayerView, RoomPlayer } from './player.ts';
+import type { PlayerQuality, PlayerView, RoomPlayer } from './player.ts';
 import { Theater } from './Theater.tsx';
 
 const HOST = 'm_IsmaAnfitrion';
 const ANA = 'm_AnaInvitada01';
 const NOW = 1_000_000;
 
-function setup(selfId: string, over: Partial<PartyRoom> = {}, desk = true) {
+function setup(
+  selfId: string,
+  over: Partial<PartyRoom> = {},
+  desk = true,
+  quality: PlayerQuality | null = null,
+) {
   const env: PartyEnv = {
     now: () => NOW,
     eventSource: () => new EventTarget() as unknown as EventSource,
@@ -34,11 +39,15 @@ function setup(selfId: string, over: Partial<PartyRoom> = {}, desk = true) {
     durationS: 6516,
     bufferedS: 30,
     buffering: false,
+    quality,
   };
+  const setQuality = vi.fn();
   const player = {
     subscribe: () => () => undefined,
     getView: () => view,
+    setQuality,
   } as unknown as RoomPlayer;
+  const control = vi.spyOn(client, 'control');
   const room: PartyRoom = {
     ...(joined.room as PartyRoom),
     title: { ...(joined.room as PartyRoom).title, durationS: 6516 },
@@ -58,6 +67,7 @@ function setup(selfId: string, over: Partial<PartyRoom> = {}, desk = true) {
       desk={desk}
     />,
   );
+  return { setQuality, control };
 }
 
 describe('«Ver juntos»: el reproductor', () => {
@@ -127,5 +137,56 @@ describe('«Ver juntos»: el reproductor en el móvil (como siempre)', () => {
     expect(screen.getAllByRole('button', { name: 'Pausar' })).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Avanzar 10 segundos' })).toBeTruthy();
     expect(document.querySelector('.juntos-center__controls')).toBeNull();
+  });
+});
+
+describe('«Ver juntos»: «Calidad» del invitado (§17)', () => {
+  const both: PlayerQuality = { choice: 'auto', current: 'lite' };
+
+  it('sin dos versiones no hay menú (en casa, como siempre)', () => {
+    setup(ANA);
+    expect(screen.queryByRole('button', { name: 'Calidad' })).toBeNull();
+  });
+
+  it('con las dos: Automática (lo que suena), Alta y Ligera; elegir es de este aparato, sin orden a la sala', () => {
+    const { setQuality, control } = setup(ANA, {}, true, both);
+    fireEvent.click(screen.getByRole('button', { name: 'Calidad' }));
+    expect(
+      screen.getByRole('menuitemcheckbox', { name: 'Automática (ahora 720p)' }),
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Ligera (720p)' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Alta (original)' }));
+    expect(setQuality).toHaveBeenCalledWith('hd');
+    expect(control).not.toHaveBeenCalled();
+  });
+
+  it('también para quien no controla y en el móvil; nunca en directo', () => {
+    const { setQuality } = setup(ANA, {}, false, { choice: 'hd', current: 'hd' });
+    fireEvent.click(screen.getByRole('button', { name: 'Calidad' }));
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Alta (original)' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Ligera (720p)' }));
+    expect(setQuality).toHaveBeenCalledWith('lite');
+  });
+
+  it('en directo no sale aunque el reproductor dijera que hay dos', () => {
+    setup(
+      HOST,
+      {
+        live: {
+          hash: 'a'.repeat(40),
+          channel: 'DAZN 1',
+          source: 'iptv',
+          matchId: null,
+          match: null,
+          auto: false,
+        },
+      },
+      true,
+      both,
+    );
+    expect(screen.queryByRole('button', { name: 'Calidad' })).toBeNull();
   });
 });

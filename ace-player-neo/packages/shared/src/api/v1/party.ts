@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import { PARTY } from '../../constants/party.js';
 import { HashSchema } from '../../primitives.js';
-import { ChannelStreamQuerySchema, StreamGrantSchema, VideoParamsSchema } from './playback.js';
+import { ChannelStreamQuerySchema, StreamGrantSchema } from './playback.js';
 import { VodArtStampSchema, VodGrantSchema } from './vod.js';
 
 export const PartyCodeSchema = z
@@ -433,11 +433,23 @@ export type PartyQueueBody = z.infer<typeof PartyQueueBodySchema>;
 /** Clave de vídeo de una persona (base64url de 24 bytes). */
 export const PartyVideoKeySchema = z.string().regex(/^[A-Za-z0-9_-]{32}$/, 'clave de vídeo');
 
-/** GET /api/v1/party/:code/v/:key/:file: los mismos ficheros que `video`. */
+/**
+ * Ficheros de la ruta de la sala: los de `video` (`VideoParamsSchema.shape.file`) más la lista
+ * maestra y la versión ligera de los invitados (docs/ver-juntos.md §17): `master.m3u8`, `lo.m3u8`,
+ * `lo_init.mp4` y `lo_index<N>.m4s`. Nombres planos de 40 caracteres como mucho (el proxy de la sala).
+ */
+export const PartyVideoFileSchema = z
+  .string()
+  .regex(
+    /^(?:index\.m3u8|init(?:_\d{1,6})?\.mp4|index\d{1,9}\.m4s|master\.m3u8|lo\.m3u8|lo_init\.mp4|lo_index\d{1,9}\.m4s)$/,
+    'fichero de la sala',
+  );
+
+/** GET /api/v1/party/:code/v/:key/:file: los ficheros de `video` y los de la versión ligera (§17). */
 export const PartyVideoParamsSchema = z.strictObject({
   code: PartyCodeSchema,
   key: PartyVideoKeySchema,
-  file: VideoParamsSchema.shape.file,
+  file: PartyVideoFileSchema,
 });
 export type PartyVideoParams = z.infer<typeof PartyVideoParamsSchema>;
 
@@ -453,6 +465,12 @@ export const PartyStreamQuerySchema = ChannelStreamQuerySchema.pick({
 }).extend({
   t: PartyTokenSchema,
   hevc: z.enum(['0', '1']).default('0'),
+  /**
+   * `1`: el cliente sabe elegir entre dos calidades (docs/ver-juntos.md §17). Solo lo manda la web del
+   * invitado; con él, y si entra de fuera por el proxy de la sala, puede recibir `master.m3u8` (o
+   * `lo.m3u8`) y `variants`. Sin él (las apps y la web de casa), `index.m3u8` como siempre.
+   */
+  abr: z.enum(['0', '1']).default('0'),
 });
 export type PartyStreamQuery = z.infer<typeof PartyStreamQuerySchema>;
 

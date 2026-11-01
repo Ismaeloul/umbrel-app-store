@@ -8,8 +8,9 @@
    - `ACESTREAM_SCANNER_HOST` y `ENGINE_CONTROL_HOST` se sanean igual que
      `ACESTREAM_HOST` (backend-modulos §9.10: hoy no se sanean).
    - Variables nuevas: `ACE_SEED`, `ACE_SAME_CHANNEL_POLICY`, `ACE_LOG_LEVEL`,
-     `ACE_LOOPBACK` (solo desarrollo: el relé de la IPTV en `::1`) y
-     `APP_VERSION` (la inyecta el build, T-102).
+     `ACE_LOOPBACK` (solo desarrollo: el relé de la IPTV en `::1`),
+     `ACE_PARTY_LITE` (la calidad ligera de los invitados de «Ver juntos»,
+     docs/ver-juntos.md §17) y `APP_VERSION` (la inyecta el build, T-102).
    - Un valor que no vale se sustituye por el defecto y queda un aviso en
      `warnings` (main.ts los escribe en el log). Solo las de seguridad hacen
      fallar el arranque (`ConfigError`): un `ACE_SEED` demasiado corto. */
@@ -154,6 +155,12 @@ export interface AppConfig {
      * null: los enlaces de invitación son los de la web de casa.
      */
     readonly publicUrl: string | null;
+    /**
+     * «Calidad ligera para invitados» (docs/ver-juntos.md §17): `ACE_PARTY_LITE=1` la enciende;
+     * cualquier otra cosa (y el defecto, "0" en los Compose hasta probarla en el NAS) deja a todo
+     * el mundo con la original de siempre.
+     */
+    readonly lite: boolean;
   };
   readonly security: {
     /** De dónde sale el material de las claves. `ephemeral` = aleatorio de este arranque. */
@@ -278,6 +285,12 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
     }
   }
 
+  const rawPartyLite = String(env.ACE_PARTY_LITE || '').trim();
+  const partyLite = rawPartyLite === '1';
+  if (rawPartyLite && rawPartyLite !== '0' && rawPartyLite !== '1') {
+    warnings.push(`ACE_PARTY_LITE=${JSON.stringify(rawPartyLite)} no vale ("0" o "1"); se usa "0"`);
+  }
+
   // --- Nivel de log ---
   let logLevel: LogLevel = 'info';
   const rawLevel = String(env.ACE_LOG_LEVEL || '')
@@ -393,7 +406,7 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
       enabled: ollamaConfigured(ollamaBaseUrl, embedModel),
     },
     playback: { sameChannelPolicy, relayLoopback },
-    party: { publicUrl: partyPublicUrl },
+    party: { publicUrl: partyPublicUrl, lite: partyLite },
     security: { seedSource, keys },
   };
 

@@ -206,6 +206,15 @@ describe('variables nuevas', () => {
     expect(bad.warnings).toHaveLength(1);
   });
 
+  it('ACE_PARTY_LITE: solo "1" enciende la calidad ligera de los invitados (§17)', () => {
+    expect(loadConfig({ ACE_SEED: SEED }).config.party.lite).toBe(false);
+    expect(loadConfig({ ACE_SEED: SEED, ACE_PARTY_LITE: '0' }).config.party.lite).toBe(false);
+    expect(loadConfig({ ACE_SEED: SEED, ACE_PARTY_LITE: '1' }).config.party.lite).toBe(true);
+    const bad = loadConfig({ ACE_SEED: SEED, ACE_PARTY_LITE: 'true' });
+    expect(bad.config.party.lite).toBe(false);
+    expect(bad.warnings).toHaveLength(1);
+  });
+
   it('APP_VERSION del entorno si el build no la inyecta', () => {
     expect(loadConfig({ ACE_SEED: SEED, APP_VERSION: '0.7.1' }).config.appVersion).toBe('0.7.1');
   });

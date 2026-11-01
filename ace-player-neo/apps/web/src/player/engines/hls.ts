@@ -153,6 +153,60 @@ export const HLS_VOD_CONFIG = {
   },
 } as const;
 
+/**
+ * «Ver juntos», invitado de fuera con lista maestra (docs/ver-juntos.md §17): la ligera (720p,
+ * nivel 0: hls.js ordena por altura) primero y una adaptación lenta y prudente, encima de
+ * `HLS_VOD_CONFIG` (los búferes no cambian: 30/60/60).
+ *
+ * - `startLevel` 0 y una estimación de partida de 1,5 Mbit/s: se empieza por la ligera y se sube
+ *   cuando la línea lo demuestra (la original pide unos 6,5 Mbit/s sostenidos).
+ * - Medias de 3 y 12 fragmentos (las de hls.js son 3 y 9): un pico corto no sube de nivel.
+ * - Subir pide el 70 % del caudal medido; quedarse, el 85 %.
+ * - Sin `abrSwitchInterval` (el plan decía 20 s): en hls.js 1.7.3 ese freno vale para TODO cambio
+ *   automático, también para bajar (el abandono de emergencia y el `nextLoadLevel` de la regla del
+ *   atasco pasan por el mismo `set nextLoadLevel` de level-controller.ts y se descartan si hubo otro
+ *   cambio hace menos de 20 s). Un invitado que acaba de subir y se atasca se quedaría en la
+ *   original parando la sala. Contra el vaivén ya están el 70 % para subir y la media lenta de 12.
+ * - Sin `capLevelToPlayerSize`: el vídeo pequeño del móvil no obliga a la ligera.
+ *
+ * La regla del atasco (que hls.js no aplica con el vídeo en pausa, y la sala lo pausa al esperar)
+ * va en el reproductor de la sala (features/juntos/player.ts).
+ */
+export const HLS_GUEST_ABR = {
+  startLevel: 0,
+  abrEwmaDefaultEstimate: 1_500_000,
+  abrEwmaFastVoD: 3,
+  abrEwmaSlowVoD: 12,
+  abrBandWidthFactor: 0.85,
+  abrBandWidthUpFactor: 0.7,
+  capLevelToPlayerSize: false,
+} as const;
+
+/** Tope de la estimación de partida que da Android (`navigator.connection.downlink`). */
+const GUEST_ABR_ESTIMATE_MAX = 5_000_000;
+
+/**
+ * `HLS_GUEST_ABR` con la estimación de partida de este aparato: en Android, Chrome dice la
+ * velocidad de la red (`navigator.connection.downlink`, Mbit/s): el 80 % de eso, 5 Mbit/s como
+ * mucho. En lo demás (o si no lo dice o lanza), 1,5 Mbit/s.
+ */
+export function guestAbrConfig(nav: unknown = globalThis.navigator): Record<string, unknown> {
+  let estimate: number = HLS_GUEST_ABR.abrEwmaDefaultEstimate;
+  try {
+    const n = nav as { userAgent?: string; connection?: { downlink?: unknown } } | undefined;
+    const downlink = n?.connection?.downlink;
+    if (
+      /Android/i.test(n?.userAgent ?? '') &&
+      typeof downlink === 'number' &&
+      Number.isFinite(downlink) &&
+      downlink > 0
+    ) {
+      estimate = Math.round(Math.min(GUEST_ABR_ESTIMATE_MAX, downlink * 0.8 * 1_000_000));
+    }
+  } catch {}
+  return { ...HLS_GUEST_ABR, abrEwmaDefaultEstimate: estimate };
+}
+
 /** La configuración que recibe hls.js (exportada para el test). */
 export function hlsConfig(
   profile: EngineArgs['profile'],

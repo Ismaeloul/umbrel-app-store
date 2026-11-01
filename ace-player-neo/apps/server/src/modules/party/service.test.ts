@@ -11,13 +11,17 @@
    - un traspaso o un fallo de la sesión deja la sala en pausa e
      «interrumpida» (menos el del cambio de idioma);
    - cerrar (solo el anfitrión), salir y la sala vacía que caduca;
-   - co-líderes, «Esperando a todos» y «está escribiendo» (§13). */
+   - co-líderes, «Esperando a todos» y «está escribiendo» (§13);
+   - la calidad ligera de los invitados (§17): la tabla entera de quién recibe
+     `master.m3u8`, `lo.m3u8` o el `index.m3u8` de siempre. */
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   PARTY,
   PartyEventSchema,
+  PartyStreamGrantSchema,
+  PartyStreamQuerySchema,
   type PartyCreateBody,
   type PartyEvent,
   type VodGrant,
@@ -29,6 +33,9 @@ import { AppError } from '../../core/errors.js';
 import { FakeSink } from '../events/test-support.js';
 import type { ViewerIdentity } from '../playback/types.js';
 import type { VodAcquireOptions } from '../playback/types.js';
+import { vodUnsupported } from '../remux/vod/codecs.js';
+import { liteOfferFor, liteVariantFor } from '../remux/vod/lite.js';
+import type { VodIndex } from '../remux/vod/types.js';
 import { createPartyService, type PartyService } from './index.js';
 
 const PELI = '4b5c6d7e8f9012345678abcdef0123457a8b9c0d';
@@ -562,7 +569,7 @@ function live(): AbortSignal {
 }
 
 function streamQuery(t: string, viewerId: string) {
-  return { client: 'web' as const, viewer: viewerId, hevc: '0' as const, t };
+  return { client: 'web' as const, viewer: viewerId, hevc: '0' as const, abr: '0' as const, t };
 }
 
 function handoff(viewerIds: string[], hash: string) {
@@ -927,3 +934,257 @@ describe('«Ver juntos»: líder, co-líderes y lista (§11 y §13)', () => {
     expect(now?.audio.index).toBe(1);
   });
 });
+
+/* «Calidad ligera para invitados» (docs/ver-juntos.md §17): qué lista recibe cada uno. La decisión
+   del remux es la de verdad (`liteOfferFor`); el remux y el playback, de mentira. */
+describe('«Ver juntos»: calidad ligera para invitados (§17)', () => {
+  type Source = 'h264-1080' | 'h264-720' | 'hevc';
+  const VIDEO: Record<Source, VodIndex['video']> = {
+    'h264-1080': {
+      codec: 'h264',
+      codecs: 'avc1.640028',
+      width: 1920,
+      height: 1080,
+      bitDepth: 8,
+      profile: 100,
+      chromaFormat: 1,
+    },
+    'h264-720': {
+      codec: 'h264',
+      codecs: 'avc1.64001f',
+      width: 1280,
+      height: 720,
+      bitDepth: 8,
+      profile: 100,
+      chromaFormat: 1,
+    },
+    hevc: {
+      codec: 'hevc',
+      codecs: 'hvc1.1.6.L120.B0',
+      width: 1920,
+      height: 1080,
+      bitDepth: 8,
+      profile: 1,
+      chromaFormat: 1,
+    },
+  };
+
+  interface Case {
+    readonly guest: boolean | undefined;
+    readonly abr: '0' | '1';
+    readonly lite: boolean;
+    readonly source: Source;
+    readonly hevc: '0' | '1';
+    readonly canTranscode: boolean;
+    readonly tripped: boolean;
+  }
+
+  function liteSetup(c: Case) {
+    const core = createTestCore({ env: { ACE_PARTY_LITE: c.lite ? '1' : '0' } });
+    const video = VIDEO[c.source];
+    /* 2 GB en 100 min: 2,7 Mb/s (el 720p no necesita ligera; el 1080p, sí). */
+    const index: VodIndex = {
+      container: 'mkv',
+      durationS: 6_000,
+      keyframes: Float64Array.from([0]),
+      video,
+      audio: [],
+      subtitles: [],
+      sizeBytes: 2_000_000_000,
+    };
+    const grant: VodGrant = {
+      ...GRANT,
+      codec: { ...GRANT.codec, video: video.codec === 'hevc' ? 'hevc' : 'h264' },
+      vod: {
+        ...GRANT.vod,
+        video: {
+          codec: video.codec === 'hevc' ? 'hevc' : 'h264',
+          codecs: video.codecs,
+          width: video.width,
+          height: video.height,
+        },
+      },
+    };
+    const acquired: string[] = [];
+    const released: string[] = [];
+    const party = createPartyService({
+      ...core,
+      playback: {
+        acquire: () => Promise.reject(new Error('directo')),
+        acquireVod: async (_id, query) => {
+          acquired.push(query.hevc);
+          /* Lo que hace assertPlayable: HEVC sin decodificador no se abre. */
+          if (video.codec === 'hevc' && query.hevc === '0') {
+            throw vodUnsupported('hevc', 'HEVC sin decodificador en el cliente');
+          }
+          return grant;
+        },
+        heartbeat: async () => ({
+          session: GRANT.session,
+          url: GRANT.url,
+          protocol: GRANT.protocol,
+          viewers: 1,
+        }),
+        release: async (_sid, body) => {
+          released.push(body.viewer);
+          return { released: true, sessionClosed: false };
+        },
+      },
+      remux: {
+        vodLiteOffer: (_sid, hevcOk) =>
+          liteOfferFor({
+            enabled: core.config.party.lite,
+            ffmpegMissing: false,
+            tripped: c.tripped,
+            slot: c.canTranscode,
+            index,
+            hevcOk,
+          }),
+        /* Con la sesión de la sala ya abierta mira su fusible; sin ella (la sala no tiene visor),
+           no lo ve: es la carrera de «se funde o se queda sin plaza mientras se abre». */
+        vodLiteCovers: async (_id, sessionId) =>
+          !(sessionId && c.tripped) &&
+          core.config.party.lite &&
+          c.canTranscode &&
+          index.video.codec === 'hevc' &&
+          liteVariantFor(index, false) === 'lite',
+      },
+    });
+    return { party, acquired, released };
+  }
+
+  /** Lo que tiene que pasar: la lista, o el rechazo de hoy (HEVC sin decodificador). */
+  function expected(c: Case): 'index.m3u8' | 'master.m3u8' | 'lo.m3u8' | 'vod_unsupported' {
+    const wants = c.lite && c.guest === true && c.abr === '1';
+    if (c.source === 'hevc' && c.hevc === '0') {
+      /* Con la ligera fundida, el rechazo de hoy: nunca una concesión HEVC que no decodifica. */
+      if (!wants || !c.canTranscode || c.tripped) return 'vod_unsupported';
+      return 'lo.m3u8';
+    }
+    if (c.source === 'h264-1080' && wants && c.canTranscode && !c.tripped) return 'master.m3u8';
+    return 'index.m3u8';
+  }
+
+  it('origen × abr × interruptor × fuente × hevc × plaza × fusible: index.m3u8 salvo los casos previstos', async () => {
+    const cases: Case[] = [];
+    for (const guest of [true, false, undefined])
+      for (const abr of ['0', '1'] as const)
+        for (const lite of [true, false])
+          for (const source of ['h264-1080', 'h264-720', 'hevc'] as const)
+            for (const hevc of ['0', '1'] as const)
+              for (const canTranscode of [true, false])
+                for (const tripped of [true, false])
+                  cases.push({ guest, abr, lite, source, hevc, canTranscode, tripped });
+    const seen = new Set<string>();
+    for (const c of cases) {
+      const { party, acquired, released } = liteSetup(c);
+      const host = party.create(BODY);
+      const query = { ...streamQuery(host.member.token, 'v-ana'), abr: c.abr, hevc: c.hevc };
+      const want = expected(c);
+      seen.add(want);
+      const label = JSON.stringify(c);
+      const options = c.guest === undefined ? undefined : { guest: c.guest };
+      const result = await party
+        .stream(host.room.code, query, viewer('v-ana'), live(), options)
+        .then(
+          (grant) => ({ grant, error: null }),
+          (error: unknown) => ({ grant: null, error }),
+        );
+      if (want === 'vod_unsupported') {
+        expect(code(result.error), label).toBe('vod_unsupported');
+        /* Si se llegó a abrir por la ligera, se suelta: ni visor ni productor para nadie. */
+        expect(released, label).toEqual(acquired.includes('1') ? ['v-ana'] : []);
+        continue;
+      }
+      expect(released, label).toEqual([]);
+      expect(result.error, label).toBeNull();
+      const grant = result.grant as VodGrant;
+      expect(grant.url, label).toBe(
+        `/api/v1/party/${host.room.code}/v/${keyOf(grant.url)}/${want}`,
+      );
+      /* La concesión sigue siendo una `VodGrant` válida (la de la sala). */
+      expect(PartyStreamGrantSchema.safeParse(grant).success, label).toBe(true);
+      if (want === 'index.m3u8') {
+        expect(grant.variants, label).toBeUndefined();
+        expect(grant.vod.video.codecs, label).toBe(VIDEO[c.source].codecs);
+      } else if (want === 'master.m3u8') {
+        expect(grant.variants, label).toEqual({ hd: 'avc1.640028', lite: 'avc1.640028' });
+        expect(grant.vod.video.codecs, label).toBe('avc1.640028');
+      } else {
+        /* Solo la ligera: el reproductor ve H.264 720p y la acepta. */
+        expect(grant.variants, label).toEqual({ hd: null, lite: 'avc1.640028' });
+        expect(grant.vod.video, label).toEqual({
+          codec: 'h264',
+          codecs: 'avc1.640028',
+          width: 1280,
+          height: 720,
+        });
+        expect(grant.codec.video, label).toBe('h264');
+        expect(acquired, label).toEqual(['0', '1']);
+      }
+    }
+    expect([...seen].sort()).toEqual(['index.m3u8', 'lo.m3u8', 'master.m3u8', 'vod_unsupported']);
+  });
+
+  it('HEVC sin decodificador y la ligera de la sala ya fundida: el rechazo, sin abrir nada', async () => {
+    const c: Case = {
+      guest: true,
+      abr: '1',
+      lite: true,
+      source: 'hevc',
+      hevc: '0',
+      canTranscode: true,
+      tripped: true,
+    };
+    const { party, acquired, released } = liteSetup(c);
+    const host = party.create(BODY);
+    /* El anfitrión, que sí decodifica HEVC, ya tiene la sesión de la sala abierta. */
+    await party.stream(
+      host.room.code,
+      { ...streamQuery(host.member.token, 'v-casa'), hevc: '1' },
+      viewer('v-casa'),
+      live(),
+    );
+    const guest = party.join(host.room.code, 'Bea');
+    const error = await party
+      .stream(
+        host.room.code,
+        { ...streamQuery(guest.member.token, 'v-bea'), abr: '1', hevc: '0' },
+        viewer('v-bea'),
+        live(),
+        { guest: true },
+      )
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(code(error)).toBe('vod_unsupported');
+    expect(acquired).toEqual(['1', '0']);
+    expect(released).toEqual([]);
+  });
+
+  it('sin remux nadie recibe otra cosa, y una consulta vieja sin abr sigue valiendo (abr = 0)', async () => {
+    const s = setup({ ACE_PARTY_LITE: '1' });
+    const host = s.party.create(BODY);
+    const grant = (await s.party.stream(
+      host.room.code,
+      { ...streamQuery(host.member.token, 'v-ana'), abr: '1' },
+      viewer('v-ana'),
+      live(),
+      { guest: true },
+    )) as VodGrant;
+    expect(grant.url.endsWith('/index.m3u8')).toBe(true);
+    expect(grant.variants).toBeUndefined();
+    const old = PartyStreamQuerySchema.parse({
+      client: 'web',
+      viewer: 'v-ana',
+      t: host.member.token,
+    });
+    expect(old).toMatchObject({ abr: '0', hevc: '0' });
+  });
+});
+
+/** La clave de vídeo de una URL de la sala. */
+function keyOf(url: string): string {
+  return /\/v\/([A-Za-z0-9_-]{32})\//.exec(url)?.[1] ?? '';
+}

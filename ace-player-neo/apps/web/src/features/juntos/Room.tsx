@@ -135,6 +135,7 @@ export function Room({
   header,
   exitAction,
   liveTools = false,
+  guest = false,
 }: {
   code: string;
   credential: PartyCredential;
@@ -151,6 +152,8 @@ export function Room({
   exitAction: ReactNode;
   /** En casa: Fuentes y Partidos de la sala en directo (la agenda y las fuentes son de casa). */
   liveTools?: boolean;
+  /** La página del invitado: el reproductor pide las dos calidades (`abr=1`, docs/ver-juntos.md §17). */
+  guest?: boolean;
 }) {
   const client = useMemo(() => new PartyClient(code, credential), [code, credential]);
   const state = useSyncExternalStore(client.subscribe, client.getState);
@@ -177,14 +180,14 @@ export function Room({
     const element = video.current;
     if (!element) return;
     onEnter?.();
-    const created = new RoomPlayer(element, client);
+    const created = new RoomPlayer(element, client, { guest });
     created.start();
     setPlayer(created);
     return () => {
       created.destroy();
       setPlayer(null);
     };
-  }, [client, onEnter]);
+  }, [client, onEnter, guest]);
 
   useEffect(() => {
     if (state.closed === 'forbidden') onForbidden();

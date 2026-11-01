@@ -376,3 +376,131 @@ confirmada, el bucle de la espera, y descartó o rebajó otras 16 hipótesis.
   fondo es una calidad más baja para los invitados de fuera (una segunda versión recodificada o calidad adaptativa).
 - **Pruebas**: `features/juntos/sync.test.ts` (detector) y `modules/party/service.test.ts` (reanudar tras 700 ms y
   el margen de quien se atasca a menudo).
+
+## 17. Calidad ligera para invitados
+
+Lo que faltaba en §16: el invitado de fuera con poca conexión recibe una versión 720p H.264 a unos 2,5 Mbit/s y
+sube a la original si su línea aguanta (unos 6,5 Mbit/s medidos). En casa (la web, el escritorio y las apps) todo
+sigue igual, byte a byte: `index.m3u8` y la calidad original. Lo peor que puede pasar es lo de hoy. Primero el
+servidor; la web, al final de la sección.
+
+- **De dónde sale** (`remux/vod/lite.ts`, `LiteRendition`): NUNCA de otra conexión con el relé o el proveedor (una
+  sola plaza, y el relé da la razón a la petición más nueva, docs/vod.md §9.1). Cada segmento ligero se hace con un
+  ffmpeg corto que lee por la tubería el `init.mp4` + `index<N>.m4s` que el productor ya tiene en disco
+  (`vod/lite-args.ts`: `-copyts -fps_mode passthrough`, `scale=-2:'min(720,ih)'`, libx264 veryfast High 4.0, CRF 23
+  con tope de 2500k, sin fotogramas B, un solo GOP, el audio copiado) y saca `lo_index<N>.m4s`. Los límites, los
+  `EXTINF` y los tiempos son los de la original por construcción: el reloj de la sala, `placeFragment` y la
+  sincronía (§6) no cambian.
+- **Cuándo**: perezosa. Se crea con la primera petición `lo_*` de la sesión; un trabajo a la vez, en orden, como mucho
+  3 segmentos y 20 s por delante del último `lo_index<N>` pedido (`LITE_VOD`), por debajo de los 30 s de
+  `restartAheadS`: nunca pide un reinicio al productor. Fija en el productor `[cursor − 1, cursor + 3]` para que el
+  recorte no le borre lo que aún tiene que leer; sus ficheros, en la misma carpeta `vod-<sid>`, cuentan en el tope de
+  1,5 GiB y se recortan con la ventana de 120 s.
+- **Varios invitados en la ligera**: cada uno pide desde su búfer (uno 30 s por delante, otro que acaba de entrar),
+  así que se recuerdan los cursores de las peticiones recientes (al menos 10 s y dos segmentos, `recentMs`) y la cola
+  es la unión de sus ventanas: se fija `[min − 1, max + 3]`, se codifica primero lo que alguien espera y luego lo más
+  bajo, y un trabajo solo se mata si cae fuera de TODAS las ventanas y nadie lo espera. Con un único cursor, dos
+  invitados a más de 3 segmentos se mataban el trabajo el uno al otro hasta el 404 de los dos.
+- **Un solo cursor**: la versión ligera lee del productor sin moverlo (`readySegment`, `onSegmentReady`,
+  `onRestart`). Un `lo_index<N>` de un invitado lo mueve desde la ruta con `touch(N)`, que es `file()` sin esperar:
+  actividad, contrapresión, recorte y la misma regla de reinicio (así una sala solo de invitados también tira del
+  productor, y un salto del invitado reinicia la original como hoy).
+- **Comprobaciones**: el primer init es `lo_init.mp4` y los siguientes tienen que casar con él (los mismos `stsd`
+  salvo el `btrt` y los caudales del `esds` del audio, que ffmpeg mide en cada trabajo); el primer fragmento es clave
+  y empieza donde el original, a menos de un fotograma (en presentación y en `tfdt`). Se escribe `.part` y se
+  renombra. Con el ffmpeg de verdad (9.0 en Windows y 6.1 en WSL) y una fuente con fotogramas B: los tiempos casan
+  exactos, el audio sale idéntico byte a byte y el segundo segmento se decodifica con el init del primero
+  (`vod/lite.ffmpeg.test.ts`, se salta sin ffmpeg).
+- **Servir** (`remux/service.ts`, solo por la ruta de la sala, `partyVideo` con `party: true`, `PARTY_FILE_RE` y
+  `PartyVideoFileSchema`): `master.m3u8` (la ligera PRIMERO, AVPlayer empieza por la primera; `CODECS`,
+  `BANDWIDTH` 2,9 M y `AVERAGE-BANDWIDTH` 2,2 M, `RESOLUTION`; la original con el pico por segmento de las posiciones
+  del índice o la media × 1,5) y `lo.m3u8` salen del índice como `index.m3u8`. Un `lo_index<N>` listo sale con Range;
+  si se está codificando se espera 4 s; si no estaba en la cola (un salto) el cursor se va allí y se espera 6 s;
+  después 503 «aún no está» y, a la segunda vez, 404 (`no-store`): hls.js o AVPlayer cogen ese trozo de la original en
+  vez de parar la sala. NUNCA se sirven bytes de la original con un nombre `lo_` (su SPS no es el de `lo_init.mp4`).
+  La ruta de vídeo de siempre (`/api/v1/video`, `VIDEO_FILE_RE`, `VideoParamsSchema`) no conoce ninguno de los
+  nuevos. Los nombres caben en el proxy de la sala (Caddyfile, `[A-Za-z0-9_.-]{1,40}`): sin cambios en Caddy.
+- **Quién la recibe** (`party.stream`): `master.m3u8` solo si TODO se cumple: entró por el proxy de la sala
+  (`X-Ace-Origin: guest`, `isGuestOrigin`; para todo lo demás sigue siendo `native`), manda `abr=1` (solo la web del
+  invitado; `PartyStreamQuerySchema`, por defecto `0`), `ACE_PARTY_LITE=1`, la original es H.264 de 8 bits hasta 1080
+  que pasa de 720 o de 3 Mbit/s (`liteVariantFor`), el fusible de la sesión no está fundido y hay plaza de
+  recodificación. Con HEVC no hay maestra (hls.js no cambia de nivel entre `hvc1` y `avc1`): quien no decodifica HEVC
+  (hoy rechazado) recibe `lo.m3u8` sola y la concesión dice H.264 720p; si era el primero en abrirla, se abre igual
+  para los demás (el productor copia la original). Si al final no hay ligera para esa persona (la de la sesión de la
+  sala ya estaba fundida, o se funde o se queda sin plaza mientras se abre), se suelta lo recién cogido y vuelve el
+  rechazo de antes (`vod_unsupported`, `hevc`), nunca una concesión HEVC que no decodifica. En cualquier otro caso, `index.m3u8` como siempre. Con oferta, la
+  `VodGrant` lleva `variants: { hd, lite }` (códecs de vídeo; `hd` null si solo hay ligera), que solo llega a quien
+  manda `abr=1`: las apps no lo ven.
+- **Plaza**: los trabajos ligeros cuentan en `MAX_DEINTERLACE` (2) con el desentrelazado y la ligera del directo
+  (`deinterlacing()`). El primero que llega se queda la plaza, sin quitársela a nadie; se suelta tras 60 s sin
+  peticiones `lo_*` y la siguiente la vuelve a coger.
+- **Fusible** (para toda la sesión): 3 trabajos seguidos fallidos o inválidos, menos de 1,5× el tiempo real de media
+  en 3 segmentos, un init que no casa, sin plaza o sin ffmpeg. Con él, `lo_*` da 404 y las concesiones nuevas de la sala
+  vuelven a `index.m3u8`. Se escribe una vez en el registro y sale en `remux.stats().partyLite` (`on`, `off` o
+  `tripped` y por qué; solo con `ACE_PARTY_LITE=1`).
+- **Interruptores**, de menos a más: «Alta» en el menú «Calidad» del invitado (la web), el fusible de la sesión y
+  `ACE_PARTY_LITE` en el Compose (`"0"` de fábrica hasta probarla en el NAS; con `"0"`, `master.m3u8`, `lo.m3u8` y los
+  `lo_*` dan 404 y nadie recibe oferta). El ajuste de casa «Calidad para invitados» del plan NO está hecho: haría falta
+  otro fichero de ajustes, rutas y la pantalla de Ajustes; el interruptor del Compose cubre lo mismo con un reinicio.
+- **Despliegue**: storage pasa de `mem_limit` 768m a 1280m y de `pids_limit` 128 a 192 (decodificar más x264 son
+  150-300 MB y unos hilos por trabajo; un OOM tumbaría el backend entero), en el Compose de Umbrel, su copia de la
+  tienda y la pila local (`deploy/test/compose.test.ts`). Solo x264 por software: `/dev/dri` sigue sin montarse.
+- **Por medir en el NAS**: la velocidad y la memoria de un trabajo con una película 1080p H.264 y otra HEVC de 8 bits
+  dentro del contenedor (sigue si un segmento de 6 s tarda 3 s o menos), y una sala de verdad con un invitado por 4G
+  y otro con la red limitada a 3 Mbit/s.
+- **Pruebas**: `remux/vod/lite.test.ts` (cola, salto, fijado, fusible, 503/404, plaza; con un ffmpeg falso),
+  `vod/lite-args.test.ts`, `vod/playlist.test.ts` (lista ligera y maestra), `vod/producer.test.ts` (`touch`, leer sin
+  mover el cursor, recorte con lo fijado), `remux/party-lite.test.ts` (servir por la sala y no por la ruta de vídeo,
+  `ACE_PARTY_LITE=0`), `party/routes.test.ts` (origen `guest` y `abr`), `party/service.test.ts` (la tabla entera:
+  origen × `abr` × interruptor × fuente × HEVC × plaza × fusible) y `vod/lite.ffmpeg.test.ts`.
+
+### Web (`features/juntos/player.ts`, `Theater.tsx`, `player/engines/hls.ts`)
+
+- **Quién pide**: solo la página del invitado (`guest/App.tsx` → `Room guest` → `new RoomPlayer(…, { guest })`)
+  añade `abr=1` a `partyStream`, junto a `hevc`. La web de casa manda la consulta de siempre (sin `abr`): segunda
+  barrera después del origen.
+- **Filtro de códecs**: sin `variants`, el de siempre (`grant.vod.video.codecs`). Con `variants`, vale si este
+  navegador decodifica alguna (`<códec>,mp4a.40.2`). Con las dos, la maestra y el menú «Calidad». Con una sola,
+  esa lista sin menú (`lo.m3u8` o `index.m3u8`, la misma URL de la sala con otro fichero, `variantUrl`). La ligera
+  sola (HEVC con `hevc=0`) ya llega así del servidor: la persona que hoy veía «Este navegador no puede reproducir
+  este vídeo» ahora la ve en 720p.
+- **hls.js con la maestra** (`HLS_GUEST_ABR` encima de `HLS_VOD_CONFIG`, los búferes 30/60/60 sin tocar):
+  `startLevel` 0 (la ligera: hls.js ordena los niveles por altura), estimación de partida 1,5 Mbit/s (en Android,
+  el 80 % de `navigator.connection.downlink`, 5 Mbit/s como mucho, con try/catch; `guestAbrConfig`), medias de 3 y 12
+  fragmentos, 85 % del caudal para quedarse y 70 % para subir, y sin `capLevelToPlayerSize`. **Sin**
+  `abrSwitchInterval`, aunque el plan pedía 20 s: en hls.js 1.7.3 ese freno vale para todo cambio automático, también
+  para BAJAR (`set nextLoadLevel` de `level-controller.ts`, que usan el abandono de emergencia, el propio
+  stream-controller y nuestra regla del atasco). Un invitado que acaba de subir y se atasca se quedaría hasta 20 s en
+  la original con la sala esperándole.
+- **Regla del atasco** (el tic de 500 ms): al ENTRAR en un atasco (`StallDetector`), en «Automática»
+  (`autoLevelEnabled`) y fuera de la ligera, `hls.nextLoadLevel = <ligera>` (sin vaciar lo cargado y sin salir de la
+  automática) y `stall.moved(now, true)`, para que el rellenado no suba el colchón. Hace falta porque la bajada de
+  emergencia de hls.js no corre con el vídeo en pausa, y la sala lo pausa mientras espera a este aparato. Nunca
+  `currentLevel` (vacía el búfer al momento y hace esperar a todos). La ligera se busca por su lista (`lo.m3u8`), no
+  por el número.
+- **Safari (HLS nativo)**: la maestra va en `src` y AVPlayer empieza por la primera, la ligera. Tras un atasco
+  REPETIDO (el que sube el colchón, `StallDetector.escalations`), se pasa a `lo.m3u8` hasta el final del título
+  (también si se vuelve a abrir por idioma o sesión perdida) y no se sube solo nunca. El cambio de `src` va en
+  'preparing': `onNative` no manda nada (ni la pausa ni el salto de la recarga), la sala espera a este aparato como en
+  cualquier carga y, con `loadedmetadata`, se coloca en la posición de la sala. Si en 20 s no llegan los datos, se
+  vuelve a abrir todo como con una sesión perdida. Con la pantalla completa del iPhone (`webkitDisplayingFullscreen`)
+  no se cambia: la cerraría.
+- **«Calidad»** (`Theater.tsx`, junto a Idioma; `view.quality`): Automática (con lo que se carga ahora, «ahora 720p»
+  u «ahora original»), Alta (original) y Ligera (720p). Solo con las dos versiones que este navegador decodifica y
+  nunca en directo; lo puede tocar cualquiera, controle o no. Es de este aparato: `player.setQuality`, nunca
+  `client.control`. Con hls.js, Ligera es `nextLevel` (al siguiente fragmento), Alta `loadLevel` (sin vaciar lo
+  cargado) y Automática `loadLevel = -1`. En Safari, el cambio de `src` en 'preparing' de antes (`index.m3u8`,
+  `lo.m3u8` o la maestra; elegir Automática a mano vuelve a la maestra aunque el título ya hubiera bajado). Se
+  recuerda en este navegador (`aceneo-juntos-calidad`, `lib/storage.ts`, con try/catch) y se vuelve a poner al abrir
+  el siguiente vídeo (hls.js: al leer la maestra, antes del primer fragmento). El menú sale antes de leer la maestra:
+  lo que se elija mientras tanto solo se guarda, y MANIFEST_PARSED pone la elección de ESE momento (sin niveles,
+  «Alta» sería el nivel 0, la ligera, y hls.js borra la elección manual al cargar la maestra).
+- **Lo que no cambia**: sin maestra (en casa, las apps, `ACE_PARTY_LITE=0`, el fusible fundido), ni `abr`, ni
+  configuración nueva de hls.js, ni regla, ni menú: lo de antes, línea a línea.
+- **Pruebas**: `features/juntos/player.test.ts` (quién manda `abr=1`, el filtro con `variants`, la configuración con
+  la maestra, la regla del atasco, «Calidad» sin órdenes y recordada, Safari a `lo.m3u8` en 'preparing' sin órdenes,
+  sin volver a subir y no en pantalla completa), `Theater.test.tsx` (el menú), `sync.test.ts` (`escalations`),
+  `player/engines/engines.test.ts` (`HLS_GUEST_ABR` y `guestAbrConfig`), `Room.test.tsx` y `guest/App.test.tsx` (el
+  invitado crea el reproductor con `guest`). Sin probar en un navegador de verdad: el cambio de nivel de hls.js con
+  la ligera y la original de un mismo título (el salto de audio y vídeo) y el cambio de variante de AVPlayer quedan
+  para la prueba en el NAS.

@@ -28,9 +28,21 @@ import type {
 } from '@ace/shared';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { PlaybackService, ViewerIdentity } from '../playback/types.js';
+import type { RemuxService } from '../remux/types.js';
 
 export interface PartyDeps extends CoreDeps {
   readonly playback: Pick<PlaybackService, 'acquire' | 'acquireVod' | 'heartbeat' | 'release'>;
+  /**
+   * La calidad ligera de los invitados (docs/ver-juntos.md §17). Sin él (tests viejos), nadie la
+   * recibe: `index.m3u8` como siempre.
+   */
+  readonly remux?: Pick<RemuxService, 'vodLiteOffer' | 'vodLiteCovers'>;
+}
+
+/** De dónde viene la petición de `partyStream`. */
+export interface PartyStreamOptions {
+  /** Entró por el proxy de la sala (`X-Ace-Origin: guest`, §9): un invitado de fuera. */
+  readonly guest?: boolean;
 }
 
 /** Lo mínimo de `http.ServerResponse` que usa el SSE de la sala (los tests pasan uno falso). */
@@ -64,6 +76,7 @@ export interface PartyService extends Lifecycle {
     query: PartyStreamQuery,
     viewer: ViewerIdentity,
     signal: AbortSignal,
+    options?: PartyStreamOptions,
   ): Promise<PartyStreamGrant>;
   /** La sesión de vídeo de la persona con esta clave (`partyVideo`). */
   videoSession(code: string, key: string): string;

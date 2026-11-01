@@ -112,6 +112,10 @@ services:
       # «Ver juntos» desde fuera (docs/ver-juntos.md §9): los enlaces de
       # invitacion van al proxy de la sala (servicio sala).
       PARTY_PUBLIC_URL: "https://sala.ismaeloul.es"
+      # Calidad ligera para los invitados de fuera (docs/ver-juntos.md §17): un
+      # 720p que el NAS hace a partir de lo que ya tiene en disco. "0" (todos
+      # con la original, como siempre) hasta probarla en el NAS; "1" la enciende.
+      ACE_PARTY_LITE: "0"
       # Arranca como root solo para instalar ffmpeg; antes de abrir ningun
       # fichero el backend pasa a ser este usuario (el node de la imagen) y
       # deja suya la carpeta de datos (core/privileges.ts). Desde fuera llega
@@ -140,8 +144,12 @@ services:
       timeout: 8s
       retries: 3
       start_period: 90s
-    mem_limit: 768m
-    pids_limit: 128
+    # 1280m y 192 (antes 768m y 128): la calidad ligera de «Ver juntos» (§17)
+    # decodifica y codifica en x264 (150-300 MB y unos hilos por trabajo) y un
+    # OOM aqui tumbaria el backend entero. El NAS tiene 16 GB (9,4 de los
+    # «usados» son la cache ARC de ZFS, que se suelta).
+    mem_limit: 1280m
+    pids_limit: 192
 
   nginx:
     image: nginx:1.30.4-alpine3.24@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46

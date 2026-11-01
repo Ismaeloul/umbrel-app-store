@@ -11,8 +11,11 @@
    - partyPreview: GET /api/v1/party/:code
    - partyJoin: POST /api/v1/party/:code/join
    - partyEvents: GET /api/v1/party/:code/events (SSE; `?t=` con la credencial)
-   - partyStream: GET /api/v1/party/:code/stream (la `VodGrant` de la sala)
-   - partyVideo: GET /api/v1/party/:code/v/:key/:file (la lista y los segmentos)
+   - partyStream: GET /api/v1/party/:code/stream (la `VodGrant` de la sala; al
+     invitado de fuera con `abr=1`, la lista maestra o la ligera, §17)
+   - partyVideo: GET /api/v1/party/:code/v/:key/:file (la lista y los segmentos;
+     también `master.m3u8`, `lo.m3u8` y los `lo_*`, que la ruta de vídeo de
+     siempre no sirve)
    - partyControl, partyStatus, partyChat, partyLeave, partyClose: POST con
      la credencial en `token`.
    - partySettings, partyMember, partyQueue (§11 y §13): ajustes y personas
@@ -20,6 +23,7 @@
    - partyTyping (§13): «está escribiendo»; POST con `token`. Las
      reacciones (`partyReact`) se quitaron en el rediseño de escritorio. */
 
+import { ORIGIN_HEADER, isGuestOrigin } from '../../core/origin.js';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
 import { browserDeviceName } from '../playback/device-name.js';
@@ -67,6 +71,12 @@ export function registerV1Routes(router: V1Router, services: Services): void {
         deviceName: browserDeviceName(ctx.request.headers['user-agent']),
       },
       ctx.signal,
+      /* El invitado de fuera (§9 y §17): Caddy pone `guest`, que para todo lo demás es `native`. */
+      {
+        guest:
+          ctx.request.aceOrigin === 'native' &&
+          isGuestOrigin(ctx.request.headers[ORIGIN_HEADER], ctx.request.url),
+      },
     ),
   );
   router.handle('partyVideo', async (input, ctx) => {
@@ -74,6 +84,8 @@ export function registerV1Routes(router: V1Router, services: Services): void {
     await services.remux.serveFile(ctx.reply, sid, input.params.file, {
       rangeHeader: ctx.request.headers.range,
       deviceId: null,
+      /* Además de los de siempre, la lista maestra y la versión ligera (§17): solo por aquí. */
+      party: true,
     });
   });
   router.handle('partyControl', (input) => party.control(input.params.code, input.body));

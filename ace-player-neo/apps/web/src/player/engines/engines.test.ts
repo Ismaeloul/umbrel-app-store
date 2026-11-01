@@ -8,7 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDemoEngine } from './demo.ts';
 import {
   createHlsEngine,
+  guestAbrConfig,
+  HLS_GUEST_ABR,
   HLS_IN_PLACE,
+  HLS_VOD_CONFIG,
   hlsConfig,
   mediaSequenceOf,
   startPositionFor,
@@ -632,5 +635,44 @@ describe('qué motor toca', () => {
     expect(chooseEngine('mpegts', iphone)).toBeNull();
     expect(chooseEngine('hls-fmp4', safariMac)).toBe('native');
     expect(chooseEngine('hls', { ios: false, mse: false, nativeHls: false })).toBeNull();
+  });
+});
+
+describe('«Ver juntos», invitado con dos calidades (docs/ver-juntos.md §17)', () => {
+  const ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130 Mobile';
+  const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15';
+
+  it('empieza por la ligera, adapta despacio y no toca los búferes de siempre', () => {
+    expect(HLS_GUEST_ABR).toEqual({
+      startLevel: 0,
+      abrEwmaDefaultEstimate: 1_500_000,
+      abrEwmaFastVoD: 3,
+      abrEwmaSlowVoD: 12,
+      abrBandWidthFactor: 0.85,
+      abrBandWidthUpFactor: 0.7,
+      capLevelToPlayerSize: false,
+    });
+    /* Sin `abrSwitchInterval`: en hls.js también frena las bajadas (la de emergencia y la nuestra). */
+    expect('abrSwitchInterval' in HLS_GUEST_ABR).toBe(false);
+    for (const key of Object.keys(HLS_VOD_CONFIG)) expect(key in HLS_GUEST_ABR).toBe(false);
+  });
+
+  it('en Android parte del 80 % de lo que dice la red, con tope de 5 Mbit/s; si no, 1,5 Mbit/s', () => {
+    const estimate = (nav: unknown) => guestAbrConfig(nav).abrEwmaDefaultEstimate;
+    expect(estimate({ userAgent: ANDROID, connection: { downlink: 2.5 } })).toBe(2_000_000);
+    expect(estimate({ userAgent: ANDROID, connection: { downlink: 10 } })).toBe(5_000_000);
+    expect(estimate({ userAgent: ANDROID, connection: { downlink: 0 } })).toBe(1_500_000);
+    expect(estimate({ userAgent: ANDROID })).toBe(1_500_000);
+    /* Safari no lo tiene y el escritorio no es de fiar: el de partida. */
+    expect(estimate({ userAgent: IPHONE, connection: { downlink: 10 } })).toBe(1_500_000);
+    expect(estimate(undefined)).toBe(1_500_000);
+    const throwing = {
+      userAgent: ANDROID,
+      get connection(): never {
+        throw new Error('bloqueado');
+      },
+    };
+    expect(estimate(throwing)).toBe(1_500_000);
+    expect(guestAbrConfig({ userAgent: ANDROID }).startLevel).toBe(0);
   });
 });
