@@ -22,6 +22,7 @@ import { json, mockFetch } from '../../test/fetch.ts';
 import { PartyClient, type PartyEnv } from './client.ts';
 import { LiveSources } from './LivePanels.tsx';
 import { canSwitchLive, roomEntries, roomScreen, roomSourcesModel } from './liveSources.ts';
+import { LIVE_TEXT } from './liveTexts.ts';
 
 const H = (n: number) => n.toString(16).padStart(40, '0');
 const HOST = 'm_IsmaAnfitrion';
@@ -161,10 +162,13 @@ describe('roomSourcesModel', () => {
       matchId: 'fltv-1',
       match: 'Real Madrid – Barcelona',
     });
-    /* Sin repetir el canal del grupo: el proveedor. */
-    expect(m8?.name).toBe('Elcano');
-    expect(m8?.meta).toContain('12 pares');
-    expect(model.groups[0]?.rows.find((item) => item.iptv)?.meta).toContain('Casa');
+    /* Como la maqueta: en negrita la calidad; debajo, el nombre (sin el canal del grupo) y los pares. */
+    expect(m8?.name).toBe('1080p · 4,2 Mb/s');
+    expect(m8?.meta).toBe('Elcano · 12 pares');
+    /* La IPTV: la calidad y, debajo, el proveedor una sola vez (antes «Casa · IPTV · 1080p · Casa»). */
+    const tv = model.groups[0]?.rows.find((item) => item.iptv);
+    expect(tv?.name).toBe('1080p');
+    expect(tv?.meta).toBe('Casa');
     expect(model.groups[0]).toMatchObject({ total: 7 });
   });
 
@@ -223,9 +227,71 @@ describe('LiveSources', () => {
     const group = await screen.findByRole('region', { name: 'M+ LaLiga' });
     expect(net.calls[0]?.url).toContain('t=m_IsmaAnfitrion.secreto');
     expect(screen.getByText('Ver 1 floja')).toBeTruthy();
-    fireEvent.click(within(group).getByRole('button', { name: 'Poner' }));
+    /* Cada «Poner» dice qué fuente pone (con VoiceOver no eran «Poner, Poner, Poner…»). */
+    const names = screen
+      .getAllByRole('button', { name: /^Poner/ })
+      .map((button) => button.getAttribute('aria-label'));
+    expect(new Set(names).size).toBe(names.length);
+    fireEvent.click(
+      within(group).getByRole('button', { name: /^Poner la 9: M\+ LaLiga · 1080p, AceStream/ }),
+    );
     await waitFor(() => expect(net?.calls.some((call) => call.method === 'POST')).toBe(true));
     const sent = net.calls.find((call) => call.method === 'POST')?.body as Record<string, unknown>;
     expect(sent).toMatchObject({ action: 'live', from: H(9), live: { hash: H(8) } });
+  });
+});
+
+describe('LiveSources: otro relanza la resolución', () => {
+  let net: ReturnType<typeof mockFetch> | undefined;
+  beforeEach(() => {
+    resetMode();
+    setMode('live', 'bootstrap');
+  });
+  afterEach(() => {
+    net?.restore();
+    net = undefined;
+    resetMode();
+  });
+
+  it('el sondeo trae otro trabajo: se adopta (fuentes nuevas y sin «Comprobando…» colgado)', async () => {
+    const J1 = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+    const J2 = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+    net = mockFetch({
+      [`GET /api/v1/party/${BASE.code}/sources`]: (call) =>
+        call.url.includes(`job=${J1}`)
+          ? json({
+              candidates: [candidate(H(3)), candidate(H(8), { matchedChannel: 'M+ LaLiga' })],
+              scan: {
+                ...SCAN,
+                id: J2,
+                status: 'complete',
+                candidates: [probe(H(3), 'working'), probe(H(8), 'working')],
+              },
+            })
+          : json({
+              candidates: [candidate(H(3))],
+              scan: { ...SCAN, id: J1, status: 'running', candidates: [probe(H(3), 'checking')] },
+            }),
+    });
+    const env: PartyEnv = {
+      now: () => 1_000,
+      eventSource: () => new EventTarget() as unknown as EventSource,
+      setInterval: () => 0,
+      clearInterval: () => undefined,
+    };
+    const client = new PartyClient(BASE.code, { id: HOST, token: `${HOST}.secreto` }, env);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <LiveSources room={{ ...BASE, live: LIVE }} client={client} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText(LIVE_TEXT.checking)).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'M+ LaLiga' })).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText(LIVE_TEXT.checking)).toBeNull());
+    /* Ya no se sondea el trabajo viejo. */
+    const polls = () => (net?.calls ?? []).filter((call) => call.url.includes('job=')).length;
+    const before = polls();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(polls()).toBe(before);
   });
 });

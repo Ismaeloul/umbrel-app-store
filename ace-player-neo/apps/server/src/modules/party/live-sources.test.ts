@@ -12,6 +12,7 @@ import type { FakeClock } from '../../core/clock.js';
 import { AppError } from '../../core/errors.js';
 import { createPartyService } from './index.js';
 import {
+  LIVE_RESEARCH_MIN_MS,
   LIVE_SOURCES_TTL_MS,
   channelOfLive,
   createLiveSources,
@@ -182,5 +183,86 @@ describe('partyLiveSources en el servicio: quién puede', () => {
       live: { hash: 'b'.repeat(40), channel: 'M+', source: 'engine', matchId: null, match: null },
     });
     expect(party.join(room, 'Eva').room.live?.hash).toBe('b'.repeat(40));
+  });
+});
+
+describe('fuentes de la sala: una resolución a la vez y la última manda', () => {
+  const OTHER = 'bb11bb22cc33dd44ee55ff66aa77bb88cc99dd00';
+
+  /** Un `resolve` que no acaba hasta que el test lo suelta. */
+  function slowFootball() {
+    const calls: Record<string, unknown>[] = [];
+    const waiting: Array<(value: unknown) => void> = [];
+    return {
+      calls,
+      release: (index: number, ids: string[], job: string) =>
+        waiting[index]?.({ candidates: ids.map((id) => candidate(id)), scan: { id: job } }),
+      football: {
+        resolve: (query: Record<string, unknown>) => {
+          calls.push(query);
+          return new Promise((resolve) => waiting.push(resolve)) as never;
+        },
+      },
+    };
+  }
+
+  it('una resolución normal que acaba después de «Buscar más fuentes» no la pisa', async () => {
+    const core = createTestCore({});
+    const slow = slowFootball();
+    const sources = createLiveSources({ clock: core.clock, football: slow.football });
+    const normal = sources.get('r', LIVE);
+    const research = sources.get('r', LIVE, { research: true });
+    slow.release(1, [DAZN, OTHER], 'job-research');
+    await research;
+    slow.release(0, [DAZN], 'job-normal');
+    await normal;
+    expect(sources.cached('r')).toMatchObject({ jobId: 'job-research' });
+    expect(sources.cached('r')?.candidates.map((item) => item.id)).toEqual([DAZN, OTHER]);
+  });
+
+  it('dos «Buscar más fuentes» a la vez, una sola búsqueda; y no otra hasta pasado el mínimo', async () => {
+    const core = createTestCore({});
+    const clock = core.clock as FakeClock;
+    const { football, calls } = fakeFootball();
+    const sources = createLiveSources({ clock, football });
+    await Promise.all([
+      sources.get('r', LIVE, { research: true }),
+      sources.get('r', LIVE, { research: true }),
+    ]);
+    expect(calls).toHaveLength(1);
+    await sources.get('r', LIVE, { research: true });
+    expect(calls).toHaveLength(1);
+    clock.advance(LIVE_RESEARCH_MIN_MS);
+    await sources.get('r', LIVE, { research: true });
+    expect(calls).toHaveLength(2);
+  });
+
+  it('un canal suelto con pocas AceStream: también la búsqueda inversa (engine=1), sin repetir', async () => {
+    const core = createTestCore({});
+    const calls: Record<string, unknown>[] = [];
+    const sources = createLiveSources({
+      clock: core.clock,
+      football: {
+        resolve: async (query: Record<string, unknown>) => {
+          calls.push(query);
+          return (
+            query.engine === '1'
+              ? { candidates: [candidate(DAZN), candidate(OTHER)], scan: { id: 'job-inversa' } }
+              : { candidates: [candidate(DAZN, { source: 'iptv' })], scan: { id: JOB } }
+          ) as never;
+        },
+      },
+    });
+    const loose = { ...LIVE, matchId: null, match: null };
+    await sources.get('r', loose);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls[1]).toMatchObject({ scope: 'channel', engine: '1', client: 'party-r' });
+    expect(sources.cached('r')?.candidates.map((item) => item.id)).toEqual([DAZN, OTHER]);
+    expect(sources.cached('r')?.jobId).toBe('job-inversa');
+    /* «Buscar más fuentes» espera la inversa, con research. */
+    const result = await sources.get('r', loose, { research: true });
+    expect(calls.at(-1)).toMatchObject({ engine: '1', research: '1' });
+    expect(result.candidates.map((item) => item.id)).toEqual([DAZN, OTHER]);
   });
 });

@@ -89,9 +89,16 @@ export interface RoomSourceRow {
   /** La que suena en la sala. */
   readonly here: boolean;
   readonly iptv: boolean;
-  /** El nombre sin el proveedor ni el canal del grupo (si sobra, el proveedor). */
+  /**
+   * La línea principal, como la maqueta (ver-juntos.html): la calidad y los Mb/s («1080p · 6,2
+   * Mb/s»). Sin calidad conocida, el nombre sin el proveedor ni el canal del grupo (si sobra,
+   * el proveedor).
+   */
   readonly name: string;
-  /** La segunda línea: calidad, Mb/s y pares, o «tu lista». */
+  /**
+   * La segunda línea, tras la etiqueta de origen: el nombre si no es el del grupo, el proveedor
+   * (en IPTV, «tu lista» si no hay) y, en AceStream, los pares. Nada se repite con la principal.
+   */
   readonly meta: string;
   readonly choice: PartyLiveChoice;
 }
@@ -131,15 +138,25 @@ function fold(text: string): string {
     .trim();
 }
 
-function metaOf(row: SourceRow): string {
+/** Las dos líneas de una fila (ver `RoomSourceRow`). */
+function linesOf(row: SourceRow, group: string): { name: string; meta: string } {
   const { entry } = row;
-  const parts = [...qualityTags(entry)];
+  const provider = row.presentation.provider;
+  const bare = channelNameWithoutProvider(channelNameOf(entry), [provider]);
+  /* El nombre solo dice algo si no es el canal del grupo («DAZN 1» dentro de DAZN 1). */
+  const own = bare && fold(bare) !== fold(group) ? bare : '';
+  const quality = [...qualityTags(entry)];
   const mbit = swarmMbit(entry);
-  if (mbit) parts.push(LIVE_TEXT.mbit(mbit));
+  if (mbit) quality.push(LIVE_TEXT.mbit(mbit));
+  const name = quality.length ? quality.join(' · ') : own || row.presentation.short;
+  const parts: string[] = [];
+  if (own && own !== name) parts.push(own);
+  /* De dónde sale: el proveedor (la lista de AceStream o el de la IPTV; «tu lista» si no hay). */
+  const origin = provider || (isIptv(entry) ? LIVE_TEXT.yourList : '');
+  if (origin && fold(origin) !== fold(name) && fold(origin) !== fold(own)) parts.push(origin);
   const peers = entry.probe?.peers ?? 0;
   if (!isIptv(entry) && peers > 0) parts.push(LIVE_TEXT.peers(peers));
-  if (isIptv(entry)) parts.push(row.presentation.provider || LIVE_TEXT.yourList);
-  return parts.join(' · ');
+  return { name, meta: parts.join(' · ') };
 }
 
 /** Lo que va a la sala al «Poner» una fuente: el partido sigue siendo el de la sala. */
@@ -185,14 +202,11 @@ export function roomSourcesModel(
     count += 1;
     const group = groupOf(entry);
     const iptv = isIptv(entry);
-    const bare = channelNameWithoutProvider(channelNameOf(entry), [row.presentation.provider]);
-    const name = fold(bare) === fold(group) || !bare ? row.presentation.short : bare;
     const item: RoomSourceRow = {
       row,
       here,
       iptv,
-      name,
-      meta: metaOf(row),
+      ...linesOf(row, group),
       choice: choiceOfEntry(entry, live),
     };
     const signal = row.signal.state;

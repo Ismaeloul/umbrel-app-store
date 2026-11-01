@@ -63,6 +63,7 @@ import {
   type PartyTitle,
   type PartyUpNext,
   type ResolutionCandidate,
+  type ScanJob,
   type VerdictState,
 } from '@ace/shared';
 import type { FastifyReply } from 'fastify';
@@ -74,11 +75,18 @@ import type { PartyDeps, PartyService, PartySink } from './types.js';
 import type { RemuxLiteOffer } from '../remux/types.js';
 /* directo §14 */
 import {
+  AUTO_IPTV_BUSY_TEXT,
   AUTO_NONE_TEXT,
+  AUTO_SCAN_RETRY_MS,
   decide,
+  heardSound,
+  jumpedInStreak,
   manualSwitch,
   newStreak,
   refreshStreak,
+  soundLost,
+  waitForScan,
+  type AutoHouse,
   type AutoStreak,
 } from './live-auto.js';
 import { createLiveSources } from './live-sources.js';
@@ -588,7 +596,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     }
     for (const member of room.members.values()) {
       if (member.id === room.leaderId || !online(member, now)) continue;
-      const hostAway = why === 'absence' && leader?.host === true && room.live !== null;
+      /* Si el anfitrión ya la había perdido por no estar, sigue fuera: aunque ahora se vaya el
+         líder provisional, la corona le tiene que volver a él al reconectarse. */
+      const hostAway =
+        room.live !== null &&
+        ((why === 'absence' && leader?.host === true) || room.leaderLostBy === 'absence');
       setLeader(room, member, `${member.name} es ahora el líder.`);
       room.leaderLostBy = hostAway ? 'absence' : null;
       return;
@@ -1188,15 +1200,23 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         'Ver juntos: la sala se ha quedado sin vídeo',
       );
       /* directo §14: la ficha aprende de la sala, y el automático lo decide el servidor. */
+      soundLost(room.autoStreak);
       if (kind === 'failed' && room.live) {
-        try {
-          scanner?.recordVerdict(room.live.hash, {
-            state: 'failed',
-            reason: 'party_failed',
-            by: 'player',
-          });
-        } catch {
-          /* Sin comprobador: no pasa nada. */
+        /* No se apunta «Sin señal» si el corte no es de la fuente: con el motor caído (o
+           reiniciándose) todas fallan igual, y las que pone el propio automático en la misma
+           racha caen por lo mismo que la primera. Si no, cuatro fuentes buenas quedaban
+           marcadas para siempre en la ficha y en Fuentes. */
+        const engineDown = room.live.source === 'engine' && engineUnwell();
+        if (!engineDown && !jumpedInStreak(room.autoStreak, room.live.hash)) {
+          try {
+            scanner?.recordVerdict(room.live.hash, {
+              state: 'failed',
+              reason: 'party_failed',
+              by: 'player',
+            });
+          } catch {
+            /* Sin comprobador: no pasa nada. */
+          }
         }
         liveAuto(room);
       }
@@ -1222,22 +1242,34 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         return null;
       }
     };
-    const run = (candidates: readonly ResolutionCandidate[]): void => {
+    const run = (candidates: readonly ResolutionCandidate[], scan: ScanJob | null): void => {
       const current = room.live;
       if (room.closed || !current?.auto || current.hash !== failed) return;
       if (room.interrupted !== 'failed') return;
       const now = clock.now();
-      const decision = decide(room.autoStreak, candidates, current, verdictOf, now);
+      const decision = decide(room.autoStreak, candidates, current, verdictOf, now, houseOf(room));
       if (decision.kind === 'switch') {
         switchLive(room, decision.choice, null);
         return;
       }
+      /* Sin otra buena todavía, pero el comprobador de la sala sigue: se le espera un rato
+         (una sala creada sin pasar por la ficha aún no tiene veredictos). */
+      const scanning =
+        decision.kind === 'none' &&
+        decision.reason === 'no_source' &&
+        waitForScan(
+          room.autoStreak,
+          scan !== null && (scan.status === 'queued' || scan.status === 'running'),
+          now,
+        );
       const later =
         decision.kind === 'wait'
           ? decision.ms
           : decision.reason === 'grace'
             ? room.autoStreak.graceUntil - now
-            : null;
+            : scanning
+              ? AUTO_SCAN_RETRY_MS
+              : null;
       if (later !== null) {
         clock.clearTimeout(room.autoTimer);
         room.autoTimer = clock.setTimeout(
@@ -1250,7 +1282,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         );
         return;
       }
-      say(room, AUTO_NONE_TEXT, null);
+      const busy = decision.kind === 'none' && decision.reason === 'iptv_busy';
+      say(room, busy ? AUTO_IPTV_BUSY_TEXT : AUTO_NONE_TEXT, null);
       logger.info(
         { room: room.code, reason: decision.kind === 'none' ? decision.reason : 'wait' },
         'Ver juntos: sin otra fuente',
@@ -1258,8 +1291,43 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     };
     sources
       .get(room.code, live)
-      .then((result) => run(result.candidates))
-      .catch(() => run(sources.cached(room.code)?.candidates ?? []));
+      .then((result) => run(result.candidates, result.scan))
+      .catch(() => run(sources.cached(room.code)?.candidates ?? [], null));
+  }
+
+  /** ¿El motor está caído o reiniciándose? Sin vigilante (tests viejos), se da por sano. */
+  function engineUnwell(): boolean {
+    try {
+      const state = deps.engine?.status().status;
+      return state === 'offline' || state === 'restarting';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * El canal que OTRO aparato de casa ve por la IPTV (la única plaza), de «Dónde se está
+   * reproduciendo»: lo de esta sala no cuenta (como `houseLanes` en la ficha).
+   */
+  function houseOf(room: Room): AutoHouse {
+    let status: ReturnType<NonNullable<typeof playback.status>> | undefined;
+    try {
+      status = playback.status?.();
+    } catch {
+      status = undefined;
+    }
+    if (!status) return { busyIptv: null };
+    const own = new Set(room.viewers);
+    for (const member of room.members.values()) {
+      if (member.viewer) own.add(member.viewer.identity.viewerId);
+    }
+    for (const session of status.sessions) {
+      if (session.source !== 'iptv') continue;
+      if (session.viewers.some((viewer) => !own.has(viewer.viewerId))) {
+        return { busyIptv: session.hash.toLowerCase() };
+      }
+    }
+    return { busyIptv: null };
   }
 
   function subscribe(): void {
@@ -1675,6 +1743,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
             viewer.identity,
           );
           stream = 'ok';
+          /* directo §14: la fuente que puso el automático suena; seguida un rato, la racha acaba. */
+          if (room.live && !room.interrupted) {
+            if (body.buffering) soundLost(room.autoStreak);
+            else heardSound(room.autoStreak, now);
+          }
         } catch {
           if (member.viewer === viewer) member.viewer = null;
           stream = 'lost';

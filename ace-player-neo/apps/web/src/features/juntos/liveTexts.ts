@@ -23,6 +23,13 @@ export const LIVE_TEXT = {
   mbit: (value: string) => `${value} Mb/s`,
   iptv: 'IPTV',
   engine: 'AceStream',
+  /** El anfitrión al que se le ha ido la corona (no es co-líder). */
+  hostNotLeader: (leader: string) => `Has creado la sala · ahora manda ${leader}`,
+  /** El nombre accesible de «Poner» en Fuentes: qué fuente es. */
+  putSource: (number: number, channel: string, origin: string, meta: string) =>
+    `Poner la ${number}: ${channel}, ${origin}${meta ? `, ${meta}` : ''}`,
+  /** El de «Poner» en Partidos y en los canales favoritos. */
+  putWhat: (what: string) => `Poner ${what}`,
   reclaim: 'Recuperar el mando',
   reclaimDone: 'Vuelves a ser el líder.',
   matchesLoading: 'Cargando partidos…',

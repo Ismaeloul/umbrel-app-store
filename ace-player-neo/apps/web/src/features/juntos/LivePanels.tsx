@@ -47,7 +47,7 @@ function put(client: PartyClient, live: PartyLiveChoice, from?: string): Promise
 function Origin({ source }: { source: PartyLiveChoice['source'] }) {
   return (
     <span className={cx('juntos-live__origin', source === 'iptv' && 'juntos-live__origin--iptv')}>
-      {source === 'iptv' ? 'IPTV' : 'AceStream'}
+      {source === 'iptv' ? LIVE_TEXT.iptv : LIVE_TEXT.engine}
     </span>
   );
 }
@@ -66,10 +66,13 @@ function SourceRowView({
   return (
     <li className="juntos-live__row" data-here={item.here ? 'true' : undefined}>
       <span className="juntos-live__num">{item.row.number}</span>
+      {/* Como la maqueta: en negrita la calidad; debajo, el origen y de dónde sale (o los pares). */}
       <span className="juntos-live__text">
         <span className="juntos-live__name">{item.name}</span>
-        <Origin source={item.choice.source} />
-        {item.meta ? <span className="juntos-live__meta">{item.meta}</span> : null}
+        <span className="juntos-live__meta">
+          <Origin source={item.choice.source} />
+          {item.meta ? ` ${item.meta}` : null}
+        </span>
       </span>
       {item.here ? null : (
         <SignalBadge
@@ -90,6 +93,12 @@ function SourceRowView({
           variant="quiet"
           busy={busy === hash}
           disabled={busy !== null && busy !== hash}
+          aria-label={LIVE_TEXT.putSource(
+            item.row.number,
+            item.choice.channel,
+            item.choice.source === 'iptv' ? LIVE_TEXT.iptv : LIVE_TEXT.engine,
+            item.meta,
+          )}
           onClick={() => onPut(item)}
         >
           {JUNTOS_TEXT.livePut}
@@ -316,6 +325,7 @@ export function LiveMatches({ room, client }: { room: PartyRoom; client: PartyCl
             variant="quiet"
             busy={busy === match.id}
             disabled={busy !== null && busy !== match.id}
+            aria-label={LIVE_TEXT.putWhat(matchTitle(match))}
             onClick={() => void putMatch(match)}
           >
             {JUNTOS_TEXT.livePut}
@@ -384,6 +394,7 @@ export function LiveMatches({ room, client }: { room: PartyRoom; client: PartyCl
                       variant="quiet"
                       busy={busy === item.id}
                       disabled={busy !== null && busy !== item.id}
+                      aria-label={LIVE_TEXT.putWhat(item.title || item.id.slice(0, 8))}
                       onClick={() => {
                         setBusy(item.id);
                         void put(client, {

@@ -154,7 +154,7 @@ export function createServices(
     overrides.instantStart ??
     createInstantStartService({ ...core, state, football, playback, scanner });
   const party =
-    overrides.party ?? createPartyService({ ...core, playback, remux, football, scanner });
+    overrides.party ?? createPartyService({ ...core, playback, remux, football, scanner, engine });
   const teams = overrides.teams ?? createTeamsService({ ...core, net, football });
   const auth = overrides.auth ?? createAuthService({ ...core, state });
   const events = overrides.events ?? createEventsHub(core);

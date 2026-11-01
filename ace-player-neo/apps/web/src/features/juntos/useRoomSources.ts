@@ -5,7 +5,7 @@
 
 import type { PartyLiveSourcesResponse, PartyRoom } from '@ace/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/index.ts';
 import { useNow } from '../agenda/data.ts';
 import type { PartyClient } from './client.ts';
@@ -69,8 +69,14 @@ export function useRoomSources(room: PartyRoom, client: PartyClient): RoomSource
   });
   const [researching, setResearching] = useState(false);
   const now = useNow();
-  const data: PartyLiveSourcesResponse | undefined =
-    job.data && job.data.scan?.id === jobId ? job.data : base.data;
+  /* Si otro (u otra caducidad) ha relanzado la resolución, el servidor contesta al sondeo con
+     el trabajo nuevo: se adopta, para que el sondeo pase a él y la lista reciba sus fuentes y
+     veredictos. Sin esto, la foto vieja se quedaba en «Comprobando…». */
+  const adopt = job.data && job.data.scan?.id !== jobId ? job.data : null;
+  useEffect(() => {
+    if (adopt) queryClient.setQueryData(baseKey, adopt);
+  }, [adopt, queryClient, baseKey]);
+  const data: PartyLiveSourcesResponse | undefined = job.data ?? base.data;
   const interrupted = room.interrupted;
   const model = useMemo(() => {
     if (!live || !data) return null;

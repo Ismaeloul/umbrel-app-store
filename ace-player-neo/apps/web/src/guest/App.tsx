@@ -5,7 +5,9 @@
    nunca manda `abr=1`. */
 
 import type { PartyCredential } from '@ace/shared';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
+import { createQueryClient } from '../api/query.ts';
 import { forgetCredential, savedCredential } from '../features/juntos/client.ts';
 import { Join } from '../features/juntos/Join.tsx';
 import { Room } from '../features/juntos/Room.tsx';
@@ -39,8 +41,10 @@ function GuestRoom({ code }: { code: string }) {
 
 export function GuestApp({ pathname }: { pathname: string }) {
   const code = codeFromPath(pathname);
+  /* Fuentes del directo (useRoomSources) usa TanStack Query: sin esto, abrirla tiraba la sala. */
+  const [queryClient] = useState(createQueryClient);
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <header className="guest__bar">
         <img src="/icon.svg" alt="" width={24} height={24} />
         <span>{GUEST_TEXT.brand}</span>
@@ -55,6 +59,6 @@ export function GuestApp({ pathname }: { pathname: string }) {
         )}
       </main>
       <Toaster />
-    </>
+    </QueryClientProvider>
   );
 }

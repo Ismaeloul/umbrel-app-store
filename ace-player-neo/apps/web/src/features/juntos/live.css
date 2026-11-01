@@ -20,10 +20,11 @@
   display: grid;
   gap: 6px;
 }
+/* 44 px: el toque mínimo del resto de la sala (juntos.css), también en el iPhone. */
 .juntos-live__fold > summary {
   display: flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 4px;
   color: var(--text-2);
   font-size: 13.5px;
@@ -57,6 +58,17 @@
 }
 .juntos-live__reclaim {
   justify-self: start;
+}
+
+/* Móvil: cada canal es una tarjeta (juntos.css). Su cabecera ya no es el título suelto
+   (`.juntos-live__group > .juntos-kicker`), así que el relleno va en ella. */
+@media (max-width: 767px) {
+  .juntos-live__group-head {
+    padding: 12px 14px 8px;
+  }
+  .juntos-live__group-head > .juntos-kicker {
+    padding: 0;
+  }
 }
 
 /* Escritorio: la lista hace scroll dentro del panel y el interruptor del

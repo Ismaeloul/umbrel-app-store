@@ -1,6 +1,7 @@
 /* Página de invitado de «Ver juntos» (docs/ver-juntos.md §9): el código sale
    de /s/<código>; sin código válido, el aviso; con él, la entrada de la sala. */
 
+import { useQueryClient } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import preview from '@fixtures/web/v1/partyPreview.json';
@@ -9,11 +10,14 @@ import { json, mockFetch } from '../test/fetch.ts';
 import { saveCredential } from '../features/juntos/client.ts';
 import { codeFromPath, GuestApp } from './App.tsx';
 
-/* La sala de verdad abre el SSE y el vídeo: aquí solo importa con qué se monta. */
+/* La sala de verdad abre el SSE y el vídeo: aquí solo importa con qué se monta y que tenga
+   el QueryClient que usa la pestaña Fuentes del directo (useRoomSources). */
 const roomProps = vi.hoisted(() => [] as Record<string, unknown>[]);
+const roomQuery = vi.hoisted(() => ({ ok: false }));
 vi.mock('../features/juntos/Room.tsx', () => ({
   Room: (props: Record<string, unknown>) => {
     roomProps.push(props);
+    roomQuery.ok = useQueryClient() !== undefined;
     return null;
   },
 }));
@@ -60,5 +64,7 @@ describe('página de invitado', () => {
     saveCredential('k3J9xQ2mZpL8wR4t', { id: 'm_AnaInvitada01', token: 'm_AnaInvitada01.secreto' });
     render(<GuestApp pathname="/s/k3J9xQ2mZpL8wR4t" />);
     expect(roomProps.at(-1)).toMatchObject({ code: 'k3J9xQ2mZpL8wR4t', guest: true });
+    /* Fuentes (react-query) no tira la sala del enlace: hay QueryClient. */
+    expect(roomQuery.ok).toBe(true);
   });
 });

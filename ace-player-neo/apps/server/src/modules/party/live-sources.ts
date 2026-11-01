@@ -12,13 +12,22 @@
 
    Los canales del partido los pone `resolve` con la agenda (B-231). Si el
    partido ya no está en ella, se manda el canal que suena; con un canal suelto
-   (`matchId` null), `scope: 'channel'` con su nombre. */
+   (`matchId` null), `scope: 'channel'` con su nombre y, como la ficha
+   (sources/session.ts `reverseChannel`), la búsqueda inversa en AceStream
+   (`engine: '1'`): de fondo si hay pocas AceStream, y esperándola con «Buscar
+   más fuentes».
 
-import type {
-  PartyLive,
-  PartyLiveSourcesResponse,
-  ResolutionCandidate,
-  ScanJob,
+   Una resolución a la vez por sala, numeradas: solo la última que se lanzó
+   guarda lo suyo (una vieja que acaba tarde no pisa a la nueva). «Buscar más
+   fuentes» tampoco se repite: si ya hay una en marcha se espera esa, y entre
+   dos de la misma sala pasan al menos `LIVE_RESEARCH_MIN_MS`. */
+
+import {
+  IPTV_SEARCH,
+  type PartyLive,
+  type PartyLiveSourcesResponse,
+  type ResolutionCandidate,
+  type ScanJob,
 } from '@ace/shared';
 import type { Clock } from '../../core/clock.js';
 import type { FootballService } from '../football/types.js';
@@ -26,6 +35,8 @@ import type { ScannerService } from '../scanner/types.js';
 
 /** Cuánto vale lo resuelto para una sala (luego se vuelve a resolver). */
 export const LIVE_SOURCES_TTL_MS = 3 * 60_000;
+/** Entre dos «Buscar más fuentes» de la misma sala (la búsqueda completa es cara). */
+export const LIVE_RESEARCH_MIN_MS = 15_000;
 
 export interface LiveSourcesDeps {
   readonly clock: Pick<Clock, 'now'>;
@@ -69,11 +80,42 @@ export function partyClientKey(code: string): string {
   return `party-${code}`.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
 }
 
+/** Lo que ya había y, al final, lo nuevo sin repetir (lo comprobado no se reordena). */
+function merge(
+  base: readonly ResolutionCandidate[],
+  extra: readonly ResolutionCandidate[],
+): ResolutionCandidate[] {
+  const known = new Set(base.map((candidate) => candidate.id.toLowerCase()));
+  const fresh = extra.filter((candidate) => !known.has(candidate.id.toLowerCase()));
+  return [...base, ...fresh];
+}
+
+const aceCount = (candidates: readonly ResolutionCandidate[]): number =>
+  candidates.filter((candidate) => candidate.source !== 'iptv').length;
+
+interface Running {
+  readonly key: string;
+  readonly promise: Promise<LiveSourcesEntry>;
+}
+
 export function createLiveSources(deps: LiveSourcesDeps): LiveSources {
   const { clock, football, scanner } = deps;
   const entries = new Map<string, LiveSourcesEntry>();
-  /* Una resolución en marcha por sala: dos que piden a la vez esperan la misma. */
-  const pending = new Map<string, { key: string; promise: Promise<LiveSourcesEntry> }>();
+  /* La última resolución en marcha por sala: dos que piden a la vez esperan la misma. */
+  const pending = new Map<string, Running>();
+  /* «Buscar más fuentes» en marcha por sala, y cuándo empezó la última. */
+  const researching = new Map<string, Running>();
+  const researchAt = new Map<string, number>();
+  /* El número de la última resolución lanzada por sala: solo esa guarda. */
+  const generations = new Map<string, number>();
+
+  function nextGeneration(code: string): number {
+    const gen = (generations.get(code) ?? 0) + 1;
+    generations.set(code, gen);
+    return gen;
+  }
+
+  const isLatest = (code: string, gen: number): boolean => generations.get(code) === gen;
 
   function jobOf(id: string | null): ScanJob | null {
     if (!id || !scanner) return null;
@@ -85,40 +127,103 @@ export function createLiveSources(deps: LiveSourcesDeps): LiveSources {
     }
   }
 
-  async function resolve(code: string, live: PartyLive, research: boolean) {
-    const key = keyOf(live);
+  function queryOf(code: string, live: PartyLive, research: boolean) {
     const client = partyClientKey(code);
     const channel = channelOfLive(live.channel);
-    const result = await football.resolve(
-      live.matchId
-        ? {
-            match: live.matchId,
-            channel: [channel],
-            client,
-            ...(research ? { research: '1', current: live.hash } : {}),
-          }
-        : {
-            scope: 'channel',
-            channel: [channel],
-            iptv: live.hash,
-            client,
-            ...(research ? { research: '1' } : {}),
-          },
-    );
-    const entry: LiveSourcesEntry = {
-      key,
-      at: clock.now(),
-      candidates: result.candidates,
-      jobId: result.scan?.id ?? null,
-    };
+    return live.matchId
+      ? {
+          match: live.matchId,
+          channel: [channel],
+          client,
+          ...(research ? { research: '1', current: live.hash } : {}),
+        }
+      : {
+          scope: 'channel',
+          channel: [channel],
+          iptv: live.hash,
+          client,
+          ...(research ? { research: '1' } : {}),
+        };
+  }
+
+  /** La búsqueda inversa de un canal suelto (`engine: '1'`), como la ficha. */
+  function reverse(code: string, live: PartyLive, research: boolean) {
+    return football.resolve({ ...queryOf(code, live, research), engine: '1' });
+  }
+
+  /** De fondo: si sigue siendo lo último de la sala, se suman las AceStream que encuentre. */
+  async function reverseLater(code: string, live: PartyLive, gen: number): Promise<void> {
+    let result: Awaited<ReturnType<typeof reverse>>;
+    try {
+      result = await reverse(code, live, false);
+    } catch {
+      return;
+    }
+    if (!isLatest(code, gen)) return;
+    const current = entries.get(code);
+    if (!current || current.key !== keyOf(live)) return;
+    entries.set(code, {
+      ...current,
+      candidates: merge(current.candidates, result.candidates),
+      /* El trabajo nuevo (misma clave) ha sustituido al anterior en el comprobador. */
+      jobId: result.scan?.id ?? current.jobId,
+    });
+  }
+
+  async function resolve(
+    code: string,
+    live: PartyLive,
+    research: boolean,
+    gen: number,
+  ): Promise<LiveSourcesEntry> {
+    const key = keyOf(live);
+    const result = await football.resolve(queryOf(code, live, research));
+    let candidates: readonly ResolutionCandidate[] = result.candidates;
+    let jobId = result.scan?.id ?? null;
+    const loose = !live.matchId;
+    if (loose && research && isLatest(code, gen)) {
+      /* «Buscar más fuentes» en un canal suelto: también en AceStream, y se espera. */
+      try {
+        const extra = await reverse(code, live, true);
+        candidates = merge(candidates, extra.candidates);
+        jobId = extra.scan?.id ?? jobId;
+      } catch {
+        /* Sin la inversa: lo que ya había. */
+      }
+    }
+    const entry: LiveSourcesEntry = { key, at: clock.now(), candidates, jobId };
+    if (!isLatest(code, gen)) {
+      /* Hay otra más nueva: esta no pisa lo suyo (ni su trabajo). */
+      const newer = entries.get(code);
+      return newer?.key === key ? newer : entry;
+    }
     entries.set(code, entry);
+    if (loose && !research && aceCount(candidates) < IPTV_SEARCH.reverseBelowAce) {
+      void reverseLater(code, live, gen);
+    }
     return entry;
+  }
+
+  function launch(code: string, live: PartyLive, research: boolean): Promise<LiveSourcesEntry> {
+    const key = keyOf(live);
+    const gen = nextGeneration(code);
+    const promise = resolve(code, live, research, gen);
+    const running = { key, promise };
+    pending.set(code, running);
+    if (research) researching.set(code, running);
+    const clean = (): void => {
+      if (pending.get(code) === running) pending.delete(code);
+      if (researching.get(code) === running) researching.delete(code);
+    };
+    promise.then(clean, clean);
+    return promise;
   }
 
   return {
     async get(code, live, options = {}) {
       const key = keyOf(live);
       const cached = entries.get(code);
+      const now = clock.now();
       /* El sondeo del comprobador: solo un trabajo de esta sala, nunca uno cualquiera. */
       if (options.job) {
         if (cached?.key === key && cached.jobId === options.job) {
@@ -126,24 +231,26 @@ export function createLiveSources(deps: LiveSourcesDeps): LiveSources {
         }
         /* Otro partido u otro trabajo: lo que hay ahora (se resuelve si hace falta, abajo). */
       }
-      const fresh =
-        !options.research && cached?.key === key && clock.now() - cached.at < LIVE_SOURCES_TTL_MS;
       let entry: LiveSourcesEntry;
-      if (fresh && cached) {
+      if (options.research) {
+        const running = researching.get(code);
+        const last = researchAt.get(code) ?? Number.NEGATIVE_INFINITY;
+        if (running && running.key === key) {
+          entry = await running.promise;
+        } else if (cached?.key === key && now - last < LIVE_RESEARCH_MIN_MS) {
+          /* Otra «Buscar más fuentes» hace nada: lo que trajo esa (o lo que esté en marcha). */
+          const other = pending.get(code);
+          entry = other && other.key === key ? await other.promise : cached;
+        } else {
+          researchAt.set(code, now);
+          entry = await launch(code, live, true);
+        }
+      } else if (cached?.key === key && now - cached.at < LIVE_SOURCES_TTL_MS) {
         entry = cached;
       } else {
         const running = pending.get(code);
-        if (running && running.key === key && !options.research) {
-          entry = await running.promise;
-        } else {
-          const promise = resolve(code, live, !!options.research);
-          pending.set(code, { key, promise });
-          try {
-            entry = await promise;
-          } finally {
-            if (pending.get(code)?.promise === promise) pending.delete(code);
-          }
-        }
+        entry =
+          running && running.key === key ? await running.promise : await launch(code, live, false);
       }
       return { candidates: [...entry.candidates], scan: jobOf(entry.jobId) };
     },
@@ -153,6 +260,10 @@ export function createLiveSources(deps: LiveSourcesDeps): LiveSources {
     forget(code) {
       entries.delete(code);
       pending.delete(code);
+      researching.delete(code);
+      researchAt.delete(code);
+      /* Lo que aún esté en marcha ya no guarda nada. */
+      nextGeneration(code);
     },
   };
 }

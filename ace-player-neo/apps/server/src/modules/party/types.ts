@@ -33,9 +33,12 @@ import type { PlaybackService, ViewerIdentity } from '../playback/types.js';
 import type { RemuxService } from '../remux/types.js';
 import type { FootballService } from '../football/types.js';
 import type { ScannerService } from '../scanner/types.js';
+import type { EngineService } from '../engine/types.js';
 
 export interface PartyDeps extends CoreDeps {
-  readonly playback: Pick<PlaybackService, 'acquire' | 'acquireVod' | 'heartbeat' | 'release'>;
+  readonly playback: Pick<PlaybackService, 'acquire' | 'acquireVod' | 'heartbeat' | 'release'> &
+    /* El automático del directo mira quién usa la plaza IPTV (sin él, se da por libre). */
+    Partial<Pick<PlaybackService, 'status'>>;
   /**
    * La calidad ligera de los invitados (docs/ver-juntos.md §17). Sin él (tests viejos), nadie la
    * recibe: `index.m3u8` como siempre.
@@ -48,6 +51,8 @@ export interface PartyDeps extends CoreDeps {
   readonly football?: Pick<FootballService, 'resolve'>;
   /** Los veredictos del comprobador (qué fuente está verificada) y los que aprende la sala. */
   readonly scanner?: Pick<ScannerService, 'job' | 'verdict' | 'recordVerdict'>;
+  /** El vigilante del motor: con él caído, un corte de la sala no es «Sin señal» de la fuente. */
+  readonly engine?: Pick<EngineService, 'status'>;
 }
 
 /** De dónde viene la petición de `partyStream`. */

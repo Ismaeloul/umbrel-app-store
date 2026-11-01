@@ -24,7 +24,7 @@
      casa: solo en casa (`liveTools`). El «Cambio automático si se cae» lo
      decide el servidor (party/live-auto.ts). */
 
-import type { PartyCloseReason, PartyCredential } from '@ace/shared';
+import type { PartyCloseReason, PartyCredential, PartyRoom } from '@ace/shared';
 import {
   useCallback,
   useEffect,
@@ -51,6 +51,7 @@ import { MobileFaces, MobileSkip } from './Mobile.tsx';
 import { Faces, joinNames, Lobby, NextCard, NextPanel, People } from './Panels.tsx';
 import { LiveMatches, LiveReclaim, LiveSources } from './LivePanels.tsx';
 import { canSwitchLive } from './liveSources.ts';
+import { LIVE_TEXT } from './liveTexts.ts';
 import { RoomPlayer } from './player.ts';
 import { useUnread } from './useUnread.ts';
 import { Theater } from './Theater.tsx';
@@ -69,6 +70,28 @@ const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
 const CLOSE_CONFIRM_MS = 5_000;
 
 type SideTab = 'chat' | 'siguiente' | 'fuentes' | 'partidos' | 'gente';
+
+/* directo §14 */
+/**
+ * La pestaña que se ve de verdad: la elegida o, si ya no está (a un co-líder le quitan el
+ * co-liderazgo con Fuentes abierta), el Chat. Con la misma regla que la lista de pestañas.
+ */
+function visibleTab(
+  tab: SideTab,
+  room: PartyRoom | null,
+  selfId: string,
+  liveTools: boolean,
+): SideTab {
+  const live = !!room?.live;
+  const switcher = live && canSwitchLive(room, selfId);
+  const ok =
+    tab === 'chat' ||
+    tab === 'gente' ||
+    (tab === 'siguiente' && !live) ||
+    (tab === 'fuentes' && switcher) ||
+    (tab === 'partidos' && switcher && liveTools);
+  return ok ? tab : 'chat';
+}
 
 /** ¿Este navegador sabe poner un elemento cualquiera en pantalla completa? (el iPhone, no). */
 function nativeFullscreen(element: HTMLElement | null): boolean {
@@ -119,7 +142,12 @@ export function Room({
   const closeTap = useSecondTap(CLOSE_CONFIRM_MS);
   const [closing, setClosing] = useState(false);
   /* directo §14 */
-  const unread = useUnread(state.chat, credential.id, tab === 'chat');
+  /* Lo que se pinta (`shownSide`), no lo último que se tocó: si Fuentes desaparece, el Chat se lee. */
+  const unread = useUnread(
+    state.chat,
+    credential.id,
+    visibleTab(tab, state.room, credential.id, liveTools) === 'chat',
+  );
 
   useEffect(() => {
     rememberRoom(code);
@@ -212,9 +240,12 @@ export function Room({
     : live
       ? role === 'leader' || (liveTabs && room.settings.control === 'everyone')
         ? JUNTOS_TEXT.liveYouControl(live.channel)
-        : liveTabs
+        : role === 'coleader'
           ? JUNTOS_TEXT.liveColeader(leaderName)
-          : JUNTOS_TEXT.liveGuestOf(hostName, names.length > 1)
+          : isHost
+            ? /* La corona pasó a otro (o la cedió): no es co-líder. */
+              LIVE_TEXT.hostNotLeader(leaderName)
+            : JUNTOS_TEXT.liveGuestOf(hostName, names.length > 1)
       : room.settings.control === 'everyone'
         ? JUNTOS_TEXT.everyoneControls(lobby)
         : role === 'leader'
@@ -311,7 +342,7 @@ export function Room({
         { value: 'siguiente', label: JUNTOS_TEXT.tabNext, count: room?.queue.length ?? 0 },
         { value: 'gente', label: JUNTOS_TEXT.tabPeople },
       ];
-  const shownSide: SideTab = tabs.some((item) => item.value === tab) ? tab : 'chat';
+  const shownSide: SideTab = visibleTab(tab, room, selfId, liveTools);
   /* Como la maqueta: quien creó la sala, solo «Invitar» («Cerrar sala» va al
      final de Gente); los demás, «Salir» (e «Invitar» si controlan). En el
      móvil, con los dos, «Invitar» se queda en el icono: no caben junto al título. */
