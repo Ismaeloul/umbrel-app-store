@@ -196,8 +196,11 @@ export const VOD_FFMPEG_RW_TIMEOUT_US = 55_000_000;
  * película, hecha en casa a partir de los segmentos que ya están en disco (nunca otra conexión con el
  * proveedor), solo para quien entra de fuera por el proxy de la sala.
  *
- * - `aheadSegments` y `aheadMaxS`: lo que se adelanta el codificador al último `lo_index<N>` pedido;
- *   por debajo de `restartAheadS` (30 s) del productor, así nunca le pide un reinicio.
+ * - `aheadSegments` y `aheadMaxS`: lo que se adelanta el codificador al último `lo_index<N>` pedido.
+ *   Solo lee lo que el productor ya tiene en disco (`readySegment`) y no le mueve el cursor, así que
+ *   adelantarse no le pide ningún reinicio; el productor va hasta `aheadMaxS` (120 s) por delante.
+ *   Eran 3 y 20 s: el iPhone, tras una pausa o un salto, pide de golpe y se quedaba esperando
+ *   `waitMs` en el borde (§16). A unas 6× el tiempo real y con la plaza ya cogida, cuesta poco.
  * - `waitMs`: lo que espera una petición al segmento que se está codificando; `repositionWaitMs`, al
  *   que pide un salto (el codificador se va allí). Después, 503 con `Retry-After: 1`; a la segunda
  *   vez, 404 y el reproductor tira del original para ese trozo.
@@ -208,8 +211,8 @@ export const VOD_FFMPEG_RW_TIMEOUT_US = 55_000_000;
  *   como mucho, el audio y un 10 % de margen).
  */
 export const LITE_VOD = {
-  aheadSegments: 3,
-  aheadMaxS: 20,
+  aheadSegments: 8,
+  aheadMaxS: 48,
   waitMs: 4 * SECOND,
   repositionWaitMs: 6 * SECOND,
   idleMs: MINUTE,

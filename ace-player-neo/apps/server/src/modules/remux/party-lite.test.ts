@@ -19,6 +19,8 @@ import { FakeFfmpegLauncher } from '../../../test/fake-vod/fake-ffmpeg.js';
 import { isAppError } from '../../core/errors.js';
 import { notImplementedService } from '../../core/stub.js';
 import type { EngineService } from '../engine/types.js';
+import type { VaapiProfile } from './args.js';
+import { softwareVideoAccel, type VideoAccel } from './hwaccel.js';
 import { createRemuxRuntime, type RemuxRuntime } from './service.js';
 import type { LiteProcess, LiteProcessLauncher, VodIndex } from './vod/types.js';
 
@@ -45,11 +47,17 @@ const INDEX: VodIndex = {
 };
 
 /** Un trabajo ligero que devuelve lo que le entra (init + segmento): tiempos y init idénticos. */
-function echoLauncher(): LiteProcessLauncher & { readonly jobs: number[] } {
+function echoLauncher(): LiteProcessLauncher & {
+  readonly jobs: number[];
+  readonly argv: (readonly string[])[];
+} {
   const jobs: number[] = [];
+  const argv: (readonly string[])[] = [];
   return {
     jobs,
-    spawn(): LiteProcess {
+    argv,
+    spawn(args: readonly string[]): LiteProcess {
+      argv.push(args);
       const stdout = new PassThrough();
       const chunks: Buffer[] = [];
       let onExit: ((code: number | null, signal: string | null) => void) | null = null;
@@ -96,7 +104,7 @@ afterEach(async () => {
   while (runtimes.length) await runtimes.pop()?.service.stop();
 });
 
-async function setup(lite: '0' | '1') {
+async function setup(lite: '0' | '1', videoAccel?: VideoAccel) {
   const core = createTestCore({ env: { ACE_PARTY_LITE: lite } });
   const liteLauncher = echoLauncher();
   const runtime = createRemuxRuntime({
@@ -104,6 +112,7 @@ async function setup(lite: '0' | '1') {
     engine: notImplementedService<EngineService>('engine'),
     vodLauncher: new FakeFfmpegLauncher(MOVIE),
     liteLauncher,
+    ...(videoAccel ? { videoAccel } : {}),
     readVodIndex: async () => INDEX,
     procRoot: null,
     watchFiles: false,
@@ -188,6 +197,34 @@ describe('remux: calidad ligera de «Ver juntos» (§17)', () => {
     expect(service.vodLiteOffer('s_otra000001', false)).toBeNull();
   });
 
+  it('el CODECS de la maestra fija el codificador: el ensayo que acaba después no lo cambia', async () => {
+    const profile: VaapiProfile = {
+      device: '/dev/dri/renderD128',
+      lowPower: true,
+      rateControl: 'VBR',
+      deinterlace: true,
+      liteCodecs: 'avc1.640c28',
+    };
+    /* La gráfica «aún ensayando» al servir la maestra; lista justo después. */
+    let on = false;
+    const base = softwareVideoAccel(2);
+    const accel: VideoAccel = { ...base, vaapi: () => (on ? profile : null) };
+    const { app, service, liteLauncher } = await setup('1', accel);
+    const master = await app.inject({ method: 'GET', url: '/sala/master.m3u8' });
+    expect(master.body).toContain('CODECS="avc1.640028,mp4a.40.2"');
+    on = true;
+    expect(service.vodLiteOffer(SID, false)).toMatchObject({
+      variants: { lite: 'avc1.640028' },
+    });
+    const init = await app.inject({ method: 'GET', url: '/sala/lo_init.mp4' });
+    expect(init.statusCode).toBe(200);
+    expect(liteLauncher.argv.length).toBeGreaterThan(0);
+    for (const argv of liteLauncher.argv) {
+      expect(argv).toContain('libx264');
+      expect(argv).not.toContain('h264_vaapi');
+    }
+  });
+
   it('la ruta de vídeo de siempre no conoce nada de la versión ligera', async () => {
     const { app } = await setup('1');
     for (const file of ['master.m3u8', 'lo.m3u8', 'lo_init.mp4', 'lo_index0.m4s']) {
@@ -219,6 +256,11 @@ describe('remux: calidad ligera de «Ver juntos» (§17)', () => {
     expect(liteLauncher.jobs).toEqual([]);
     expect(service.vodLiteOffer(SID, false)).toBeNull();
     expect(await service.vodLiteCovers('m_lite')).toBe(false);
-    expect(service.stats()).toEqual({ sessions: 0, max: 3, ffmpegMissing: false });
+    expect(service.stats()).toEqual({
+      sessions: 0,
+      max: 3,
+      ffmpegMissing: false,
+      video: expect.objectContaining({ hwaccel: 'none', encoder: 'libx264' }),
+    });
   });
 });

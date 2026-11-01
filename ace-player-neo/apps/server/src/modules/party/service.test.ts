@@ -16,7 +16,7 @@
      `master.m3u8`, `lo.m3u8` o el `index.m3u8` de siempre. */
 
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   PARTY,
   PartyEventSchema,
@@ -253,9 +253,9 @@ describe('«Ver juntos»: salas', () => {
     let last = sse.of('party.playback').at(-1);
     expect(last?.action).toBe('wait');
     expect(last?.playback.waitingFor).toEqual([ana.member.id]);
+    /* Se para donde se atascó Ana (§16), no en lo que llevaba la sala (5,8 s y pico). */
     const frozen = last?.playback.positionS ?? -1;
-    expect(frozen).toBeGreaterThan(5);
-    expect(frozen).toBeLessThanOrEqual(7.5);
+    expect(frozen).toBe(5);
 
     clock.advance(3_000);
     party.status(room, { token: ana.member.token, positionS: frozen, buffering: false });
@@ -344,6 +344,100 @@ describe('«Ver juntos»: salas', () => {
     party.status(room, { token: ana.member.token, positionS: 0, buffering: true });
     clock.advance(PARTY.bufferingGraceMs + 1_000);
     expect(last()).toBe('wait');
+  });
+
+  it('§16: la sala se para donde se atascó quien carga, no por delante (hasta holdRewindMaxS)', async () => {
+    const { party, clock } = setup();
+    const host = party.create(BODY);
+    const room = host.room.code;
+    const ana = party.join(room, 'Ana');
+    const sse = listen(party, room, host.member.token);
+    await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    party.control(room, { token: host.member.token, action: 'play', positionS: 99 });
+    /* La sala va por 100 s; el iPhone de Ana se queda sin datos en 98,6 s. */
+    clock.advance(1_000);
+    party.status(room, { token: ana.member.token, positionS: 98.6, buffering: true });
+    clock.advance(PARTY.bufferingGraceMs + 1_000);
+    const wait = sse.of('party.playback').at(-1);
+    expect(wait?.action).toBe('wait');
+    expect(wait?.playback.positionS).toBe(98.6);
+    /* Se recupera: la sala sigue desde ahí. */
+    party.status(room, { token: ana.member.token, positionS: 98.6, buffering: false });
+    clock.advance(PARTY.resumeSettleMs + 1_000);
+    expect(sse.of('party.playback').at(-1)?.action).toBe('resume');
+
+    /* Muy atrasada (más de holdRewindMaxS): la sala no retrocede tanto, se para donde va. */
+    clock.advance(10_000);
+    const at = 98.6 + (clock.now() - (sse.of('party.playback').at(-1)?.playback.at ?? 0)) / 1000;
+    party.status(room, { token: ana.member.token, positionS: 80, buffering: true });
+    clock.advance(PARTY.bufferingGraceMs + 1_000);
+    const far = sse.of('party.playback').at(-1);
+    expect(far?.action).toBe('wait');
+    expect(far?.playback.positionS).toBeGreaterThan(at);
+    expect(far?.playback.positionS).toBeLessThan(at + 2.5);
+  });
+
+  it('§16: tras esperar hasta el tope, el mismo atasco no vuelve a parar la sala; uno nuevo, sí', async () => {
+    const { party, clock } = setup();
+    const host = party.create(BODY);
+    const room = host.room.code;
+    const ana = party.join(room, 'Ana');
+    const sse = listen(party, room, host.member.token);
+    await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    party.control(room, { token: host.member.token, action: 'play', positionS: 0 });
+    const actions = () => sse.of('party.playback').map((s) => s.action);
+    party.status(room, { token: ana.member.token, positionS: 0, buffering: true });
+    clock.advance(PARTY.bufferingGraceMs + 1_000);
+    expect(actions()).toEqual(['play', 'wait']);
+    clock.advance(PARTY.holdMaxMs);
+    expect(actions()).toEqual(['play', 'wait', 'resume']);
+    /* Sigue «cargando» (el latido cada 5 s, sin cambios) mucho después del enfriamiento de 30 s:
+       antes, la sala se volvía a parar al momento y así una y otra vez. */
+    for (let i = 0; i < 20; i += 1) {
+      clock.advance(PARTY.statusIntervalMs);
+      party.status(room, { token: ana.member.token, positionS: 3, buffering: true });
+    }
+    expect(actions()).toEqual(['play', 'wait', 'resume']);
+    /* Se recupera y vuelve a atascarse: es otro atasco, con la gracia de siempre. */
+    party.status(room, { token: ana.member.token, positionS: 3, buffering: false });
+    clock.advance(2_000);
+    party.status(room, { token: ana.member.token, positionS: 5, buffering: true });
+    clock.advance(PARTY.bufferingGraceMs - 300);
+    expect(actions().at(-1)).toBe('resume');
+    clock.advance(1_000);
+    expect(actions()).toEqual(['play', 'wait', 'resume', 'wait']);
+  });
+
+  it('§16: cada espera deja una línea en el registro al empezar y al acabar', async () => {
+    const { party, clock, core } = setup();
+    const info = vi.spyOn(core.logger, 'info');
+    const host = party.create(BODY);
+    const room = host.room.code;
+    const ana = party.join(room, 'Ana');
+    await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    party.control(room, { token: host.member.token, action: 'play', positionS: 0 });
+    party.status(room, { token: ana.member.token, positionS: 0.5, buffering: true });
+    clock.advance(PARTY.bufferingGraceMs + 1_000);
+    clock.advance(PARTY.holdMaxMs);
+    const holds = info.mock.calls
+      .map(([fields]) => fields as unknown as Record<string, unknown>)
+      .filter((fields) => fields.phase !== undefined);
+    expect(holds).toEqual([
+      expect.objectContaining({
+        room,
+        member: ana.member.id,
+        phase: 'start',
+        reason: 'first',
+        holdS: 0.5,
+      }),
+      expect.objectContaining({
+        room,
+        member: ana.member.id,
+        phase: 'end',
+        reason: 'holdMax',
+        holdS: 0.5,
+      }),
+    ]);
   });
 
   it('el SSE empieza con la foto entera; el chat llega a todos y tiene tope por minuto', () => {

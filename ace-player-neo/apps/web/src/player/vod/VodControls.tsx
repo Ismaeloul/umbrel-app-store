@@ -24,6 +24,7 @@ import { MenuButton } from '../../ui/Menu.tsx';
 import { Num } from '../../ui/Num.tsx';
 import type { PlayerState, VodPlayback } from '../api.ts';
 import type { PlayerContextValue } from '../context.ts';
+import { VolumeControl } from '../VolumeControl.tsx';
 import { clockText, VOD_SEEK_STEP_S } from './timeline.ts';
 
 /**
@@ -213,7 +214,16 @@ function VodClock({ vod }: { vod: VodPlayback }) {
   );
 }
 
-export function VodControls({ state, ctx }: { state: PlayerState; ctx: PlayerContextValue }) {
+export function VodControls({
+  state,
+  ctx,
+  onActivity,
+}: {
+  state: PlayerState;
+  ctx: PlayerContextValue;
+  /** Ajustando el volumen: los controles siguen a la vista (PlayerSurface). */
+  onActivity?: () => void;
+}) {
   const vod = state.vod;
   const { actions } = ctx;
   const wantsPlay = state.desiredPlaying || state.phase === 'buffer';
@@ -224,7 +234,6 @@ export function VodControls({ state, ctx }: { state: PlayerState; ctx: PlayerCon
     state.conn === 'reconectando' ||
     (state.conn === 'arrancando' && state.phase !== 'bloqueado');
   const ready = state.conn === 'activa' && vod !== null && vod.durationS > 0;
-  const volume = state.muted ? 0 : state.volume;
   const tracks = vod?.audio ?? [];
   return (
     <div className="player-chrome__bottom vod-bottom">
@@ -273,27 +282,15 @@ export function VodControls({ state, ctx }: { state: PlayerState; ctx: PlayerCon
               <Num value="10" />
               <Icon name="back" size={18} className="vod-forward__icon" />
             </button>
-            <IconButton
-              icon={state.muted || state.volume === 0 ? 'mute' : 'vol'}
-              label={state.muted ? 'Activar sonido' : 'Silenciar'}
+            <VolumeControl
+              muted={state.muted || state.volume === 0}
+              volume={state.volume}
               shortcut="M"
-              variant="video"
-              onClick={actions.toggleMute}
+              slider={ctx.finePointer && !ctx.compact}
+              onToggleMute={actions.toggleMute}
+              onVolume={actions.setVolume}
+              {...(onActivity ? { onActivity } : {})}
             />
-            {ctx.finePointer && !ctx.compact ? (
-              <label className="player-vol">
-                <span className="sr-only">Volumen</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={volume}
-                  style={{ '--v': volume } as CSSProperties}
-                  onChange={(event) => actions.setVolume(Number(event.currentTarget.value))}
-                />
-              </label>
-            ) : null}
           </div>
           {vod && vod.durationS > 0 ? <VodClock vod={vod} /> : null}
         </div>

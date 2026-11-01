@@ -466,6 +466,8 @@ export function createHealthService(deps: HealthDeps): HealthService {
           },
           events: { connections },
           ...(instantStart ? { instantStart } : {}),
+          /* La gráfica del NAS (docs/ver-juntos.md §17.6): para mirarlo desde la LAN. */
+          ...(remux.video ? { video: remux.video } : {}),
         },
         reports,
         diagnostics: { counts24h: { ...ZERO_COUNTS, ...counts24h } },

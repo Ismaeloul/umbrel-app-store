@@ -4,7 +4,7 @@
    `lo.m3u8` tras un atasco repetido y «Calidad», que nunca es una orden de la sala. Con hls.js, el
    vídeo, la API y el reloj simulados. */
 
-import type { PartyRoom, PartyStreamGrant } from '@ace/shared';
+import { PARTY, type PartyRoom, type PartyStreamGrant } from '@ace/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import joined from '@fixtures/web/v1/partyJoin.json';
 import grantFixture from '@fixtures/v1/vodStream.json';
@@ -514,5 +514,209 @@ describe('«Ver juntos», una sesión nueva', () => {
     player.retry();
     expect(player.getView().sounded).toBe(false);
     player.destroy();
+  });
+});
+
+/**
+ * Safari del iPhone (HLS nativo, AVPlayer), lo justo para el atasco de §16: un salto pone
+ * `seeking`, tira lo cargado y vuelve a pedir el trozo entero (`fetches`); a los 200 ms llega
+ * 'seeked' y el vídeo queda donde diga `land` (el fotograma clave, unas décimas al lado o justo
+ * donde se pidió). En pausa, sin saltos, lo cargado crece 1 s cada 500 ms; reproduciendo con datos,
+ * el vídeo avanza a su `playbackRate`.
+ */
+class FakeSafariVideo extends FakeVideo {
+  fetches = 0;
+  private time = 0;
+  private pending: { to: number; at: number } | null = null;
+  private loadedAt = 0;
+  constructor(private readonly land: (to: number) => number) {
+    super();
+    /* `currentTime` es un campo de FakeVideo: se cambia por un accesor en la propia instancia. */
+    Object.defineProperty(this, 'currentTime', {
+      configurable: true,
+      get: () => this.time,
+      set: (to: number) => {
+        this.fetches += 1;
+        this.seeking = true;
+        this.readyState = 1;
+        this.ranges = [];
+        this.pending = { to, at: now + 200 };
+        this.dispatchEvent(new Event('seeking'));
+      },
+    });
+  }
+  /** Lo que pasa en el vídeo hasta `now` (el reloj falso). */
+  advance(): void {
+    const pending = this.pending;
+    if (pending && now >= pending.at) {
+      this.pending = null;
+      this.time = this.land(pending.to);
+      this.seeking = false;
+      this.loadedAt = now;
+      this.dispatchEvent(new Event('seeked'));
+    }
+    if (this.seeking) return;
+    if (!this.paused && this.readyState >= 3) this.time += 0.05 * this.playbackRate;
+    const ahead = Math.floor((now - this.loadedAt) / 500);
+    this.ranges = [[this.time, this.time + ahead]];
+    this.readyState = ahead >= 2 ? 4 : 2;
+  }
+  /** Coloca el vídeo sin que cuente como salto (la carga de partida). */
+  place(at: number): void {
+    this.time = at;
+    this.loadedAt = now;
+  }
+}
+
+describe('«Ver juntos», Safari con la sala esperando (§16): el salto en pausa, una vez', () => {
+  const IDR = 145.033;
+
+  beforeEach(() => {
+    Object.assign(platform, { ios: true, mse: false, nativeHls: true });
+  });
+
+  /** La sala de la captura del 1-11-2026: «reproduciendo», esperando a Ana, parada en 147,5 s. */
+  async function waitingRoom(land: (to: number) => number, waitingFor: string[] = [ANA]) {
+    api.mockResolvedValue(grantFor('index'));
+    const video = new FakeSafariVideo(land);
+    video.place(145.2);
+    const room = makeRoom();
+    const playback = { playing: true, positionS: 147.5, at: now, rev: 9, waitingFor, lobby: false };
+    const { client } = fakeClient(ANA, { ...room, playback });
+    const player = new RoomPlayer(
+      video as unknown as HTMLVideoElement,
+      client,
+      { guest: true },
+      fakeEnv(),
+    );
+    player.start();
+    await vi.waitFor(() => expect(player.getView().phase).toBe('blocked'));
+    player.unlock();
+    await vi.waitFor(() => expect(video.paused).toBe(true));
+    const run = (ms: number) => {
+      for (let t = 50; t <= ms; t += 50) {
+        now += 50;
+        video.advance();
+        if (t % 500 === 0) tick();
+      }
+    };
+    return { player, video, playback, run, client };
+  }
+
+  it('cayendo siempre en el fotograma clave: como mucho un reintento en 20 s (antes, uno por tic)', async () => {
+    const { video, run, player } = await waitingRoom(() => IDR);
+    run(20_000);
+    expect(video.fetches).toBeLessThanOrEqual(2);
+    expect(video.fetches).toBeGreaterThanOrEqual(1);
+    /* El registro de saltos dice dónde cayó cada uno. */
+    expect(player.getSeeks().map((seek) => [seek.to, seek.landed])).toEqual(
+      Array.from({ length: video.fetches }, () => [147.5, IDR]),
+    );
+    /* Y, sin saltos, el colchón se llena: deja de estar atascado. */
+    expect(player.getView().bufferedS - video.currentTime).toBeGreaterThanOrEqual(4);
+  });
+
+  it('cayendo unas décimas al lado (+0,4 s): un salto y nada más', async () => {
+    const { video, run } = await waitingRoom((to) => to + 0.4);
+    run(20_000);
+    expect(video.fetches).toBe(1);
+  });
+
+  it('cayendo justo donde se pide: un salto y nada más', async () => {
+    const { video, run } = await waitingRoom((to) => to);
+    run(20_000);
+    expect(video.fetches).toBe(1);
+    expect(video.currentTime).toBe(147.5);
+  });
+
+  it('la sala espera a este aparato y está a 1,2 s: no se mueve en pausa', async () => {
+    const { video, run, playback } = await waitingRoom(() => IDR);
+    playback.positionS = 146.4;
+    run(20_000);
+    expect(video.fetches).toBe(0);
+    expect(video.currentTime).toBe(145.2);
+  });
+
+  it('esperando a otro, a 1,2 s: se coloca una vez (la regla de 0,3 s en pausa)', async () => {
+    const { video, run, playback } = await waitingRoom((to) => to + 0.4, [HOST]);
+    playback.positionS = 146.4;
+    run(20_000);
+    expect(video.fetches).toBe(1);
+  });
+
+  it('una orden nueva (el líder salta a otro sitio) salta enseguida aunque el anterior sea reciente', async () => {
+    const { video, run, playback } = await waitingRoom(() => IDR, [HOST]);
+    run(1_000);
+    expect(video.fetches).toBe(1);
+    Object.assign(playback, { playing: false, positionS: 600, rev: 10, waitingFor: [] });
+    tick();
+    expect(video.fetches).toBe(2);
+    run(300);
+    expect(video.currentTime).toBe(IDR);
+  });
+
+  it('en pausa, otro `rev` en el mismo sitio («entra…», «esperando a…») no vuelve a saltar', async () => {
+    const { video, run, playback } = await waitingRoom((to) => to + 0.4, [HOST]);
+    run(1_000);
+    expect(video.fetches).toBe(1);
+    Object.assign(playback, { rev: 10 });
+    tick();
+    run(5_000);
+    Object.assign(playback, { rev: 11, waitingFor: [HOST, ANA] });
+    tick();
+    run(5_000);
+    expect(video.fetches).toBe(1);
+  });
+
+  it('cae a 1,5 s, pasa a ser esperado y la sala sigue: no salta en 20 s, lo absorbe la velocidad', async () => {
+    const { video, run, playback } = await waitingRoom((to) => to - 1.5, [HOST]);
+    run(1_000);
+    expect(video.fetches).toBe(1);
+    expect(video.currentTime).toBe(146);
+    /* Atascado ahí, entra como segundo que espera (`rev` + 1, la sala no se mueve). */
+    Object.assign(playback, { rev: 10, waitingFor: [HOST, ANA] });
+    tick();
+    run(4_000);
+    expect(video.fetches).toBe(1);
+    /* «Sigue»: `rev` + 1, mismo `positionS`, y la sala echa a andar. */
+    Object.assign(playback, { rev: 11, waitingFor: [], at: now });
+    tick();
+    run(500);
+    expect(video.paused).toBe(false);
+    expect(video.playbackRate).toBe(1 + PARTY.driftRate);
+    run(20_000);
+    /* Antes: un salto en el primer tic (la «orden» de 'resume'), que tiraba el colchón recién lleno. */
+    expect(video.fetches).toBe(1);
+  });
+
+  it('por delante de la sala al atascarse (1,6 s), esperado: ni salta en pausa ni al seguir', async () => {
+    const { video, run, playback } = await waitingRoom(() => IDR);
+    playback.positionS = 143.6;
+    run(5_000);
+    expect(video.fetches).toBe(0);
+    Object.assign(playback, { rev: 10, waitingFor: [], at: now });
+    tick();
+    run(20_000);
+    expect(video.fetches).toBe(0);
+  });
+
+  it('pasado lo que se absorbe, una deriva de más de driftSeekS vuelve a saltar', async () => {
+    const { video, run, playback } = await waitingRoom((to) => to, [HOST]);
+    run(1_000);
+    Object.assign(playback, { waitingFor: [], at: now });
+    tick();
+    run(1_000);
+    expect(video.fetches).toBe(1);
+    /* A 1,5 s mientras se absorbe: con la velocidad. */
+    const ahead = (s: number) =>
+      Object.assign(playback, { at: now - (video.currentTime + s - playback.positionS) * 1000 });
+    ahead(1.5);
+    tick();
+    expect(video.fetches).toBe(1);
+    /* 61 s después, la sala 1,5 s por delante (p. ej., el reloj): salta como siempre. */
+    now += 61_000;
+    ahead(1.5);
+    tick();
+    expect(video.fetches).toBe(2);
   });
 });

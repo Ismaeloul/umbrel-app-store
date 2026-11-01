@@ -129,7 +129,13 @@ describe('arranque y espera del manifiesto (B-105, B-217)', () => {
     const proc = fake.last();
     expect(proc.input).toBe(`http://ismaeloul-ace-player-neo_acestream_1:6878/ace/r/${hex(1)}/p1`);
     expect(proc.sessionId).toBe('s_sesion0001');
-    expect(service.stats()).toEqual({ sessions: 1, max: MAX_REMUX_SESSIONS, ffmpegMissing: false });
+    expect(service.stats()).toEqual({
+      sessions: 1,
+      max: MAX_REMUX_SESSIONS,
+      ffmpegMissing: false,
+      /* Con un ffmpeg de pega no se ensaya la gráfica: x264 (hwaccel.ts). */
+      video: expect.objectContaining({ hwaccel: 'none', encoder: 'libx264', recodeSlots: 2 }),
+    });
     expect(service.viewersOf('s_sesion0001')).toEqual(['visor-1']);
     expect(service.viewersOf('s_otra00000')).toEqual([]);
     expect(runtime.entries()[0]).toMatchObject({ pid: proc.pid, ready: true, exited: false });

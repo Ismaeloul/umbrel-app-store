@@ -2,7 +2,7 @@
 openapi: 3.1.0
 info:
   title: Ace Player Neo · API v1
-  version: 1.1.0
+  version: 1.1.1
   description: "Generado desde packages/shared/src/routes.ts con scripts/openapi.ts: no editar a mano. Cada ruta existe también bajo /native (la entrada de la app iOS, D4), con origen native. Las rutas antiguas /api/* están en docs/openapi.yaml."
 servers:
   - url: /
@@ -972,6 +972,63 @@ paths:
                           - matchId
                           - source
                           - last
+                        additionalProperties: false
+                      video:
+                        type: object
+                        properties:
+                          hwaccel:
+                            type: string
+                            enum:
+                              - vaapi
+                              - none
+                              - probing
+                          reason:
+                            type:
+                              - string
+                              - "null"
+                          device:
+                            type:
+                              - string
+                              - "null"
+                          encoder:
+                            type: string
+                            enum:
+                              - h264_vaapi
+                              - libx264
+                          lowPower:
+                            type:
+                              - boolean
+                              - "null"
+                          rateControl:
+                            anyOf:
+                              - type: string
+                                enum:
+                                  - VBR
+                                  - CQP
+                              - type: "null"
+                          deinterlace:
+                            type: string
+                            enum:
+                              - vaapi
+                              - bwdif
+                          recodeSlots:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          failures:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - hwaccel
+                          - reason
+                          - device
+                          - encoder
+                          - lowPower
+                          - rateControl
+                          - deinterlace
+                          - recodeSlots
+                          - failures
                         additionalProperties: false
                     required:
                       - backend
@@ -11005,6 +11062,63 @@ paths:
                                       - matchId
                                       - source
                                       - last
+                                    additionalProperties: false
+                                  video:
+                                    type: object
+                                    properties:
+                                      hwaccel:
+                                        type: string
+                                        enum:
+                                          - vaapi
+                                          - none
+                                          - probing
+                                      reason:
+                                        type:
+                                          - string
+                                          - "null"
+                                      device:
+                                        type:
+                                          - string
+                                          - "null"
+                                      encoder:
+                                        type: string
+                                        enum:
+                                          - h264_vaapi
+                                          - libx264
+                                      lowPower:
+                                        type:
+                                          - boolean
+                                          - "null"
+                                      rateControl:
+                                        anyOf:
+                                          - type: string
+                                            enum:
+                                              - VBR
+                                              - CQP
+                                          - type: "null"
+                                      deinterlace:
+                                        type: string
+                                        enum:
+                                          - vaapi
+                                          - bwdif
+                                      recodeSlots:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      failures:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                    required:
+                                      - hwaccel
+                                      - reason
+                                      - device
+                                      - encoder
+                                      - lowPower
+                                      - rateControl
+                                      - deinterlace
+                                      - recodeSlots
+                                      - failures
                                     additionalProperties: false
                                 required:
                                   - backend

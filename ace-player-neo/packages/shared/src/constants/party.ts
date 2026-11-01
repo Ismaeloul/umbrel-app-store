@@ -34,6 +34,11 @@ export const PARTY = {
    * Antes seguía con el primer aviso y, en el iPhone, se paraba otra vez enseguida.
    */
   resumeSettleMs: 700,
+  /**
+   * Al esperar a alguien, la sala se para donde se atascó él si va hasta esto por detrás (§16):
+   * los demás retroceden un poco en pausa. Más atrasado, la sala se para donde va y él se pone al día.
+   */
+  holdRewindMaxS: 8,
   /** Con dos esperas o más en este tiempo por la misma persona, su margen sube a `repeatBufferingGraceMs`. */
   repeatHoldWindowMs: 60_000,
   /** El margen de quien se atasca a menudo: sus atascos cortos no paran la sala. */

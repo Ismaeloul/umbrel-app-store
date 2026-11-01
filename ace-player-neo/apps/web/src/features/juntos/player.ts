@@ -60,10 +60,14 @@ import {
   forwardBufferEnd,
   isRunning,
   lobbyReport,
+  pausedSeek,
   RESUME_AHEAD_S,
+  SAME_TARGET_S,
   StallDetector,
   targetPosition,
+  WAITED_STAY_S,
 } from './sync.ts';
+import type { PausedSeek } from './sync.ts';
 import { JUNTOS_TEXT } from './texts.ts';
 
 const TICK_MS = 500;
@@ -72,6 +76,11 @@ const REOPEN_DELAY_MS = 2_000;
 const REOPENS_PER_MINUTE = 3;
 /** Reproduciendo, entre dos saltos de corrección pasa al menos esto. */
 const SEEK_BACKOFF_MS = 4_000;
+/**
+ * Tras colocarse por una orden o al seguir la sala, durante esto lo que quede hasta `WAITED_STAY_S`
+ * se corrige con la velocidad (un 5 %: 2 s en 40 s), no saltando (§16).
+ */
+const LANDING_ABSORB_MS = 60_000;
 /** Un salto en los controles nativos tiene que apartarse al menos esto de la sala para ser una orden. */
 const NATIVE_SEEK_S = 1.5;
 /** Un evento del vídeo hasta esto después de un toque o una tecla cuenta como de la persona. */
@@ -83,6 +92,32 @@ const NATIVE_SWAP_TIMEOUT_MS = 20_000;
 const SOUNDED_S = 3;
 /** «Calidad» (§17): lo último que eligió esta persona, en este navegador. */
 const QUALITY_KEY = 'aceneo-juntos-calidad';
+/** Los últimos saltos de corrección que se guardan para depurar (§16, `?debug=juntos`). */
+const SEEK_LOG_SIZE = 50;
+
+/**
+ * Un salto de corrección (§16): a dónde, desde dónde, con qué orden de la sala y dónde cayó al
+ * llegar 'seeked'. Con `?debug=juntos` en la URL se ven en `window.__aceJuntosDebug.seeks`
+ * (el inspector web del iPhone o Safari del Mac, que usa el mismo AVFoundation).
+ */
+export interface SeekRecord {
+  readonly at: number;
+  readonly from: number;
+  readonly to: number;
+  readonly rev: number;
+  readonly running: boolean;
+  readonly readyState: number;
+  landed: number | null;
+  landedAt: number | null;
+}
+
+function debugEnabled(): boolean {
+  try {
+    return new URLSearchParams(globalThis.location?.search ?? '').get('debug') === 'juntos';
+  } catch {
+    return false;
+  }
+}
 
 /** «Calidad» del invitado (§17): la elige cada uno, nunca la sala. */
 export type QualityChoice = 'auto' | 'hd' | 'lite';
@@ -234,8 +269,20 @@ export class RoomPlayer {
   private lastSeekAt = Number.NEGATIVE_INFINITY;
   /** La última orden de la sala que se ha aplicado (`playback.rev`). */
   private seenRev: number | null = null;
-  /** La orden de la sala (`playback.rev`) del último salto de corrección. */
-  private seekRev: number | null = null;
+  /**
+   * La posición de la sala (`playback.positionS`) de la última orden ya atendida: saltando a ella o
+   * quedándose donde estaba. Una orden es otra posición (un salto o una pausa del líder), no otro
+   * `rev`: «esperando a…», «entra…» y «sigue» lo suben sin mover la sala (§16).
+   */
+  private placedS: number | null = null;
+  /** ¿La sala reproducía en el tic anterior? (al seguir, se absorbe con la velocidad). */
+  private wasRunning = false;
+  /** Hasta cuándo lo que quedó al colocarse se absorbe con la velocidad (`LANDING_ABSORB_MS`). */
+  private absorbUntil = Number.NEGATIVE_INFINITY;
+  /** El último salto en pausa (`pausedSeek`, §16): no se repite en cada tic. */
+  private lastPausedSeek: PausedSeek | null = null;
+  /** Los últimos saltos de corrección (§16), para depurar en el aparato. */
+  private readonly seekLog: SeekRecord[] = [];
   private hls: HlsInstance | null = null;
   /** Las dos versiones del invitado (§17), o null: `index.m3u8` como siempre. */
   private abr: AbrState | null = null;
@@ -278,6 +325,7 @@ export class RoomPlayer {
       play: () => this.onNative('play'),
       pause: () => this.onNative('pause'),
       seeking: () => this.onNative('seeking'),
+      seeked: () => this.onSeeked(),
       /* Sin datos ya: atascado al momento (no hay que esperar al tic). */
       waiting: () => {
         if (this.view.phase === 'ready' && !this.video.paused) this.stall.waiting(this.env.now());
@@ -291,6 +339,9 @@ export class RoomPlayer {
   };
 
   getView = (): PlayerView => this.view;
+
+  /** Los últimos saltos de corrección (§16), del más viejo al más nuevo. */
+  getSeeks = (): readonly SeekRecord[] => this.seekLog;
 
   private set(patch: Partial<PlayerView>): void {
     this.view = { ...this.view, ...patch };
@@ -308,6 +359,12 @@ export class RoomPlayer {
       });
     }
     this.tickTimer = this.env.setInterval(() => this.tick(), TICK_MS);
+    if (debugEnabled()) {
+      (globalThis as { __aceJuntosDebug?: unknown }).__aceJuntosDebug = {
+        seeks: this.seekLog,
+        view: () => this.view,
+      };
+    }
     this.unsubscribe = this.client.subscribe(() => {
       this.reconcile();
       /* Una orden nueva de la sala (pausa, espera, salto) se aplica ya, no en el
@@ -502,11 +559,14 @@ export class RoomPlayer {
       return;
     }
     this.grant = grant;
-    /* Safari (HLS nativo) llena el colchón a trozos enteros: pide más para darse por recuperado. */
-    this.stall = new StallDetector(
-      engine === 'native' ? RESUME_AHEAD_S.native : RESUME_AHEAD_S.mse,
-    );
+    /* Safari (HLS nativo) llena el colchón a trozos enteros: pide más para darse por recuperado.
+       En pausa, no más de lo de partida: AVPlayer puede no llenar 10 s parado (§16). */
+    this.stall =
+      engine === 'native'
+        ? new StallDetector(RESUME_AHEAD_S.native, { pausedMaxS: RESUME_AHEAD_S.native })
+        : new StallDetector(RESUME_AHEAD_S.mse);
     this.lastSeekAt = Number.NEGATIVE_INFINITY;
+    this.lastPausedSeek = null;
     this.wasStalled = false;
     this.escalationsSeen = 0;
     this.acquiredAudio = grant.vod.audioIndex >= 0 ? grant.vod.audioIndex : null;
@@ -770,26 +830,80 @@ export class RoomPlayer {
       return;
     }
     const running = isRunning(room.playback);
+    /* La sala sigue (tras una pausa o una espera): lo que quedó al colocarse, con la velocidad. */
+    if (running && !this.wasRunning) this.absorbUntil = now + LANDING_ABSORB_MS;
+    this.wasRunning = running;
     const target = targetPosition(room.playback, this.client.serverNow(), durationS);
     if (running && video.paused) this.playVideo();
     if (!running && !video.paused) this.pauseVideo();
     if (video.readyState < 1 || video.seeking) return;
-    const fix = correction(video.currentTime, target, running);
+    /* Una orden es otra posición de la sala, no otro `rev` (§16). */
+    const order =
+      this.placedS === null || Math.abs(room.playback.positionS - this.placedS) >= SAME_TARGET_S;
+    this.placedS = room.playback.positionS;
+    /* Safari no cae justo donde se le pide (el fotograma clave, a 1-2 s): otro salto caería en el
+       mismo sitio tras tirar el colchón. Hasta `WAITED_STAY_S`, la velocidad lo absorbe. */
+    const absorbing = running && !order && now < this.absorbUntil;
+    const fix = correction(
+      video.currentTime,
+      target,
+      running,
+      absorbing ? WAITED_STAY_S : undefined,
+    );
     if (fix.kind === 'seek') {
       /* Reproduciendo, un salto cada `SEEK_BACKOFF_MS` como mucho: en una conexión
          justa, cada salto tira lo que se estaba bajando, cae sin datos, se aparta
-         otra vez y vuelve a saltar (el «CD rayado»). En pausa se coloca siempre. */
+         otra vez y vuelve a saltar (el «CD rayado»). */
       /* El freno es para la deriva: una orden nueva de la sala (un salto del líder) pasa siempre. */
-      const order = room.playback.rev !== this.seekRev;
-      if (running && !order && now - this.lastSeekAt < SEEK_BACKOFF_MS) return;
+      if (running) {
+        if (!order && now - this.lastSeekAt < SEEK_BACKOFF_MS) return;
+        this.lastPausedSeek = null;
+      } else {
+        /* En pausa, una vez por orden (§16): Safari no cae justo donde se le pide y cada salto
+           vaciaba lo cargado; con la sala esperando a este aparato, no se mueve. */
+        const next = pausedSeek({
+          rev: room.playback.rev,
+          target: fix.to,
+          localS: video.currentTime,
+          last: this.lastPausedSeek,
+          now,
+          backoffMs: SEEK_BACKOFF_MS,
+          waitedFor: room.playback.waitingFor.includes(this.client.credential.id),
+        });
+        if (!next) return;
+        this.lastPausedSeek = next;
+      }
       video.playbackRate = 1;
       this.lastSeekAt = now;
-      this.seekRev = room.playback.rev;
+      if (running) this.absorbUntil = now + LANDING_ABSORB_MS;
       this.stall.moved(now, true);
+      this.logSeek({
+        at: now,
+        from: video.currentTime,
+        to: fix.to,
+        rev: room.playback.rev,
+        running,
+        readyState: video.readyState,
+        landed: null,
+        landedAt: null,
+      });
       this.seekVideo(fix.to);
     } else if (fix.kind === 'rate' && video.playbackRate !== fix.rate) {
       video.playbackRate = fix.rate;
     }
+  }
+
+  private logSeek(record: SeekRecord): void {
+    this.seekLog.push(record);
+    if (this.seekLog.length > SEEK_LOG_SIZE) this.seekLog.shift();
+  }
+
+  /** Dónde cayó el último salto de corrección (§16): Safari no siempre cae donde se le pide. */
+  private onSeeked(): void {
+    const last = this.seekLog.at(-1);
+    if (!last || last.landed !== null) return;
+    last.landed = this.video.currentTime || 0;
+    last.landedAt = this.env.now();
   }
 
   /** ¿Ya ha avanzado `SOUNDED_S` reproduciendo desde que se le vio empezar en esta sesión? */

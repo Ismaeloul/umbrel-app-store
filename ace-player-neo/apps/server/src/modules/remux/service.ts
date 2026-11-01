@@ -45,7 +45,8 @@
      y el primer segmento de disco (interlace.ts); si es entrelazada, se
      recuerda por canal y se avisa `onDeinterlace`: playback la reinicia (B2)
      y la generación nueva sale con `bwdif` + x264 (1080p50). Como mucho
-     `MAX_DEINTERLACE` a la vez (unos 2 núcleos del N300 cada una); lo
+     `MAX_DEINTERLACE` a la vez con x264 (unos 2 núcleos del N300 cada una;
+     con la gráfica, `MAX_RECODE_HW` en total, hwaccel.ts); lo
      progresivo y la web sola siguen copiando. */
 
 /* Películas y series (docs/vod.md §9.7-§9.8, VOD-5): `openVod` lee el índice
@@ -84,7 +85,13 @@ import {
 import type { TimerHandle } from '../../core/clock.js';
 import { AppError } from '../../core/errors.js';
 import { redactText } from '../../core/logger.js';
-import { buildRemuxArgs } from './args.js';
+import { buildRemuxArgs, liveUsesVaapi } from './args.js';
+import {
+  createVideoAccel,
+  isVaapiFailure,
+  softwareVideoAccel,
+  type VaapiProfile,
+} from './hwaccel.js';
 import { probeInterlaced } from './interlace.js';
 import { elegirSesionRemuxADesalojar, type EvictionCandidate } from './eviction.js';
 import {
@@ -111,6 +118,7 @@ import { pickVodAudio } from './vod/audio.js';
 import { assertPlayable, readVodIndex, VodIndexCache } from './vod/index.js';
 import { VOD_DIR_PREFIX, VodProducer, sweepVodDirs } from './vod/producer.js';
 import { createHttpRangeReader } from './vod/reader.js';
+import { LITE_VIDEO_CODECS } from './vod/lite-args.js';
 import { LiteRendition, liteOfferFor, liteVariantFor } from './vod/lite.js';
 import {
   LITE_INIT_FILE,
@@ -185,6 +193,11 @@ interface VodEntry {
   readonly audio: boolean;
   /** Se crea con la primera petición `lo_*` (y solo con `ACE_PARTY_LITE=1`). */
   lite: LiteRendition | null;
+  /**
+   * El codificador de la ligera cuyo CODECS ya se anunció (maestra u oferta) antes de crearla: la
+   * gráfica, x264 (null) o aún nada (undefined). La ligera se crea con él (§17.6).
+   */
+  liteEncoder?: VaapiProfile | null;
 }
 
 interface LegacyClient {
@@ -206,6 +219,8 @@ interface Entry {
   readonly deinterlace: boolean;
   /** Esta generación sale en calidad ligera (720p, x264) para un iPhone con poca conexión (0.9.8). */
   readonly lite: boolean;
+  /** Recodifica con la gráfica (hwaccel.ts, docs/ver-juntos.md §17.6) y no con x264. */
+  readonly hw: boolean;
   readonly startedAt: number;
   lastAccess: number;
   /** Última vez que se vio cambiar la lista (para `remuxStalled`). */
@@ -379,6 +394,20 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       ...(process.platform === 'win32' ? { niceness: 0 } : {}),
     });
   const partyLite = config.party.lite;
+  /* La gráfica del NAS (docs/ver-juntos.md §17.6): se ensaya en `start()`. Con un ffmpeg de pega
+     (tests) no hay ensayo: x264. */
+  const accel =
+    deps.videoAccel ??
+    (deps.launcher || deps.vodLauncher || deps.liteLauncher
+      ? softwareVideoAccel(MAX_DEINTERLACE, 'ffmpeg de pruebas: sin ensayo')
+      : createVideoAccel({
+          launcher: liteLauncher,
+          clock,
+          logger,
+          mode: config.video.hwaccel,
+          device: config.video.vaapiDevice,
+          softwareSlots: MAX_DEINTERLACE,
+        }));
   let ffmpegMissing = false;
   let reaper: TimerHandle | null = null;
   let stallTimer: TimerHandle | null = null;
@@ -480,15 +509,50 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
 
   /**
    * Remux vivos que recodifican ahora: desentrelazan o salen ligeros (la entrada que se está sustituyendo
-   * ya está cerrada). Comparten el tope `MAX_DEINTERLACE` (cada uno, unos 2 núcleos del N300).
+   * ya está cerrada). `total` cuenta en el tope de recodificaciones (`accel.recodeSlots()`: 2 con x264,
+   * `MAX_RECODE_HW` con la gráfica) y `software` (las de x264, unos 2 núcleos del N300 cada una) además
+   * en `MAX_DEINTERLACE`.
    */
-  function deinterlacing(): number {
-    let count = 0;
-    for (const entry of byHash.values())
-      if ((entry.deinterlace || entry.lite) && !entry.closed) count += 1;
+  function recodes(): { total: number; software: number } {
+    let total = 0;
+    let software = 0;
+    for (const entry of byHash.values()) {
+      if ((entry.deinterlace || entry.lite) && !entry.closed) {
+        total += 1;
+        if (!entry.hw) software += 1;
+      }
+    }
     /* La ligera de «Ver juntos» (§17) mientras tiene plaza (la suelta tras 60 s sin peticiones). */
-    for (const vod of vods.values()) if (vod.lite?.holdsSlot) count += 1;
-    return count;
+    for (const vod of vods.values()) {
+      if (vod.lite?.holdsSlot) {
+        total += 1;
+        if (!vod.lite.hardware) software += 1;
+      }
+    }
+    return { total, software };
+  }
+
+  /** ¿Cabe otra recodificación? `hw`: irá por la gráfica (no gasta el tope de CPU). */
+  function recodeFree(hw: boolean): boolean {
+    const { total, software } = recodes();
+    return total < accel.recodeSlots() && (hw || software < MAX_DEINTERLACE);
+  }
+
+  /**
+   * El códec que se anuncia de la ligera de una sesión VOD (el de la gráfica si va con ella). Fija
+   * el codificador de la sesión: el `avcC` de `lo_init.mp4` tiene que ser el anunciado, y Safari no
+   * vuelve a pedir la maestra (aunque el ensayo termine después o la gráfica falle).
+   */
+  function announceLite(vod: VodEntry): string {
+    if (vod.lite) return vod.lite.announce();
+    if (vod.liteEncoder === undefined) vod.liteEncoder = accel.vaapi() ?? null;
+    return vod.liteEncoder?.liteCodecs ?? LITE_VIDEO_CODECS;
+  }
+
+  /** ¿La ligera de la sesión irá (o va) por la gráfica? (para su plaza). */
+  function liteHardware(vod: VodEntry): boolean {
+    if (vod.lite) return vod.lite.hardware;
+    return vod.liteEncoder === undefined ? !!accel.vaapi() : vod.liteEncoder !== null;
   }
 
   /** La versión ligera de la sesión: la de antes o una nueva (con la primera petición `lo_*`). */
@@ -501,17 +565,29 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         logger,
         launcher: liteLauncher,
         redact,
+        accel,
         slot: {
-          acquire: () => {
-            if (deinterlacing() < MAX_DEINTERLACE) return true;
+          acquire: (hardware) => {
+            if (recodeFree(hardware)) return true;
             logger.info(
-              { sessionId, max: MAX_DEINTERLACE },
+              { sessionId, max: accel.recodeSlots() },
               'Ver juntos: sin plaza de recodificación para la calidad ligera',
             );
             return false;
           },
           /* La plaza es `holdsSlot`: soltarla no tiene más que hacer. */
           release: () => undefined,
+          /* Pasa a x264 con la plaza cogida (la gráfica falló): ya cuenta en `software`. */
+          fits: () => {
+            const fits = recodes().software <= MAX_DEINTERLACE;
+            if (!fits) {
+              logger.info(
+                { sessionId, max: MAX_DEINTERLACE },
+                'Ver juntos: sin plaza de x264 para la calidad ligera tras fallar la gráfica',
+              );
+            }
+            return fits;
+          },
         },
         /* El fusible es de la sesión: nunca apaga nada del remux de siempre (ni `ffmpegMissing`). */
       },
@@ -519,6 +595,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         sessionId,
         dir: path.join(remuxDir, `${VOD_DIR_PREFIX}${sessionId}`),
         source: vod.producer,
+        ...(vod.liteEncoder === undefined ? {} : { encoder: vod.liteEncoder }),
       },
     );
     return vod.lite;
@@ -591,9 +668,9 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     if (!verdict) return;
     if (entry.closed || byHash.get(entry.hash) !== entry || replacing.has(entry.sessionId)) return;
     if (!wantsDeinterlace(entry.source)) return;
-    if (deinterlacing() >= MAX_DEINTERLACE) {
+    if (!recodeFree(accel.vaapi()?.deinterlace === true)) {
       logger.warn(
-        { sessionId: entry.sessionId, max: MAX_DEINTERLACE },
+        { sessionId: entry.sessionId, max: accel.recodeSlots() },
         'remux IPTV entrelazada: sin hueco para desentrelazar, sigue copiando',
       );
       return;
@@ -733,6 +810,9 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     entry.lastAccess = clock.now();
     if (entry.killed) return;
     const tail = redact(entry.log.tail(300));
+    /* Con la gráfica, un fallo suyo cuenta para apagarla (3 seguidos, hwaccel.ts): la siguiente
+       sale con x264. El fin de la entrada (sin pares, la IPTV caída, el motor) no es culpa suya. */
+    if (entry.hw && isVaapiFailure(code, tail)) accel.failed(tail);
     const cause = /codec|decoder|encoder|invalid data|unsupported|not supported/i.test(tail)
       ? 'codec'
       : 'engine';
@@ -790,12 +870,17 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     const generation = next?.generation ?? 1;
     const now = clock.now();
     const origin = source.origin ?? 'engine';
-    const lite = wantsLite(source) && deinterlacing() < MAX_DEINTERLACE;
+    /* La gráfica (§17.6) si el ensayo salió: la ligera progresiva siempre; lo entrelazado, solo
+       con `deinterlace_vaapi`. Lo que va por ella no gasta el tope de CPU. */
+    const vaapi = accel.vaapi();
+    const interlacedNow =
+      origin === 'iptv' && interlaced.get(hash) === true && wantsDeinterlace(source);
+    const lite =
+      wantsLite(source) &&
+      recodeFree(liveUsesVaapi(vaapi, { lite: true, deinterlace: interlacedNow }));
     const deinterlace =
-      origin === 'iptv' &&
-      interlaced.get(hash) === true &&
-      wantsDeinterlace(source) &&
-      (lite || deinterlacing() < MAX_DEINTERLACE);
+      interlacedNow && (lite || recodeFree(liveUsesVaapi(vaapi, { deinterlace: true })));
+    const hw = liveUsesVaapi(vaapi, { lite, deinterlace });
     const entry: Entry = {
       hash,
       sessionId: source.sessionId,
@@ -806,6 +891,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       dir,
       deinterlace,
       lite,
+      hw,
       startedAt: now,
       lastAccess: now,
       lastChangeAt: now,
@@ -845,6 +931,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       ...(next ? { generation, startNumber: next.startNumber } : {}),
       ...(deinterlace ? { deinterlace: true } : {}),
       ...(lite ? { lite: true } : {}),
+      ...(hw ? { vaapi } : {}),
     });
     let proc: RemuxProcess;
     try {
@@ -1075,6 +1162,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       await waitChange(entry, READY_POLL_MS, signal);
     }
     entry.ready = true;
+    if (entry.hw) accel.succeeded();
     /* Primera observación de la lista: desde aquí cuenta el atasco. */
     await observe(entry);
     scheduleStaleDrop(entry);
@@ -1128,7 +1216,12 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       const startS = vod.startS > 0 ? vod.startS : undefined;
       const text =
         file === VOD_MASTER_FILE
-          ? buildVodMaster({ index: vod.index, plan: vod.producer.plan, audio: vod.audio })
+          ? buildVodMaster({
+              index: vod.index,
+              plan: vod.producer.plan,
+              audio: vod.audio,
+              liteCodecs: announceLite(vod),
+            })
           : file === LITE_PLAYLIST_FILE
             ? buildVodPlaylist(vod.producer.plan, {
                 ...(startS === undefined ? {} : { startS }),
@@ -1243,6 +1336,8 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const service: RemuxService = {
     async start() {
       if (reaper || stopped) return;
+      /* El ensayo de la gráfica (§17.6), sin esperarlo: mientras, x264. */
+      void accel.probe();
       /* Carpetas VOD de un proceso anterior que murió sin limpiar (docs/vod.md §9.7). */
       const swept = await sweepVodDirs(remuxDir, new Set(vods.keys())).catch(() => []);
       if (swept.length) logger.info({ count: swept.length }, 'VOD: carpetas huérfanas borradas');
@@ -1382,7 +1477,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     },
 
     canTranscode() {
-      return deinterlacing() < MAX_DEINTERLACE;
+      return recodeFree(!!accel.vaapi());
     },
 
     async vodFile(sessionId, file, signal) {
@@ -1516,14 +1611,16 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     vodLiteOffer(sessionId, hevcOk): RemuxLiteOffer | null {
       const vod = vods.get(sessionId);
       if (!vod || stopped) return null;
+      const liteCodecs = announceLite(vod);
       return liteOfferFor({
         enabled: partyLite,
         ffmpegMissing,
         tripped: vod.lite?.tripped != null,
         /* Sin plaza, la original: el primero que llegó se la queda (nunca se le quita a nadie). */
-        slot: vod.lite?.holdsSlot === true || deinterlacing() < MAX_DEINTERLACE,
+        slot: vod.lite?.holdsSlot === true || recodeFree(liteHardware(vod)),
         index: vod.index,
         hevcOk,
+        liteCodecs,
       });
     },
 
@@ -1533,7 +1630,8 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
          su plaza no hace falta otra (lo mismo que mira `vodLiteOffer`). */
       const vod = sessionId ? vods.get(sessionId) : undefined;
       if (vod?.lite?.tripped != null) return false;
-      if (vod?.lite?.holdsSlot !== true && deinterlacing() >= MAX_DEINTERLACE) return false;
+      const hardware = vod ? liteHardware(vod) : !!accel.vaapi();
+      if (vod?.lite?.holdsSlot !== true && !recodeFree(hardware)) return false;
       const cached = vodIndexes.peek(titleId);
       if (!cached) return false;
       const index = await cached.catch(() => null);
@@ -1689,7 +1787,12 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     },
 
     stats() {
-      const base = { sessions: byHash.size, max: MAX_REMUX_SESSIONS, ffmpegMissing };
+      const base = {
+        sessions: byHash.size,
+        max: MAX_REMUX_SESSIONS,
+        ffmpegMissing,
+        video: accel.status(),
+      };
       if (!partyLite) return base;
       const lites = [...vods].flatMap(([sessionId, vod]) =>
         vod.lite ? [{ sessionId, ...vod.lite.status() }] : [],

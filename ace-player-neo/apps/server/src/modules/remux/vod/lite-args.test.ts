@@ -65,3 +65,46 @@ describe('buildVodLiteArgs', () => {
     expect(args).toContain('-nostdin');
   });
 });
+
+describe('buildVodLiteArgs con la gráfica (§17.6)', () => {
+  const vaapi = {
+    device: '/dev/dri/renderD128',
+    lowPower: true,
+    rateControl: 'VBR' as const,
+    deinterlace: true,
+    liteCodecs: 'avc1.640c28',
+  };
+  const hw = buildVodLiteArgs({ sessionId: 's_sala1234', vaapi });
+  const at = (flag: string): string | undefined => hw[hw.indexOf(flag) + 1];
+
+  it('decodifica, escala y codifica la gráfica; lo de los tiempos y la salida no cambia', () => {
+    expect(hw.indexOf('-hwaccel')).toBeLessThan(hw.indexOf('-i'));
+    expect(at('-hwaccel_output_format')).toBe('vaapi');
+    expect(at('-i')).toBe('pipe:0');
+    expect(hw).toContain('-copyts');
+    expect(at('-fps_mode')).toBe('passthrough');
+    expect(at('-vf')).toBe(
+      `format=nv12|vaapi,hwupload,scale_vaapi=w=-2:h='min(${LITE_HEIGHT},ih)':format=nv12`,
+    );
+    expect(at('-c:v')).toBe('h264_vaapi');
+    expect(at('-low_power')).toBe('1');
+    expect(at('-profile:v')).toBe('high');
+    expect(at('-level:v')).toBe('40');
+    expect(at('-rc_mode')).toBe('VBR');
+    expect(at('-maxrate')).toBe(LITE_MAXRATE);
+    expect(at('-bufsize')).toBe('5000k');
+    /* Un GOP por segmento (IDR al principio de cada trabajo) y sin B: los mismos tiempos. */
+    expect(at('-bf')).toBe('0');
+    expect(at('-g')).toBe('9999');
+    expect(at('-c:a')).toBe('copy');
+    expect(at('-movflags')).toBe(VOD_MOVFLAGS);
+    expect(hw).toContain(`${ACE_SESSION_MARK}s_sala1234`);
+    expect(hw.slice(-1)).toEqual(['pipe:1']);
+    expect(hw).not.toContain('libx264');
+    expect(hw).not.toContain('-crf');
+  });
+
+  it('sin gráfica (null), los de x264 de siempre', () => {
+    expect(buildVodLiteArgs({ sessionId: 's_sala1234', vaapi: null })).toEqual(args);
+  });
+});

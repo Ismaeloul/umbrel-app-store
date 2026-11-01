@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createTestCore } from '../../../test/helpers/index.js';
 import { DEINTERLACE_THREADS, LITE_MAXRATE, buildRemuxArgs, liteVideoArgs } from './args.js';
 import { MAX_DEINTERLACE, createRemuxRuntime } from './service.js';
+import { HW_FAILURES_TO_DISABLE, MAX_RECODE_HW, createVideoAccel } from './hwaccel.js';
 import { createFakeLauncher } from './test-support.js';
 import type { RemuxSource } from './types.js';
 
@@ -100,5 +101,106 @@ describe('remux con un iPhone que pide calidad ligera', () => {
     await rt.service.ensure(source(9, { wantsLite: () => true }), 'v_9');
     expect(ffmpeg.last().args).toContain('copy');
     expect(rt.service.liteActive(source(9).sessionId)).toBe(false);
+  });
+});
+
+describe('remux ligero con la gráfica del NAS (docs/ver-juntos.md §17.6)', () => {
+  const stops: (() => Promise<void>)[] = [];
+  afterEach(async () => {
+    while (stops.length) await stops.pop()?.();
+  });
+
+  function runtime() {
+    const core = createTestCore();
+    const ffmpeg = createFakeLauncher();
+    const accel = createVideoAccel({
+      launcher: {
+        spawn: () => {
+          throw new Error('sin ensayo en este test');
+        },
+      },
+      clock: core.clock,
+      logger: core.logger,
+      mode: 'auto',
+      softwareSlots: MAX_DEINTERLACE,
+    });
+    const profile = {
+      device: '/dev/dri/renderD128',
+      lowPower: true,
+      rateControl: 'VBR' as const,
+      deinterlace: true,
+      liteCodecs: 'avc1.640c28',
+    };
+    /* La gráfica «ya ensayada»: el perfil de pega hasta que `failed` la apague. */
+    let on = true;
+    const videoAccel = {
+      ...accel,
+      vaapi: () => (on ? profile : null),
+      recodeSlots: () => (on ? MAX_RECODE_HW : MAX_DEINTERLACE),
+      failed: (detail: string) => {
+        accel.failed(detail);
+        fails += 1;
+        if (fails >= HW_FAILURES_TO_DISABLE) on = false;
+      },
+    };
+    let fails = 0;
+    const rt = createRemuxRuntime({
+      ...core,
+      engine: {} as never,
+      launcher: ffmpeg.launcher,
+      videoAccel,
+      procRoot: null,
+      watchFiles: false,
+      probeInterlaced: async () => false,
+    });
+    stops.push(() => rt.service.stopAll());
+    return { ffmpeg, rt, failures: () => fails };
+  }
+
+  it(`con la gráfica caben ${MAX_RECODE_HW} ligeras a la vez y van con h264_vaapi`, async () => {
+    const { ffmpeg, rt } = runtime();
+    for (let n = 1; n <= Math.min(MAX_RECODE_HW, 3); n += 1) {
+      await rt.service.ensure(source(n, { wantsLite: () => true }), `v_${n}`);
+      expect(ffmpeg.last().args).toContain('h264_vaapi');
+      expect(ffmpeg.last().args).not.toContain('libx264');
+    }
+    /* El tope de 3 remux (MAX_REMUX_SESSIONS) llega antes: la gráfica nunca es el cuello aquí. */
+    expect(rt.service.canTranscode()).toBe(true);
+  });
+
+  it('un ffmpeg con la gráfica que muere cuenta; con la gráfica apagada vuelve x264', async () => {
+    const { ffmpeg, rt, failures } = runtime();
+    const src = source(1, { wantsLite: () => true });
+    await rt.service.ensure(src, 'v_1');
+    expect(ffmpeg.last().args).toContain('h264_vaapi');
+    for (let i = 0; i < HW_FAILURES_TO_DISABLE; i += 1) {
+      ffmpeg.last().stderr('Failed to sync surface: 1 (operation failed)');
+      ffmpeg.last().exit(1);
+      await new Promise((resolve) => setImmediate(resolve));
+      await rt.service.ensure(src, `v_${i + 2}`);
+    }
+    expect(failures()).toBe(HW_FAILURES_TO_DISABLE);
+    expect(ffmpeg.last().args).toContain('libx264');
+  });
+
+  it('el fin de la entrada (sin pares, la IPTV caída, código 0) no cuenta como fallo de la gráfica', async () => {
+    const { ffmpeg, rt, failures } = runtime();
+    const src = source(1, { wantsLite: () => true });
+    const ends: [string, number][] = [
+      ['http://127.0.0.1:6878/ace/getstream: Connection refused', 1],
+      ['Server returned 404 Not Found', 1],
+      ['', 0],
+      ['Error during demuxing: End of file', 255],
+    ];
+    for (const [i, [tail, code]] of ends.entries()) {
+      await rt.service.ensure(src, `v_${i + 1}`);
+      expect(ffmpeg.last().args).toContain('h264_vaapi');
+      if (tail) ffmpeg.last().stderr(tail);
+      ffmpeg.last().exit(code);
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    expect(failures()).toBe(0);
+    await rt.service.ensure(src, 'v_9');
+    expect(ffmpeg.last().args).toContain('h264_vaapi');
   });
 });

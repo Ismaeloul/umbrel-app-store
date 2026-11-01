@@ -27,6 +27,7 @@ import type { z } from 'zod';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { AppError } from '../../core/errors.js';
 import type { EngineService } from '../engine/types.js';
+import type { VideoAccel, VideoAccelStatus } from './hwaccel.js';
 import type { VodProducerStats } from './vod/producer.js';
 import type { LiteOffer, LiteStatus } from './vod/lite.js';
 import type { LiteProcessLauncher, VodIndex, VodProcessLauncher, VodTrack } from './vod/types.js';
@@ -42,6 +43,11 @@ export interface RemuxDeps extends CoreDeps {
    * docs/ver-juntos.md §17). Por defecto `spawn('ffmpeg')`.
    */
   readonly liteLauncher?: LiteProcessLauncher;
+  /**
+   * La gráfica del NAS para lo que se recodifica (hwaccel.ts, docs/ver-juntos.md §17.6). Por defecto,
+   * la de verdad (se ensaya en `start()`); con un lanzador de pega, x264 sin ensayo.
+   */
+  readonly videoAccel?: VideoAccel;
   /** Cómo se lee el índice de una película (tests). Por defecto, por HTTP con Range sobre el relé. */
   readonly readVodIndex?: (inputUrl: string, signal?: AbortSignal) => Promise<VodIndex>;
   /**
@@ -224,6 +230,8 @@ export interface RemuxStats {
   readonly max: number;
   /** No hay ffmpeg: el remux está desactivado (`ffmpeg_missing`). */
   readonly ffmpegMissing?: boolean;
+  /** La gráfica: si recodifica ella o x264, y por qué (`components.video` de la salud). */
+  readonly video?: VideoAccelStatus;
   /**
    * La calidad ligera de «Ver juntos» (docs/ver-juntos.md §17), solo con `ACE_PARTY_LITE=1`: cada
    * sesión que la ha usado, `on` / `off` / `tripped` y por qué.

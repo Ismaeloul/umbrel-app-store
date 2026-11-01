@@ -10,7 +10,7 @@
    - Corrección: con más de `driftSeekS` de diferencia se salta; entre
      `driftRateS` y eso, se acelera o frena un 5 % (no se nota y no vacía el
      colchón); por debajo, velocidad normal. En pausa se salta a la posición
-     exacta si se aparta más de 0,3 s. */
+     exacta si se aparta más de 0,3 s, pero una vez por orden (`pausedSeek`). */
 
 import { PARTY, type PartyPlayback } from '@ace/shared';
 
@@ -64,16 +64,86 @@ export type Correction =
   | { readonly kind: 'seek'; readonly to: number }
   | { readonly kind: 'rate'; readonly rate: number };
 
-/** Qué hacer con el vídeo para ir a la par: saltar, cambiar la velocidad o nada. */
-export function correction(localS: number, targetS: number, running: boolean): Correction {
+/**
+ * Qué hacer con el vídeo para ir a la par: saltar, cambiar la velocidad o nada. `seekS` es a partir
+ * de cuánto se salta reproduciendo (`PARTY.driftSeekS`; más, mientras se absorbe con la velocidad lo
+ * que quedó al colocarse, §16).
+ */
+export function correction(
+  localS: number,
+  targetS: number,
+  running: boolean,
+  seekS: number = PARTY.driftSeekS,
+): Correction {
   const drift = targetS - localS;
   const size = Math.abs(drift);
   if (!running) return size > PAUSED_SNAP_S ? { kind: 'seek', to: targetS } : { kind: 'none' };
-  if (size > PARTY.driftSeekS) return { kind: 'seek', to: targetS };
+  if (size > seekS) return { kind: 'seek', to: targetS };
   if (size > PARTY.driftRateS) {
     return { kind: 'rate', rate: drift > 0 ? 1 + PARTY.driftRate : 1 - PARTY.driftRate };
   }
   return { kind: 'rate', rate: 1 };
+}
+
+/** El último salto en pausa: a dónde, con qué orden de la sala (`rev`), cuándo y cuántos reintentos. */
+export interface PausedSeek {
+  readonly to: number;
+  readonly rev: number;
+  readonly at: number;
+  readonly retries: number;
+}
+
+/** Dos objetivos más cerca que esto son el mismo (la sala manda posiciones con milésimas). */
+export const SAME_TARGET_S = 0.05;
+/** Reintentos de un salto en pausa al mismo objetivo con la misma orden. */
+const PAUSED_SEEK_RETRIES = 1;
+/**
+ * Si la sala espera a este aparato y está a esto o menos, no se mueve: que llene el colchón ahí. Al
+ * seguir la sala, lo que quede hasta esto se absorbe con la velocidad (`correction`, `seekS`), no
+ * con otro salto que tiraría ese mismo colchón (§16).
+ */
+export const WAITED_STAY_S = 2;
+
+export interface PausedSeekInput {
+  /** La orden de la sala (`playback.rev`, solo para recordarla) y la posición a la que hay que ir. */
+  readonly rev: number;
+  readonly target: number;
+  /** Dónde está el vídeo ahora. */
+  readonly localS: number;
+  readonly last: PausedSeek | null;
+  readonly now: number;
+  /** Entre el salto y su reintento pasa al menos esto. */
+  readonly backoffMs: number;
+  /** ¿La sala espera a este aparato (`waitingFor`)? */
+  readonly waitedFor: boolean;
+}
+
+/**
+ * En pausa (la sala parada o esperando a alguien), ¿saltar a la posición de la sala? Devuelve el
+ * salto que se hace (para recordarlo) o null si no se salta (docs/ver-juntos.md §16).
+ *
+ * Antes se saltaba siempre que el vídeo estuviera a más de 0,3 s, en cada tic. En el iPhone
+ * (HLS nativo) un salto preciso a mitad de un trozo cae en otro sitio (el fotograma clave, o unas
+ * décimas al lado), vacía lo cargado y vuelve a bajar el trozo entero: con la sala esperando a
+ * ese mismo aparato, eran ~45 peticiones del mismo segmento en 18 s y nunca llenaba el colchón.
+ * - La sala espera a este aparato y está a `WAITED_STAY_S` o menos: no se mueve.
+ * - Ya saltó a este objetivo con esta orden: se da por colocado aunque Safari haya quedado unas
+ *   décimas al lado. Solo se reintenta una vez, si quedó a más de `PARTY.driftSeekS` y pasado
+ *   `backoffMs`.
+ * - Otro objetivo (un salto o una pausa del líder): se salta. Un `rev` nuevo con el mismo objetivo
+ *   (alguien más carga, alguien entra, la sala sigue) no es una orden nueva: cada uno volvía a
+ *   vaciar lo cargado de todos los Safari que habían caído unas décimas al lado.
+ */
+export function pausedSeek(input: PausedSeekInput): PausedSeek | null {
+  const { rev, target, localS, last, now } = input;
+  const drift = Math.abs(target - localS);
+  if (input.waitedFor && drift <= WAITED_STAY_S) return null;
+  if (last === null || Math.abs(last.to - target) >= SAME_TARGET_S) {
+    return { to: target, rev, at: now, retries: 0 };
+  }
+  if (last.retries >= PAUSED_SEEK_RETRIES) return null;
+  if (drift <= PARTY.driftSeekS || now - last.at < input.backoffMs) return null;
+  return { to: target, rev, at: now, retries: last.retries + 1 };
 }
 
 /**
@@ -181,7 +251,8 @@ export interface StallInput {
  *   título), con `readyState === 4` y 2 s por delante, o si el vídeo de
  *   verdad avanza (1 s en 1,6 s).
  * - Si los atascos se repiten (a menos de 60 s), pide más colchón: 4 → 6 →
- *   10 s en el iPhone; tras 2 min sin atascos, vuelve al de partida.
+ *   10 s en el iPhone; tras 2 min sin atascos, vuelve al de partida. Con `pausedMaxS`
+ *   (el iPhone), en pausa no se piden más de esos segundos.
  */
 export class StallDetector {
   private stalled = false;
@@ -193,7 +264,15 @@ export class StallDetector {
   private selfSeekAt = Number.NEGATIVE_INFINITY;
   private repeats = 0;
 
-  constructor(private readonly baseS: number) {
+  /**
+   * `pausedMaxS`: con el vídeo en pausa, el colchón pedido no pasa de esto. En el iPhone, con la
+   * sala esperando a este aparato, AVPlayer puede no llenar 10 s en pausa y la espera llegaba
+   * siempre al tope (§16); el `resumeSettleMs` del servidor ya cubre un «ya no cargo» corto.
+   */
+  constructor(
+    private readonly baseS: number,
+    private readonly options: { readonly pausedMaxS?: number } = {},
+  ) {
     this.needS = baseS;
   }
 
@@ -258,8 +337,11 @@ export class StallDetector {
       if (input.readyState < 2 || still) this.enter(now);
       return this.stalled;
     }
-    const need =
-      input.leftS === null ? this.needS : Math.min(this.needS, Math.max(0, input.leftS - 0.5));
+    const asked =
+      input.paused && this.options.pausedMaxS !== undefined
+        ? Math.min(this.needS, this.options.pausedMaxS)
+        : this.needS;
+    const need = input.leftS === null ? asked : Math.min(asked, Math.max(0, input.leftS - 0.5));
     const oldest = this.samples[0];
     const advancing =
       playing &&

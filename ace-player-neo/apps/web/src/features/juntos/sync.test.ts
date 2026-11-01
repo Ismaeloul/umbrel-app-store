@@ -9,7 +9,9 @@ import {
   isRunning,
   lobbyReport,
   offsetSample,
+  pausedSeek,
   StallDetector,
+  WAITED_STAY_S,
   targetPosition,
 } from './sync.ts';
 
@@ -191,6 +193,113 @@ describe('StallDetector: pausas y saltos (revisión §16)', () => {
     stall.update({ ...base, now: 0, currentTime: 5, paused: false });
     stall.update({ ...base, now: 3_000, currentTime: 40, paused: false, seeking: true });
     expect(stall.update({ ...base, now: 3_100, currentTime: 40, paused: false })).toBe(false);
+  });
+});
+
+describe('StallDetector: el colchón en pausa del iPhone (§16)', () => {
+  const base = { seeking: false, ended: false, readyState: 3, leftS: null };
+  /** Tres atascos seguidos (cada uno recuperado con colchón de sobra): pide 10 s; y uno más. */
+  const escalate = (stall: StallDetector) => {
+    for (const now of [0, 10_000, 20_000]) {
+      stall.waiting(now);
+      stall.update({ ...base, now, currentTime: 0, paused: false, aheadS: 30 });
+    }
+    expect(stall.resumeAheadS).toBe(10);
+    stall.waiting(20_900);
+  };
+
+  it('con `pausedMaxS`, en pausa basta con eso aunque los atascos hayan subido el colchón a 10 s', () => {
+    const stall = new StallDetector(4, { pausedMaxS: 4 });
+    escalate(stall);
+    /* La sala espera a este aparato (vídeo en pausa): 4 s por delante bastan. */
+    expect(stall.update({ ...base, now: 21_000, currentTime: 0, paused: true, aheadS: 3 })).toBe(
+      true,
+    );
+    expect(stall.update({ ...base, now: 21_500, currentTime: 0, paused: true, aheadS: 4 })).toBe(
+      false,
+    );
+    /* Sin la opción (hls.js), lo de siempre: 10 s. */
+    const mse = new StallDetector(4);
+    escalate(mse);
+    expect(mse.update({ ...base, now: 21_500, currentTime: 0, paused: true, aheadS: 4 })).toBe(
+      true,
+    );
+  });
+
+  it('reproduciendo, el colchón pedido sigue siendo el que han subido los atascos', () => {
+    const stall = new StallDetector(4, { pausedMaxS: 4 });
+    escalate(stall);
+    expect(stall.update({ ...base, now: 20_500, currentTime: 0, paused: false, aheadS: 4 })).toBe(
+      true,
+    );
+  });
+});
+
+describe('pausedSeek: el salto en pausa, una vez por orden (§16)', () => {
+  const input = {
+    rev: 7,
+    target: 147.5,
+    localS: 145.2,
+    last: null,
+    now: 10_000,
+    backoffMs: 4_000,
+    waitedFor: false,
+  };
+
+  it('sin salto anterior, o con otro objetivo, salta', () => {
+    expect(pausedSeek(input)).toEqual({ to: 147.5, rev: 7, at: 10_000, retries: 0 });
+    const last = { to: 147.5, rev: 7, at: 9_900, retries: 1 };
+    expect(pausedSeek({ ...input, rev: 8, target: 160, last })).toEqual({
+      to: 160,
+      rev: 8,
+      at: 10_000,
+      retries: 0,
+    });
+  });
+
+  it('otro `rev` con el mismo objetivo («esperando a…», «entra…») no es una orden nueva', () => {
+    const last = { to: 147.5, rev: 7, at: 9_900, retries: 1 };
+    expect(pausedSeek({ ...input, rev: 8, localS: 147.1, last })).toBeNull();
+    expect(pausedSeek({ ...input, rev: 9, localS: 146, last, now: 60_000 })).toBeNull();
+  });
+
+  it('al mismo objetivo con la misma orden no vuelve a saltar aunque Safari quedara unas décimas al lado', () => {
+    const last = { to: 147.5, rev: 7, at: 9_000, retries: 0 };
+    /* Cayó a 0,4 s (más de los 0,3 s de la colocación en pausa): se da por colocado. */
+    expect(pausedSeek({ ...input, localS: 147.1, last, now: 20_000 })).toBeNull();
+    /* Lo mismo con una diferencia de milésimas en el objetivo. */
+    expect(pausedSeek({ ...input, target: 147.52, localS: 147.1, last, now: 20_000 })).toBeNull();
+  });
+
+  it('un reintento, solo si quedó a más de driftSeekS y pasado el freno; luego ya no', () => {
+    const last = { to: 147.5, rev: 7, at: 10_000, retries: 0 };
+    const far = 147.5 - PARTY.driftSeekS - 1.4;
+    expect(pausedSeek({ ...input, localS: far, last, now: 13_999 })).toBeNull();
+    const retry = pausedSeek({ ...input, localS: far, last, now: 14_000 });
+    expect(retry).toEqual({ to: 147.5, rev: 7, at: 14_000, retries: 1 });
+    expect(pausedSeek({ ...input, localS: far, last: retry, now: 30_000 })).toBeNull();
+  });
+
+  it('si la sala espera a este aparato y está cerca, no se mueve (que llene el colchón ahí)', () => {
+    expect(pausedSeek({ ...input, localS: 147.5 - 1.2, waitedFor: true })).toBeNull();
+    expect(pausedSeek({ ...input, localS: 147.5 - WAITED_STAY_S, waitedFor: true })).toBeNull();
+    /* Más lejos, sí (un servidor viejo que para la sala por delante). */
+    expect(pausedSeek({ ...input, localS: 145.2, waitedFor: true })).toMatchObject({ to: 147.5 });
+  });
+});
+
+describe('correction: el umbral del salto mientras se absorbe lo que quedó al colocarse', () => {
+  it('con `seekS`, hasta ahí corrige con la velocidad; más allá, salta', () => {
+    expect(correction(146, 147.5, true)).toEqual({ kind: 'seek', to: 147.5 });
+    expect(correction(146, 147.5, true, WAITED_STAY_S)).toEqual({
+      kind: 'rate',
+      rate: 1 + PARTY.driftRate,
+    });
+    expect(correction(149, 147.5, true, WAITED_STAY_S)).toEqual({
+      kind: 'rate',
+      rate: 1 - PARTY.driftRate,
+    });
+    expect(correction(145, 147.5, true, WAITED_STAY_S)).toEqual({ kind: 'seek', to: 147.5 });
   });
 });
 

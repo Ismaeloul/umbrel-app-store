@@ -1,0 +1,86 @@
+/* Silencio y volumen en el ordenador (VolumeControl.tsx). El deslizador se
+   abre a la derecha del botón al pasar el ratón, con el foco del teclado o
+   mientras se arrastra; con una pantalla táctil, siempre abierto. */
+
+.vol-ctl {
+  --vol-w: 96px;
+  display: inline-flex;
+  align-items: center;
+}
+.player-vol {
+  display: inline-flex;
+  align-items: center;
+  height: var(--tap);
+  padding: 0;
+}
+.player-vol input {
+  --v: 1;
+  width: 0;
+  height: var(--tap);
+  margin: 0;
+  background: transparent;
+  opacity: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  /* Solo la opacidad (el ancho, de golpe: nada que recalcule la maquetación en cada fotograma). */
+  transition: opacity var(--dur-rapido) var(--ease-estandar);
+}
+.vol-ctl:is(:hover, :focus-within, [data-dragging='true']) .player-vol {
+  padding: 0 14px 0 2px;
+}
+.vol-ctl:is(:hover, :focus-within, [data-dragging='true']) .player-vol input {
+  width: var(--vol-w);
+  opacity: 1;
+}
+/* Con el dedo no hay «pasar por encima»: a la vista y con 44 px de alto (--tap). */
+@media (any-pointer: coarse) {
+  .player-vol {
+    padding: 0 14px 0 2px;
+  }
+  .player-vol input {
+    width: var(--vol-w);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player-vol input {
+    transition: none;
+  }
+}
+.player-vol input:focus-visible {
+  outline: 2px solid var(--on-video, #fff);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.player-vol input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #fff calc(var(--v) * 100%), rgb(255 255 255 / 0.3) 0);
+}
+.player-vol input::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+  -webkit-appearance: none;
+}
+.player-vol input::-moz-range-track {
+  height: 4px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.3);
+}
+.player-vol input::-moz-range-progress {
+  height: 4px;
+  border-radius: 4px;
+  background: #fff;
+}
+.player-vol input::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+}

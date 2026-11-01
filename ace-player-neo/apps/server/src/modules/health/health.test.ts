@@ -33,6 +33,7 @@ import type { EventsHub } from '../events/types.js';
 import type { FootballService } from '../football/types.js';
 import type { InstantStartService } from '../instant-start/types.js';
 import type { PlaybackService } from '../playback/types.js';
+import type { VideoAccelStatus } from '../remux/hwaccel.js';
 import type { RemuxService } from '../remux/types.js';
 import type { ScannerService, ScannerStats } from '../scanner/types.js';
 import { createStateService } from '../state/service.js';
@@ -93,6 +94,7 @@ interface Fakes {
   env?: Record<string, string>;
   state?: StateService;
   instantStart?: InstantStartService;
+  video?: VideoAccelStatus;
 }
 
 interface Setup {
@@ -131,7 +133,9 @@ function setup(fakes: Fakes = {}): Setup {
       status: () =>
         fakes.playback ?? { nowPlaying: null, learningCount: 0, serverTime: 0, sessions: [] },
     } as unknown as PlaybackService,
-    remux: { stats: () => ({ sessions: 1, max: 3 }) } as unknown as RemuxService,
+    remux: {
+      stats: () => ({ sessions: 1, max: 3, ...(fakes.video ? { video: fakes.video } : {}) }),
+    } as unknown as RemuxService,
     events: { connections: () => 4 } as unknown as EventsHub,
     diagnostics: {
       counts24h: () => ({ engine: 1, source: 2, network: 0, codec: 0, client: 5 }),
@@ -453,6 +457,24 @@ describe('/api/v1/health, /health/live y /ping', () => {
       'scanner_leaked_sessions',
       'ai_model_missing',
     ]);
+  });
+
+  it('la gráfica del NAS (docs/ver-juntos.md §17.6) sale en components.video, tal cual la da el remux', async () => {
+    const video = {
+      hwaccel: 'vaapi' as const,
+      reason: null,
+      device: '/dev/dri/renderD128',
+      encoder: 'h264_vaapi' as const,
+      lowPower: true,
+      rateControl: 'VBR' as const,
+      deinterlace: 'vaapi' as const,
+      recodeSlots: 4,
+      failures: 0,
+    };
+    const body = await setup({ video }).health.health();
+    expect(HealthResponseSchema.parse(body)).toEqual(body);
+    expect(body.components.video).toEqual(video);
+    expect((await setup().health.health()).components.video).toBeUndefined();
   });
 
   it('«Arranque instantáneo» (D24): lo preparado sale en components.instantStart', async () => {

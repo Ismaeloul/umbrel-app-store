@@ -215,6 +215,21 @@ describe('variables nuevas', () => {
     expect(bad.warnings).toHaveLength(1);
   });
 
+  it('ACE_HWACCEL y ACE_VAAPI_DEVICE: la gráfica se ensaya por defecto y solo con un renderD (§17.6)', () => {
+    expect(loadConfig({ ACE_SEED: SEED }).config.video).toEqual({
+      hwaccel: 'auto',
+      vaapiDevice: '/dev/dri/renderD128',
+    });
+    expect(loadConfig({ ACE_SEED: SEED, ACE_HWACCEL: 'OFF' }).config.video.hwaccel).toBe('off');
+    expect(
+      loadConfig({ ACE_SEED: SEED, ACE_VAAPI_DEVICE: '/dev/dri/renderD129' }).config.video
+        .vaapiDevice,
+    ).toBe('/dev/dri/renderD129');
+    const bad = loadConfig({ ACE_SEED: SEED, ACE_HWACCEL: 'qsv', ACE_VAAPI_DEVICE: '/etc/passwd' });
+    expect(bad.config.video).toEqual({ hwaccel: 'auto', vaapiDevice: '/dev/dri/renderD128' });
+    expect(bad.warnings).toHaveLength(2);
+  });
+
   it('APP_VERSION del entorno si el build no la inyecta', () => {
     expect(loadConfig({ ACE_SEED: SEED, APP_VERSION: '0.7.1' }).config.appVersion).toBe('0.7.1');
   });

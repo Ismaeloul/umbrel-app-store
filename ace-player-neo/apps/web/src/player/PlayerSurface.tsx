@@ -65,6 +65,7 @@ import { liveButton, stageMessage } from './status.ts';
 import { VodEndCards } from './vod/NextUp.tsx';
 import { VOD_TEXT } from './vod/texts.ts';
 import { VodControls } from './vod/VodControls.tsx';
+import { VolumeControl } from './VolumeControl.tsx';
 import { useNavigate } from '../app/router.tsx';
 import { cx } from '../lib/cx.ts';
 
@@ -674,7 +675,6 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
     state.conn === 'reconectando' ||
     (state.conn === 'arrancando' && state.phase !== 'bloqueado');
   const canBack = state.conn === 'activa' && state.started && !state.demo;
-  const volume = state.muted ? 0 : state.volume;
   /* Escritorio con un directo (rediseño, pantalla 2, «1B»): controles mínimos.
      Arriba atrás, el partido, la píldora de la fuente (abre el panel de
      fuentes) y PiP; en medio la pausa; abajo la barra y una píldora DIRECTO.
@@ -847,27 +847,15 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
                     className="player-cap player-1b__vol glass--video"
                     data-muted={state.muted || state.volume === 0 ? 'true' : 'false'}
                   >
-                    <IconButton
-                      icon={state.muted || state.volume === 0 ? 'mute' : 'vol'}
-                      label={state.muted ? 'Activar sonido' : 'Silenciar'}
+                    <VolumeControl
+                      muted={state.muted || state.volume === 0}
+                      volume={state.volume}
                       shortcut="M"
-                      variant="video"
-                      onClick={actions.toggleMute}
+                      slider={ctx.finePointer}
+                      onToggleMute={actions.toggleMute}
+                      onVolume={actions.setVolume}
+                      onActivity={wake}
                     />
-                    {ctx.finePointer ? (
-                      <label className="player-vol">
-                        <span className="sr-only">Volumen</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={volume}
-                          style={{ '--v': volume } as CSSProperties}
-                          onChange={(event) => actions.setVolume(Number(event.currentTarget.value))}
-                        />
-                      </label>
-                    ) : null}
                   </div>
                   <LiveBar state={state} />
                   <LivePill state={state} onPress={actions.goLive} />
@@ -990,7 +978,7 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
             controles de abajo, que en el móvil apretaban el panel con
             «Reintentar» (Detener sigue en «Más opciones»). */}
             {hasChannel && state.phase !== 'error' && vod ? (
-              <VodControls state={state} ctx={ctx} />
+              <VodControls state={state} ctx={ctx} onActivity={wake} />
             ) : hasChannel && state.phase !== 'error' ? (
               <div className="player-chrome__bottom">
                 <div className="player-chrome__group">
@@ -1026,27 +1014,15 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
                       <Icon name="back" size={18} />
                       <Num value="30" />
                     </button>
-                    <IconButton
-                      icon={state.muted || state.volume === 0 ? 'mute' : 'vol'}
-                      label={state.muted ? 'Activar sonido' : 'Silenciar'}
+                    <VolumeControl
+                      muted={state.muted || state.volume === 0}
+                      volume={state.volume}
                       shortcut="M"
-                      variant="video"
-                      onClick={actions.toggleMute}
+                      slider={ctx.finePointer && !ctx.compact}
+                      onToggleMute={actions.toggleMute}
+                      onVolume={actions.setVolume}
+                      onActivity={wake}
                     />
-                    {ctx.finePointer && !ctx.compact ? (
-                      <label className="player-vol">
-                        <span className="sr-only">Volumen</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={volume}
-                          style={{ '--v': volume } as CSSProperties}
-                          onChange={(event) => actions.setVolume(Number(event.currentTarget.value))}
-                        />
-                      </label>
-                    ) : null}
                   </div>
                 </div>
                 <div className="player-cap glass--video">

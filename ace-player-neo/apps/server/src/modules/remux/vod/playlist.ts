@@ -126,6 +126,8 @@ export interface VodMasterInput {
   readonly plan: VodPlan;
   /** Hay audio (siempre AAC-LC: copiado o convertido por el productor). */
   readonly audio: boolean;
+  /** El códec de la ligera (el de la gráfica si la sesión codifica con ella; por defecto, x264). */
+  readonly liteCodecs?: string;
 }
 
 /** `master.m3u8` de la sala (docs/ver-juntos.md §17): la ligera primero, luego la original. */
@@ -144,7 +146,7 @@ export function buildVodMaster(input: VodMasterInput): string {
     '#EXT-X-VERSION:7',
     '#EXT-X-INDEPENDENT-SEGMENTS',
     `#EXT-X-STREAM-INF:BANDWIDTH=${LITE_VOD.bandwidth},AVERAGE-BANDWIDTH=${LITE_VOD.average},` +
-      `CODECS="${withAudio(LITE_VIDEO_CODECS)}",RESOLUTION=${lite.width}x${lite.height}`,
+      `CODECS="${withAudio(input.liteCodecs ?? LITE_VIDEO_CODECS)}",RESOLUTION=${lite.width}x${lite.height}`,
     LITE_PLAYLIST_FILE,
     `#EXT-X-STREAM-INF:BANDWIDTH=${peakSegmentBitrate(index, plan)},` +
       `${average > 0 ? `AVERAGE-BANDWIDTH=${average},` : ''}` +

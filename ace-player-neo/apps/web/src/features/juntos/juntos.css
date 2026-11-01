@@ -739,27 +739,8 @@
 .juntos-chrome__dur {
   color: var(--on-video, #fff);
 }
-/* Volumen: el deslizador solo con ratón (en el móvil manda el botón del teléfono). */
-.juntos-volume {
-  display: inline-flex;
-  align-items: center;
-}
-.juntos-volume__slider {
-  width: 0;
-  opacity: 0;
-  accent-color: var(--on-video, #fff);
-  transition: opacity var(--dur-rapido) var(--ease-estandar);
-}
-.juntos-volume:hover .juntos-volume__slider,
-.juntos-volume:focus-within .juntos-volume__slider {
-  width: 84px;
-  opacity: 1;
-}
-@media (pointer: coarse) {
-  .juntos-volume__slider {
-    display: none;
-  }
-}
+/* Volumen: VolumeControl (player/volume.css). El deslizador solo con ratón; en el
+   móvil mandan los botones del teléfono. */
 /* Sin vídeo (preparando, error, interrumpida) o esperando el primer toque, la barra no sirve
  y en el móvil taparía el aviso. */
 .juntos-chrome:is(

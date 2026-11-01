@@ -35,9 +35,37 @@
      hilo de filtros: el tope de procesos del contenedor (`pids_limit`) cuenta
      hilos.
    - Altura y caudal, los de la calidad ligera del directo (`LITE_HEIGHT`,
-     `LITE_MAXRATE`, remux/args.ts): un solo sitio. */
+     `LITE_MAXRATE`, remux/args.ts): un solo sitio.
 
-import { ACE_SESSION_MARK, LITE_HEIGHT, LITE_MAXRATE } from '../args.js';
+   Con la gráfica del NAS (§17.6, `vaapi`; el ensayo es remux/hwaccel.ts):
+
+     ffmpeg … -init_hw_device vaapi=va:/dev/dri/renderD128 -filter_hw_device va
+       -hwaccel vaapi -hwaccel_device va -hwaccel_output_format vaapi
+       -threads 2 -f mp4 -i pipe:0 -copyts -fps_mode passthrough -map …
+       -vf format=nv12|vaapi,hwupload,scale_vaapi=w=-2:h='min(720,ih)':format=nv12
+       -c:v h264_vaapi [-low_power 1] -profile:v high -level:v 40
+       -rc_mode VBR -b:v 1500k -maxrate 2500k -bufsize 5000k   (o CQP -qp 25)
+       -bf 0 -g 9999 -threads 2 -filter_threads 1 -c:a copy …
+
+   Decodifica, escala y codifica la gráfica; lo que no sepa decodificar lo
+   decodifica la CPU y `hwupload` lo sube. Lo demás no cambia: los mismos
+   tiempos, un GOP por segmento que empieza en IDR (cada trabajo es un ffmpeg
+   nuevo), sin B, el audio copiado y la misma salida. Su `avcC` no es el de
+   x264 (banderas de restricción 4 y 5): una sesión no mezcla los dos
+   (vod/lite.ts) y la lista maestra anuncia el del ensayo. */
+
+import {
+  ACE_SESSION_MARK,
+  LITE_HEIGHT,
+  LITE_MAXRATE,
+  VAAPI_LITE_LEVEL,
+  VAAPI_LITE_RATE,
+  VAAPI_UPLOAD,
+  vaapiEncoderArgs,
+  vaapiInputArgs,
+  vaapiScale,
+  type VaapiProfile,
+} from '../args.js';
 import { VOD_MOVFLAGS } from './args.js';
 
 /** Hilos del decodificador y de x264 en un trabajo ligero. */
@@ -50,9 +78,27 @@ export const LITE_AUDIO_CODECS = 'mp4a.40.2';
 
 export interface VodLiteArgsInput {
   readonly sessionId: string;
+  /** La gráfica (null o nada: x264). */
+  readonly vaapi?: VaapiProfile | null;
 }
 
 export function buildVodLiteArgs(input: VodLiteArgsInput): string[] {
+  const hw = input.vaapi;
+  if (hw) {
+    return [
+      ...['-hide_banner', '-loglevel', 'warning', '-nostdin'],
+      ...vaapiInputArgs(hw.device),
+      ...['-threads', String(LITE_THREADS), '-f', 'mp4', '-i', 'pipe:0'],
+      ...['-copyts', '-fps_mode', 'passthrough'],
+      ...['-map', '0:v:0', '-map', '0:a:0?'],
+      ...['-vf', `${VAAPI_UPLOAD},${vaapiScale(LITE_HEIGHT)}`],
+      ...vaapiEncoderArgs(hw, VAAPI_LITE_RATE, { gop: 9999, level: VAAPI_LITE_LEVEL }),
+      ...['-threads', String(LITE_THREADS), '-filter_threads', '1'],
+      ...['-c:a', 'copy'],
+      ...['-metadata', `${ACE_SESSION_MARK}${input.sessionId}`],
+      ...['-movflags', VOD_MOVFLAGS, '-f', 'mp4', 'pipe:1'],
+    ];
+  }
   return [
     ...['-hide_banner', '-loglevel', 'warning', '-nostdin'],
     ...['-threads', String(LITE_THREADS), '-f', 'mp4', '-i', 'pipe:0'],
