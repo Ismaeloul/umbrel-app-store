@@ -3,7 +3,8 @@
    lista («Seguir viendo» y la lista partida en Series y Películas, sin
    novedades ni estrenos) y la ficha con «Seguir · T1 E3»,
    Mi lista / Ver juntos / Tráiler / Compartir y el siguiente episodio
-   marcado. En el móvil nada de esto cambia (lo cubren los demás tests). */
+   marcado. Desde el rediseño del móvil, lo mismo por debajo de 768 px, con
+   el destacado de «Seguir viendo» arriba de Mi lista (al final). */
 
 import type { VodContinue } from '@ace/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -19,7 +20,14 @@ import {
   demoVodList,
   resetDemoVod,
 } from './demo-data.ts';
-import { halfBadge, heroLine, listSections, splitSubtitle } from './Escaparate.tsx';
+import {
+  DESTACADO_MAX,
+  destacadoFollow,
+  halfBadge,
+  heroLine,
+  listSections,
+  splitSubtitle,
+} from './Escaparate.tsx';
 import { deskColumnsFor } from './model.ts';
 import { demoRoutes, queryOf, renderCine } from './test-utils.tsx';
 
@@ -290,5 +298,107 @@ describe('escritorio: ficha', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(location.href));
     expect(await screen.findByText('Enlace copiado: pégalo donde quieras.')).toBeVisible();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('móvil: el destacado y Mi lista (maqueta pelis-y-series-escaparate)', () => {
+  it('«Seguir · T3 E4» o «Seguir · 43:12»; sin dato, «Seguir»', () => {
+    expect(destacadoFollow(entry({}))).toBe('Seguir · T3 E4');
+    expect(destacadoFollow(entry({ subtitle: null }))).toBe('Seguir');
+    const movie = entry({ kind: 'movie', seriesId: null, subtitle: null, posS: 2592 });
+    expect(destacadoFollow(movie)).toBe('Seguir · 43:12');
+    expect(destacadoFollow({ ...movie, posS: 0 })).toBe('Seguir');
+  });
+
+  it('arriba lo último a medias en grande; debajo «También a medias», Series y Películas', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine();
+    const entries = demoVodHome().continue;
+    const destacado = await screen.findByRole('region', { name: 'Seguir viendo' });
+    const cards = within(destacado).getAllByRole('article');
+    expect(cards).toHaveLength(Math.min(DESTACADO_MAX, entries.length));
+    const first = cards[0]!;
+    expect(within(first).getByRole('heading', { level: 2, name: 'Dune' })).toBeInTheDocument();
+    expect(within(first).getByRole('link', { name: 'Dune' })).toHaveAttribute(
+      'href',
+      expect.stringContaining(entries[0]!.id),
+    );
+    expect(within(first).getByText('SEGUIR VIENDO · PELÍCULA', { exact: false })).toBeTruthy();
+    expect(within(first).getByRole('button', { name: 'Seguir · 43:12' })).toBeInTheDocument();
+    expect(within(first).getByRole('progressbar')).toBeInTheDocument();
+    // Mi lista y Ver juntos, redondos (con su nombre para el lector).
+    expect(within(first).getByRole('button', { name: 'Mi lista' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(within(first).getByRole('button', { name: 'Ver juntos' })).toBeInTheDocument();
+    // Lo demás a medias, en su fila (sin el primero).
+    const rest = screen.getByRole('list', { name: 'También a medias' });
+    expect(within(rest).queryByRole('button', { name: /^Dune\. / })).toBeNull();
+    expect(within(rest).getAllByRole('button', { name: /^(?!Más opciones)/ })).toHaveLength(
+      entries.length - 1,
+    );
+    expect(screen.queryByRole('list', { name: 'Seguir viendo' })).toBeNull();
+    expect(await screen.findByRole('list', { name: 'Series' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Películas' })).toBeInTheDocument();
+  });
+
+  it('«Mi lista» del destacado guarda el título (PUT) y se marca', async () => {
+    const dune = demoVodHome().continue[0]!;
+    net = mockFetch({
+      ...demoRoutes(),
+      [`PUT /api/v1/vod/list/${dune.id}`]: () => {
+        const list = demoVodList();
+        const movie = list.items.find((item) => item.kind === 'movie')!;
+        return json({ ...list, items: [{ ...movie, id: dune.id, title: 'Dune' }, ...list.items] });
+      },
+    });
+    renderCine();
+    const destacado = await screen.findByRole('region', { name: 'Seguir viendo' });
+    const first = within(destacado).getAllByRole('article')[0]!;
+    await waitFor(() =>
+      expect(net.calls.some((call) => call.url === '/api/v1/vod/list')).toBe(true),
+    );
+    fireEvent.click(within(first).getByRole('button', { name: 'Mi lista' }));
+    expect(await within(first).findByRole('button', { name: 'En mi lista' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(net.calls.some((call) => call.method === 'PUT')).toBe(true);
+  });
+
+  it('nada a medias: sin destacado ni «También a medias»', async () => {
+    net = mockFetch({
+      ...demoRoutes(),
+      'GET /api/v1/vod': (call) => json({ ...demoVodHome(queryOf(call)), continue: [] }),
+    });
+    renderCine();
+    expect(await screen.findByRole('list', { name: 'Series' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Seguir viendo' })).toBeNull();
+    expect(screen.queryByRole('list', { name: 'También a medias' })).toBeNull();
+  });
+
+  it('lista vacía: la invitación sin «Ctrl K» (en el móvil no hay teclado)', async () => {
+    for (const item of demoVodList().items) demoListRemove(item.id);
+    net = mockFetch(demoRoutes());
+    renderCine();
+    expect(await screen.findByText('Tu lista está vacía')).toBeVisible();
+    const empty = screen.getByText('Tu lista está vacía').closest('.empty') as HTMLElement;
+    expect(within(empty).getByRole('button', { name: 'Buscar' })).not.toHaveTextContent('Ctrl K');
+  });
+
+  it('ficha: «Seguir · T1 E3», la fila de Mi lista / Ver juntos / Tráiler / Compartir y «Volver»', async () => {
+    net = mockFetch(demoRoutes([DEMO_VOD_IDS.seriesParts]));
+    renderCine({ search: `?vista=cine/${DEMO_VOD_IDS.seriesParts}` });
+    expect(await screen.findByRole('button', { name: 'Seguir · T1 E3' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Volver' })).toBeInTheDocument();
+    const actions = screen.getByRole('group', { name: 'Más acciones' });
+    expect(await within(actions).findByRole('button', { name: 'En mi lista' })).toBeVisible();
+    for (const name of ['Ver juntos', 'Compartir'])
+      expect(within(actions).getByRole('button', { name })).toBeVisible();
+    // Sin los botones sueltos de antes (Mi lista junto al play, Ver juntos y Tráiler abajo).
+    expect(screen.getAllByRole('button', { name: 'Ver juntos' })).toHaveLength(1);
+    expect(document.querySelector('.cine-list')).toBeNull();
+    expect(document.querySelector('.cine-hero__kicker')?.textContent).toMatch(/5 temporadas/i);
   });
 });

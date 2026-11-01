@@ -975,3 +975,190 @@
     inset: -2px 0;
   }
 }
+
+/* ==========================================================================
+   Ficha del partido en el móvil: dirección B «Vídeo arriba» (maqueta
+   movil-ficha-partido.html). Bajo el vídeo, los dos equipos en una línea con
+   el minuto y «Marcador» en medio, la competición, las píldoras de fuente
+   que se deslizan a los lados, las pestañas con las fuentes en filas y
+   «Ver juntos». Solo por debajo de 768: desde ahí, el escritorio.
+   ========================================================================== */
+.mc-bhead {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding-top: var(--s-3);
+}
+.mc-bhead__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.mc-bhead__team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  line-height: var(--lh-tight);
+}
+.mc-bhead__team--away {
+  justify-content: flex-end;
+  text-align: right;
+}
+.mc-bhead__name {
+  min-width: 0;
+  overflow-wrap: break-word;
+  /* «Santan-der» y no «Santande / r» cuando la cuenta atrás aprieta. */
+  hyphens: auto;
+  text-wrap: balance;
+}
+.mc-bhead__crest {
+  flex: none;
+}
+.mc-bhead__mid {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.mc-bhead__when {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: var(--fs-15);
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* «En 4 h 58 min» es más largo que «67'»: más pequeño, para dejar sitio a los nombres. */
+.mc-bhead__when:not(.is-live) {
+  font-size: var(--fs-13);
+}
+.mc-bhead__when.is-live {
+  color: var(--live-ink);
+}
+.mc-bhead__comp {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  text-align: center;
+}
+/* A 360 los nombres, algo más pequeños: «Barcelona» cabe entero. */
+@container mc (max-width: 379px) {
+  .mc-bhead__team {
+    font-size: var(--fs-13);
+  }
+  .mc-bhead__row {
+    gap: 6px;
+  }
+}
+/* «Marcador» y su «Tapar», con la zona invisible hasta 44 (son de 32). */
+.mc-bhead .mc-schip:is(button),
+.mc-bhead .mc-schip__hide.icon-btn {
+  position: relative;
+}
+.mc-bhead .mc-schip:is(button)::before,
+.mc-bhead .mc-schip__hide.icon-btn::before {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
+}
+.mc-bhead .mc-schip__hide.icon-btn::before {
+  inset: -6px;
+}
+
+/* Las píldoras de fuente: una fila que se desliza a los lados, a sangre. */
+.mc-chips {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  margin-inline: calc(-1 * var(--gutter));
+  padding: 2px var(--gutter);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: var(--gutter);
+  scrollbar-width: none;
+}
+.mc-chips::-webkit-scrollbar {
+  display: none;
+}
+.mc-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  max-width: 78vw;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.mc-chip.is-onscreen {
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px var(--accent-edge, var(--accent));
+  color: var(--accent-ink);
+}
+.mc-chip__num {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--text);
+}
+.mc-chip.is-onscreen .mc-chip__num {
+  color: var(--accent-ink);
+}
+.mc-chip__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mc-chip__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.mc-chip__dot[data-tone='ok'] {
+  background: var(--ok);
+}
+.mc-chip__dot[data-tone='weak'] {
+  background: var(--weak);
+}
+.mc-chip__dot[data-tone='fail'] {
+  background: var(--fail);
+}
+@media (hover: hover) and (pointer: fine) {
+  .mc-chip:not(.is-onscreen):hover {
+    color: var(--text);
+  }
+}
+
+/* «Ver juntos este partido», a lo ancho al final de la ficha. */
+.mc-together {
+  display: grid;
+  padding-bottom: var(--s-2);
+}
+.mc-together__btn.btn {
+  width: 100%;
+  justify-content: center;
+}
+@media (max-width: 767px) {
+  /* La ficha B va más junta: la cabecera, las píldoras y las pestañas. */
+  .mc--theater[data-layout='mobile'] {
+    gap: var(--s-3);
+  }
+  /* Con las filas, el panel no necesita reservar 40 dvh. */
+  .mc--theater[data-layout='mobile'] .mc-tabs--view .mc-tabs__panel {
+    min-height: 0;
+  }
+}

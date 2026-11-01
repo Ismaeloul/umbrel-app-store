@@ -13,6 +13,14 @@
    cuando no tienen más que enseñar hacia ese lado); si habías bajado, la
    página vuelve a la tira para que se vea qué día es.
 
+   Móvil en vertical (por debajo de 768 px; maqueta movil-agenda-direcciones,
+   dirección B «Por competición»): SIN héroe. Arriba la semana (DayStrip
+   `week`), una fila de píldoras (Todo, Para ti, Directo, ligas, Mis gustos:
+   el mismo filtro que la lista de escritorio) y una tarjeta por competición
+   con filas compactas (MobileAgenda.tsx). Tocar una fila abre la ficha del
+   partido a pantalla completa. Lo de arriba (héroe y filas de tarjetas)
+   queda para el móvil en horizontal, que por ancho es «tableta».
+
    Escritorio (desde 768 px salvo el móvil en horizontal; Isma, 1-11-2026),
    al estilo SofaScore: SIN héroe ni destacado. A la izquierda la lista
    (DeskList: pestañas, día, píldoras de estado y ligas, grupos por
@@ -75,7 +83,7 @@ import { AgendaRows, type RowSlot } from './AgendaList.tsx';
 import { useLibraryLookup, useNow, useSchedule, useScores } from './data.ts';
 import { useDaySwipe } from './day-swipe.ts';
 import { DayStrip } from './DayStrip.tsx';
-import { DeskList, deskView, FOR_YOU_CHIP } from './DeskList.tsx';
+import { byChip, DeskList, deskView, FOR_YOU_CHIP } from './DeskList.tsx';
 import { AgendaDetail, AgendaDetailEmpty } from './Detail.tsx';
 import {
   asForYou,
@@ -96,6 +104,7 @@ import {
 import { FirstUseCard } from './FirstUseCard.tsx';
 import { AgendaHero } from './Hero.tsx';
 import { MatchRow } from './MatchRow.tsx';
+import { MobileFilters, MobileGroups, MobileLoading, MobileRow } from './MobileAgenda.tsx';
 import {
   hideScore,
   isScoreRevealed,
@@ -108,6 +117,7 @@ import {
   setAgendaDay,
   setAgendaMode,
   setAgendaSelected,
+  setAgendaStatus,
   useAgendaUi,
 } from './state.ts';
 
@@ -197,6 +207,15 @@ export default function Agenda({ active }: ViewProps) {
   const stageVisible =
     kind === 'desktop' || kind === 'wide' || (kind === 'tablet' && !phoneLandscape);
   const mobile = kind === 'mobile' || kind === 'tablet';
+  /* El móvil de verdad (por debajo de 768 px; maqueta movil-agenda-direcciones,
+     dirección B «Por competición»): la semana arriba, píldoras por liga y los
+     partidos en filas compactas agrupadas por competición, sin héroe. El
+     móvil en horizontal (844 × 390, «tableta» por ancho) sigue con la portada
+     de siempre: desde 768 px no cambia nada. */
+  const compact = kind === 'mobile';
+  /* En el móvil, de las píldoras de estado solo existe «Directo»: si en
+     escritorio quedó puesta «Terminados» o «Próximos», aquí no filtra. */
+  const compactStatus = ui.status === 'live' ? 'live' : null;
   /* El héroe (el destacado) es solo del móvil: en escritorio, al entrar no
      hay nada abierto y el detalle enseña SOLO el que elijas (de cualquier
      pestaña o liga de la lista, por eso se busca en todo el día). */
@@ -205,12 +224,46 @@ export default function Agenda({ active }: ViewProps) {
      `mode`, que es del móvil. */
   const desk = useMemo(
     () =>
-      stageVisible
-        ? deskView(dayMatches, { chip: ui.chip, status: ui.status }, now, scores, preferences)
+      stageVisible || compact
+        ? deskView(
+            dayMatches,
+            { chip: ui.chip, status: compact ? compactStatus : ui.status },
+            now,
+            scores,
+            preferences,
+          )
         : null,
-    [stageVisible, dayMatches, ui.chip, ui.status, now, scores, preferences],
+    [
+      stageVisible,
+      compact,
+      compactStatus,
+      dayMatches,
+      ui.chip,
+      ui.status,
+      now,
+      scores,
+      preferences,
+    ],
   );
-  const featured = stageVisible ? null : featuredMatch(matches, now, scores, preferences);
+  const featured =
+    stageVisible || compact ? null : featuredMatch(matches, now, scores, preferences);
+  /* La semana del móvil: el recuento con la pestaña o liga elegida y cuántos
+     partidos de tus equipos hay cada día (el punto bajo el número). */
+  const deskChip = desk?.chip ?? null;
+  const weekEntries = useMemo(
+    () =>
+      compact
+        ? days.map((item) => {
+            const all = visibleMatches(item.matches, 'all', preferences);
+            return {
+              date: item.date,
+              count: byChip(all, deskChip, preferences).length,
+              mine: all.filter((match) => isMine(match, preferences)).length,
+            };
+          })
+        : [],
+    [compact, days, deskChip, preferences],
+  );
   const selected = stageVisible
     ? (dayMatches.find((match) => match.id === ui.selected) ?? null)
     : null;
@@ -761,6 +814,175 @@ export default function Agenda({ active }: ViewProps) {
             {deskFoot}
           </aside>
         </div>
+        <p className="sr-only" role="status" aria-live="polite">
+          {announcement}
+        </p>
+        {prefsMounted ? (
+          <Suspense fallback={null}>
+            <PreferencesSheet open={prefsOpen} onClose={() => setPrefsOpen(false)} />
+          </Suspense>
+        ) : null}
+      </div>
+    );
+  }
+
+  /* Móvil (por debajo de 768 px), dirección B «Por competición»: la semana,
+     las píldoras y las tarjetas por competición con filas compactas. Tocar
+     una fila abre la ficha del partido a pantalla completa. */
+  if (compact && desk) {
+    const scopedLive = countLive(desk.scoped, now, scores);
+    const compactGroups = groupByCompetition(desk.shown, now, scores, preferences);
+    let compactContent;
+    if (schedule.isPending) {
+      compactContent = <MobileLoading />;
+    } else if (schedule.isError && !data) {
+      compactContent = content;
+    } else if (desk.shown.length === 0) {
+      const nextDay = days[days.findIndex((item) => item.date === day) + 1];
+      compactContent =
+        compactStatus === 'live' && desk.scoped.length > 0 ? (
+          <EmptyState
+            title="Nada en directo ahora"
+            actions={
+              <Button variant="quiet" onClick={() => setAgendaStatus(null)}>
+                Ver todo el día
+              </Button>
+            }
+          >
+            Ahora no hay ningún partido en directo. Puedes ver los de todo el día.
+          </EmptyState>
+        ) : desk.chip === FOR_YOU_CHIP ? (
+          <EmptyState
+            title="Nada de los tuyos este día"
+            actions={
+              <>
+                <Button variant="primary" icon="pencil" onClick={openPreferences}>
+                  Editar mis gustos
+                </Button>
+                <Button variant="quiet" onClick={() => setAgendaChip(null)}>
+                  Ver todos
+                </Button>
+              </>
+            }
+          >
+            No hay partidos de tus ligas, equipos o selecciones favoritas. Puedes cambiar tus gustos
+            o ver todos.
+          </EmptyState>
+        ) : (
+          <EmptyState
+            title="Sin partidos anunciados"
+            actions={
+              nextDay ? (
+                <Button
+                  variant="quiet"
+                  trailingIcon="chev-r"
+                  onClick={() => changeDay(nextDay.date, 'next')}
+                >
+                  Ver el día siguiente
+                </Button>
+              ) : (
+                <Button variant="quiet" icon="refresh" onClick={refresh} busy={schedule.isFetching}>
+                  Actualizar
+                </Button>
+              )
+            }
+          >
+            No hay emisiones de fútbol registradas para este día. Prueba otra fecha.
+          </EmptyState>
+        );
+    } else {
+      const compactKey = `${day ?? ''}|${desk.chip ?? ''}|${compactStatus ?? ''}`;
+      compactContent = (
+        <MobileGroups
+          key={compactKey}
+          className={cx('agenda-list', swipeDirection && `agenda-list--${swipeDirection}`)}
+          groups={compactGroups}
+          now={now}
+          scores={scores}
+          listKey={compactKey}
+          renderRow={(match) => {
+            const channels = channelInfo(match, lookup);
+            const score = scores[match.id] ?? null;
+            const shown = isScoreRevealed(revealed, match.id);
+            return (
+              <MobileRow
+                key={match.id}
+                match={match}
+                now={now}
+                score={score}
+                channels={channels}
+                mine={isMine(match, preferences)}
+                watching={watched === match.id}
+                revealed={shown}
+                onOpen={openMatch}
+                menuItems={menuFor(
+                  match,
+                  channels.some((channel) => channel.inLibrary),
+                  paintableScore(score) === null ? null : shown ? 'shown' : 'hidden',
+                )}
+              />
+            );
+          }}
+        />
+      );
+    }
+    return (
+      <div className="agenda agenda--m" data-demo={appMode === 'demo' || undefined}>
+        {/* Solo el título (con la lupa y el engranaje del armazón): el día lo
+            dice la semana y «Actualizar» sigue con la R. */}
+        <ViewHeader title="Agenda" className="agenda-head" />
+        <div ref={barRef} className="agenda-bar agm-bar">
+          <DayStrip
+            days={weekEntries}
+            selected={day}
+            today={today}
+            onSelect={(date) => {
+              const from = days.findIndex((item) => item.date === day);
+              const to = days.findIndex((item) => item.date === date);
+              changeDay(date, to > from ? 'next' : 'prev');
+            }}
+            variant="week"
+            controls="agenda-lista"
+          />
+          {ready && days.length ? (
+            <MobileFilters
+              view={desk}
+              liveOnly={compactStatus === 'live'}
+              live={scopedLive}
+              preferences={preferences}
+              onEditPreferences={openPreferences}
+            />
+          ) : null}
+        </div>
+        {showCard ? (
+          <FirstUseCard onCustomize={openPreferences} onSkip={skipFirstUse} busy={save.isPending} />
+        ) : null}
+        <div className="agenda__body">
+          <div
+            ref={listRef}
+            id="agenda-lista"
+            role="tabpanel"
+            aria-labelledby={day ? `agenda-dia-${day}` : undefined}
+            className="agenda-panel"
+            onTouchStartCapture={() => {
+              suppressClick.current = false;
+            }}
+            onKeyDownCapture={() => {
+              suppressClick.current = false;
+            }}
+            onClickCapture={(event) => {
+              // Un deslizamiento no puede acabar abriendo la fila donde empezó.
+              if (suppressClick.current) {
+                suppressClick.current = false;
+                event.preventDefault();
+                event.stopPropagation();
+              }
+            }}
+          >
+            {compactContent}
+          </div>
+        </div>
+        {foot}
         <p className="sr-only" role="status" aria-live="polite">
           {announcement}
         </p>

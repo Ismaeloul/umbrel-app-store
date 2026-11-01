@@ -3,14 +3,12 @@
    la cápsula de estado los pone el armazón ENCIMA de esta vista
    (src/app/Shell.tsx); aquí va todo lo demás.
 
-   - Sobre el vídeo, arriba a la izquierda, la cápsula del marcador (tapada
-     por defecto): la vista la proyecta con un portal en el hueco que publica
-     el reproductor (player/stage-slot.ts). Sin armazón (los tests) va en su
-     sitio, arriba de la vista; con él, mientras el reproductor aún no ha
-     publicado el hueco, no se pinta (match-center.css: si no, la cabecera
-     saltaba en mitad del fundido de entrada).
-   - Bajo el vídeo, la cabecera (competición, estado y los dos equipos) y el
-     panel con pestañas Fuentes · Partido · Datos técnicos. Desde 1024 px ese
+   - En el móvil (maqueta movil-ficha-partido.html, dirección B «Vídeo
+     arriba»): bajo el vídeo, los dos equipos con el minuto y «Marcador»
+     (tapado, regla 29), la competición, las píldoras de fuente, las
+     pestañas con las fuentes en filas y, al final, «Ver juntos».
+   - Desde 768, bajo el vídeo, la cabecera de escritorio y el panel con
+     pestañas Fuentes · Partido · Datos técnicos. Desde 1024 px ese
      panel va en el lateral (MatchAside.tsx), plegable; plegado, vuelve aquí.
      Desde 1280 px el armazón añade además la columna de la agenda.
    - Modo teatro (pantalla completa, F, doble clic o el móvil en horizontal):
@@ -22,12 +20,10 @@
 import '../agenda/demo.ts';
 import '../sources/demo.ts';
 import type { FootballMatch } from '@ace/shared';
-import { useEffect, useEffectEvent, useMemo, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useEffectEvent, useMemo } from 'react';
 import type { ViewProps } from '../../app/contracts.ts';
 import { useLayout } from '../../app/layout.tsx';
 import { useNavigate } from '../../app/router.tsx';
-import { useStageSlot } from '../../player/stage-slot.ts';
 import { Button, EmptyState, IconButton, Skeleton, SkeletonRows } from '../../ui/index.ts';
 import { useLibraryLookup, useNow, useSchedule, useScores } from '../agenda/data.ts';
 import { channelInfo, madridClock } from '../agenda/domain.ts';
@@ -44,8 +40,9 @@ import {
 } from '../sources/session.ts';
 import { ChannelCenter } from './ChannelCenter.tsx';
 import { findMatch } from './find.ts';
-import { DeskMatchHead, MatchHead } from './MatchHead.tsx';
-import { Scoreboard } from './Scoreboard.tsx';
+import { LiveJuntosButton } from '../juntos/LiveCreate.tsx';
+import { DeskMatchHead, MobileMatchHead } from './MatchHead.tsx';
+import { SourceChips } from './SourceChips.tsx';
 import { SourcesSheet } from './SourcesSheet.tsx';
 import { MatchTabs } from './TheaterTabs.tsx';
 import './match-center.css';
@@ -107,13 +104,6 @@ function ResearchButton() {
   );
 }
 
-/** La cápsula del marcador: sobre el vídeo si hay escenario; si no, arriba de la vista. */
-function ScoreCapsuleSlot({ children }: { children: ReactNode }) {
-  const slot = useStageSlot();
-  if (slot) return createPortal(children, slot);
-  return <div className="mc-scap-inline">{children}</div>;
-}
-
 function MatchView({ id, active }: { id: string; active: boolean }) {
   const navigate = useNavigate();
   const layout = useLayout();
@@ -140,7 +130,8 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
   if (!match && schedule.isPending) return <MatchSkeleton />;
 
   // Desde 768 la ficha lleva la cabecera de escritorio, las fuentes en filas
-  // (también en la tableta) y el vídeo, los controles «1B».
+  // (también en la tableta) y el vídeo, los controles «1B». En el móvil, la
+  // dirección B: también en filas.
   const desk = layout.kind !== 'mobile';
   const tabs = layout.asideVisible ? null : (
     <MatchTabs
@@ -149,7 +140,7 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
       now={now}
       channels={channels}
       today={today}
-      variant={desk ? 'line' : 'list'}
+      variant="line"
       className="mc-tabs--view"
       extra={
         layout.asideAvailable ? (
@@ -158,9 +149,9 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
             label="Mostrar el panel lateral"
             onClick={() => layout.setAsideOpen(true)}
           />
-        ) : desk ? (
+        ) : (
           <ResearchButton />
-        ) : null
+        )
       }
     />
   );
@@ -210,19 +201,23 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
       data-layout={layout.kind}
       data-aside={layout.asideVisible ? 'true' : 'false'}
     >
-      {/* En escritorio el vídeo va limpio (rediseño, pantalla 2): el marcador,
-          tapado como siempre, va junto al titular. */}
-      {active && !desk ? (
-        <ScoreCapsuleSlot>
-          <Scoreboard key={match.id} match={match} score={score} now={now} />
-        </ScoreCapsuleSlot>
-      ) : null}
+      {/* El vídeo va limpio (rediseño): el marcador, tapado como siempre, va
+          junto al titular. */}
       {desk ? (
         <DeskMatchHead key={match.id} match={match} score={score} now={now} active={active} />
       ) : (
-        <MatchHead match={match} score={score} now={now} />
+        <>
+          <MobileMatchHead key={match.id} match={match} score={score} now={now} active={active} />
+          <SourceChips />
+        </>
       )}
       {tabs}
+      {desk ? null : (
+        <div className="mc-together">
+          {/* La sala del partido en directo (docs/ver-juntos.md §14). */}
+          <LiveJuntosButton match={match} look={{ className: 'mc-together__btn', size: 'md' }} />
+        </div>
+      )}
       <MatchSheets inMatch />
     </div>
   );

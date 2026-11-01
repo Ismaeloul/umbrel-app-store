@@ -4,6 +4,7 @@ import { resetMode, setMode } from '../../api/mode.ts';
 import { setPlayerPresence } from '../../app/player-presence.ts';
 import { installShortcutListener, shortcutStore } from '../../app/shortcuts.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
+import { MEDIA } from '../../lib/media.ts';
 import { fixture, json, mockFetch } from '../../test/fetch.ts';
 import Agenda from './index.tsx';
 import { resetScoreRevealForTests } from './score-reveal.ts';
@@ -67,8 +68,28 @@ function routes(overrides: Record<string, unknown> = {}) {
   } as Parameters<typeof mockFetch>[0];
 }
 
-function renderAgenda(kind: 'mobile' | 'desktop' | 'wide' = 'mobile') {
-  return renderWithApp(<Agenda route={{ vista: 'agenda' }} active />, { kind });
+/* `landscape`: el móvil en horizontal (844 × 390), «tableta» por ancho pero
+   con la portada de siempre (héroe y filas de tarjetas); `mobile` es el
+   móvil en vertical, con la Agenda «Por competición». */
+function renderAgenda(kind: 'mobile' | 'landscape' | 'desktop' | 'wide' = 'mobile') {
+  if (kind === 'landscape') {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query === MEDIA.phoneLandscape || query === MEDIA.tablet,
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as unknown as MediaQueryList,
+    );
+  }
+  return renderWithApp(<Agenda route={{ vista: 'agenda' }} active />, {
+    kind: kind === 'landscape' ? 'tablet' : kind,
+  });
 }
 
 /** Cifras de marcador pintadas en TODA la agenda (ninguna mientras esté tapado). */
@@ -95,6 +116,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   net?.restore();
   uninstall();
   shortcutStore.set([]);
@@ -105,9 +127,9 @@ afterEach(() => {
 });
 
 describe('vista Agenda', () => {
-  it('cabecera, días, «Para ti» por defecto con gustos, bloques por competición y pie', async () => {
+  it('móvil en horizontal: cabecera, días, «Para ti» por defecto con gustos, bloques por competición y pie', async () => {
     net = mockFetch(routes());
-    renderAgenda();
+    renderAgenda('landscape');
     expect(screen.getByRole('heading', { level: 1, name: 'Agenda' })).toBeInTheDocument();
     // Cargando: esqueleto con su nombre y el pie de la 0.6.59.
     expect(screen.getByLabelText('Cargando partidos')).toBeInTheDocument();
@@ -137,9 +159,9 @@ describe('vista Agenda', () => {
     expect(screen.getByText(/horario peninsular/)).toBeInTheDocument();
   });
 
-  it('portada: héroe con el destacado, sin marcador en la tarjeta; el botón navega y nunca reproduce', async () => {
+  it('móvil en horizontal: portada: héroe con el destacado, sin marcador en la tarjeta; el botón navega y nunca reproduce', async () => {
     net = mockFetch(routes());
-    renderAgenda();
+    renderAgenda('landscape');
     // El destacado es tu equipo en directo (Real Madrid, en tus gustos).
     const hero = await screen.findByRole('region', { name: 'Real Madrid vs Girona' });
     expect(hero).toHaveClass('agenda-hero', 'is-live');
@@ -181,9 +203,9 @@ describe('vista Agenda', () => {
     }
   });
 
-  it('«Todos» enseña todo; «Ver canal» si está en tu biblioteca y «Buscar canal» si no', async () => {
+  it('móvil en horizontal: «Todos» enseña todo; «Ver canal» si está en tu biblioteca y «Buscar canal» si no', async () => {
     net = mockFetch(routes());
-    renderAgenda();
+    renderAgenda('landscape');
     await screen.findByRole('heading', { name: /Champions League/ });
     fireEvent.click(screen.getByRole('radio', { name: /Todos/ }));
     expect(await screen.findByText('Arsenal')).toBeInTheDocument();
@@ -302,9 +324,9 @@ describe('vista Agenda', () => {
     expect(screen.getByRole('tabpanel').style.transform).toBe('');
   });
 
-  it('marcadores TAPADOS por defecto en toda la agenda; «Marcador» destapa ese partido y otro toque lo tapa', async () => {
+  it('móvil en horizontal: marcadores TAPADOS por defecto en toda la agenda; «Marcador» destapa ese partido y otro toque lo tapa', async () => {
     net = mockFetch(routes());
-    const { container } = renderAgenda();
+    const { container } = renderAgenda('landscape');
     const hero = await screen.findByRole('region', { name: 'Real Madrid vs Girona' });
     const name = 'Ver marcador de Real Madrid vs Girona';
     // Una cápsula en el héroe y otra en su tarjeta de la fila; ninguna cifra.
@@ -329,9 +351,9 @@ describe('vista Agenda', () => {
     expect(screen.getAllByRole('button', { name })).toHaveLength(2);
   });
 
-  it('menú contextual: «Ver marcador» destapa y «Tapar el marcador» lo tapa', async () => {
+  it('móvil en horizontal: menú contextual: «Ver marcador» destapa y «Tapar el marcador» lo tapa', async () => {
     net = mockFetch(routes());
-    const { container } = renderAgenda();
+    const { container } = renderAgenda('landscape');
     await screen.findByRole('region', { name: 'Real Madrid vs Girona' });
     const card = () =>
       within(rows()).getByRole('button', { name: `Buscar canal para ${LIVE.title}` });
@@ -344,10 +366,10 @@ describe('vista Agenda', () => {
     await waitFor(() => expect(scoreDigits()).toHaveLength(0));
   });
 
-  it('el partido que ves: «En pantalla» y «Volver al vídeo»; detener vuelve a tapar lo destapado (regla 29)', async () => {
+  it('móvil en horizontal: el partido que ves: «En pantalla» y «Volver al vídeo»; detener vuelve a tapar lo destapado (regla 29)', async () => {
     net = mockFetch(routes());
     setPlayerPresence({ active: true, route: { vista: 'partido', id: LIVE.id, canal: null } });
-    renderAgenda();
+    renderAgenda('landscape');
     const hero = await screen.findByRole('region', { name: 'Real Madrid vs Girona' });
     expect(within(hero).getByText('En pantalla')).toBeInTheDocument();
     expect(within(hero).getByRole('button', { name: 'Volver al vídeo' })).toBeInTheDocument();
@@ -361,7 +383,7 @@ describe('vista Agenda', () => {
     expect(scoreDigits()).toHaveLength(0);
   });
 
-  it('sin partidos tuyos: «Nada de los tuyos este día» con sus dos salidas', async () => {
+  it('móvil en horizontal: sin partidos tuyos: «Nada de los tuyos este día» con sus dos salidas', async () => {
     net = mockFetch(
       routes({
         'GET /api/v1/preferences': {
@@ -375,7 +397,7 @@ describe('vista Agenda', () => {
         },
       }),
     );
-    renderAgenda();
+    renderAgenda('landscape');
     const heading = await screen.findByRole('heading', { name: 'Nada de los tuyos este día' });
     const empty = heading.closest('section') as HTMLElement;
     expect(within(empty).getByRole('button', { name: 'Editar mis gustos' })).toBeInTheDocument();
@@ -383,7 +405,7 @@ describe('vista Agenda', () => {
     expect(await screen.findByText('Arsenal')).toBeInTheDocument();
   });
 
-  it('día sin partidos: «Sin partidos anunciados» y salida al día siguiente', async () => {
+  it('móvil en horizontal: día sin partidos: «Sin partidos anunciados» y salida al día siguiente', async () => {
     net = mockFetch(
       routes({
         'GET /api/v1/football': scheduleOf({ [TODAY]: [], '2026-09-24': [TOMORROW] }),
@@ -398,7 +420,7 @@ describe('vista Agenda', () => {
         },
       }),
     );
-    renderAgenda();
+    renderAgenda('landscape');
     expect(
       await screen.findByRole('heading', { name: 'Sin partidos anunciados' }),
     ).toBeInTheDocument();

@@ -2,9 +2,8 @@
    desde el teclado). Los mensajes de los demás van a la izquierda con su
    cara y su nombre; los tuyos, a la derecha en amarillo; los avisos de la
    sala («Ismael ha saltado a 1:12:04»), centrados y en gris. Debajo, «Lucía
-   está escribiendo…» y la caja para escribir. Así en escritorio (`desk`); en
-   el móvil, el chat de siempre: una lista con el nombre y la hora de cada
-   mensaje (también solo texto). Baja solo al último mensaje salvo que se esté
+   está escribiendo…» y la caja para escribir. Igual en escritorio y en el
+   móvil (ver-juntos.html). Baja solo al último mensaje salvo que se esté
    leyendo más arriba. */
 
 import { PARTY, type PartyChatMessage, type PartyRoom } from '@ace/shared';
@@ -12,7 +11,6 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { describeFailure } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
-import { IconButton } from '../../ui/Button.tsx';
 import { Icon } from '../../ui/Icon.tsx';
 import type { Typing } from './client.ts';
 import { Avatar, joinNames } from './Panels.tsx';
@@ -39,7 +37,6 @@ export function Chat({
   messages,
   room,
   selfId,
-  desk = false,
   typing = [],
   onSend,
   onTyping,
@@ -48,8 +45,6 @@ export function Chat({
   messages: readonly PartyChatMessage[];
   room: PartyRoom | null;
   selfId: string;
-  /** El chat del rediseño de escritorio; sin él, el de siempre del móvil. */
-  desk?: boolean;
   typing?: readonly Typing[];
   onSend(text: string): Promise<void>;
   /** Se está escribiendo (el cliente ya lo espacia). */
@@ -108,31 +103,6 @@ export function Chat({
           <li className="juntos-chat__empty">{JUNTOS_TEXT.chatEmpty}</li>
         ) : null}
         {messages.map((message) => {
-          if (!desk) {
-            return (
-              <li
-                key={message.id}
-                className={cx(
-                  'juntos-chat__msg',
-                  message.kind === 'system' && 'juntos-chat__msg--system',
-                  message.memberId === selfId && 'juntos-chat__msg--self',
-                )}
-              >
-                {message.kind === 'chat' ? (
-                  <span className="juntos-chat__who">
-                    {message.name}
-                    <time
-                      className="juntos-chat__time"
-                      dateTime={new Date(message.at).toISOString()}
-                    >
-                      {TIME.format(message.at)}
-                    </time>
-                  </span>
-                ) : null}
-                <span className="juntos-chat__text">{message.text}</span>
-              </li>
-            );
-          }
           if (message.kind === 'system') {
             return (
               <li key={message.id} className="juntos-chat__msg juntos-chat__msg--system">
@@ -171,32 +141,30 @@ export function Chat({
           );
         })}
       </ol>
-      {desk ? (
-        <p className="juntos-chat__typing" aria-live="polite">
-          {typingNames.length ? (
-            <>
-              <span className="juntos-chat__dots" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
-              {typingNames.length === 1
-                ? JUNTOS_TEXT.typingOne(typingNames[0] ?? '')
-                : JUNTOS_TEXT.typingMany(joinNames(typingNames))}
-            </>
-          ) : null}
-        </p>
-      ) : null}
+      <p className="juntos-chat__typing" aria-live="polite">
+        {typingNames.length ? (
+          <>
+            <span className="juntos-chat__dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            {typingNames.length === 1
+              ? JUNTOS_TEXT.typingOne(typingNames[0] ?? '')
+              : JUNTOS_TEXT.typingMany(joinNames(typingNames))}
+          </>
+        ) : null}
+      </p>
       <form className="juntos-chat__form" onSubmit={(event) => void submit(event)}>
         <label className="sr-only" htmlFor="juntos-chat-input">
-          {desk ? JUNTOS_TEXT.chatPlaceholder : JUNTOS_TEXT.chatPlaceholderMobile}
+          {JUNTOS_TEXT.chatPlaceholder}
         </label>
         <input
           id="juntos-chat-input"
           className="juntos-chat__input"
           value={text}
           maxLength={PARTY.chatMaxChars}
-          placeholder={desk ? JUNTOS_TEXT.chatPlaceholder : JUNTOS_TEXT.chatPlaceholderMobile}
+          placeholder={JUNTOS_TEXT.chatPlaceholder}
           autoComplete="off"
           enterKeyHint="send"
           onChange={(event) => {
@@ -204,26 +172,15 @@ export function Chat({
             if (event.target.value.trim()) onTyping?.();
           }}
         />
-        {desk ? (
-          <button
-            type="submit"
-            className="juntos-chat__send"
-            aria-label={JUNTOS_TEXT.send}
-            aria-busy={sending || undefined}
-            disabled={!text.trim() || sending}
-          >
-            <Icon name="enviar" size={20} />
-          </button>
-        ) : (
-          <IconButton
-            type="submit"
-            icon="subir"
-            label={JUNTOS_TEXT.send}
-            variant="quiet"
-            busy={sending}
-            disabled={!text.trim()}
-          />
-        )}
+        <button
+          type="submit"
+          className="juntos-chat__send"
+          aria-label={JUNTOS_TEXT.send}
+          aria-busy={sending || undefined}
+          disabled={!text.trim() || sending}
+        >
+          <Icon name="enviar" size={20} />
+        </button>
       </form>
     </section>
   );

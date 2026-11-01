@@ -2,10 +2,14 @@
    el reproductor.
 
    Maquetación (docs/diseno/sistema.md §Maquetación, piel «Palco» W3):
-   - Móvil (< 768): la vista a lo ancho, barra inferior flotante con los 4
-     destinos (5 con «Pelis y series», docs/vod.md §12.1) y el
-     mini-reproductor encima. En el centro de partido no hay barra: el vídeo
-     va arriba, pegado, y se minimiza con la flecha o deslizando.
+   - Móvil (< 768; rediseño móvil, maqueta movil-barra-isla): la vista a lo
+     ancho y abajo la «isla» flotante con las pestañas (Agenda, Canales,
+     Guía y, con películas en el servidor, Pelis y series) y el
+     mini-reproductor acoplado dentro. Buscar y Ajustes van en la cabecera
+     de cada vista (lupa y engranaje) y se abren encima de cualquier
+     pestaña, sin la isla (maqueta buscar-ajustes). En el centro de partido
+     no hay isla: el vídeo va arriba, pegado, y se minimiza con la flecha o
+     deslizando.
    - Desde 768 (rediseño de escritorio): menú lateral fijo de 232 px con el
      mini-reproductor abajo; cada vista lleva su barra (título, buscador con
      Ctrl K) en su ViewHeader. En el partido la pone el armazón, a lo ancho
@@ -57,7 +61,7 @@ import { LayoutContext, type LayoutValue } from './layout.tsx';
 import { SideNav, TabBar } from './Nav.tsx';
 import { usePlayerPresence } from './player-presence.ts';
 import { useBack, useNavigate, useRoute } from './router.tsx';
-import { formatVista, type Route, type Vista } from './routes.ts';
+import { formatVista, isJuntosRoom, opensOverTabs, type Route, type Vista } from './routes.ts';
 import { restoreScroll } from './scroll-memory.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
 import { QuickSearchHost } from '../features/search/QuickSearchHost.tsx';
@@ -232,7 +236,10 @@ export function Shell() {
   const asideVisible = asideAvailable && asideOpen;
   const columnVisible = inPartido && wideEnough && AgendaColumn !== null;
   const miniVisible = dockMounted && presentation === 'mini';
-  const tabbarVisible = kind === 'mobile' && !inStage;
+  // Buscar y Ajustes se abren encima de cualquier pestaña, sin la isla; la sala
+  // de Ver juntos (con código) también va sin ella: se vuelve con su flecha.
+  const tabbarVisible =
+    kind === 'mobile' && !inStage && !isJuntosRoom(route) && !opensOverTabs(route.vista);
 
   // Avisos: la línea de estado solo vive en el centro de partido; con el
   // vídeo a pantalla completa no se pinta ningún toast.
@@ -332,6 +339,7 @@ export function Shell() {
         data-layout={kind}
         data-immersive={immersive ? 'true' : 'false'}
         data-mini={miniVisible ? 'true' : 'false'}
+        data-tabbar={tabbarVisible ? 'true' : 'false'}
         data-aside={asideVisible ? 'true' : 'false'}
         data-column={columnVisible ? 'true' : 'false'}
         data-motion={motion}

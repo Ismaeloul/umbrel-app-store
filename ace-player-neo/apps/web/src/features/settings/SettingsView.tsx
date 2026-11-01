@@ -36,12 +36,18 @@
 
    Escritorio (rediseño, sección 7, desde 768 px): sin sección en la dirección
    se ve la portada «Lo tuyo arriba, lo técnico abajo» (Overview.tsx) y cada
-   sección se abre sola, a todo el ancho, con «‹ Ajustes» para volver. El
-   índice de tarjetas queda solo para el móvil, que no cambia. */
+   sección se abre sola, a todo el ancho, con «‹ Ajustes» para volver.
+
+   Móvil (por debajo de 768; maqueta buscar-ajustes.html): igual, la portada
+   y cada sección sola, abiertas encima de cualquier pestaña y sin la isla
+   (el armazón). Para volver basta la flecha de la cabecera (ViewHeader:
+   atrás en el historial, así que de una sección vuelve a la portada), sin
+   «‹ Ajustes». Ya no hay fila de chips con las secciones: todas salen en la
+   portada (las que no caben en la maqueta, bajo «Más ajustes»). */
 
 import type { PlaybackMode } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   api,
   describeFailure,
@@ -63,7 +69,7 @@ import { setTheme, setTransparency, useTheme, type ThemePreference } from '../..
 import { ViewHeader } from '../../app/ViewHeader.tsx';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
-import { MEDIA, prefersReducedMotion, useMediaQuery } from '../../lib/media.ts';
+import { MEDIA, useMediaQuery } from '../../lib/media.ts';
 import { notify } from '../../notices/index.ts';
 import {
   Button,
@@ -527,10 +533,8 @@ function AboutSection() {
 
 /* ---- Vista --------------------------------------------------------------- */
 
-/* Una sección cada vez, como pestañas: el índice elige y a la derecha (debajo
-   en el móvil) solo se ve la elegida. Antes era una página sin fin en la que
-   el índice solo desplazaba hasta cada trozo; ahora cada botón enseña SOLO su
-   sección. Sin sección en la dirección (`?vista=ajustes`) se ve la primera.
+/* Una sección cada vez: la portada elige y se ve SOLO la elegida. Sin
+   sección en la dirección (`?vista=ajustes`), la portada.
 
    Cada sección es una entrada del historial (`ajustes/<sección>`): recargar
    deja la misma y «atrás» vuelve a la anterior. Como solo se monta la
@@ -594,22 +598,6 @@ function useFocusOnSectionChange(current: SectionId | null, active: boolean) {
   }, [current, active]);
 }
 
-/** En el móvil el índice es una fila de chips: la elegida, a la vista. */
-function useCurrentChipInView(list: RefObject<HTMLUListElement | null>, current: SectionId) {
-  useEffect(() => {
-    const el = list.current;
-    if (!el || el.scrollWidth <= el.clientWidth) return;
-    const item = el.querySelector<HTMLElement>('.is-current');
-    if (!item) return;
-    const start = item.offsetLeft - el.offsetLeft;
-    const end = start + item.offsetWidth;
-    const pad = parseFloat(getComputedStyle(el).scrollPaddingInlineStart) || 0;
-    if (start - pad >= el.scrollLeft && end <= el.scrollLeft + el.clientWidth) return;
-    const behavior: ScrollBehavior = prefersReducedMotion() ? 'auto' : 'smooth';
-    el.scrollTo?.({ left: Math.max(0, start - pad), behavior });
-  }, [list, current]);
-}
-
 function External({ section, route, active }: { section: ExternalSection } & ViewProps) {
   const Component = externalSection(section);
   if (!Component) return null;
@@ -624,7 +612,7 @@ function External({ section, route, active }: { section: ExternalSection } & Vie
 
 export default function SettingsView({ route, active }: ViewProps) {
   const navigate = useNavigate();
-  // Escritorio: portada sin sección y cada sección sola (rediseño, sección 7).
+  // Portada sin sección y cada sección sola (rediseño, sección 7; el móvil, igual).
   const desk = useLayout().kind !== 'mobile';
   const hasHealth = externalSection('salud') !== null;
   const hasDevices = externalSection('dispositivos') !== null;
@@ -633,7 +621,6 @@ export default function SettingsView({ route, active }: ViewProps) {
   );
   const requested = route.vista === 'ajustes' ? route.seccion : null;
   // Sin panel de salud, «ajustes/salud» (el indicador del motor) va al motor.
-  // Sin sección (o con una que no existe) se ve la primera.
   const chosen: SectionId | null =
     requested === 'salud' && !hasHealth
       ? 'motor'
@@ -641,11 +628,9 @@ export default function SettingsView({ route, active }: ViewProps) {
         ? (requested as SectionId)
         : null;
   const current: SectionId = chosen ?? sections[0]?.id ?? 'listas';
-  // En escritorio, sin sección (o con una que no existe) se ve la portada.
-  const overview = desk && chosen === null;
-  const list = useRef<HTMLUListElement>(null);
+  // Sin sección (o con una que no existe) se ve la portada.
+  const overview = chosen === null;
   useFocusOnSectionChange(overview ? null : current, active);
-  useCurrentChipInView(list, current);
 
   // Cambiar de sección no es cambiar de vista: sin transición, pero sí con su
   // entrada en el historial (atrás vuelve a la sección anterior). Si ya es la
@@ -758,14 +743,15 @@ export default function SettingsView({ route, active }: ViewProps) {
     }
   };
 
-  if (desk) {
-    return (
-      <div className="set set--desk">
-        <ViewHeader title="Ajustes" />
-        {overview ? (
-          <Overview go={go} hasDevices={hasDevices} hasHealth={hasHealth} />
-        ) : (
-          <div className="set-one" id="ajustes-panel">
+  return (
+    <div className={cx('set', desk ? 'set--desk' : 'set--movil')}>
+      <ViewHeader title="Ajustes" />
+      {overview ? (
+        <Overview go={go} hasDevices={hasDevices} hasHealth={hasHealth} />
+      ) : (
+        <div className="set-one" id="ajustes-panel">
+          {/* En el móvil, la flecha de la cabecera ya vuelve: sin «‹ Ajustes». */}
+          {desk ? (
             <a
               className="set-back"
               href={searchFor({ vista: 'ajustes', seccion: null })}
@@ -786,67 +772,10 @@ export default function SettingsView({ route, active }: ViewProps) {
               <Icon name="chevron" size={18} className="set-back__ic" />
               Ajustes
             </a>
-            {def ? render(def) : null}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="set">
-      <ViewHeader title="Ajustes" />
-      <div className="set-layout">
-        <nav className="set-index" aria-label="Secciones de Ajustes">
-          <ul className="set-index__list" ref={list}>
-            {/* Tarjeta con icono grande, título y una pista. El enlace ES la
-                tarjeta (objetivo de 44 px de verdad, también en táctil): dentro
-                lleva el icono (decorativo, sin texto) y el título, así que su
-                nombre y su texto siguen siendo solo el título. La pista es
-                decorativa y va fuera, colocada por CSS bajo el título.
-                Son enlaces de verdad (cada sección tiene su dirección: se
-                pueden abrir en otra pestaña) y la elegida lleva
-                aria-current="page", porque es la única que se ve. */}
-            {sections.map((item) => (
-              <li
-                key={item.id}
-                className={cx('set-index__item', current === item.id && 'is-current')}
-              >
-                <a
-                  className="set-index__link"
-                  href={searchFor({ vista: 'ajustes', seccion: item.id })}
-                  aria-current={current === item.id ? 'page' : undefined}
-                  aria-controls="ajustes-panel"
-                  onClick={(event) => {
-                    if (
-                      event.button !== 0 ||
-                      event.metaKey ||
-                      event.ctrlKey ||
-                      event.shiftKey ||
-                      event.altKey
-                    )
-                      return;
-                    event.preventDefault();
-                    haptic('selection');
-                    go(item.id);
-                  }}
-                >
-                  <span className="set-index__icon" aria-hidden="true">
-                    <Icon name={item.icon} size={20} />
-                  </span>
-                  <span className="set-index__title">{item.title}</span>
-                </a>
-                <span className="set-index__hint" aria-hidden="true">
-                  {item.hint}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <div className="set-sections" id="ajustes-panel">
+          ) : null}
           {def ? render(def) : null}
         </div>
-      </div>
+      )}
     </div>
   );
 }

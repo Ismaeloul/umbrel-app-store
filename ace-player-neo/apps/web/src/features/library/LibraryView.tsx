@@ -1,14 +1,12 @@
-/* Vista Canales (la biblioteca; inventario-front §13, piel «Palco», plan de la
-   fase 2 W8): «Emitiendo ahora» como carrusel de carteles de canal, filas con
-   tesela 16:9 y categorías como rótulos. Misma lógica y mismos nombres
-   accesibles que antes.
+/* Vista Canales (la biblioteca; inventario-front §13): pestañas, filtro y una
+   lista de canales con lo que echa cada uno ahora; categorías como rótulos.
+   Misma lógica y mismos nombres accesibles que antes.
 
    - Pestañas Favoritos / Recientes / Listas, cada una con su contador. Abre en
      la que tiene contenido (regla 32) y la elegida viaja en la URL
      (`&pestana=`), así que volver o recargar la conserva.
    - Buscador local con 140 ms de espera tras cada tecla; desde cualquier
      pestaña, con 2 letras o más, «Buscar «q» en el motor AceStream».
-   - «Emitiendo ahora» (injerto C1) arriba, sin reordenar nada debajo.
    - Listas largas virtualizadas; en Listas, categorías en acordeón (con texto
      escrito salen todas abiertas).
    - Cada estado vacío con el botón que lo resuelve.
@@ -17,7 +15,15 @@
      chips por tipo y «ahora / después», sin ficha lateral. La barra de la
      sección solo lleva el título y el buscador (como la maqueta); «Categorías
      IPTV», «Pegar hash» y las listas van en «Más opciones», a la derecha de
-     las pestañas. Lo de aquí debajo es el móvil, que no cambia.
+     las pestañas.
+   - Por debajo de 768 px (rediseño móvil, dirección B «Lista con ahora» de
+     movil-canales.html): las mismas pestañas y el mismo buscador, con
+     «Pegar hash» a su lado (la cabecera ya lleva la lupa y el engranaje), chips
+     por tipo (Todo, Deportes, Cine…, genres.ts) y filas que dicen qué echa
+     cada canal AHORA y cuánto le queda (MobileChannelRow, con los datos de la
+     tabla de escritorio: la agenda y la guía de tu IPTV). Sin el carrusel
+     «Emitiendo ahora» (lo que está en directo ya lo dice cada fila, con su
+     punto rojo) ni el botón «Guía TV» (la Guía es una pestaña de la isla).
    - Oculta (Activity), la vista conserva pestaña, texto, acordeones y scroll
      y no tiene nada vivo: ni consultas, ni temporizadores.
    - Con IPTV activa y 2 letras o más (docs/iptv.md §14.5): debajo de la lista
@@ -26,25 +32,26 @@
      450 ms, como Buscar, y comparte su consulta en caché.
    - Con IPTV activa, una cuarta pestaña «IPTV» a la derecha de Listas
      (docs/iptv.md §16): recorre tu IPTV por categorías, con buscador y
-     filtros (iptv/IptvTab.tsx). En ella el campo busca en tu IPTV y no sale
-     «Emitiendo ahora». */
+     filtros (iptv/IptvTab.tsx). En ella el campo busca en tu IPTV y no hay
+     chips por tipo (tiene sus filtros). */
 
 import { IPTV_SEARCH, type Item, type LibraryCollection } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, useApiQuery, useAppMode, useIptvActive } from '../../api/index.ts';
 import type { ViewProps } from '../../app/contracts.ts';
 import { requestFocus } from '../../app/focus.ts';
 import { useLayout } from '../../app/layout.tsx';
+import { usePlayerPresence } from '../../app/player-presence.ts';
 import { useNavigate, useSearchParam } from '../../app/router.tsx';
 import { searchFor, VISTA_TITLE } from '../../app/routes.ts';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
-import { preloadView } from '../../app/views.tsx';
 import { useSwipe } from '../../lib/gestures.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
 import {
   Button,
+  Chip,
   EmptyState,
   Icon,
   IconButton,
@@ -58,17 +65,19 @@ import {
 } from '../../ui/index.ts';
 import { applyDirectoryView, directoryErrorMessage } from '../directories/model.ts';
 import { PasteHashSheet } from '../paste-hash/index.ts';
-import {
-  bothButtonText,
-  IPTV_ID_SUBTITLE,
-  IPTV_TEXT,
-  iptvSubtitle,
-  iptvTags,
-} from '../search/iptv.ts';
+import { bothButtonText, IPTV_ID_SUBTITLE, IPTV_TEXT, iptvSubtitle } from '../search/iptv.ts';
 import { canSearch, cleanQuery, ENGINE_SEARCH_DELAY_MS } from '../search/model.ts';
 import { goToEngineSearch } from '../search/navigation.ts';
-import { ChannelRow } from './ChannelRow.tsx';
 import { usePendingKeys } from './data.ts';
+import { genreChips, genreCounts, genreOf, GENRE_LABEL, type Genre } from './genres.ts';
+import {
+  blockChunks,
+  chunkIds,
+  guideBlocks,
+  registerGuideNowDemo,
+  useGuideNow,
+  type GuideBlocks,
+} from './guide-now.ts';
 import { IptvTab } from './iptv/IptvTab.tsx';
 import { searchInCategory, IPTV_TAB_TEXT } from './iptv/texts.ts';
 import {
@@ -91,16 +100,17 @@ import {
   type LibraryTab,
 } from './model.ts';
 import { DeskChannels, type DeskTab } from './DeskChannels.tsx';
-import { onAirEntries, OnAirStrip } from './OnAirStrip.tsx';
-import { useOnAir } from './on-air.ts';
+import { MobileChannelRow } from './MobileChannelRow.tsx';
+import { useNow, useOnAir } from './on-air.ts';
 import { useOnScreenHash } from './play.ts';
 import { useChannelActions } from './useChannelActions.tsx';
 import { VirtualList } from './VirtualList.tsx';
 import { registerIptvChannelsDemo } from '../search/demo-register.ts';
 import './library.css';
 
-/* En la demo, «En tu IPTV» del filtro sin haber pasado por Buscar. */
+/* En la demo, «En tu IPTV» del filtro sin haber pasado por Buscar, y el «ahora» de las filas del móvil. */
 registerIptvChannelsDemo();
+registerGuideNowDemo();
 
 type Row =
   | { type: 'channel'; collection: LibraryCollection; item: Item }
@@ -145,8 +155,21 @@ export default function LibraryView({ active }: ViewProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const onAir = useOnAir(active);
   const onScreen = useOnScreenHash();
-  /* Escritorio y tableta: la tabla (DeskChannels); el móvil se queda como estaba. */
+  /* Escritorio y tableta: la tabla (DeskChannels); el móvil, la lista con «ahora». */
   const desk = layout.kind !== 'mobile';
+  /* El canal que suena (móvil): el hash del reproductor o, si la sesión del canal
+     eligió otra fuente (la IPTV, otra de la lista), el canal que se tocó. Como DeskChannels. */
+  const presence = usePlayerPresence();
+  const tappedId =
+    presence.active && presence.route?.vista === 'partido' ? presence.route.canal : null;
+  const now = useNow(30_000);
+  /* El chip por tipo del móvil es de la pestaña: al cambiar de pestaña vuelve a «Todo». */
+  const [genre, setGenre] = useState<Genre | null>(null);
+  const [genreTab, setGenreTab] = useState(tabParam);
+  if (genreTab !== tabParam) {
+    setGenreTab(tabParam);
+    setGenre(null);
+  }
 
   const setTab = (next: LibraryTab | 'todos') => {
     // Cambiar de pestaña (toque o deslizamiento): «selección» del mapa háptico.
@@ -218,12 +241,34 @@ export default function LibraryView({ active }: ViewProps) {
   const q = query.trim();
   const iptvIds = data?.iptvIds;
 
+  /* El tipo de un canal (chips del móvil), con la categoría que le falte sacada
+     de la lista activa (un reciente que llegó sin ella), como en el escritorio. */
+  const genreFor = useCallback(
+    (item: Item) =>
+      genreOf(item.category ? item : { ...item, category: webById.get(item.id)?.category ?? '' }),
+    [webById],
+  );
+  /* Chips: los tipos que tiene la pestaña; uno elegido que ya no está, no filtra. */
+  const chips = useMemo(() => {
+    if (desk || !visible || collectionTab === null) return [];
+    const counts = genreCounts(
+      itemsFor(visible, collectionTab).map((item) => ({
+        ...item,
+        category: item.category || webById.get(item.id)?.category || '',
+      })),
+    );
+    return genreChips(counts);
+  }, [desk, visible, collectionTab, webById]);
+  const shownGenre = genre && chips.includes(genre) ? genre : null;
+
   // `channelCount` cuenta los canales que encajan aunque su categoría esté
   // plegada: una lista con todo plegado NO está vacía.
   const { rows, channelCount } = useMemo<{ rows: Row[]; channelCount: number }>(() => {
     if (!visible || collectionTab === null) return { rows: [], channelCount: 0 };
     const collection = TAB_COLLECTION[collectionTab];
-    const items = filterItems(itemsFor(visible, collectionTab), q);
+    const items = filterItems(itemsFor(visible, collectionTab), q).filter(
+      (item) => shownGenre === null || genreFor(item) === shownGenre,
+    );
     const channel = (item: Item): Row => ({ type: 'channel', collection, item });
     if (collectionTab === 'favoritos')
       return { rows: items.map(channel), channelCount: items.length };
@@ -247,7 +292,7 @@ export default function LibraryView({ active }: ViewProps) {
       }),
       channelCount: items.length,
     };
-  }, [visible, collectionTab, q, openCats]);
+  }, [visible, collectionTab, q, openCats, shownGenre, genreFor]);
 
   // Deslizar a los lados cambia de pestaña en el móvil (como los días de la agenda).
   useSwipe(panelRef, {
@@ -268,11 +313,27 @@ export default function LibraryView({ active }: ViewProps) {
     enter.current = { key: enterKey, until: Date.now() + ENTER_MS };
   const entering = Date.now() < enter.current.until;
 
-  const yours = useMemo(
-    () => (visible ? [...visible.favorites, ...visible.history] : []),
-    [visible],
+  /* El «ahora» de tu IPTV para las filas del móvil (guide-now.ts, como la tabla
+     de escritorio): solo las filas a la vista más un margen, en bloques fijos,
+     y los canales de «En tu IPTV». En escritorio lo pide DeskChannels. */
+  const [blocks, setBlocks] = useState<GuideBlocks>({ first: 0, last: 0 });
+  const onRange = useCallback((start: number, end: number) => {
+    const next = guideBlocks(start, end);
+    setBlocks((prev) => (prev.first === next.first && prev.last === next.last ? prev : next));
+  }, []);
+  const rowIds = useMemo(
+    () => rows.map((row) => (row.type === 'channel' ? row.item.id : null)),
+    [rows],
   );
-  const onAirNow = useMemo(() => (onAir.ready ? onAirEntries(yours, onAir) : []), [onAir, yours]);
+  const iptvFound = iptvSearch.data?.channels;
+  const guideChunks = useMemo(() => {
+    // En escritorio, ni una consulta (ni siquiera parada): la tabla pide las suyas.
+    if (desk || !withIptv) return [];
+    const chunks = collectionTab === null ? [] : blockChunks(rowIds, blocks);
+    const found = (iptvFound ?? []).map((channel) => channel.id);
+    return found.length > 0 ? [...chunks, ...chunkIds(found)] : chunks;
+  }, [desk, withIptv, collectionTab, rowIds, blocks, iptvFound]);
+  const guide = useGuideNow(guideChunks, active && guideChunks.length > 0);
 
   const toggleCategory = (category: string) =>
     setOpenCats((current) => {
@@ -304,21 +365,23 @@ export default function LibraryView({ active }: ViewProps) {
         </button>
       );
     const { item, collection } = row;
-    const watching = onScreen === item.id;
+    const watching = onScreen === item.id || tappedId === item.id;
     const category = item.category || webById.get(item.id)?.category || '';
     // Un canal de tu IPTV guardado: «Tu IPTV», «Ya no está en tu IPTV»… (§14.5).
     const idState = iptvIds?.[item.id];
     return (
-      <ChannelRow
+      <MobileChannelRow
         item={category === item.category ? item : { ...item, category }}
         iptv={idState !== undefined}
         subtitle={idState ? IPTV_ID_SUBTITLE[idState] : undefined}
         kind={collection}
         href={searchFor({ vista: 'partido', id: null, canal: item.id })}
+        now={now}
+        guide={guide.get(item.id) ?? null}
         isFavorite={actions.favoriteIds.has(item.id)}
         fallen={collection === 'favorites' && isFallenFavorite(item, webIds)}
         onScreen={watching}
-        onAir={onAir(item)}
+        onAir={idState !== undefined ? null : onAir(item)}
         onPlay={() => actions.play(item)}
         onToggleFavorite={() => actions.toggleFavorite(item)}
         menuItems={actions.menuFor(item, collection)}
@@ -328,39 +391,10 @@ export default function LibraryView({ active }: ViewProps) {
     );
   };
 
-  const header = (
-    <ViewHeader
-      title={VISTA_TITLE.biblioteca}
-      actions={
-        <>
-          {/* La Guía TV es hija de Canales (docs/iptv.md §20): su entrada, aquí.
-              En escritorio la Guía ya está en el menú lateral. */}
-          {withIptv && !desk ? (
-            <Button
-              variant="quiet"
-              size="sm"
-              icon="guia"
-              className="lib-guide-link"
-              onClick={() => navigate({ vista: 'guia' })}
-              onPointerEnter={() => preloadView('guia')}
-              onFocus={() => preloadView('guia')}
-            >
-              Guía TV
-            </Button>
-          ) : null}
-          {/* En escritorio, «Pegar hash» va en «Más opciones» (DeskChannels). */}
-          {desk ? null : (
-            <IconButton
-              icon="paste"
-              label="Pegar un Content ID o enlace acestream://"
-              title="Pegar hash"
-              onClick={() => setPasteOpen(true)}
-            />
-          )}
-        </>
-      }
-    />
-  );
+  /* Solo el título: en el móvil la cabecera ya lleva la lupa y el engranaje, la
+     Guía es una pestaña de la isla y «Pegar hash» va al lado del buscador; en
+     escritorio, «Pegar hash» va en «Más opciones» (DeskChannels). */
+  const header = <ViewHeader title={VISTA_TITLE.biblioteca} />;
 
   const fieldLabel =
     tab === 'iptv'
@@ -394,12 +428,24 @@ export default function LibraryView({ active }: ViewProps) {
       }}
     />
   );
+  /* Móvil: el buscador con «Pegar hash» a su lado (B-064: siempre a mano). */
+  const searchBar = (
+    <div className="lib-searchbar">
+      {search}
+      <IconButton
+        icon="paste"
+        label="Pegar un Content ID o enlace acestream://"
+        title="Pegar hash"
+        onClick={() => setPasteOpen(true)}
+      />
+    </div>
+  );
 
   if (!data) {
     return (
       <div className="lib">
         {header}
-        {desk ? null : search}
+        {desk ? null : searchBar}
         {library.isError ? (
           <EmptyState
             tone="error"
@@ -463,18 +509,19 @@ export default function LibraryView({ active }: ViewProps) {
             };
             return (
               <li key={channel.id} className="lib-row">
-                <ChannelRow
+                <MobileChannelRow
                   item={iptvRow}
                   kind="search"
                   href={searchFor({ vista: 'partido', id: null, canal: channel.id })}
+                  now={now}
+                  guide={guide.get(channel.id) ?? null}
                   isFavorite={actions.favoriteIds.has(channel.id)}
-                  onScreen={onScreen === channel.id}
+                  onScreen={onScreen === channel.id || tappedId === channel.id}
                   onAir={onAir(iptvRow)}
                   iptv
                   highlight={q}
                   ace={channel.library.length}
                   subtitle={iptvSubtitle(channel)}
-                  tags={iptvTags(channel)}
                   onPlay={() => actions.play(iptvRow)}
                   onToggleFavorite={() => actions.toggleFavorite(iptvRow)}
                   menuItems={actions.menuFor(iptvRow, 'search')}
@@ -497,8 +544,25 @@ export default function LibraryView({ active }: ViewProps) {
       </section>
     ) : null;
 
+  const pickGenre = (next: Genre | null) => {
+    haptic('selection');
+    setGenre(next);
+  };
+
   const empty = (() => {
     if (channelCount > 0 || collectionTab === null) return null;
+    /* Con un chip elegido y 0 o 1 letra: no es que la pestaña esté vacía, es que nada coincide. */
+    if (shownGenre !== null && q.length < ENGINE_SEARCH_MIN)
+      return (
+        <EmptyState
+          title={`Ningún canal de ${GENRE_LABEL[shownGenre].toLowerCase()} aquí.`}
+          actions={
+            <Button variant="primary" onClick={() => pickGenre(null)}>
+              Ver todos
+            </Button>
+          }
+        />
+      );
     if (q.length >= ENGINE_SEARCH_MIN)
       return (
         <EmptyState
@@ -671,15 +735,7 @@ export default function LibraryView({ active }: ViewProps) {
   return (
     <div className="lib" data-tab={tab}>
       {header}
-      {search}
-      {q || tab === 'iptv' ? null : (
-        <OnAirStrip
-          entries={onAirNow}
-          onScreen={onScreen}
-          favoriteIds={actions.favoriteIds}
-          onPlay={(item) => actions.play(item)}
-        />
-      )}
+      {searchBar}
       <Tabs
         label="Secciones de la biblioteca"
         idPrefix="bib"
@@ -696,6 +752,18 @@ export default function LibraryView({ active }: ViewProps) {
           ...(value === 'iptv' ? {} : { count: counts[value] }),
         }))}
       />
+      {collectionTab !== null && chips.length > 0 ? (
+        <div className="lib-chips" role="group" aria-label="Filtrar por tipo de canal">
+          <Chip pressed={shownGenre === null} onClick={() => pickGenre(null)}>
+            Todo
+          </Chip>
+          {chips.map((value) => (
+            <Chip key={value} pressed={shownGenre === value} onClick={() => pickGenre(value)}>
+              {GENRE_LABEL[value]}
+            </Chip>
+          ))}
+        </div>
+      ) : null}
       <div ref={panelRef} className="lib-panel" {...tabPanelProps('bib', tab)}>
         {tab === 'listas' ? sourceBar : null}
         {tab === 'iptv' ? (
@@ -718,6 +786,7 @@ export default function LibraryView({ active }: ViewProps) {
               label={TAB_LABEL[tab]}
               className="lib-list"
               rowClassName={(row) => `lib-row lib-row--${row.type}`}
+              onRangeChange={onRange}
             />
           ))
         )}

@@ -9,6 +9,10 @@
    - Sin elemento compartido: el partido se abre con el mismo fundido que
      cualquier cambio de vista (src/app/transitions.ts, 0.9.0).
 
+   En el móvil (maqueta movil-ficha-partido.html, dirección B «Vídeo
+   arriba») va MobileMatchHead: los dos equipos en una línea con el minuto y
+   «Marcador» (tapado, regla 29) en medio, y la competición debajo.
+
    Desde 768 (rediseño de escritorio, pantalla 1) va DeskMatchHead: el
    partido en una línea con la competición y el estado debajo y, a la
    derecha, «Marcador» (tapado) y «Ver juntos». */
@@ -104,6 +108,83 @@ export function DeskMatchHead({
         {/* La sala del partido en directo (docs/ver-juntos.md §14). */}
         <LiveJuntosButton match={match} look={{ className: 'mc-dhead__together', size: 'md' }} />
       </div>
+    </header>
+  );
+}
+
+/** Lo de en medio de la cabecera móvil: «67'», «Descanso», «Final», «En 48 min» o la hora. */
+export function mobileWhen(
+  match: FootballMatch,
+  score: LiveScore | null,
+  now: number,
+): { text: string; live: boolean } {
+  const status = matchStatus(match, now, score);
+  if (status?.phase === 'live') {
+    const minute = liveMinute(score);
+    if (!minute) return { text: 'En directo', live: true };
+    return { text: minute.halftime ? 'Descanso' : `${minute.minute}'`, live: true };
+  }
+  if (status?.phase === 'done') return { text: 'Final', live: false };
+  if (status) return { text: status.text, live: false };
+  return {
+    text: /^\d{2}:\d{2}$/.test(match.time) ? match.time : 'Hora por confirmar',
+    live: false,
+  };
+}
+
+/** Cabecera de la ficha móvil (dirección B): equipos, minuto y «Marcador», y la competición. */
+export function MobileMatchHead({
+  match,
+  score,
+  now,
+  active = true,
+}: {
+  match: FootballMatch;
+  score: LiveScore | null;
+  now: number;
+  /** Con la vista oculta, el marcador no celebra goles (ni vibra). */
+  active?: boolean;
+}) {
+  const when = mobileWhen(match, score, now);
+  return (
+    <header className={cx('mc-bhead', when.live && 'is-live')}>
+      <div className="mc-bhead__row">
+        <p className="mc-bhead__team" aria-hidden="true">
+          <SideMark
+            match={match}
+            side="home"
+            size={20}
+            lit={when.live}
+            className="mc-bhead__crest"
+          />
+          <span className="mc-bhead__name">{match.home}</span>
+        </p>
+        <div className="mc-bhead__mid">
+          <span className={cx('mc-bhead__when', when.live && 'is-live')}>
+            {when.live ? <LiveDot /> : null}
+            {when.text}
+          </span>
+          <ScoreChip match={match} score={score} now={now} quiet={!active} />
+        </div>
+        {match.away ? (
+          <p className="mc-bhead__team mc-bhead__team--away" aria-hidden="true">
+            <span className="mc-bhead__name">{match.away}</span>
+            <SideMark
+              match={match}
+              side="away"
+              size={20}
+              lit={when.live}
+              className="mc-bhead__crest"
+            />
+          </p>
+        ) : (
+          <span />
+        )}
+      </div>
+      {match.competition ? <p className="mc-bhead__comp">{match.competition}</p> : null}
+      <h1 id={`mc-title-${match.id}`} className="sr-only" tabIndex={-1}>
+        {matchTitle(match)}
+      </h1>
     </header>
   );
 }

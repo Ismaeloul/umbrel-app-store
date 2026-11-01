@@ -130,7 +130,10 @@ async function canalesIptv(q: string): Promise<{ id: string; title: string }[]> 
 /** Buscar con un texto (Intro busca al momento). */
 async function buscar(page: Page, texto: string): Promise<void> {
   await page.goto('/?vista=buscar');
-  const campo = page.getByRole('searchbox', { name: 'Buscar en tu IPTV y en el motor AceStream' });
+  // En el móvil el campo busca también partidos y pelis (maqueta buscar-ajustes): otro nombre.
+  const campo = page.getByRole('searchbox', {
+    name: /^(Buscar en tu IPTV y en el motor AceStream|Buscar partidos)/,
+  });
   await campo.fill(texto);
   await campo.press('Enter');
 }
@@ -418,8 +421,12 @@ test(
     await expect(page.getByText('IPTV en pausa: todo sale de AceStream')).toBeVisible();
     // Buscar sin IPTV: los textos de hoy y sin sección.
     await page.goto('/?vista=buscar');
-    const campo = page.getByRole('searchbox', { name: 'Buscar en el motor AceStream' });
-    await expect(page.getByText('Busca canales publicados en el motor AceStream.')).toBeVisible();
+    const campo = page.getByRole('searchbox', {
+      name: /^(Buscar en el motor AceStream|Buscar partidos)/,
+    });
+    // La pista del motor es de escritorio; en el móvil, sin texto, salen los atajos.
+    if ((page.viewportSize()?.width ?? 1440) >= 768)
+      await expect(page.getByText('Busca canales publicados en el motor AceStream.')).toBeVisible();
     await campo.fill('tele');
     await campo.press('Enter');
     await expect(enElMotor(page)).toBeVisible();

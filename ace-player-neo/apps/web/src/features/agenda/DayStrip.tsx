@@ -13,8 +13,12 @@
      deshabilitan en los extremos y se ocultan si no hay desbordamiento. Van
      solo con ratón (pointer: fine): en táctil se desliza la propia tira y las
      flechas se comerían 88 px del móvil (decisión anotada).
-   - Dos formas: `line` (móvil y tableta, a sangre, pastillas justas) y
-     `tiles` (escritorio, pastillas anchas con «n partidos»).
+   - Tres formas: `line` (tableta y móvil en horizontal, a sangre, pastillas
+     justas), `tiles` (escritorio, pastillas anchas con «n partidos») y `week`
+     (la Agenda del móvil, maqueta movil-agenda-direcciones B: una semana que
+     llena el ancho, «HOY» y el día de la semana en mayúsculas, el número y,
+     debajo, un punto si ese día juega uno de tus equipos; el elegido, en amarillo;
+     el recuento va solo en el nombre accesible).
    - Pestañas ARIA: flechas, Inicio y Fin cambian de día con el foco. */
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
@@ -27,6 +31,8 @@ import { dayLabel } from './domain.ts';
 export interface DayEntry {
   date: string;
   count: number;
+  /** Partidos de tus equipos ese día (solo lo pinta la semana del móvil, con un punto). */
+  mine?: number;
 }
 
 export interface DayStripProps {
@@ -34,13 +40,23 @@ export interface DayStripProps {
   selected: string | null;
   today: string;
   onSelect(date: string): void;
-  variant?: 'line' | 'tiles';
+  variant?: 'line' | 'tiles' | 'week';
   /** id del panel que controlan las pestañas (la lista). */
   controls?: string;
 }
 
 const partidos = (n: number) => `${n} ${n === 1 ? 'partido' : 'partidos'}`;
 const RELATIVE = new Set(['Hoy', 'Mañana', 'Ayer']);
+const WEEKDAY = new Intl.DateTimeFormat('es-ES', { weekday: 'short', timeZone: 'UTC' });
+
+/** El rótulo de la semana del móvil: «Hoy» o el día de la semana («Dom»), nunca «Mañana». */
+function weekLabel(date: string, today: string): string {
+  if (date === today) return 'Hoy';
+  const when = new Date(`${date}T12:00:00Z`);
+  if (!Number.isFinite(when.getTime())) return date;
+  const name = WEEKDAY.format(when).replace('.', '');
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
 
 export function DayStrip({
   days,
@@ -167,7 +183,11 @@ export function DayStrip({
               id={`agenda-dia-${day.date}`}
               aria-selected={active}
               aria-controls={controls}
-              aria-label={`${RELATIVE.has(label.primary) ? `${label.primary}, ` : ''}${label.long}: ${partidos(day.count)}`}
+              aria-label={`${RELATIVE.has(label.primary) ? `${label.primary}, ` : ''}${label.long}: ${partidos(day.count)}${
+                variant === 'week' && day.mine
+                  ? `, ${day.mine} ${day.mine === 1 ? 'tuyo' : 'tuyos'}`
+                  : ''
+              }`}
               tabIndex={active ? 0 : -1}
               className={cx(
                 'agenda-day',
@@ -179,19 +199,28 @@ export function DayStrip({
               onClick={() => onSelect(day.date)}
               onKeyDown={(event) => onKeyDown(event, index)}
             >
-              <span className="agenda-day__label">{label.primary}</span>
+              <span className="agenda-day__label">
+                {variant === 'week' ? weekLabel(day.date, today) : label.primary}
+              </span>
               {/* Número en texto plano (no en celdas de Num): va expandido y
                   no cambia, así que no hay nada que alinear. */}
               <span className="agenda-day__num" aria-hidden="true">
                 {label.number}
               </span>
-              <span className="agenda-day__count">
-                {variant === 'line' ? (
-                  <Num value={day.count} condensed={false} />
-                ) : (
-                  partidos(day.count)
-                )}
-              </span>
+              {variant === 'week' ? (
+                <span
+                  className={cx('agenda-day__mine', day.mine ? 'is-on' : null)}
+                  aria-hidden="true"
+                />
+              ) : (
+                <span className="agenda-day__count">
+                  {variant === 'line' ? (
+                    <Num value={day.count} condensed={false} />
+                  ) : (
+                    partidos(day.count)
+                  )}
+                </span>
+              )}
             </button>
           );
         })}

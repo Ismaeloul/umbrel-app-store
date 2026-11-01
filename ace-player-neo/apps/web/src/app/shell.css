@@ -213,8 +213,8 @@
 .dock[data-presentation='stage'] {
   position: relative;
 }
-/* Mini-reproductor «Sonando» (W7): banda de 72 px con la imagen viva
-   (96×54) encima de la barra inferior, márgenes de 12. */
+/* Mini-reproductor «Sonando» (W7). En el móvil va acoplado dentro de la isla
+   (más abajo, en la sección de la isla); desde 768, en el menú lateral. */
 .app {
   --mini-h: 72px;
 }
@@ -225,10 +225,6 @@
   right: calc(var(--safe-right) + 12px);
   bottom: calc(var(--safe-bottom) + var(--tabbar-gap) + var(--tabbar-h) + 8px);
   min-height: var(--mini-h);
-}
-.app[data-layout='mobile'][data-vista='partido'] .dock[data-presentation='mini'],
-.app[data-layout='mobile'][data-vista='sala'] .dock[data-presentation='mini'] {
-  bottom: calc(var(--safe-bottom) + 12px);
 }
 .stage-placeholder {
   display: grid;
@@ -272,8 +268,8 @@
    nombre propio, las filas que quedan bajo la barra superior (o bajo la
    inferior y su velo) se veían encima de ellas mientras duraba el fundido
    (Canales con scroll, sobre todo). Con nombre, las barras son su propia
-   capa, encima de las vistas, y base.css las deja quietas (clase ace-barra):
-   la píldora sigue deslizándose porque la imagen nueva está viva. */
+   capa, encima de las vistas, y base.css las deja quietas (clase ace-barra).
+   Las capas siguen el orden de pintado: el mini (z 41) queda sobre la isla. */
 .sidenav {
   view-transition-name: ace-barra-superior;
   view-transition-class: ace-barra;
@@ -287,63 +283,122 @@
   view-transition-class: ace-barra;
 }
 
-/* ---- Barra inferior flotante (móvil) -------------------------------------------
-   Cristal, márgenes de 12, radio 24 y la sombra larga de Palco. La píldora
-   (::before) es la única pieza que se mueve: translateX hasta la columna --i. */
+/* ---- La «isla» (móvil; rediseño móvil, maqueta movil-barra-isla) --------------
+   Barra flotante OPACA (--surface, radio 30, márgenes de 16 y la sombra
+   larga de Palco) con solo los iconos: el activo, en --text y con el trazo
+   más grueso; debajo, una rayita amarilla de 20×3. Sin píldora que se
+   desliza. Con algo sonando, la isla crece por arriba lo que mide el mini
+   (--mini-h) y el mini-reproductor se coloca en ese hueco (.dock, más abajo):
+   una sola pieza. Al cerrar el vídeo vuelve a ser solo la barra. */
 .tabbar {
-  /* --n (destinos) y --i (el activo) los pone Nav.tsx en línea con la lista
-     que se pinta: 4 o 5 con «Pelis y series» (T17 de docs/vod.md). */
-  --i: 0;
-  --tabbar-pad: 6px;
+  /* --n (pestañas) lo pone Nav.tsx en línea con la lista que se pinta: 3 o
+     4 con «Pelis y series» (T17 de docs/vod.md). */
   position: fixed;
   z-index: var(--z-nav);
-  left: calc(var(--safe-left) + 12px);
-  right: calc(var(--safe-right) + 12px);
+  left: calc(var(--safe-left) + var(--isla-x));
+  right: calc(var(--safe-right) + var(--isla-x));
   bottom: calc(var(--safe-bottom) + var(--tabbar-gap));
   display: grid;
   grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  align-items: center;
   height: var(--tabbar-h);
-  padding: var(--tabbar-pad);
-  border-radius: var(--r-xl);
+  padding: 6px 8px 8px;
+  border-radius: var(--isla-r);
+  background: var(--surface);
   box-shadow:
+    inset 0 0 0 1px var(--glass-rim),
     inset 0 1px 0 var(--glass-hi),
     var(--shadow-2);
 }
-.tabbar::before {
-  content: '';
-  position: absolute;
-  top: var(--tabbar-pad);
-  bottom: var(--tabbar-pad);
-  left: var(--tabbar-pad);
-  width: calc((100% - 2 * var(--tabbar-pad)) / var(--n));
-  /* Concéntrico: 24 − 6. */
-  border-radius: calc(var(--r-xl) - var(--tabbar-pad));
-  background: var(--accent-wash);
-  transform: translateX(calc(var(--i) * 100%));
-  transition: transform var(--dur-estandar) var(--ease-estandar);
-}
-.tabbar--none::before {
-  opacity: 0;
+.app[data-mini='true'] .tabbar {
+  height: calc(var(--tabbar-h) + var(--mini-h));
+  padding-top: calc(var(--mini-h) + 6px);
 }
 .tabbar__item {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: var(--tap);
+  height: 100%;
+  border-radius: 18px;
+  color: var(--text-3);
+}
+.tabbar__tile {
   position: relative;
   display: grid;
   place-items: center;
-  align-content: center;
-  gap: 2px;
-  min-width: 0;
-  border-radius: calc(var(--r-xl) - var(--tabbar-pad));
-  color: var(--text-2);
-  font-size: var(--fs-11);
-  font-weight: 620;
-  font-stretch: var(--w-tight);
-  /* Sin transición de color (solo transform y opacity): lo que se desliza es la píldora. */
+  width: 60px;
+  max-width: 100%;
+  height: 48px;
 }
-.tabbar__item[aria-current='page'] {
-  color: var(--accent-ink);
+.tabbar__bar {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 20px;
+  height: 3px;
+  margin-left: -10px;
+  border-radius: 2px;
+  background: var(--accent-edge);
+}
+.tabbar__item .icon {
+  width: 26px;
+  height: 26px;
+}
+.tabbar__item[aria-current] {
+  color: var(--text);
+}
+.tabbar__item[aria-current] .icon {
+  stroke-width: 2.3;
+}
+.tabbar__item[aria-current] .tabbar__bar {
+  display: block;
 }
 .tabbar__item:focus-visible {
   outline-offset: -2px;
+}
+
+/* Móvil: medidas de la isla y el mini acoplado dentro. Todo por debajo de
+   768: el escritorio de la 1.0.0 no cambia. */
+@media (max-width: 767px) {
+  .app {
+    --isla-x: 16px;
+    --isla-r: 30px;
+    /* El mini dentro de la isla es más bajo (maqueta: 56). */
+    --mini-h: 56px;
+  }
+  .dock[data-presentation='mini'] {
+    left: calc(var(--safe-left) + var(--isla-x));
+    right: calc(var(--safe-right) + var(--isla-x));
+    bottom: calc(var(--safe-bottom) + var(--tabbar-gap) + var(--tabbar-h));
+    height: var(--mini-h);
+    min-height: 0;
+    border-radius: var(--isla-r) var(--isla-r) 0 0;
+  }
+  /* Sin isla (Buscar, Ajustes, el partido): el mini va solo, como su propia
+     isla redonda abajo, con la línea de progreso metida entre las esquinas. */
+  .app[data-tabbar='false'] .dock[data-presentation='mini'] {
+    --mini-line-inset: 24px;
+    bottom: calc(var(--safe-bottom) + var(--tabbar-gap));
+    border-radius: var(--isla-r);
+    background: var(--surface);
+    box-shadow:
+      inset 0 0 0 1px var(--glass-rim),
+      inset 0 1px 0 var(--glass-hi),
+      var(--shadow-2);
+  }
+  .app[data-mini='true'] .app-main {
+    padding-bottom: calc(
+      var(--safe-bottom) + var(--tabbar-gap) + var(--tabbar-h) + var(--mini-h) + 28px
+    );
+  }
+  .app[data-tabbar='false'] .app-main {
+    padding-bottom: calc(var(--safe-bottom) + 28px);
+  }
+  .app[data-tabbar='false'][data-mini='true'] .app-main {
+    padding-bottom: calc(var(--safe-bottom) + var(--tabbar-gap) + var(--mini-h) + 28px);
+  }
 }
 
 /* ---- Menú lateral (desde 768, rediseño de escritorio) ----------------------------
@@ -739,7 +794,7 @@
     color: var(--text);
     background: var(--line-soft);
   }
-  .tabbar__item:hover:not([aria-current='page']) {
+  .tabbar__item:hover:not([aria-current]) {
     color: var(--text);
   }
   .engine:hover {

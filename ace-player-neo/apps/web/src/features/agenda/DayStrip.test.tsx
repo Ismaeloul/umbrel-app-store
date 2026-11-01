@@ -93,4 +93,37 @@ describe('tira de días', () => {
     expect(screen.queryByRole('tablist')).toBeNull();
     expect(container.querySelectorAll('button')).toHaveLength(0);
   });
+
+  it('la semana del móvil: «Hoy» y el día de la semana (nunca «Mañana»), sin recuento a la vista y un punto si juega algo tuyo', () => {
+    const { container } = render(
+      <DayStrip
+        days={[
+          { date: '2026-09-22', count: 9, mine: 0 },
+          { date: TODAY, count: 8, mine: 1 },
+          { date: '2026-09-24', count: 1, mine: 2 },
+        ]}
+        selected={TODAY}
+        today={TODAY}
+        onSelect={() => {}}
+        variant="week"
+      />,
+    );
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs.map((tab) => tab.querySelector('.agenda-day__label')?.textContent)).toEqual([
+      'Mar',
+      'Hoy',
+      'Jue',
+    ]);
+    expect(container.querySelector('.agenda-day__count')).toBeNull();
+    // El recuento y lo tuyo, en el nombre accesible.
+    expect(
+      screen.getByRole('tab', { name: 'Mañana, jueves, 24 de septiembre: 1 partido, 2 tuyos' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('tab', { name: 'Hoy, miércoles, 23 de septiembre: 8 partidos, 1 tuyo' }),
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(
+      tabs.map((tab) => tab.querySelector('.agenda-day__mine')?.classList.contains('is-on')),
+    ).toEqual([false, true, true]);
+  });
 });

@@ -1,6 +1,7 @@
-/* Portada en filas y rejilla de Películas y series (docs/vod.md §12.4, §12.5 y
-   §13; pendiente.md punto 7: «como los partidos») con un servidor simulado
-   que contesta con el catálogo de muestra. */
+/* Pelis y series en el móvil (la maquetación por defecto de estos tests):
+   pestañas, Mi lista como portada y la rejilla (docs/vod.md §12.4, §12.5 y
+   §13), con un servidor simulado que contesta con el catálogo de muestra. La
+   portada en filas de antes se fue con el rediseño del móvil. */
 
 import type { VodHome } from '@ace/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -47,256 +48,69 @@ function emptyHome(patch: Partial<VodHome>): VodHome {
   return { ...(homeNone as VodHome), ...patch };
 }
 
-describe('«Mi lista» en la portada (0.9.1)', () => {
-  const headings = () =>
-    [...document.querySelectorAll('.cine-portada .cine-row__name, .cine-portada h2')].map(
-      (node) => node.textContent,
-    );
-
-  it('tras «Seguir viendo», con los del tipo, por dónde va la serie y SIN filtrar por idioma', async () => {
-    net = mockFetch({
-      ...demoRoutes(),
-      /* Solo castellano: «Coco» (latino) no sale en la portada, pero en Mi lista sí. */
-      'GET /api/v1/vod/languages': () =>
-        json({ chosen: true, langs: ['castellano'], unknown: false, updatedAt: null }),
-    });
-    renderCine({ search: '?vista=cine&cine=series' });
-    const list = await screen.findByRole('list', { name: 'Mi lista' });
-    const order = headings().filter((text) => text === 'Seguir viendo' || text === 'Mi lista');
-    expect(order).toEqual(['Seguir viendo', 'Mi lista']);
-    const cards = within(list).getAllByRole('link');
-    expect(cards.map((card) => card.querySelector('.cine-card__title')?.textContent)).toEqual([
-      'The Office',
-      'La casa de papel',
-    ]);
-    expect(cards[0]?.querySelector('.cine-card__note')?.textContent).toMatch(/^Siguiente: T2 · E6/);
-    expect(cards[1]?.querySelector('.cine-card__note')?.textContent).toMatch(/^Vas por T1 · E3/);
-    // Películas: la de otro idioma, con su distintivo.
-    fireEvent.click(screen.getByRole('radio', { name: 'Películas' }));
-    const movies = await screen.findByRole('list', { name: 'Mi lista' });
-    await waitFor(() =>
-      expect(
-        within(movies)
-          .getAllByRole('link')
-          .map((card) => card.textContent),
-      ).toEqual([expect.stringContaining('El 47'), expect.stringContaining('Coco')]),
-    );
-    expect(within(movies).getByText('Latino')).toBeInTheDocument();
-  });
-
-  it('vacía (o de otro tipo): la fila no sale', async () => {
-    net = mockFetch({
-      ...demoRoutes(),
-      'GET /api/v1/vod/list': () => json({ items: [], max: 500 }),
-    });
-    renderCine();
-    await screen.findByRole('heading', { name: 'Seguir viendo' });
-    await waitFor(() =>
-      expect(net.calls.some((call) => call.url === '/api/v1/vod/list')).toBe(true),
-    );
-    expect(screen.queryByRole('list', { name: 'Mi lista' })).toBeNull();
-  });
-
-  it('«Ver todo» abre su rejilla (sin pedir vodBrowse) y «‹» vuelve a la portada', async () => {
-    net = mockFetch(demoRoutes());
-    renderCine({ search: '?vista=cine&cine=series' });
-    await screen.findByRole('list', { name: 'Mi lista' });
-    const before = gridCalls().length;
-    fireEvent.click(screen.getByRole('button', { name: /Mi lista/ }));
-    expect(await screen.findByRole('heading', { level: 2, name: 'Mi lista' })).toBeInTheDocument();
-    expect(new URLSearchParams(location.search).get('cinecat')).toBe('milista');
-    expect(document.querySelector('.cine-browse--mylist .cine-browse__count')?.textContent).toBe(
-      '2 series',
-    );
-    expect(gridCalls()).toHaveLength(before);
-    fireEvent.click(screen.getByRole('button', { name: 'Volver a Películas y series' }));
-    await waitFor(() => expect(new URLSearchParams(location.search).get('cinecat')).toBeNull());
-  });
-});
-
-describe('portada en filas, como la agenda', () => {
-  it('título, selector, buscador, «Seguir viendo», novedades y una fila por categoría (sin rejilla)', async () => {
+describe('móvil: pestañas y Mi lista como portada (rediseño del móvil)', () => {
+  it('«Pelis y series», Mi lista · N / Películas / Series y la portada sin pedir el catálogo', async () => {
     net = mockFetch(demoRoutes());
     renderCine();
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Películas y series' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Películas' })).toHaveAttribute(
-      'aria-checked',
+    expect(screen.getByRole('heading', { level: 1, name: 'Pelis y series' })).toBeInTheDocument();
+    const tabs = screen.getByRole('group', { name: 'Secciones de Pelis y series' });
+    expect(await within(tabs).findByRole('button', { name: 'Mi lista · 4' })).toHaveAttribute(
+      'aria-pressed',
       'true',
     );
-    expect(screen.getByRole('searchbox', { name: 'Buscar películas' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Seguir viendo' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Novedades en películas' })).toBeInTheDocument();
-    // Una fila por categoría, en el orden del proveedor (las de adultos al final, como las demás).
-    const rows = (await screen.findAllByRole('heading', { level: 2, name: /películas$/ })).filter(
-      (row) => row.closest('[data-cat]'),
-    );
-    expect(rows.map((row) => row.querySelector('.cine-row__name')?.textContent)).toEqual([
-      'Estrenos 2024',
-      '4K',
-      'Cine español',
-      'Pelis latino',
-      'Animación',
-      'Clásicos',
-      'VOSE',
-      'EN · Movies',
-      'FR · Films',
-      'XXX · Adultos',
-    ]);
-    await waitFor(() => expect(rowCalls()).toHaveLength(10));
-    expect(rowCalls().every((call) => queryOf(call).sort === 'added')).toBe(true);
-    const k4 = await screen.findByRole('list', { name: '4K' });
-    expect(within(k4).getAllByRole('link').length).toBe(9);
-    // La portada no pide la rejilla: esa es otra pantalla.
-    expect(gridCalls()).toHaveLength(0);
-    expect(screen.queryByRole('list', { name: 'Todas las películas' })).toBeNull();
-    // «Seguir viendo» de Películas: solo películas, con lo que queda (los
-    // episodios van en el de Series).
-    expect(screen.getByRole('button', { name: /^Dune\. Quedan 1 h 53 min$/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^The Office\./ })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Ver las 73 películas' })).toBeInTheDocument();
+    // Ni el selector «Películas | Series» ni «Categorías» ni el buscador de antes.
+    expect(screen.queryByRole('radio', { name: 'Películas' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Categorías' })).toBeNull();
+    expect(screen.queryByRole('searchbox')).toBeNull();
+    expect(await screen.findByRole('list', { name: 'Series' })).toBeInTheDocument();
+    // Ni filas de categorías ni novedades: la portada no pide `vodBrowse`.
+    expect(screen.queryByText('Novedades en películas')).toBeNull();
+    expect(browseCalls()).toHaveLength(0);
   });
 
-  it('«Seguir viendo» de Series: los episodios (y ninguna película)', async () => {
-    net = mockFetch(demoRoutes());
-    renderCine({ search: '?vista=cine&cine=series' });
-    expect(
-      await screen.findByRole('button', { name: /^The Office\. Siguiente: T2 · E6/ }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Dune\./ })).toBeNull();
-  });
-
-  it('las filas se piden al acercarse a la pantalla, no todas de golpe', async () => {
-    const observers: Array<{ cb: IntersectionObserverCallback; nodes: Element[] }> = [];
-    class FakeObserver {
-      private entry: { cb: IntersectionObserverCallback; nodes: Element[] };
-      constructor(cb: IntersectionObserverCallback) {
-        this.entry = { cb, nodes: [] };
-        observers.push(this.entry);
-      }
-      observe(node: Element) {
-        this.entry.nodes.push(node);
-      }
-      disconnect() {
-        this.entry.nodes = [];
-      }
-      unobserve() {}
-      takeRecords() {
-        return [];
-      }
-    }
-    vi.stubGlobal('IntersectionObserver', FakeObserver);
-    net = mockFetch(demoRoutes());
-    renderCine();
-    await screen.findByRole('heading', { name: 'Seguir viendo' });
-    await screen.findAllByRole('heading', { level: 2, name: /películas$/ });
-    expect(rowCalls()).toHaveLength(0);
-    const k4 = observers.find((o) =>
-      o.nodes.some((node) => node.getAttribute('data-cat') === DEMO_VOD_IDS.movieCategory),
-    )!;
-    act(() =>
-      k4.cb(
-        [{ isIntersecting: true } as IntersectionObserverEntry],
-        k4 as unknown as IntersectionObserver,
-      ),
-    );
-    await waitFor(() => expect(rowCalls()).toHaveLength(1));
-    expect(queryOf(rowCalls()[0]!).cat).toBe(DEMO_VOD_IDS.movieCategory);
-  });
-
-  it('«Ver todo» abre la rejilla de la categoría como otra pantalla; «Volver» regresa a la portada', async () => {
-    net = mockFetch(demoRoutes());
-    renderCine();
-    fireEvent.click(await screen.findByRole('button', { name: 'Ver todo: 4K, 9 películas' }));
-    expect(location.search).toContain(`cinecat=${DEMO_VOD_IDS.movieCategory}`);
-    // Su propia entrada en el historial: «Atrás» del navegador vuelve a la portada.
-    expect(history.state).toMatchObject({ cineGrid: true });
-    expect(await screen.findByRole('heading', { level: 2, name: '4K' })).toBeInTheDocument();
-    const grid = await screen.findByRole('list', { name: '4K' });
-    expect(within(grid).getAllByRole('listitem')[0]).toHaveAttribute('aria-setsize', '9');
-    expect(screen.queryByRole('heading', { name: 'Seguir viendo' })).toBeNull();
-    await waitFor(() =>
-      expect(queryOf(gridCalls().at(-1)!)).toMatchObject({
-        cat: DEMO_VOD_IDS.movieCategory,
-        limit: 60,
-      }),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Volver a Películas y series' }));
-    expect(await screen.findByRole('heading', { name: 'Seguir viendo' })).toBeInTheDocument();
-    await waitFor(() => expect(location.search).not.toContain('cinecat'));
-  });
-
-  it('con el teclado, el foco va al título de la rejilla y vuelve al «Ver todo» del que se vino', async () => {
-    net = mockFetch(demoRoutes());
-    renderCine();
-    const seeAll = await screen.findByRole('button', { name: 'Ver todo: 4K, 9 películas' });
-    seeAll.focus();
-    fireEvent.click(seeAll);
-    // La portada se oculta con el botón dentro: el foco no se queda en algo invisible.
-    const title = await screen.findByRole('heading', { level: 2, name: '4K' });
-    await waitFor(() => expect(title).toHaveFocus());
-    const back = screen.getByRole('button', { name: 'Volver a Películas y series' });
-    back.focus();
-    fireEvent.click(back);
-    // La flecha desaparece con la rejilla: el foco vuelve a la fila de la que se vino.
-    await waitFor(() => expect(seeAll).toHaveFocus());
-    expect(document.activeElement).not.toBe(document.body);
-  });
-
-  it('volver a la portada la deja donde estaba; si se cambió a Series en la rejilla, en Series', async () => {
+  it('Películas abre la rejilla (con su entrada en el historial) y Mi lista vuelve a su sitio', async () => {
     const scrollTo = vi.mocked(window.scrollTo);
     net = mockFetch(demoRoutes());
     renderCine();
-    await screen.findByRole('heading', { name: 'Novedades en películas' });
-    // La portada bajada a 1.800 px.
+    const tabs = screen.getByRole('group', { name: 'Secciones de Pelis y series' });
+    await screen.findByRole('list', { name: 'Series' });
+    // Mi lista bajada a 1.800 px.
     vi.spyOn(window, 'scrollY', 'get').mockReturnValue(1800);
     fireEvent.scroll(window);
-    fireEvent.click(screen.getByRole('button', { name: 'Ver todo: 4K, 9 películas' }));
-    await screen.findByRole('heading', { level: 2, name: '4K' });
+    fireEvent.click(within(tabs).getByRole('button', { name: 'Películas' }));
+    expect(history.state).toMatchObject({ cineGrid: true });
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Todas las películas' }),
+    ).toBeInTheDocument();
     expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 0 }));
-    fireEvent.click(screen.getByRole('button', { name: 'Volver a Películas y series' }));
-    await screen.findByRole('heading', { name: 'Novedades en películas' });
+    // La rejilla trae el buscador, las categorías en chips y el orden.
+    expect(screen.getByRole('searchbox', { name: 'Buscar películas' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Categorías' })).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Orden' })).toBeInTheDocument();
+    // «Todas» es la pestaña: sin flecha.
+    expect(screen.queryByRole('button', { name: 'Todas las películas' })).toBeNull();
+    await waitFor(() => expect(queryOf(gridCalls().at(-1)!)).toMatchObject({ limit: 60 }));
+    fireEvent.click(within(tabs).getByRole('button', { name: /^Mi lista/ }));
+    expect(await screen.findByRole('list', { name: 'Series' })).toBeVisible();
     await waitFor(() =>
       expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 1800 })),
     );
-    // Rejilla de películas → «Series» → «‹»: la portada de SERIES (y arriba: es otra).
-    fireEvent.click(screen.getByRole('button', { name: 'Ver todo: 4K, 9 películas' }));
-    await screen.findByRole('heading', { level: 2, name: '4K' });
-    fireEvent.click(screen.getByRole('radio', { name: 'Series' }));
-    expect(
-      await screen.findByRole('heading', { level: 2, name: 'Todas las series' }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Volver a Películas y series' }));
-    expect(await screen.findByRole('heading', { name: 'Series actualizadas' })).toBeInTheDocument();
-    await waitFor(() => expect(location.search).toContain('cine=series'));
     expect(location.search).not.toContain('cinecat');
-    expect(screen.getByRole('radio', { name: 'Series' })).toHaveAttribute('aria-checked', 'true');
-    expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 0 }));
   });
 
-  it('«Series» cambia de tipo, de novedades y de filas (sigue en la portada)', async () => {
+  it('una categoría desde los chips: su flecha vuelve a «Todas las películas»', async () => {
     net = mockFetch(demoRoutes());
-    renderCine();
-    await screen.findByRole('heading', { name: 'Novedades en películas' });
-    fireEvent.click(screen.getByRole('radio', { name: 'Series' }));
-    expect(await screen.findByRole('heading', { name: 'Series actualizadas' })).toBeInTheDocument();
-    expect(location.search).toContain('cine=series');
-    expect(location.search).not.toContain('cinecat');
-    expect(screen.getByRole('searchbox', { name: 'Buscar series' })).toBeInTheDocument();
-    await waitFor(() => expect(queryOf(rowCalls().at(-1)!).kind).toBe('series'));
-  });
-
-  it('en el móvil, «Categorías» abre la hoja y una categoría abre su rejilla', async () => {
-    net = mockFetch(demoRoutes());
-    renderCine();
-    fireEvent.click(await screen.findByRole('button', { name: 'Categorías' }));
-    const sheet = await screen.findByRole('dialog', { name: 'Todas las categorías' });
-    fireEvent.click(within(sheet).getByRole('button', { name: /^Pelis latino/ }));
+    renderCine({ search: '?vista=cine&cinecat=all' });
+    const cats = await screen.findByRole('group', { name: 'Categorías' });
+    fireEvent.click(within(cats).getByRole('button', { name: /^Pelis latino/ }));
     expect(
       await screen.findByRole('heading', { level: 2, name: 'Pelis latino' }),
     ).toBeInTheDocument();
-    expect(location.search).toContain('cinecat=');
+    fireEvent.click(screen.getByRole('button', { name: 'Todas las películas' }));
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Todas las películas' }),
+    ).toBeInTheDocument();
+    expect(location.search).toContain('cinecat=all');
   });
 });
 
@@ -403,10 +217,10 @@ describe('la rejilla (otra pantalla)', () => {
 describe('búsqueda (§12.5)', () => {
   /* Partida en dos (antes era una sola que pasaba de 15 s con la máquina
      cargada): escribir y buscar, y lo que se ofrece cuando no hay nada. */
-  it('desde 2 letras, tras 250 ms, y buscando no salen «Seguir viendo» ni las filas', async () => {
+  it('desde 2 letras, tras 250 ms, en la rejilla', async () => {
     net = mockFetch(demoRoutes());
-    renderCine();
-    await screen.findByRole('heading', { name: 'Seguir viendo' });
+    renderCine({ search: '?vista=cine&cinecat=all' });
+    await screen.findByRole('heading', { level: 2, name: 'Todas las películas' });
     const field = screen.getByRole('searchbox', { name: 'Buscar películas' });
     fireEvent.change(field, { target: { value: 'c' } });
     fireEvent.change(field, { target: { value: 'casa de papel' } });
@@ -414,7 +228,6 @@ describe('búsqueda (§12.5)', () => {
     expect(
       await screen.findByRole('heading', { name: 'Nada con «casa de papel» en películas' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Seguir viendo' })).toBeNull();
     expect(
       screen.getByRole('heading', { level: 2, name: 'Resultados de «casa de papel»' }),
     ).toBeInTheDocument();
@@ -422,16 +235,20 @@ describe('búsqueda (§12.5)', () => {
     expect(withQ.map((call) => queryOf(call).q)).toEqual(['casa de papel']);
   }, 30_000);
 
-  it('sin nada: «Ver N series» y «Borrar búsqueda»', async () => {
+  it('sin nada: «Ver N series»', async () => {
     net = mockFetch(demoRoutes());
     renderCine({ search: '?vista=cine&cineq=casa%20de%20papel' });
     fireEvent.click(await screen.findByRole('button', { name: 'Ver 1 serie' }));
     expect((await screen.findAllByText('1 serie')).length).toBeGreaterThan(0);
     expect(location.search).toContain('cine=series');
-    fireEvent.click(screen.getByRole('radio', { name: 'Películas' }));
+  }, 30_000);
+
+  it('sin nada: «Borrar búsqueda» vuelve a la portada (Mi lista)', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine({ search: '?vista=cine&cineq=casa%20de%20papel' });
     fireEvent.click(await screen.findByRole('button', { name: 'Borrar búsqueda' }));
-    expect(screen.getByRole('searchbox', { name: 'Buscar películas' })).toHaveValue('');
-    expect(await screen.findByRole('heading', { name: 'Seguir viendo' })).toBeInTheDocument();
+    expect(await screen.findByRole('list', { name: 'Series' })).toBeVisible();
+    expect(location.search).not.toContain('cineq');
   }, 30_000);
 
   it('dentro de una categoría busca ahí y lo dice: «0 películas en 4K» y «Buscar en todas»', async () => {
@@ -489,7 +306,7 @@ describe('búsqueda (§12.5)', () => {
 
   it('Esc borra el texto y «/» enfoca el buscador', async () => {
     net = mockFetch(demoRoutes());
-    renderCine();
+    renderCine({ search: '?vista=cine&cinecat=all' });
     const field = await screen.findByRole('searchbox', { name: 'Buscar películas' });
     expect(field).toHaveAttribute('data-focus-target', 'buscar-cine');
     fireEvent.change(field, { target: { value: 'dune' } });
@@ -584,7 +401,7 @@ describe('estados sin catálogo (§13): siempre con salida', () => {
     net.restore();
     net = mockFetch(demoRoutes());
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
-    expect(await screen.findByRole('heading', { name: 'Seguir viendo' })).toBeInTheDocument();
+    expect(await screen.findByRole('list', { name: 'Series' })).toBeInTheDocument();
   });
 
   it('catálogo viejo y recortado: las dos notas', async () => {

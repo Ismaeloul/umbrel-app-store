@@ -162,19 +162,17 @@ describe('«Cerrar sala»', () => {
     expect(FakeSource.last?.readyState).toBe(2);
   });
 
-  it('en el móvil (la cabecera): igual, con el segundo toque', async () => {
+  it('en el móvil, también al final de Gente (ver-juntos.html): con el segundo toque', async () => {
     setViewport(390);
     net = mockFetch({ [CLOSE_URL]: { ok: true } });
     const onLeft = mountRoom(HOST);
+    /* Arriba, quien la creó solo tiene «Invitar» (como la maqueta). */
+    expect(screen.queryByRole('button', { name: JUNTOS_TEXT.closeRoom })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: /Gente/ }));
 
-    const idle = screen.getByRole('button', { name: JUNTOS_TEXT.closeRoom });
-    expect(idle).not.toHaveClass('juntos__close--armed');
-    fireEvent.click(idle);
+    fireEvent.click(screen.getByRole('button', { name: JUNTOS_TEXT.closeRoom }));
     expect(closeCalls()).toHaveLength(0);
-    /* El primer toque se nota: otra clase (que enseña el texto aunque por
-       debajo de 480 la cabecera vaya solo con iconos), otro icono y otro texto. */
     const armed = screen.getByRole('button', { name: JUNTOS_TEXT.closeArmed });
-    expect(armed).toHaveClass('juntos__close--armed');
     expect(armed).toHaveTextContent(JUNTOS_TEXT.closeArmedShort);
     fireEvent.click(armed);
     await waitFor(() => expect(onLeft).toHaveBeenCalledOnce());
@@ -188,12 +186,12 @@ describe('«Cerrar sala»', () => {
       setViewport(390);
       net = mockFetch({ [CLOSE_URL]: { ok: true } });
       mountRoom(HOST);
+      fireEvent.click(screen.getByRole('tab', { name: /Gente/ }));
       fireEvent.click(screen.getByRole('button', { name: JUNTOS_TEXT.closeRoom }));
       expect(screen.getByRole('button', { name: JUNTOS_TEXT.closeArmed })).toBeTruthy();
       act(() => vi.advanceTimersByTime(5_000));
-      expect(screen.getByRole('button', { name: JUNTOS_TEXT.closeRoom })).not.toHaveClass(
-        'juntos__close--armed',
-      );
+      expect(screen.getByRole('button', { name: JUNTOS_TEXT.closeRoom })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: JUNTOS_TEXT.closeArmed })).toBeNull();
       expect(closeCalls()).toHaveLength(0);
     } finally {
       vi.useRealTimers();
@@ -229,6 +227,88 @@ describe('«Cerrar sala»', () => {
     expect(screen.getByText(JUNTOS_TEXT.closedByHost)).toBeTruthy();
     expect(lastRoom()).toBeNull();
     expect(savedCredential(CODE)).toBeNull();
+  });
+});
+
+describe('la sala en el móvil (ver-juntos.html y ver-juntos-pelis.html)', () => {
+  /** La sala con algo propuesto (para «Cuando acabe» y «Pasar al siguiente»). */
+  const withQueue = (): PartyRoom => ({
+    ...ROOM,
+    queue: [
+      {
+        id: 'q_abcdefgh',
+        /* La lista no lleva la duración (el esquema es estricto). */
+        title: {
+          id: ROOM.title.id,
+          kind: 'movie',
+          artId: ROOM.title.artId,
+          poster: null,
+          title: 'Otra peli',
+          subtitle: null,
+        },
+        addedBy: ANA,
+        addedByName: 'Ana',
+        votes: [ANA],
+      },
+    ],
+  });
+
+  it('el mismo marcado que el escritorio: título, caras y Chat, Siguiente y Gente; sin la tarjeta «Cuando acabe»', () => {
+    setViewport(390);
+    net = mockFetch();
+    mountRoom(HOST);
+    act(() =>
+      FakeSource.last?.emit('party.snapshot', { room: withQueue(), chat: [], serverNow: 1 }),
+    );
+    expect(screen.getByRole('heading', { level: 1, name: ROOM.title.title })).toBeTruthy();
+    expect(screen.getByRole('button', { name: JUNTOS_TEXT.invite })).toBeTruthy();
+    expect(document.querySelector('.juntos-faces')).toBeTruthy();
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      JUNTOS_TEXT.tabChat,
+      expect.stringContaining(JUNTOS_TEXT.tabNext),
+      JUNTOS_TEXT.tabPeople,
+    ]);
+    expect(document.querySelector('.juntos-nextcard')).toBeNull();
+    /* Ni la cabecera vieja ni sus pestañas Lista y Ajustes. */
+    expect(document.querySelector('.juntos__head')).toBeNull();
+    expect(screen.queryByRole('tab', { name: /Lista|Ajustes/ })).toBeNull();
+  });
+
+  it('Siguiente: «Pasar al siguiente» para quien controla (lo que tenía la Lista del móvil)', async () => {
+    setViewport(390);
+    net = mockFetch({ [`POST /api/v1/party/${CODE}/queue`]: () => json({ ok: true }) });
+    mountRoom(HOST);
+    act(() =>
+      FakeSource.last?.emit('party.snapshot', { room: withQueue(), chat: [], serverNow: 1 }),
+    );
+    fireEvent.click(screen.getByRole('tab', { name: /Siguiente/ }));
+    fireEvent.click(screen.getByRole('button', { name: JUNTOS_TEXT.skipNext }));
+    await waitFor(() => expect(net?.calls.at(-1)?.body).toMatchObject({ action: 'next' }));
+  });
+
+  it('el invitado: «Salir» arriba, sin «Invitar» ni «Pasar al siguiente»', () => {
+    setViewport(390);
+    net = mockFetch();
+    mountRoom(ANA);
+    act(() =>
+      FakeSource.last?.emit('party.snapshot', { room: withQueue(), chat: [], serverNow: 1 }),
+    );
+    expect(screen.getByRole('button', { name: JUNTOS_TEXT.leave })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: JUNTOS_TEXT.invite })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: /Siguiente/ }));
+    expect(screen.queryByRole('button', { name: JUNTOS_TEXT.skipNext })).toBeNull();
+  });
+
+  it('en escritorio no cambia: «Cuando acabe» bajo el vídeo y sin «Pasar al siguiente»', () => {
+    setViewport(1280);
+    net = mockFetch();
+    mountRoom(HOST);
+    act(() =>
+      FakeSource.last?.emit('party.snapshot', { room: withQueue(), chat: [], serverNow: 1 }),
+    );
+    expect(document.querySelector('.juntos-nextcard')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Siguiente/ }));
+    expect(screen.queryByRole('button', { name: JUNTOS_TEXT.skipNext })).toBeNull();
   });
 });
 

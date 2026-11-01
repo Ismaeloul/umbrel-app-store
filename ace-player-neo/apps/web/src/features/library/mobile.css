@@ -1,0 +1,243 @@
+/* ==========================================================================
+   Canales en el móvil (por debajo de 768 px): dirección B «Lista con ahora»
+   de movil-canales.html. Las filas van dentro de la tarjeta de siempre
+   (.lib-list, con sus separadores); aquí, la fila (MobileChannelRow) y la
+   fila de chips por tipo. Solo tokens; nada por debajo de 11 px; objetivos
+   de 44 px. Desde 768 nada de esto se pinta (la vista es DeskChannels).
+   ========================================================================== */
+
+/* ---- Chips por tipo (Todo, Deportes, Cine…), bajo las pestañas ------------- */
+.lib-chips {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  /* A sangre (como los carruseles): se desliza de lado sin ensanchar la página. */
+  margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
+    calc(-1 * (var(--gutter) + var(--safe-right)));
+  padding: 6px calc(var(--gutter) + var(--safe-right)) 6px calc(var(--gutter) + var(--safe-left));
+  margin-block: -6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.lib-chips::-webkit-scrollbar {
+  display: none;
+}
+.lib-chips .chip {
+  position: relative;
+  flex: none;
+  min-height: 32px;
+  padding-inline: 12px;
+}
+/* Zona táctil de 44 aunque el chip mida 32. */
+.lib-chips .chip::after {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
+}
+
+/* ---- El buscador con «Pegar hash» al lado ---------------------------------- */
+.lib-searchbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.lib-searchbar .lib-search {
+  flex: 1 1 auto;
+}
+
+/* ---- Fila ------------------------------------------------------------------ */
+.mch {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+}
+/* El canal que suena: la fila amarilla clara, como en el escritorio. */
+.mch[data-playing] {
+  background: var(--accent-wash);
+}
+.mch--enter {
+  animation: ace-aparece var(--dur-estandar) var(--ease-estandar) both;
+  animation-delay: calc(min(var(--i, 0), var(--stagger-max)) * var(--stagger-step));
+}
+@media (prefers-reduced-motion: reduce) {
+  .mch--enter {
+    animation-name: ace-funde;
+  }
+}
+.mch__main {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 72px;
+  padding: 12px 4px 12px 14px;
+  color: inherit;
+  text-decoration: none;
+  /* La pulsación larga abre NUESTRO menú, no el del sistema. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  outline: none;
+}
+.mch__main:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-edge);
+  border-radius: var(--r-l);
+}
+.mch .mch__plate {
+  width: 56px;
+  height: 40px;
+}
+.mch__body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.mch__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-15);
+  font-weight: 650;
+  line-height: 1.2;
+}
+.mch__title {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mch .player-eq {
+  width: 12px;
+  height: 12px;
+  color: var(--accent-ink);
+}
+.mch .player-eq i {
+  width: 3px;
+}
+.mch__fallen {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--weak-ink);
+}
+/* Lo que echa ahora (o lo siguiente, o el subtítulo). */
+.mch__now {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+.mch__now .live-dot {
+  width: 12px;
+  height: 12px;
+}
+.mch__text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mch__text--sub {
+  color: var(--text-3);
+}
+.mch__time {
+  flex: none;
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+}
+/* De dónde sale · barra · lo que queda. */
+.mch__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 18px;
+  color: var(--text-3);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.mch__origin {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-11);
+  font-weight: 650;
+  line-height: 16px;
+}
+.mch__origin--iptv {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+/* Lo que lleva emitido: 3 px; gris, o rojo si es en directo. */
+.mch__bar {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 32px;
+  max-width: 140px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line-soft);
+}
+.mch__bar i {
+  display: block;
+  height: 100%;
+  background: var(--text-3);
+  transform: scaleX(var(--p, 0));
+  transform-origin: left;
+}
+.mch__now--live + .mch__meta .mch__bar i {
+  background: var(--live);
+}
+.mch__left {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.mch__now--live + .mch__meta .mch__left {
+  color: var(--live-ink);
+  font-weight: 650;
+}
+.mch__extra {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Sobre el amarillo del canal que suena, --text-3 no llega a AA en oscuro: ahí, --text-2. */
+.mch[data-playing] :is(.mch__meta, .mch__time, .mch__text--sub) {
+  color: var(--text-2);
+}
+/* El rojo del minuto («34'») tampoco llega sobre ese amarillo en oscuro: la
+   misma mezcla que el rojo sobre --accent-wash de la agenda (conserva el tono). */
+.mch[data-playing] .mch__now--live + .mch__meta .mch__left {
+  color: color-mix(in oklab, var(--live-ink) 60%, var(--text));
+}
+
+.mch__acts {
+  display: flex;
+  align-items: center;
+  padding-right: 4px;
+}
+/* En el móvil estrecho solo cabe «Más» (la estrella está dentro del menú). */
+.mch__fav {
+  display: none;
+}
+.mch__fav[aria-pressed='true'] {
+  color: var(--accent-ink);
+}
+@media (min-width: 600px) {
+  .mch__fav {
+    display: inline-grid;
+  }
+}

@@ -17,6 +17,8 @@ const HASH = 'a3f19c2b7d4e8f0a1b2c3d4e5f6a7b8c9d0e1f2a';
 
 let net: ReturnType<typeof mockFetch>;
 
+const DESK = { kind: 'desktop' } as const;
+
 function result(title: string, availability: number) {
   const r = demoSearch(title).results[0];
   return {
@@ -42,7 +44,8 @@ function setup(
         });
       }),
   });
-  return renderWithApp(<SearchView route={{ vista: 'buscar' }} active />, { search });
+  // Desde 768 Buscar es la de siempre (en el móvil, la maqueta buscar-ajustes: más abajo).
+  return renderWithApp(<SearchView route={{ vista: 'buscar' }} active />, { search, layout: DESK });
 }
 
 /** El motor caído (503 con el formato de v1). */
@@ -402,6 +405,7 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
     });
     const view = renderWithApp(<SearchView route={{ vista: 'buscar' }} active />, {
       search: '?vista=buscar',
+      layout: DESK,
     });
     const boot = fixture<BootstrapResponse>('bootstrap');
     act(() => {

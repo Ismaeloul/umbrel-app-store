@@ -15,6 +15,10 @@ import { demoRoutes, queryOf, renderCine } from './test-utils.tsx';
 
 let net: ReturnType<typeof mockFetch>;
 
+/* La rejilla de Películas (la portada, Mi lista, no pide nada por idioma: sale
+   todo lo guardado; el botón de idiomas va junto al buscador de la rejilla). */
+const GRID = { search: '?vista=cine&cinecat=all' };
+
 const homeCalls = () => net.calls.filter((call) => call.url.split('?')[0] === '/api/v1/vod');
 const browseCalls = () => net.calls.filter((call) => call.url.startsWith('/api/v1/vod/browse'));
 const puts = () => net.calls.filter((call) => call.method === 'PUT');
@@ -74,12 +78,12 @@ afterEach(() => {
 describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
   it('antes de la portada, con castellano y latino separados y cuántos hay de cada uno; al elegir, todo filtrado', async () => {
     serve(NOT_CHOSEN);
-    renderCine();
+    renderCine(GRID);
     expect(
       await screen.findByRole('heading', { name: '¿En qué idiomas las quieres ver?' }),
     ).toBeInTheDocument();
-    /* Ni portada ni buscador mientras tanto. */
-    expect(screen.queryByRole('heading', { name: 'Novedades en películas' })).toBeNull();
+    /* Ni rejilla ni buscador mientras tanto. */
+    expect(screen.queryByRole('heading', { name: 'Todas las películas' })).toBeNull();
     expect(screen.queryByRole('searchbox')).toBeNull();
     const group = screen.getByRole('group', { name: 'Idiomas' });
     const castellano = within(group).getByRole('button', {
@@ -102,9 +106,9 @@ describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ver películas y series' }));
     await waitFor(() => expect(puts()).toHaveLength(1));
     expect(puts()[0]?.body).toEqual({ langs: ['castellano', 'frances'], unknown: false });
-    /* Ya filtrado: la portada y las filas piden esos idiomas. */
+    /* Ya filtrado: la portada y la rejilla piden esos idiomas. */
     expect(
-      await screen.findByRole('heading', { name: 'Novedades en películas' }),
+      await screen.findByRole('heading', { level: 2, name: 'Todas las películas' }),
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(homeCalls().some((call) => queryOf(call).langs === 'castellano,frances')).toBe(true),
@@ -115,8 +119,6 @@ describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
         (call) => queryOf(call).langs === 'castellano,frances' && queryOf(call).unknown === '0',
       ),
     ).toBe(true);
-    /* Las categorías sin nada en esos idiomas no salen. */
-    expect(screen.queryByRole('heading', { level: 2, name: /^Pelis latino/ })).toBeNull();
     expect(
       screen.getByRole('button', { name: 'Idiomas: Castellano y Francés. Cambiar' }),
     ).toBeInTheDocument();
@@ -124,7 +126,7 @@ describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
 
   it('«Ahora no, ver todo»: se guarda «todos los idiomas» y no se vuelve a preguntar', async () => {
     serve(NOT_CHOSEN);
-    renderCine();
+    renderCine(GRID);
     fireEvent.click(await screen.findByRole('button', { name: 'Ahora no, ver todo' }));
     await waitFor(() => expect(puts()[0]?.body).toEqual({ langs: [], unknown: false }));
     expect(
@@ -135,7 +137,7 @@ describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
 
   it('si guardar falla, se entra igual con lo elegido (en esta pestaña) y se avisa', async () => {
     serve(NOT_CHOSEN, { failSave: true });
-    renderCine();
+    renderCine(GRID);
     fireEvent.click(await screen.findByRole('button', { name: 'Ver películas y series' }));
     expect(await screen.findByText(/No se han podido guardar los idiomas/)).toBeInTheDocument();
     expect(
@@ -148,9 +150,9 @@ describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
 
   it('un servidor que no sabe de idiomas: ni selector ni botón, y se ve todo', async () => {
     serve(null);
-    renderCine();
+    renderCine(GRID);
     expect(
-      await screen.findByRole('heading', { name: 'Novedades en películas' }),
+      await screen.findByRole('heading', { level: 2, name: 'Todas las películas' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Idiomas:/ })).toBeNull();
     expect(homeCalls().every((call) => !queryOf(call).langs)).toBe(true);
@@ -160,7 +162,7 @@ describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
 describe('cambiarlos luego', () => {
   it('el botón de la cabecera abre la hoja: «cambio el idioma al francés y busco»', async () => {
     serve(ONLY_CASTELLANO);
-    renderCine();
+    renderCine(GRID);
     fireEvent.click(await screen.findByRole('button', { name: 'Idiomas: Castellano. Cambiar' }));
     const sheet = await screen.findByRole('dialog', { name: 'Idiomas' });
     const group = within(sheet).getByRole('group', { name: 'Idiomas' });

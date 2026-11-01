@@ -170,6 +170,8 @@ function clientWithVod(vod: boolean) {
 }
 
 const nav = () => screen.getAllByRole('navigation', { name: 'Principal' });
+/** El nombre de un enlace de la navegación: la isla del móvil solo lleva iconos (aria-label). */
+const linkName = (a: Element) => a.getAttribute('aria-label') ?? a.textContent;
 const app = () => document.querySelector('.app') as HTMLElement;
 
 describe('armazón', () => {
@@ -191,9 +193,7 @@ describe('armazón', () => {
     ]);
     for (const bar of nav()) {
       const links = within(bar).getAllByRole('link');
-      expect(links.map((a) => a.textContent)).toEqual(
-        expect.arrayContaining(['Agenda', 'Canales', 'Ajustes']),
-      );
+      expect(links.map(linkName)).toEqual(expect.arrayContaining(['Agenda', 'Canales']));
       expect(within(bar).getByRole('link', { name: 'Agenda' })).toHaveAttribute(
         'aria-current',
         'page',
@@ -212,8 +212,90 @@ describe('armazón', () => {
     expect(screen.getByRole('main')).toHaveAttribute('id', 'contenido');
     expect(await screen.findByRole('heading', { level: 1, name: 'Agenda' })).toBeInTheDocument();
     expect(app()).toHaveAttribute('data-layout', 'mobile');
-    // El estado del motor llega de la API.
-    expect(await screen.findAllByText('Motor en línea')).not.toHaveLength(0);
+    // El estado del motor llega de la API; en línea, la cabecera del móvil no
+    // lo pinta (como el menú lateral: solo si algo falla).
+    await waitFor(() =>
+      expect(net.calls.some((call) => call.url.includes('/api/v1/engine/status'))).toBe(true),
+    );
+    expect(document.querySelector('.view-head__engine')).toHaveClass('view-head__engine--quiet');
+  });
+
+  it('móvil: el motor sale en la cabecera solo si algo falla', async () => {
+    net.restore();
+    net = mockFetch({
+      'GET /api/v1/engine/status': { ...fixture<object>('engineStatus'), status: 'offline' },
+    });
+    renderApp();
+    await screen.findByRole('heading', { level: 1, name: 'Agenda' });
+    const head = document.querySelector('.view[data-active="true"] .view-head') as HTMLElement;
+    expect(await within(head).findByText('Motor apagado')).toBeInTheDocument();
+    expect(head.querySelector('.view-head__engine')).not.toHaveClass('view-head__engine--quiet');
+  });
+
+  it('móvil: la isla lleva Agenda, Canales y Guía (solo iconos) y una rayita en la activa', async () => {
+    renderApp('?vista=guia');
+    await screen.findByRole('heading', { level: 1, name: 'Guía TV' });
+    const isla = document.querySelector('.tabbar') as HTMLElement;
+    const links = within(isla).getAllByRole('link');
+    expect(links.map(linkName)).toEqual(['Agenda', 'Canales', 'Guía TV']);
+    expect(links.map((a) => a.textContent)).toEqual(['', '', '']);
+    expect(isla.getAttribute('style')).toContain('--n: 3');
+    expect(within(isla).getByRole('link', { name: 'Guía TV' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(isla).getByRole('link', { name: 'Guía TV' }).getAttribute('href')).toContain(
+      'vista=guia',
+    );
+    expect(isla.querySelectorAll('.tabbar__bar')).toHaveLength(3);
+    // Buscar y Ajustes ya no son pestañas: suben a la cabecera.
+    expect(within(isla).queryByRole('link', { name: 'Buscar' })).toBeNull();
+    expect(within(isla).queryByRole('link', { name: 'Ajustes' })).toBeNull();
+  });
+
+  it('móvil: la lupa y el engranaje abren Buscar y Ajustes encima de la pestaña, sin la isla', async () => {
+    history.replaceState(null, '', '/?vista=biblioteca');
+    renderApp('?vista=biblioteca');
+    await screen.findByRole('heading', { level: 1, name: 'Canales' });
+    const view = () => document.querySelector('.view[data-active="true"]') as HTMLElement;
+    fireEvent.click(within(view()).getByRole('button', { name: 'Buscar' }));
+    await screen.findByRole('heading', { level: 1, name: 'Buscar' });
+    expect(app()).toHaveAttribute('data-tabbar', 'false');
+    expect(document.querySelector('.tabbar')).toHaveAttribute('hidden');
+    // Dentro, ni lupa ni engranaje: la flecha para volver.
+    expect(within(view()).queryByRole('button', { name: 'Buscar' })).toBeNull();
+    expect(within(view()).queryByRole('button', { name: 'Ajustes' })).toBeNull();
+    fireEvent.click(within(view()).getByRole('button', { name: 'Volver' }));
+    await screen.findByRole('heading', { level: 1, name: 'Canales' });
+    expect(app()).toHaveAttribute('data-tabbar', 'true');
+    expect(document.querySelector('.tabbar')).not.toHaveAttribute('hidden');
+
+    fireEvent.click(within(view()).getByRole('button', { name: 'Ajustes' }));
+    await screen.findByRole('heading', { level: 1, name: 'Ajustes' });
+    expect(location.search).toBe('?vista=ajustes');
+    expect(document.querySelector('.tabbar')).toHaveAttribute('hidden');
+  });
+
+  it('móvil: la sala de Ver juntos (con código) va sin la isla; la portada, con ella', async () => {
+    renderApp('?vista=juntos/k3J9xQ2mZpL8wR4t');
+    await waitFor(() => expect(app()).toHaveAttribute('data-tabbar', 'false'));
+    expect(document.querySelector('.tabbar')).toHaveAttribute('hidden');
+    expect(document.querySelector('.bottom-veil')).toHaveAttribute('hidden');
+  });
+
+  it('móvil: la portada de Ver juntos (sin código) conserva la isla', async () => {
+    renderApp('?vista=juntos');
+    await waitFor(() => expect(app()).toHaveAttribute('data-tabbar', 'true'));
+    expect(document.querySelector('.tabbar')).not.toHaveAttribute('hidden');
+  });
+
+  it('desde 768 la cabecera no lleva lupa, engranaje ni flecha (el escritorio no cambia)', async () => {
+    setViewport(1440, 900);
+    renderApp('?vista=ajustes');
+    await screen.findByRole('heading', { level: 1, name: 'Ajustes' });
+    const view = document.querySelector('.view[data-active="true"]') as HTMLElement;
+    expect(view.querySelector('.view-head__tab, .view-head__back')).toBeNull();
+    expect(within(view).queryByRole('button', { name: 'Volver' })).toBeNull();
   });
 
   it('navegar conserva montada la vista anterior (con su estado) y mueve la gota', async () => {
@@ -225,7 +307,11 @@ describe('armazón', () => {
     expect(location.search).toBe('?vista=biblioteca');
     const agenda = document.querySelector('.view[data-vista="agenda"]') as HTMLElement;
     expect(agenda.style.display).toBe('none');
-    expect(document.querySelector('.tabbar')?.getAttribute('style')).toContain('--i: 1');
+    expect(
+      within(document.querySelector('.tabbar') as HTMLElement).getByRole('link', {
+        name: 'Canales',
+      }),
+    ).toHaveAttribute('aria-current', 'page');
     // Vuelta a la agenda: la misma vista, con lo que se había escrito.
     fireEvent.click(within(nav()[0] as HTMLElement).getByRole('link', { name: 'Agenda' }));
     await waitFor(() => expect(agenda.style.display).not.toBe('none'));
@@ -421,24 +507,17 @@ describe('armazón', () => {
   });
 
   describe('«Pelis y series» (docs/vod.md §12.1, T17)', () => {
-    /* Los destinos de la barra inferior del móvil (el menú lateral tiene los suyos). */
+    /* Las pestañas de la isla del móvil (el menú lateral tiene los suyos). */
     const tabbar = () => document.querySelector('.tabbar') as HTMLElement;
-    const labels = (bar: HTMLElement) =>
-      [...bar.querySelectorAll('.tabbar__item')].map((a) => a.textContent);
+    const labels = (bar: HTMLElement) => [...bar.querySelectorAll('.tabbar__item')].map(linkName);
     const sideLabels = () =>
       [...document.querySelectorAll('.sidenav__item')].map((a) => a.textContent);
 
-    it('con features.vod, cinco destinos sin ?flag=cine; --n y la píldora salen de esa lista', async () => {
+    it('con features.vod, cuatro pestañas sin ?flag=cine; --n sale de esa lista', async () => {
       history.replaceState(null, '', '/?vista=cine');
       renderApp('?vista=cine', clientWithVod(true));
       await screen.findAllByRole('heading', { level: 1 });
-      expect(labels(tabbar())).toEqual([
-        'Agenda',
-        'Canales',
-        'Pelis y series',
-        'Buscar',
-        'Ajustes',
-      ]);
+      expect(labels(tabbar())).toEqual(['Agenda', 'Canales', 'Guía TV', 'Películas y series']);
       expect(sideLabels()).toEqual([
         'Agenda',
         'Canales',
@@ -453,30 +532,31 @@ describe('armazón', () => {
         expect(cine).toHaveAttribute('aria-current', 'page');
         expect(cine.getAttribute('href')).toContain('vista=cine');
       }
-      expect(tabbar().getAttribute('style')).toContain('--n: 5');
-      expect(tabbar().getAttribute('style')).toContain('--i: 2');
-      // Buscar pasa a la cuarta columna.
-      fireEvent.click(within(tabbar()).getByRole('link', { name: 'Buscar' }));
-      await screen.findByRole('heading', { level: 1, name: 'Buscar' });
-      expect(tabbar().getAttribute('style')).toContain('--i: 3');
-    });
-
-    it('sin features.vod, los cuatro de siempre', async () => {
-      renderApp('', clientWithVod(false));
-      await screen.findByRole('heading', { level: 1, name: 'Agenda' });
-      expect(labels(tabbar())).toEqual(['Agenda', 'Canales', 'Buscar', 'Ajustes']);
-      expect(sideLabels()).toEqual(['Agenda', 'Canales', 'Guía', 'Ver juntos', 'Ajustes']);
       expect(tabbar().getAttribute('style')).toContain('--n: 4');
+      // Buscar, desde la lupa de la cabecera: encima de la pestaña y sin la isla.
+      const view = document.querySelector('.view[data-active="true"]') as HTMLElement;
+      fireEvent.click(within(view).getByRole('button', { name: 'Buscar' }));
+      await screen.findByRole('heading', { level: 1, name: 'Buscar' });
+      expect(tabbar()).toHaveAttribute('hidden');
     });
 
-    it('sin películas en el servidor, Buscar sigue en la tercera columna', async () => {
+    it('sin features.vod, tres pestañas', async () => {
       renderApp('', clientWithVod(false));
       await screen.findByRole('heading', { level: 1, name: 'Agenda' });
-      expect(labels(tabbar())).toHaveLength(4);
-      // Buscar sigue en la tercera columna.
-      fireEvent.click(within(tabbar()).getByRole('link', { name: 'Buscar' }));
-      await screen.findByRole('heading', { level: 1, name: 'Buscar' });
-      expect(document.querySelector('.tabbar')?.getAttribute('style')).toContain('--i: 2');
+      expect(labels(tabbar())).toEqual(['Agenda', 'Canales', 'Guía TV']);
+      expect(sideLabels()).toEqual(['Agenda', 'Canales', 'Guía', 'Ver juntos', 'Ajustes']);
+      expect(tabbar().getAttribute('style')).toContain('--n: 3');
+    });
+
+    it('la sala de una película marca «Pelis y series» como madre', async () => {
+      renderApp(`?vista=sala/${'a'.repeat(40)}`, clientWithVod(true));
+      await screen.findByTestId('dock');
+      // En la sala la isla está oculta, pero sigue marcando a su madre.
+      const cine = within(tabbar()).getByRole('link', {
+        name: 'Películas y series',
+        hidden: true,
+      });
+      expect(cine).toHaveAttribute('aria-current', 'true');
     });
 
     it('shell.css ya no fija `--n: 4`: el número de destinos lo pone Nav.tsx', () => {

@@ -8,11 +8,18 @@
    y los chips Favoritos (se quita y se pone: sin él, todos los canales),
    Deportes, Cine y Noticias (`&tipo=`, que se suman a Favoritos); la
    parrilla a lo ancho (unas 3 h a la vista) y, al pulsar un programa, un
-   popover con «Te aviso» y «Ver ficha». El móvil no cambia.
+   popover con «Te aviso» y «Ver ficha».
 
-   En la navegación es hija de Canales (se ilumina Canales): se entra con el
-   botón «Guía TV» de la cabecera de Canales, que solo sale con IPTV activa.
-   Así la barra no pasa de 5 destinos (con «Pelis y series»). */
+   En el móvil (por debajo de 768), la dirección A «Parrilla» de guia-tv.html
+   con guia-detalles.html: «Guía» con la estrella de «Solo favoritos» junto
+   a la lupa y el engranaje de la cabecera, los días en píldoras (Ayer, Hoy,
+   Dom 1…), la misma parrilla que el escritorio con medidas de móvil (logo
+   del canal en 72 px, 78 px por media hora), «‹ Ahora 19:42» flotante y, al
+   tocar un programa, una hoja con el título entero, el horario, la
+   sinopsis y «Ver ahora» o «Te aviso» (y «Ver ficha» si está en la Agenda).
+
+   Tiene su sitio en el menú lateral de escritorio y, en el móvil, su
+   pestaña en la isla de abajo (app/Nav.tsx). */
 
 import type { IptvGuideChannel, IptvGuideScope } from '@ace/shared';
 import {
@@ -26,22 +33,20 @@ import {
 } from 'react';
 import type { ViewProps } from '../../app/contracts.ts';
 import { useNavigate, useSearchParam } from '../../app/router.tsx';
-import { VISTA_TITLE } from '../../app/routes.ts';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
 import { cx } from '../../lib/cx.ts';
 import { useLayoutKind } from '../../lib/media.ts';
 import { readItem, STORAGE_KEYS, writeItem } from '../../lib/storage.ts';
-import { Button, Chip, EmptyState, Segmented, Skeleton } from '../../ui/index.ts';
+import { Button, Chip, EmptyState, IconButton, Skeleton } from '../../ui/index.ts';
 import { playChannel } from '../library/play.ts';
 import { Board, type BoardControls, type Picked, type Selection } from './Board.tsx';
 import { useGuidePages } from './data.ts';
-import { InfoSheet, ProgrammePopover, type PopoverTarget } from './Detail.tsx';
+import { ProgrammePopover, ProgrammeSheet, type PopoverTarget } from './Detail.tsx';
 import {
   buildTimeline,
   dayChipLabel,
   dayStart,
   DESK_MAX_DAYS,
-  formatLongDay,
   GUIDE_TYPES,
   pagesBetween,
   scaleFor,
@@ -149,10 +154,11 @@ export default function GuiaView({ active }: ViewProps) {
           coveredTo: head?.coveredTo ?? null,
         },
         now,
-        desk ? { yesterday: true, maxDays: DESK_MAX_DAYS } : {},
+        // También ayer (si la guía guardada lo cubre) y hasta 4 días, en el móvil igual.
+        { yesterday: true, maxDays: DESK_MAX_DAYS },
       ),
     // Basta con recalcularla al cambiar de día o de guía.
-    [head?.from, head?.to, head?.coveredFrom, head?.coveredTo, dayStart(now), desk],
+    [head?.from, head?.to, head?.coveredFrom, head?.coveredTo, dayStart(now)],
   );
 
   const play = useCallback(
@@ -195,26 +201,31 @@ export default function GuiaView({ active }: ViewProps) {
     return () => window.removeEventListener('resize', measure);
   });
 
-  const scopeItems = [
-    { value: 'favorites' as const, label: 'Favoritos', ...(head ? { count: head.favorites } : {}) },
-    { value: 'all' as const, label: 'Todos', ...(head ? { count: head.all } : {}) },
-  ];
   const goIptvSettings = () => navigate({ vista: 'ajustes', seccion: 'iptv' });
 
+  /* Móvil: «Favoritos» se quita y se pone como en escritorio, con una
+     estrella junto a la lupa y el engranaje (la maqueta no lo dibuja y otra
+     fila de chips le quitaría parrilla). */
   const header = desk ? (
     <ViewHeader title="Guía" />
   ) : (
     <ViewHeader
-      title={VISTA_TITLE.guia}
-      subtitle={head && head.state === 'ready' ? subtitleOf(head) : undefined}
+      title="Guía"
+      subtitle={head && head.state === 'ready' ? staleOf(head) : undefined}
       actions={
         head?.state === 'ready' ? (
-          <Segmented
-            label="Canales de la guía"
-            items={scopeItems}
-            value={shownScope}
-            onChange={setScope}
-            className="guia-scope"
+          <IconButton
+            icon="star"
+            pressedIcon="star-f"
+            variant="quiet"
+            className="view-head__tab guia-fav"
+            label={
+              chipScope === 'favorites'
+                ? `Solo favoritos (${head.favorites.toLocaleString('es-ES')} canales)`
+                : `Solo favoritos (ahora, todos: ${head.all.toLocaleString('es-ES')} canales)`
+            }
+            pressed={chipScope === 'favorites'}
+            onClick={() => setScope(chipScope === 'favorites' ? 'all' : 'favorites')}
           />
         ) : null
       }
@@ -385,41 +396,13 @@ export default function GuiaView({ active }: ViewProps) {
             onlyToday={onlyToday && head.coveredTo !== null}
           />
         ) : (
-          <div className="guia-toolbar">
-            {onlyToday ? (
-              <p className="guia-toolbar__day">
-                <strong>Hoy</strong> · {formatLongDay(today)}
-                {head.coveredTo !== null ? (
-                  <span className="guia-toolbar__hint"> · tu proveedor solo da la guía de hoy</span>
-                ) : null}
-              </p>
-            ) : (
-              <div className="guia-days" role="group" aria-label="Día">
-                {days.map((day) => (
-                  <Chip
-                    key={day.start}
-                    pressed={viewDay === day.start}
-                    onClick={() =>
-                      day.start === today
-                        ? controls.current?.goNow()
-                        : controls.current?.goTo(day.start + (viewTime - viewDay))
-                    }
-                  >
-                    {day.label}
-                  </Chip>
-                ))}
-              </div>
-            )}
-            <Button
-              variant="quiet"
-              size="sm"
-              icon="clock"
-              onClick={() => controls.current?.goNow()}
-              title="Volver a ahora (Inicio)"
-            >
-              Ahora
-            </Button>
-          </div>
+          <MobileDays
+            days={days.map((day) => day.start)}
+            viewDay={viewDay}
+            today={today}
+            onDay={goDay}
+            onlyToday={onlyToday && head.coveredTo !== null}
+          />
         )}
         {head.fellBack ? (
           <p className="guia-note">
@@ -450,7 +433,6 @@ export default function GuiaView({ active }: ViewProps) {
             now={now}
             active={active}
             touchSheet={!desk}
-            desk={desk}
             {...(desk ? { onOpen: openPopover } : {})}
             selection={selection}
             onSelection={setSelection}
@@ -469,21 +451,25 @@ export default function GuiaView({ active }: ViewProps) {
             onClose={() => setPopover(null)}
             onPlay={() => popover && play(popover.picked.channel)}
           />
-        ) : null}
-        <InfoSheet
-          picked={picked}
-          open={infoOpen}
-          version={head.version}
-          now={now}
-          onClose={() => setInfoOpen(false)}
-          onPlay={() => picked && play(picked.channel)}
-        />
+        ) : (
+          <ProgrammeSheet
+            picked={picked}
+            open={infoOpen}
+            version={head.version}
+            now={now}
+            onClose={() => setInfoOpen(false)}
+            onPlay={() => picked && play(picked.channel)}
+          />
+        )}
       </>
     );
   }
 
   return (
-    <div className={cx('guia', desk && 'guia--desk')} data-layout={kind}>
+    <div
+      className={cx('guia', desk && 'guia--desk', !desk && infoOpen && 'guia--picking')}
+      data-layout={kind}
+    >
       {header}
       {body}
     </div>
@@ -553,10 +539,44 @@ function DeskBar({
   );
 }
 
-function subtitleOf(head: NonNullable<ReturnType<typeof useGuidePages>['head']>): string {
-  const parts = [head.provider || 'Tu IPTV'];
-  parts.push(`${head.all.toLocaleString('es-ES')} canales con guía`);
-  if (head.failedAt && head.updatedAt)
-    parts.push(`no se pudo actualizar; es la del ${dateTime.format(new Date(head.updatedAt))}`);
-  return parts.join(' · ');
+/** Los días del móvil (guia-tv.html A): píldoras a lo ancho, el que se ve en amarillo. */
+function MobileDays({
+  days,
+  viewDay,
+  today,
+  onDay,
+  onlyToday,
+}: {
+  days: readonly number[];
+  viewDay: number;
+  today: number;
+  onDay(start: number): void;
+  /** Solo hay «Hoy» porque el proveedor no da más: se dice. */
+  onlyToday: boolean;
+}) {
+  return (
+    <div className="guia-mdays">
+      <div className="guia-mdays__list" role="group" aria-label="Día">
+        {days.map((start) => (
+          <button
+            key={start}
+            type="button"
+            className="guia-mdays__day"
+            aria-pressed={viewDay === start}
+            aria-current={start === today ? 'date' : undefined}
+            onClick={() => onDay(start)}
+          >
+            {dayChipLabel(start, today)}
+          </button>
+        ))}
+      </div>
+      {onlyToday ? <p className="guia-mdays__hint">Tu proveedor solo da la guía de hoy</p> : null}
+    </div>
+  );
+}
+
+/** Móvil: bajo el título solo si la guía no se pudo actualizar (la que se ve es vieja). */
+function staleOf(head: NonNullable<ReturnType<typeof useGuidePages>['head']>): string | undefined {
+  if (!head.failedAt || !head.updatedAt) return undefined;
+  return `No se pudo actualizar; es la del ${dateTime.format(new Date(head.updatedAt))}`;
 }

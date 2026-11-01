@@ -49,7 +49,9 @@ export interface Scale {
 /* Desde 768, la parrilla del rediseño de escritorio (01-escritorio.html §2):
    156 px por media hora (unas 3 h a la vista a 1280), filas de 64 y la
    columna de 120 de la maqueta, con solo el logo (o el nombre en su ficha de
-   color). El programa elegido sale en un popover; en el móvil, en una hoja. */
+   color). El programa elegido sale en un popover. En el móvil (guia-tv.html
+   A): 78 px por media hora (unas 2 h a 390), filas de 68 y la columna de 72
+   con el logo; el programa elegido, en una hoja. */
 export function scaleFor(kind: LayoutKind): Scale {
   switch (kind) {
     case 'wide':
@@ -59,7 +61,7 @@ export function scaleFor(kind: LayoutKind): Scale {
     case 'tablet':
       return { ppm: 140 / 30, colW: 120, rowH: 64, rulerH: 40 };
     default:
-      return { ppm: 120 / 30, colW: 96, rowH: 64, rulerH: 32 };
+      return { ppm: 78 / 30, colW: 72, rowH: 68, rulerH: 32 };
   }
 }
 

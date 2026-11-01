@@ -55,6 +55,7 @@ import {
   CONTROLS_HIDE_TOUCH_MS,
   ZAP_SWIPE_MIN_PX,
 } from './constants.ts';
+import { useChannelTitle } from './channel-title.ts';
 import { usePlayerContext, type PlayerContextValue } from './context.ts';
 import { useZapBanner } from './favorite-zap.ts';
 import { NerdPanel } from './NerdPanel.tsx';
@@ -65,6 +66,7 @@ import { VodEndCards } from './vod/NextUp.tsx';
 import { VOD_TEXT } from './vod/texts.ts';
 import { VodControls } from './vod/VodControls.tsx';
 import { useNavigate } from '../app/router.tsx';
+import { cx } from '../lib/cx.ts';
 
 /** Publica el hueco sobre el vídeo mientras existe (y lo retira al irse). */
 function publishStageSlot(node: HTMLDivElement | null) {
@@ -166,6 +168,71 @@ export function LiveButton({ state, onPress }: { state: PlayerState; onPress(): 
 export function sourceNumberOf(subtitle: string | null | undefined): number | null {
   const match = /Fuente (\d+)/.exec(subtitle ?? '');
   return match ? Number(match[1]) : null;
+}
+
+/** La píldora de la fuente que suena («DAZN 1 · F2 ●»): abre el panel de fuentes. */
+function SourcePill({
+  state,
+  title,
+  tone,
+  className,
+  dupTitle = false,
+}: {
+  state: PlayerState;
+  /** El nombre del canal que se pinta (useChannelTitle). */
+  title: string;
+  tone: 'ok' | 'weak' | 'fail';
+  className?: string | undefined;
+  /** El titular de al lado ya dice el canal (sin partido): en el móvil
+      girado la píldora se queda en «F2» (o «Fuentes» sin número; player.css),
+      sin repetir «DAZN 1». */
+  dupTitle?: boolean;
+}) {
+  const sourceNumber = sourceNumberOf(state.channel?.subtitle);
+  return (
+    <button
+      type="button"
+      className={cx('player-1b__source glass--video press', className)}
+      aria-haspopup="dialog"
+      aria-label={`Suena ${title}${sourceNumber ? `, fuente ${sourceNumber}` : ''}. Ver todas las fuentes`}
+      data-dup={dupTitle ? 'true' : undefined}
+      onClick={() => setSourcePanelOpen(true)}
+    >
+      <span className="player-1b__source-text">
+        <span className="player-1b__source-name">
+          {title}
+          {sourceNumber ? ' · ' : ''}
+        </span>
+        {sourceNumber ? (
+          `F${sourceNumber}`
+        ) : (
+          // Sin número de fuente, lo que queda en vez del nombre repetido.
+          <span className="player-1b__source-alt">Fuentes</span>
+        )}
+      </span>
+      <span className="player-1b__dot" data-tone={tone} aria-hidden="true" />
+    </button>
+  );
+}
+
+/**
+ * El silencio del móvil en vertical (ficha B): solo el altavoz o, si está
+ * silenciado, «Silenciado» con su palabra (tocarlo devuelve el sonido).
+ */
+export function MuteChip({ muted, onPress }: { muted: boolean; onPress(): void }) {
+  return (
+    <button
+      type="button"
+      className="player-b__mute glass--video press"
+      data-muted={muted ? 'true' : 'false'}
+      aria-label={muted ? 'Activar sonido' : 'Silenciar'}
+      title={muted ? 'Activar sonido' : 'Silenciar'}
+      onClick={onPress}
+    >
+      <Icon name={muted ? 'mute' : 'vol'} size={18} />
+      {muted ? <span aria-hidden="true">Silenciado</span> : null}
+    </button>
+  );
 }
 
 /**
@@ -375,6 +442,8 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
   const { actions } = ctx;
   const playing = state.phase === 'reproduciendo';
   const hasChannel = state.channel !== null;
+  // El nombre que se pinta: el de la biblioteca si el reproductor solo tiene el del hash.
+  const channelTitle = useChannelTitle(state.channel);
   /** Una película o un episodio (docs/vod.md §12.7): su barra de tiempo en vez del directo. */
   const vod = state.kind === 'vod';
   const [chrome, setChrome] = useState(true);
@@ -585,9 +654,39 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
      Arriba atrás, el partido, la píldora de la fuente (abre el panel de
      fuentes) y PiP; en medio la pausa; abajo la barra y una píldora DIRECTO.
      Marcador, minuto, idioma y volumen quedan fuera del vídeo. */
-  const minimal = !ctx.compact && !vod && hasChannel;
+  /* El móvil en horizontal (inmersivo) también lleva el 1B (maqueta
+     movil-reproductor.html, «la ficha B girada»). */
+  const minimal = (!ctx.compact || ctx.immersive) && !vod && hasChannel;
+  /* Móvil en vertical con un directo (maqueta movil-ficha-partido.html,
+     dirección B «Vídeo arriba»): arriba minimizar, «Directo» y la fuente; en
+     medio la pausa; abajo el silencio y, a la derecha, PiP, pantalla completa
+     y «Más opciones». El marcador va debajo del vídeo, en la ficha. */
+  const mobileB = ctx.compact && !ctx.immersive && !vod && hasChannel;
   const liveMode = liveButton(state).mode;
-  const sourceNumber = sourceNumberOf(state.channel?.subtitle);
+  const sourcePill = (
+    <SourcePill
+      state={state}
+      title={channelTitle ?? ''}
+      tone={playing ? 'ok' : state.phase === 'error' ? 'fail' : 'weak'}
+      className={mobileB ? 'player-b__source' : undefined}
+      dupTitle={!mobileB && !state.channel?.event}
+    />
+  );
+  const pausePlay = (
+    // Con un panel en medio («Conectando», «Reconectando»…) la pausa no se
+    // pinta encima: el panel ya dice qué pasa.
+    <div className="player-1b__center" hidden={stageMessage(state) !== null}>
+      <IconButton
+        icon={wantsPlay || connecting ? 'pause' : 'play'}
+        label={connecting ? 'Conectando…' : wantsPlay ? 'Pausar' : 'Reproducir'}
+        shortcut="Espacio"
+        variant="video"
+        className="player-1b__play glass--video"
+        disabled={connecting}
+        onClick={actions.toggle}
+      />
+    </div>
+  );
 
   return (
     <>
@@ -626,7 +725,7 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
       !stageMessage(state) &&
       !state.vod?.ended ? (
         <p className="player-demo" aria-hidden="true">
-          <strong>{state.channel.title.toUpperCase()}</strong>
+          <strong>{(channelTitle ?? state.channel.title).toUpperCase()}</strong>
           <span>
             {vod
               ? VOD_TEXT.demo(state.vod?.kind ?? 'movie')
@@ -680,24 +779,8 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
                   className="player-round player-1b__back glass--video"
                   onClick={actions.minimize}
                 />
-                <p className="player-1b__title">{state.channel?.event ?? state.channel?.title}</p>
-                <button
-                  type="button"
-                  className="player-1b__source glass--video press"
-                  aria-haspopup="dialog"
-                  aria-label={`Suena ${state.channel?.title ?? ''}${sourceNumber ? `, fuente ${sourceNumber}` : ''}. Ver todas las fuentes`}
-                  onClick={() => setSourcePanelOpen(true)}
-                >
-                  <span className="player-1b__source-text">
-                    {state.channel?.title}
-                    {sourceNumber ? ` · F${sourceNumber}` : ''}
-                  </span>
-                  <span
-                    className="player-1b__dot"
-                    data-tone={playing ? 'ok' : state.phase === 'error' ? 'fail' : 'weak'}
-                    aria-hidden="true"
-                  />
-                </button>
+                <p className="player-1b__title">{state.channel?.event ?? channelTitle}</p>
+                {sourcePill}
               </div>
               <div className="player-cap glass--video">
                 {ctx.canPip ? (
@@ -731,23 +814,14 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
             </div>
             {state.phase !== 'error' ? (
               <>
-                {/* Con un panel en medio («Conectando», «Reconectando»…) la
-                    pausa no se pinta encima: el panel ya dice qué pasa. */}
-                <div className="player-1b__center" hidden={stageMessage(state) !== null}>
-                  <IconButton
-                    icon={wantsPlay || connecting ? 'pause' : 'play'}
-                    label={connecting ? 'Conectando…' : wantsPlay ? 'Pausar' : 'Reproducir'}
-                    shortcut="Espacio"
-                    variant="video"
-                    className="player-1b__play glass--video"
-                    disabled={connecting}
-                    onClick={actions.toggle}
-                  />
-                </div>
+                {pausePlay}
                 <div className="player-chrome__bottom player-1b__bottom">
                   {/* El volumen: la maqueta no lo trae, pero en el ordenador no
                       hay botones físicos para bajarlo. */}
-                  <div className="player-cap player-1b__vol glass--video">
+                  <div
+                    className="player-cap player-1b__vol glass--video"
+                    data-muted={state.muted || state.volume === 0 ? 'true' : 'false'}
+                  >
                     <IconButton
                       icon={state.muted || state.volume === 0 ? 'mute' : 'vol'}
                       label={state.muted ? 'Activar sonido' : 'Silenciar'}
@@ -776,6 +850,60 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
               </>
             ) : null}
           </>
+        ) : mobileB ? (
+          <>
+            <div className="player-chrome__top player-b__top">
+              <div className="player-chrome__lead">
+                <IconButton
+                  icon="chev-d"
+                  label="Minimizar el reproductor"
+                  variant="video"
+                  className="player-round player-b__btn"
+                  onClick={actions.minimize}
+                />
+                <LivePill state={state} onPress={actions.goLive} />
+              </div>
+              {sourcePill}
+            </div>
+            {state.phase !== 'error' ? pausePlay : null}
+            <div className="player-chrome__bottom player-b__bottom">
+              {state.phase !== 'error' ? (
+                <MuteChip muted={state.muted || state.volume === 0} onPress={actions.toggleMute} />
+              ) : (
+                <span />
+              )}
+              <div className="player-cap player-b__end">
+                {ctx.canPip ? (
+                  <IconButton
+                    icon="pip"
+                    pressed={ctx.pip}
+                    label="Imagen dentro de imagen"
+                    variant="video"
+                    className="player-b__btn"
+                    onClick={actions.togglePip}
+                  />
+                ) : null}
+                {ctx.canFullscreen ? (
+                  <IconButton
+                    icon="full"
+                    label={fullscreenLabel(ctx)}
+                    pressed={ctx.fullscreen || ctx.theater}
+                    variant="video"
+                    className="player-b__btn"
+                    onClick={actions.toggleFullscreen}
+                  />
+                ) : null}
+                <MenuButton
+                  icon="more"
+                  label="Más opciones"
+                  menuLabel="Opciones del reproductor"
+                  variant="video"
+                  className="player-b__btn"
+                  items={ctx.menuItems}
+                />
+              </div>
+            </div>
+          </>
         ) : (
           <>
             <div className="player-chrome__top">
@@ -791,7 +919,7 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
                 ) : hasChannel ? (
                   <p className="player-now glass--video">
                     <Equalizer playing={playing} />
-                    <span className="player-now__title">{state.channel?.title}</span>
+                    <span className="player-now__title">{channelTitle}</span>
                     {state.channel?.subtitle ? (
                       <small className="player-now__sub">{state.channel.subtitle}</small>
                     ) : null}

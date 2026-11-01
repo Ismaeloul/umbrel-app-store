@@ -98,7 +98,8 @@ describe('línea de tiempo', () => {
     );
     expect(xOf(TODAY + 30 * MINUTE, timeline, scaleFor('desktop'))).toBeCloseTo(156);
     expect(xOf(TODAY + 30 * MINUTE, timeline, scaleFor('wide'))).toBeCloseTo(156);
-    expect(xOf(TODAY + 30 * MINUTE, timeline, scaleFor('mobile'))).toBeCloseTo(120);
+    expect(xOf(TODAY + 30 * MINUTE, timeline, scaleFor('mobile'))).toBeCloseTo(78);
+    expect(scaleFor('mobile')).toMatchObject({ colW: 72, rowH: 68 });
     expect(scaleFor('desktop').rowH).toBe(64);
     // La columna de canales de la maqueta: 120 px, solo el logo.
     expect(scaleFor('desktop').colW).toBe(120);

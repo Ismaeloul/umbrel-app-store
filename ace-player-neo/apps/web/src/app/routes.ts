@@ -86,6 +86,51 @@ export function navVistas(features: { vod?: boolean } | null | undefined): reado
   return NAV_VISTAS.filter((vista) => vista !== 'cine' || withCine);
 }
 
+/**
+ * Las pestañas de la «isla» del móvil (por debajo de 768 px; maqueta
+ * movil-barra-isla): Agenda, Canales, la Guía y «Pelis y series» (esta, solo
+ * con `features.vod`, como en el menú lateral). Buscar y Ajustes ya no son
+ * pestañas: suben a la cabecera (lupa y engranaje) y se abren encima de
+ * cualquier pestaña, sin la isla (`opensOverTabs`).
+ */
+export const ISLA_VISTAS = [
+  'agenda',
+  'biblioteca',
+  'guia',
+  'cine',
+] as const satisfies readonly Vista[];
+export type IslaVista = (typeof ISLA_VISTAS)[number];
+
+export function islaVistas(features: { vod?: boolean } | null | undefined): readonly IslaVista[] {
+  const withCine = features?.vod === true;
+  return ISLA_VISTAS.filter((vista) => vista !== 'cine' || withCine);
+}
+
+/**
+ * La pestaña de la isla que se marca en una vista: la suya o, en las hijas,
+ * la de su madre (el partido es de la Agenda; la sala de una película y
+ * «Ver juntos», de Pelis y series). null en Buscar, Ajustes y el sistema.
+ */
+export function islaParent(vista: Vista): IslaVista | null {
+  if (vista === 'partido') return 'agenda';
+  if (vista === 'sala' || vista === 'juntos') return 'cine';
+  return (ISLA_VISTAS as readonly Vista[]).includes(vista) ? (vista as IslaVista) : null;
+}
+
+/** En el móvil, Buscar y Ajustes se abren encima de cualquier pestaña y sin la isla. */
+export function opensOverTabs(vista: Vista): boolean {
+  return vista === 'buscar' || vista === 'ajustes';
+}
+
+/**
+ * Dentro de una sala de «Ver juntos» (con código) el móvil va a pantalla
+ * completa, sin la isla (maquetas ver-juntos y ver-juntos-pelis), como la
+ * ficha del partido. La portada de Ver juntos, sin código, sí la lleva.
+ */
+export function isJuntosRoom(route: Route): boolean {
+  return route.vista === 'juntos' && route.code != null;
+}
+
 /* La vista `biblioteca` se titula «Canales» (decisión W3 del plan Palco): la
    URL `?vista=biblioteca` y el acceso directo del manifiesto no cambian. */
 export const VISTA_TITLE: Record<Vista, string> = {

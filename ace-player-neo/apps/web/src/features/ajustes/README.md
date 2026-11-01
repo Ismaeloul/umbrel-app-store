@@ -2,9 +2,11 @@ Ajustes (listas, tu fútbol, reproducción, «Dónde se está reproduciendo»,
 apariencia, copia de seguridad, dispositivos, salud, motor y «Acerca de»). «Dónde se está
 reproduciendo» vive en `src/features/where-playing/` (sesiones de
 GET /api/v1/playback y el evento SSE `playback.sessions`). Entrada del
-armazón: `index.tsx`. Se ve **una sección cada vez**: el índice (columna en
-escritorio, fila de chips en el móvil) funciona como pestañas y cada sección
-tiene su dirección, `?vista=ajustes/<sección>` (sin sección, la primera). El código está en
+armazón: `index.tsx`. Se ve **una sección cada vez**: sin sección
+(`?vista=ajustes`) sale la portada «Lo tuyo arriba, lo técnico abajo»
+(`Overview.tsx`, en el móvil y en escritorio; maqueta buscar-ajustes.html) y
+cada sección tiene su dirección, `?vista=ajustes/<sección>`. En el móvil se
+vuelve con la flecha de la cabecera; en escritorio, con «‹ Ajustes». El código está en
 `src/features/settings/` y las listas en `src/features/directories/`.
 
 - «Copia de seguridad» vive en `src/features/backup/` (decisiones.md D24):

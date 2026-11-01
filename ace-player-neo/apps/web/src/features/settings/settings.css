@@ -1,9 +1,8 @@
-/* Ajustes con la piel «Palco» (plan fase 2, decisión W10): índice como
-   tarjetas con icono grande (chips en fila en el móvil, columna fija desde
-   1024 px) que funciona como pestañas: al lado (debajo en el móvil) solo se
-   ve la sección elegida, una tarjeta oscura con cabecera expandida. Solo
-   tokens; animaciones solo con transform y opacity; nada por debajo de 11 px;
-   objetivos de 44 px. */
+/* Ajustes con la piel «Palco» (plan fase 2, decisión W10): la portada «Lo
+   tuyo arriba, lo técnico abajo» (Overview.tsx) y, al elegir, una sección
+   sola: una tarjeta oscura con cabecera expandida. Igual en el móvil y en
+   escritorio (maqueta buscar-ajustes.html). Solo tokens; animaciones solo
+   con transform y opacity; nada por debajo de 11 px; objetivos de 44 px. */
 
 .set {
   display: grid;
@@ -16,195 +15,12 @@
 /* En escritorio (desde 768) sin tope: la barra de la sección (ViewHeader) va
    de lado a lado de la columna y el título cae donde en Agenda o Canales. El
    tope lo llevan la portada (.ajx) y cada sección (.set-one), de 800 px. Por
-   debajo de 768 la vista es `.set` sin `--desk` y no cambia. */
+   debajo de 768 la vista es `.set--movil`. */
 .set.set--desk {
   max-width: none;
   margin-inline: 0;
 }
-.set-layout {
-  display: grid;
-  gap: var(--s-4);
-  min-width: 0;
-}
-
-/* ---- Índice (tarjetas) ---------------------------------------------------- */
-/* El enlace es la tarjeta entera (icono + título, 44 px como mínimo); la pista
-   es decorativa, hermana del enlace, y se coloca bajo el título por CSS. */
-.set-index {
-  min-width: 0;
-}
-.set-index__list {
-  display: flex;
-  gap: var(--s-2);
-  margin: 0;
-  padding: 2px;
-  list-style: none;
-  overflow-x: auto;
-  scrollbar-width: none;
-  /* A sangre en el móvil (sin ensanchar la página). */
-  margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
-    calc(-1 * (var(--gutter) + var(--safe-right)));
-  padding-inline: calc(var(--gutter) + var(--safe-left)) calc(var(--gutter) + var(--safe-right));
-  scroll-padding-inline: calc(var(--gutter) + var(--safe-left));
-}
-.set-index__list::-webkit-scrollbar {
-  display: none;
-}
-.set-index__item {
-  position: relative;
-  flex: none;
-  min-width: 0;
-  scroll-snap-align: start;
-}
-/* Móvil: chip con icono redondo y título. */
-.set-index__link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: var(--tap);
-  padding: 0 14px 0 7px;
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
-  color: var(--text-2);
-  font-size: var(--fs-13);
-  font-weight: var(--wght-strong);
-  white-space: nowrap;
-  text-decoration: none;
-  outline: none;
-}
-.set-index__link[aria-current='page'] {
-  background: var(--accent-wash);
-  box-shadow: inset 0 0 0 1px var(--accent-edge);
-  color: var(--accent-ink);
-}
-.set-index__link:focus-visible {
-  box-shadow:
-    inset 0 0 0 1px var(--line-soft),
-    var(--focus-ring);
-}
-.set-index__icon {
-  display: inline-grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--surface-2);
-  color: var(--text-2);
-}
-.set-index__link[aria-current='page'] .set-index__icon {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-.set-index__title {
-  min-width: 0;
-}
-/* La pista solo cabe en la columna de escritorio. */
-.set-index__hint {
-  display: none;
-}
-@media (hover: hover) and (pointer: fine) {
-  .set-index__link:hover:not([aria-current]) {
-    background: var(--surface-2);
-    color: var(--text);
-  }
-}
-
-@media (min-width: 1024px) {
-  .set-layout {
-    grid-template-columns: 280px minmax(0, 1fr);
-    align-items: start;
-    gap: var(--s-8);
-  }
-  .set-index {
-    position: sticky;
-    top: calc(var(--topbar-h) + var(--safe-top) + var(--s-4));
-  }
-  .set-index__list {
-    flex-direction: column;
-    gap: 4px;
-    margin-inline: 0;
-    padding: 0;
-    overflow: visible;
-  }
-  /* Escritorio: tarjeta con icono cuadrado a la izquierda, título (que puede
-     partirse en dos líneas: nada cortado) y, debajo, el hueco de la pista. */
-  .set-index__link {
-    display: grid;
-    grid-template-columns: 36px minmax(0, 1fr);
-    grid-template-rows: auto auto;
-    column-gap: 12px;
-    row-gap: 1px;
-    align-items: center;
-    align-content: center;
-    min-height: 58px;
-    padding: 8px 12px;
-    border-radius: var(--r-m);
-    background: none;
-    box-shadow: none;
-    color: var(--text);
-    font-size: var(--fs-15);
-    line-height: var(--lh-snug);
-    white-space: normal;
-  }
-  .set-index__link[aria-current='page'] {
-    background: var(--surface-2);
-    box-shadow: inset 0 0 0 1px var(--line-soft);
-    color: var(--text);
-  }
-  .set-index__link:focus-visible {
-    box-shadow: var(--focus-ring);
-  }
-  /* Hueco de una línea para la pista (contenido vacío: no cambia el nombre). */
-  .set-index__link::after {
-    content: '';
-    grid-column: 2;
-    grid-row: 2;
-    height: 16px;
-  }
-  .set-index__icon {
-    grid-column: 1;
-    grid-row: 1 / 3;
-    width: 36px;
-    height: 36px;
-    border-radius: var(--r-s);
-    background: var(--surface);
-    box-shadow: inset 0 0 0 1px var(--line-soft);
-  }
-  .set-index__link[aria-current='page'] .set-index__icon {
-    background: var(--accent);
-    box-shadow: none;
-  }
-  .set-index__title {
-    grid-column: 2;
-    grid-row: 1;
-    align-self: end;
-    overflow-wrap: anywhere;
-  }
-  .set-index__hint {
-    position: absolute;
-    left: 60px;
-    right: 12px;
-    bottom: 8px;
-    display: block;
-    color: var(--text-3);
-    font-size: var(--fs-12);
-    font-weight: var(--wght-medium);
-    line-height: 16px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    pointer-events: none;
-  }
-}
-
 /* ---- Secciones (tarjetas) --------------------------------------------------- */
-.set-sections {
-  display: grid;
-  gap: var(--s-4);
-  min-width: 0;
-}
 .set-sec {
   display: grid;
   gap: var(--s-4);
@@ -402,12 +218,11 @@
   text-align: right;
 }
 
-/* ---- Escritorio: portada «Lo tuyo arriba, lo técnico abajo» (rediseño, sección 7) ----
-   Desde 768 px y sin sección: la tarjeta del Umbrel y grupos de filas como
-   los de la maqueta (buscar-ajustes.html). Superficies opacas con borde de
-   1 px; las versiones del pie en mono (en las filas, la letra de la
-   maqueta). Solo se pinta en escritorio (Overview), así que el móvil no
-   cambia. */
+/* ---- Portada «Lo tuyo arriba, lo técnico abajo» (rediseño, sección 7) ----------------
+   Sin sección: la tarjeta del Umbrel y grupos de filas como los de la
+   maqueta (buscar-ajustes.html). Superficies opacas con borde de 1 px; las
+   versiones del pie en mono (en las filas, la letra de la maqueta). En el
+   móvil y en escritorio. */
 /* La portada y cada sección abierta, con el mismo ancho y alineadas a la
    izquierda bajo la barra de sección, como el resto de vistas de escritorio. */
 .ajx {
@@ -624,7 +439,7 @@
   text-align: center;
 }
 
-/* ---- Escritorio: una sección sola, con «‹ Ajustes» para volver ------------- */
+/* ---- Una sección sola (en escritorio, con «‹ Ajustes» para volver) ---------- */
 .set-one {
   display: grid;
   gap: var(--s-3);
@@ -657,9 +472,19 @@
     color: var(--text);
   }
 }
-/* Táctil desde 768: el Tema (Claro / Oscuro / Auto) mide 30; su zona, 44. */
-@media (min-width: 768px) and (pointer: coarse) {
+/* Táctil (móvil y tableta): el Tema (Claro / Oscuro / Auto) mide 30; su zona, 44. */
+@media (pointer: coarse) {
   .ajx-segm .seg__item::after {
     inset: -7px 0;
   }
+}
+
+/* ---- Móvil (por debajo de 768; maqueta buscar-ajustes.html) -------------------------
+   La portada y cada sección a todo el ancho de la columna; la portada, algo
+   más junta bajo el titular, como en la maqueta. */
+.set--movil {
+  gap: var(--s-3);
+}
+.set--movil .ajx-hint {
+  margin-top: 16px;
 }

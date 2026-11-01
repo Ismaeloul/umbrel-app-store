@@ -595,6 +595,17 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
             },
             { id: 'directo', label: 'Ir al directo', icon: 'directo', onSelect: actions.goLive },
             { id: 'detener', label: 'Detener', icon: 'stop', danger: true, onSelect: actions.stop },
+            // Móvil en vertical (ficha B): la estrella ya no va sobre el vídeo.
+            ...(compact
+              ? [
+                  {
+                    id: 'favorito',
+                    label: isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos',
+                    icon: isFavorite ? ('star-f' as const) : ('star' as const),
+                    onSelect: actions.toggleFavorite,
+                  },
+                ]
+              : []),
             ...(canZap
               ? [
                   {

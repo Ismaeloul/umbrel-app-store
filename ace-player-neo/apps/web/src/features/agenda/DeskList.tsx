@@ -154,12 +154,14 @@ function bigLeagueRank(competition: string): number {
  * Con datos reales un día trae 50 ligas: solo tres llevan píldora. Primero
  * las que tienen algo tuyo (`mine`), luego las grandes y después el resto,
  * cada tramo en el orden de los bloques. La elegida desde «Más ligas» se
- * queda a la vista mientras esté elegida.
+ * queda a la vista mientras esté elegida. `limit`: cuántas llevan píldora
+ * (la Agenda del móvil enseña alguna más, porque su fila se desliza).
  */
 export function splitLeagueChips(
   competitions: readonly string[],
   chip: string | null,
   mine: ReadonlySet<string> = new Set(),
+  limit: number = LEAGUE_CHIPS,
 ): { shown: string[]; more: string[] } {
   const tier = (name: string): number => {
     if (mine.has(name)) return 0;
@@ -170,8 +172,8 @@ export function splitLeagueChips(
     .map((name, index) => ({ name, index, tier: tier(name) }))
     .sort((a, b) => a.tier - b.tier || a.index - b.index)
     .map((item) => item.name);
-  const shown = ordered.slice(0, LEAGUE_CHIPS);
-  const rest = ordered.slice(LEAGUE_CHIPS);
+  const shown = ordered.slice(0, limit);
+  const rest = ordered.slice(limit);
   if (chip !== null && rest.includes(chip)) {
     return { shown: [...shown, chip], more: rest.filter((name) => name !== chip) };
   }
@@ -324,7 +326,7 @@ function DeskDayPicker({
 }
 
 /** Logo de la competición (del backend) o, si no hay o falla, la insignia de color con sus siglas. */
-function CompetitionMark({ name, logo }: { name: string; logo: string | null }) {
+export function CompetitionMark({ name, logo }: { name: string; logo: string | null }) {
   const [failed, setFailed] = useState<string | null>(null);
   if (logo && failed !== logo)
     return (

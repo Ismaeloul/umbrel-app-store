@@ -1,9 +1,9 @@
 /* Salud y Dispositivos dentro de Ajustes (el contrato de
    src/features/settings/external.tsx): Ajustes encuentra solas las dos
-   secciones, las pone en su índice y el indicador del motor («ajustes/salud»)
+   secciones, las pone en su portada y el indicador del motor («ajustes/salud»)
    lleva a la de salud. */
 
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { resetToasts } from '../../notices/toasts.ts';
@@ -41,18 +41,23 @@ afterEach(() => {
 });
 
 describe('Ajustes con Salud y Dispositivos', () => {
-  it('las dos secciones existen y salen en el índice de Ajustes', async () => {
+  it('las dos secciones existen y salen en la portada de Ajustes', async () => {
     expect(externalSection('salud')).not.toBeNull();
     expect(externalSection('dispositivos')).not.toBeNull();
     renderSection(
       <SettingsView route={{ vista: 'ajustes', seccion: null }} active />,
       '?vista=ajustes',
     );
-    const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
-    const names = within(index)
-      .getAllByRole('link')
-      .map((a) => a.textContent);
-    expect(names).toEqual(expect.arrayContaining(['Dispositivos', 'Salud']));
+    // Dispositivos, en «Fuentes y sistema»; Salud, bajo «Más ajustes».
+    expect(screen.getByRole('link', { name: /^Dispositivos/ })).toHaveAttribute(
+      'href',
+      '?vista=ajustes/dispositivos',
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Más ajustes/ }));
+    expect(screen.getByRole('link', { name: /^Salud/ })).toHaveAttribute(
+      'href',
+      '?vista=ajustes/salud',
+    );
     // Ajustes enseña una sección cada vez: cada una se ve en su dirección.
     expect(screen.queryByRole('heading', { name: 'Salud del sistema' })).not.toBeInTheDocument();
   });
@@ -74,11 +79,6 @@ describe('Ajustes con Salud y Dispositivos', () => {
     renderSection(
       <SettingsView route={{ vista: 'ajustes', seccion: 'salud' }} active />,
       '?vista=ajustes/salud',
-    );
-    const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
-    expect(within(index).getByRole('link', { name: 'Salud' })).toHaveAttribute(
-      'aria-current',
-      'page',
     );
     expect(
       await screen.findByRole('heading', { name: 'Salud del sistema', level: 2 }),
