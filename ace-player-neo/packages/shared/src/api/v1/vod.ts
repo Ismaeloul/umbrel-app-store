@@ -535,6 +535,15 @@ export const VodGrantSchema = StreamGrantSchema.extend({
       .nullable(),
     poster: VodArtStampSchema.nullable(),
   }),
+  /**
+   * «Ver juntos», invitado de fuera con `abr=1` (docs/ver-juntos.md §17): la `url` es una lista
+   * maestra (`hd` y `lite`) o solo la ligera (`hd` null). Los códecs de vídeo de cada versión, RFC 6381,
+   * para que el reproductor acepte el título si decodifica alguna. Nunca llega a quien no manda
+   * `abr=1` (las apps no la conocen).
+   */
+  variants: z
+    .strictObject({ hd: z.string().max(64).nullable(), lite: z.string().max(64) })
+    .optional(),
 });
 export type VodGrant = z.infer<typeof VodGrantSchema>;
 

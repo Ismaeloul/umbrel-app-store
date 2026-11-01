@@ -1,6 +1,6 @@
 Películas y series (el VOD de la IPTV, docs/vod.md §12). Entrada del armazón:
-`index.tsx` (la vista, `?vista=cine` y `?vista=cine/<id>`) y `aside.tsx` (las
-categorías en escritorio). Destino «Pelis y series» en la navegación solo con
+`index.tsx` (la vista, `?vista=cine` y `?vista=cine/<id>`; sin panel lateral
+desde el rediseño de escritorio). Destino «Pelis y series» en la navegación solo con
 `bootstrap.features.vod` y, hasta la 0.9.0, con `?flag=cine`. Se ve sin
 servidor con `?demo=1&flag=cine`.
 
@@ -10,24 +10,32 @@ la agenda, carteles grandes con el título bien visible, la rejilla como otra
 pantalla y una ficha con el cartel, toda la información del proveedor y el
 play grande y amarillo.
 
-| Fichero                                    | Qué                                                                                                                                                                                                |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CineView.tsx`                             | Portada o ficha según la ruta; la portada sigue montada (oculta) bajo la ficha para volver a su sitio                                                                                              |
-| `Home.tsx`                                 | Título, «Películas \| Series», «Categorías» (móvil), buscador (`/`, Esc) y una de dos pantallas: la portada en filas o la rejilla (§13)                                                            |
-| `Rows.tsx`                                 | Las filas de la portada: novedades y una por categoría, cada una con «Ver todo ›»; se piden al acercarse (IntersectionObserver)                                                                    |
-| `Grid.tsx` / `PosterCard.tsx`              | Rejilla virtual (2-6 columnas por ancho, `aria-setsize`) y la tarjeta: cartel 2:3 con cápsulas encima, título de 15 px y «2023 · ★ 7,4»                                                            |
-| `ContinueRail.tsx`                         | «Seguir viendo»: 16:9 (o el cartel entero sobre su color), barra de lo visto, «T2 · E3 · Quedan 12 min» y su menú                                                                                  |
-| `CategorySheet.tsx` / `TagChips.tsx`       | Categorías (hoja en el móvil, chips en la rejilla de la tableta, lista con «Inicio» en el panel) y los chips «Multi» y «4K» (el idioma va en su botón)                                             |
-| `Languages.tsx` / `languages.css`          | Idiomas (docs/vod.md §4.10): el selector de la primera vez, el botón del globo de la cabecera y su hoja, «3 en latino · Ver», «Viendo solo en latino» y la fila de Ajustes → IPTV                  |
-| `Ficha.tsx`                                | Cabecera (fondo, cartel desenfocado o color), datos, el play («Seguir viendo desde 43:12», «Termina a las»), tráiler, sinopsis y «Detalles»                                                        |
-| `MyList.tsx` | «Mi lista» (0.9.1, docs/vod.md §10.6): «Añadir a mi lista» / «En mi lista ✓» de la ficha (optimista), la fila de la portada tras «Seguir viendo» y su rejilla (`cinecat=milista`) |
-| `Synopsis.tsx`                             | Sinopsis recortada con «Más» (la de la ficha y la de cada temporada); se vuelve a medir al cambiar de tamaño (girar el iPhone)                                                                     |
-| `Seasons.tsx` / `EpisodeList.tsx`          | Temporadas (chips o desplegable con más de 8, «Temporada N», su resumen) y episodios (fotograma o su número, emisión y nota; lista compacta; el del botón principal, resaltado)                    |
-| `Art.tsx`                                  | Cartel, fondo o fotograma de `vodArt` sobre su relleno (un cartel sin imagen lleva el título); se pide al acercarse a la pantalla y, si falla, 3 reintentos (2, 6 y 15 s) y otro al volver a verse |
-| `data.ts`                                  | Estado de la URL compartido con el panel, portada ↔ rejilla con historial, consultas (`vodHome`, filas, rejilla por páginas, `vodTitle`), marcas                                                   |
-| `model.ts` / `texts.ts`                    | Lógica pura (URL, columnas, tiempos, «Termina a las», estreno, géneros y países en castellano, temporadas, reglas de §10.3) y los textos                                                           |
-| `play.ts`                                  | Reproducir: pide la película o el episodio al reproductor (`playVod()`, player/api.ts) y lleva a su sala (`sala/<id>`); y la prueba de HEVC                                                        |
-| `demo.ts` / `demo-data.ts` / `demo-art.ts` | Demo: 73 películas y 18 series, fichas completas y casos pobres (sin cartel, sin sinopsis, título larguísimo, 1 y 12 temporadas…)                                                                  |
+Desde el rediseño de escritorio (≥ 768 px; maqueta 01-escritorio.html §4) la
+barra lleva las pestañas Inicio / Películas / Series / Mi lista · N; Inicio es
+el escaparate (`Escaparate.tsx`: «Seguir viendo» en grande, «También a
+medias» y «Mi lista», sin novedades), Películas y Series abren la rejilla con
+su buscador, chips y orden, y la ficha lleva «Seguir · T3 E4» y Mi lista / Ver
+juntos / Tráiler / Compartir. El móvil sigue con la portada en filas.
+
+| Fichero                                    | Qué                                                                                                                                                                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CineView.tsx`                             | Portada o ficha según la ruta; la portada sigue montada (oculta) bajo la ficha para volver a su sitio                                                                                                         |
+| `Home.tsx`                                 | Título, «Películas \| Series», «Categorías» (móvil), buscador (`/`, Esc) y una de dos pantallas: la portada en filas o la rejilla (§13)                                                                       |
+| `Rows.tsx`                                 | Las filas de la portada: novedades y una por categoría, cada una con «Ver todo ›»; se piden al acercarse (IntersectionObserver)                                                                               |
+| `Grid.tsx` / `PosterCard.tsx`              | Rejilla virtual (2-6 columnas por ancho, `aria-setsize`) y la tarjeta: cartel 2:3 con cápsulas encima, título de 15 px y «2023 · ★ 7,4»                                                                       |
+| `Escaparate.tsx`                           | La portada en escritorio (`DeskHome`) es Mi lista: «Seguir viendo» (cartel con «T2 · E7» o «1:12 de 2:46») y la lista partida en «Series» y «Películas»; vacía, Explorar películas / series y Buscar (Ctrl K) |
+| `ContinueRail.tsx`                         | «Seguir viendo»: 16:9 (o el cartel entero sobre su color), barra de lo visto, «T2 · E3 · Quedan 12 min» y su menú                                                                                             |
+| `CategorySheet.tsx` / `TagChips.tsx`       | Categorías (hoja en el móvil, chips en la rejilla de la tableta, chips también en la rejilla de escritorio) y los chips «Multi» y «4K» (el idioma va en su botón)                                             |
+| `Languages.tsx` / `languages.css`          | Idiomas (docs/vod.md §4.10): el selector de la primera vez, el botón del globo de la cabecera y su hoja, «3 en latino · Ver», «Viendo solo en latino» y la fila de Ajustes → IPTV                             |
+| `Ficha.tsx`                                | Cabecera (fondo, cartel desenfocado o color), datos, el play («Seguir viendo desde 43:12», «Termina a las»), tráiler, sinopsis y «Detalles»                                                                   |
+| `MyList.tsx`                               | «Mi lista» (0.9.1, docs/vod.md §10.6): «Añadir a mi lista» / «En mi lista ✓» de la ficha (optimista), la fila de la portada tras «Seguir viendo» y su rejilla (`cinecat=milista`)                             |
+| `Synopsis.tsx`                             | Sinopsis recortada con «Más» (la de la ficha y la de cada temporada); se vuelve a medir al cambiar de tamaño (girar el iPhone)                                                                                |
+| `Seasons.tsx` / `EpisodeList.tsx`          | Temporadas (chips o desplegable con más de 8, «Temporada N», su resumen) y episodios (fotograma o su número, emisión y nota; lista compacta; el del botón principal, resaltado)                               |
+| `Art.tsx`                                  | Cartel, fondo o fotograma de `vodArt` sobre su relleno (un cartel sin imagen lleva el título); se pide al acercarse a la pantalla y, si falla, 3 reintentos (2, 6 y 15 s) y otro al volver a verse            |
+| `data.ts`                                  | Estado de la URL, portada ↔ rejilla con historial, consultas (`vodHome`, filas, rejilla por páginas, `vodTitle`), marcas                                                                                      |
+| `model.ts` / `texts.ts`                    | Lógica pura (URL, columnas, tiempos, «Termina a las», estreno, géneros y países en castellano, temporadas, reglas de §10.3) y los textos                                                                      |
+| `play.ts`                                  | Reproducir: pide la película o el episodio al reproductor (`playVod()`, player/api.ts) y lleva a su sala (`sala/<id>`); y la prueba de HEVC                                                                   |
+| `demo.ts` / `demo-data.ts` / `demo-art.ts` | Demo: 73 películas y 18 series, fichas completas y casos pobres (sin cartel, sin sinopsis, título larguísimo, 1 y 12 temporadas…)                                                                             |
 
 Decisiones (VOD-3, 30-sep; 0.9.0, 3-oct):
 

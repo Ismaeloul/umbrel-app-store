@@ -1,0 +1,47 @@
+/* Popover (Popover.tsx): tarjeta opaca con filo de 1 px y sombra; entra con
+   opacidad y un desplazamiento corto (solo transform y opacity). */
+.popover {
+  position: fixed;
+  z-index: var(--z-menu);
+  max-width: calc(100vw - 16px);
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--glass-solid);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+  color: var(--text);
+  animation: popover-entra var(--dur-rapido) var(--ease-rapido) both;
+}
+.popover:focus {
+  outline: none;
+}
+.popover:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 2px;
+}
+.popover--above {
+  animation-name: popover-entra-arriba;
+}
+@keyframes popover-entra {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes popover-entra-arriba {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .popover,
+  .popover--above {
+    animation-name: popover-funde;
+  }
+  @keyframes popover-funde {
+    from {
+      opacity: 0;
+    }
+  }
+}

@@ -200,7 +200,7 @@ Los guiones (no las muestras, que se generan con ffmpeg) se copian al repositori
   pruebas junto al código.
 - **Nadie más que el contrato toca `packages/shared`** (§16.2): si VOD-2 o VOD-6 necesitan algo, un commit pequeño
   aparte con prefijo `feat(contrato)`.
-- Las pruebas intermitentes conocidas (`relay.test.ts` de tiempos, `ChannelDetail.test.tsx` «clic derecho»,
+- Las pruebas intermitentes conocidas (`relay.test.ts` de tiempos, `channel-menu.test.tsx` «clic derecho»,
   `integration/iptv.test.ts` n.º 14, `iptv/browse.test.ts`, dos de `teams/routes.test.ts`) se repiten solas antes de
   darlas por rotas. Los 9 fallos de red del sandbox (`net/transport`, `health`, `state/routes`,
   `integration/escrituras`) no cuentan.

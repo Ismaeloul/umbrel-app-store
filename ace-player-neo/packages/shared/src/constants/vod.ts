@@ -192,6 +192,37 @@ export const VOD_PLAY = {
 export const VOD_FFMPEG_RW_TIMEOUT_US = 55_000_000;
 
 /**
+ * «Calidad ligera para invitados» (docs/ver-juntos.md §17): una segunda versión 720p H.264 de la
+ * película, hecha en casa a partir de los segmentos que ya están en disco (nunca otra conexión con el
+ * proveedor), solo para quien entra de fuera por el proxy de la sala.
+ *
+ * - `aheadSegments` y `aheadMaxS`: lo que se adelanta el codificador al último `lo_index<N>` pedido;
+ *   por debajo de `restartAheadS` (30 s) del productor, así nunca le pide un reinicio.
+ * - `waitMs`: lo que espera una petición al segmento que se está codificando; `repositionWaitMs`, al
+ *   que pide un salto (el codificador se va allí). Después, 503 con `Retry-After: 1`; a la segunda
+ *   vez, 404 y el reproductor tira del original para ese trozo.
+ * - `idleMs`: sin pedir nada ligero en este rato, se suelta la plaza de recodificación.
+ * - `minSpeed`: por debajo de 1,5× el tiempo real (media de 3 segmentos), lo ligero se apaga para la
+ *   sesión (no da abasto y solo estorbaría); `maxFailures` fallos seguidos, lo mismo.
+ * - `bandwidth` y `average`: lo que dice la lista maestra de la versión ligera (2,5 Mb/s de vídeo
+ *   como mucho, el audio y un 10 % de margen).
+ */
+export const LITE_VOD = {
+  aheadSegments: 3,
+  aheadMaxS: 20,
+  waitMs: 4 * SECOND,
+  repositionWaitMs: 6 * SECOND,
+  idleMs: MINUTE,
+  minSpeed: 1.5,
+  speedWindow: 3,
+  maxFailures: 3,
+  /** Peticiones fallidas (503) al mismo segmento antes de darlo por perdido (404). */
+  missesBeforeGone: 2,
+  bandwidth: 2_900_000,
+  average: 2_200_000,
+} as const;
+
+/**
  * Presupuesto de `vodStream` (§9.12). La suma de los cuatro primeros cabe
  * en `grantMs`, que queda 10 s por debajo del plazo de la web
  * (`VOD_CLIENT.streamMs`), y ese, por debajo de los 60 s de `location /api/`

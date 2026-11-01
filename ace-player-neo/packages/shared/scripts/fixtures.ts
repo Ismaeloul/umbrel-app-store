@@ -105,11 +105,14 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'partyControl',
   'partyStatus',
   'partyChat',
-  'partyReact',
+  'partyTyping',
   'partySettings',
   'partyMember',
   'partyQueue',
   'partyLeave',
+  /* Las salas abiertas y cerrarlas desde casa: solo la web de casa. */
+  'partyList',
+  'partyEnd',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 
@@ -524,7 +527,7 @@ export const V1_FIXTURES = {
     timezone: 'Europe/Madrid',
     country: 'Spain',
     source: 'futbolenlatv',
-    attribution: 'futbolenlatv.com',
+    attribution: 'futbolenlatv.es',
     demo: false,
     limited: false,
     partial: false,
@@ -1236,7 +1239,17 @@ const partyTitle: PartyTitle = {
 };
 
 function partyMember(id: string, name: string, host: boolean): PartyMember {
-  return { id, name, host, leader: host, online: true, buffering: false };
+  return {
+    id,
+    name,
+    host,
+    leader: host,
+    role: host ? 'leader' : 'guest',
+    ready: true,
+    progress: 100,
+    online: true,
+    buffering: false,
+  };
 }
 
 function partyJoined(self: string, others: readonly PartyMember[]): PartyJoinResponse {
@@ -1251,10 +1264,11 @@ function partyJoined(self: string, others: readonly PartyMember[]): PartyJoinRes
       leaderId: 'm_IsmaAnfitrion',
       createdAt: AT_MS,
       members: [partyMember('m_IsmaAnfitrion', 'Isma', true), ...others],
-      playback: { playing: false, positionS: 0, at: AT_MS, rev: 1, waitingFor: [] },
-      settings: { control: 'leader', queueMode: 'autoplay' },
+      playback: { playing: false, positionS: 0, at: AT_MS, rev: 1, waitingFor: [], lobby: true },
+      settings: { control: 'leader', coleaders: true, queueMode: 'vote' },
       queue: [],
       upNext: null,
+      live: null,
     },
     member: { id: self, token: `${self}.c2VjcmV0b0RlRWplbXBsbzAx` },
     chat: [
@@ -1520,12 +1534,25 @@ export const WEB_V1_FIXTURES = {
   partyControl: { serverNow: AT_MS + 60_000, rev: 3 },
   partyStatus: { serverNow: AT_MS + 65_000, rev: 3, stream: 'ok' },
   partyChat: { ok: true },
-  partyReact: { ok: true },
+  partyTyping: { ok: true },
   partySettings: { ok: true },
   partyMember: { ok: true },
   partyQueue: { ok: true },
   partyLeave: { ok: true },
   partyClose: { ok: true },
+  partyList: {
+    rooms: [
+      {
+        code: partyJoined('m_IsmaAnfitrion', []).room.code,
+        title: partyJoined('m_IsmaAnfitrion', []).room.title,
+        host: 'Isma',
+        members: 2,
+        online: 1,
+        createdAt: AT_MS,
+      },
+    ],
+  },
+  partyEnd: { ok: true },
 } satisfies { [K in WebFixtureRouteId | AppFromWebFixtureRouteId]: V1ResponseInput<K> };
 
 // --- Variantes (variantes/<ruta>.<caso>.json) ---

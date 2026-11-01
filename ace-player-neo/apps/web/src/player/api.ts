@@ -58,6 +58,8 @@ export interface PlayChannel {
   kind?: 'id' | 'infohash' | 'auto';
   /** Segunda línea: «Fuente 1, Elcano» o «Atlético – Tottenham». NUNCA el marcador (regla 29). */
   subtitle?: string;
+  /** El partido que se ve («Real Madrid – Barcelona»): el titular del reproductor de escritorio. */
+  event?: string;
   /** Frase de la fuente para la línea de estado: «Fuente 1 verificada.» */
   lead?: string;
   /** Proveedor de la fuente (`source` del resultado que se manda al backend). */

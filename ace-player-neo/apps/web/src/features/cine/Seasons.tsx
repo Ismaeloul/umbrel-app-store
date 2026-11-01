@@ -14,6 +14,7 @@
 
 import type { VodSeries } from '@ace/shared';
 import { useState } from 'react';
+import { useLayout } from '../../app/layout.tsx';
 import { useSearchParam } from '../../app/router.tsx';
 import { Button, Chip, Menu, type MenuItem } from '../../ui/index.ts';
 import { EpisodeList } from './EpisodeList.tsx';
@@ -80,7 +81,13 @@ function SeasonPicker({
   );
 }
 
+/** El chip corto de escritorio (maqueta: «T1 T2 T3»); los especiales, con su nombre. */
+export function seasonChip(n: number, provider: string | null | undefined): string {
+  return n === 0 ? seasonName(n, provider) : `T${n}`;
+}
+
 export function Seasons({ series }: { series: VodSeries }) {
+  const desk = useLayout().kind !== 'mobile';
   const [param, setParam] = useSearchParam('temporada');
   const current = shownSeason(series, param);
   const season = series.seasons.find((item) => item.n === current);
@@ -98,8 +105,13 @@ export function Seasons({ series }: { series: VodSeries }) {
       {many || series.seasons.length < 2 ? null : (
         <div className="cine-chips cine-chips--scroll" role="group" aria-label={CINE_TEXT.seasons}>
           {series.seasons.map((item) => (
-            <Chip key={item.n} pressed={item.n === season.n} onClick={() => choose(item.n)}>
-              {seasonName(item.n, item.name)}
+            <Chip
+              key={item.n}
+              pressed={item.n === season.n}
+              label={desk ? seasonName(item.n, item.name) : undefined}
+              onClick={() => choose(item.n)}
+            >
+              {desk ? seasonChip(item.n, item.name) : seasonName(item.n, item.name)}
             </Chip>
           ))}
         </div>

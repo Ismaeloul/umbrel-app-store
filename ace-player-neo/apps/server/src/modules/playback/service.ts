@@ -244,6 +244,11 @@ interface AcquireRequest {
   readonly source: 'engine' | 'iptv';
   /** Película o episodio (`vodStream`): relé VOD y productor en vez del remux del directo. */
   readonly vod?: VodAcquire;
+  /**
+   * Sala de «Ver juntos» en directo (docs/ver-juntos.md §14): los visores de la
+   * misma sala comparten el canal sin traspaso, como en un VOD de sala.
+   */
+  readonly partyKey?: string;
 }
 
 interface Placement {
@@ -311,6 +316,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   const logger = deps.logger.child({ module: 'playback' });
 
   const sessions = new Map<string, SessionRec>();
+  /** Sala de «Ver juntos» dueña de cada directo (docs/ver-juntos.md §14); sin entrada, de casa. */
+  const liveParty = new WeakMap<SessionRec, string>();
   const viewers = new Map<string, ViewerRec>();
   const recentlyClosed = new Set<string>();
   const engineLock = new SerialLock();
@@ -1463,8 +1470,12 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       clock.clearTimeout(session.graceTimer);
       session.graceTimer = null;
     }
-    /* «Ver juntos» (docs/ver-juntos.md §5): la misma sala comparte la sesión. */
-    const party = session?.vod?.partyKey != null && session.vod.partyKey === request.vod?.partyKey;
+    /* «Ver juntos» (docs/ver-juntos.md §5 y §14): la misma sala comparte la sesión. */
+    const party = session?.vod
+      ? session.vod.partyKey != null && session.vod.partyKey === request.vod?.partyKey
+      : session !== undefined &&
+        request.partyKey !== undefined &&
+        liveParty.get(session) === request.partyKey;
     /* El mismo VOD con otro audio u otro HEVC: un ffmpeg no sirve dos cosas; se reabre en la posición.
        En una sala el HEVC no cuenta (el vídeo se copia tal cual; cada uno comprueba si lo decodifica),
        y otra sala, o salir de una, también reabre. */
@@ -1516,6 +1527,11 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       }
     }
     if (!session) session = await openSessionLocked(request);
+    /* El directo es de la sala que lo pidió por última vez (o de nadie: alguien de casa). */
+    if (!request.vod) {
+      if (request.partyKey !== undefined) liveParty.set(session, request.partyKey);
+      else liveParty.delete(session);
+    }
     const existing = session.viewers.get(request.viewerId);
     const viewer: ViewerRec = existing ?? {
       viewerId: request.viewerId,
@@ -2018,7 +2034,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       syncTicker();
     },
 
-    async acquire(hashParam, query, identity, signal) {
+    async acquire(hashParam, query, identity, signal, options = {}) {
       const hash = normalizeHash(hashParam);
       if (!hash) throw new AppError('bad_request', { detail: 'hash no válido' });
       /* Un id de película o episodio por el camino de los canales (docs/vod.md §5.3). */
@@ -2043,8 +2059,9 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         deviceId,
         client,
         source,
-        /* Una IPTV siempre pasa por el remux, también en la web (docs/iptv.md §6.4). */
-        consumes: client === 'ios' || source === 'iptv' ? 'remux' : 'direct',
+        /* Una IPTV siempre pasa por el remux, también en la web (docs/iptv.md §6.4); una sala,
+           también (sus invitados ven los ficheros del remux por la ruta de la sala, §14). */
+        consumes: client === 'ios' || source === 'iptv' || options.partyKey ? 'remux' : 'direct',
         heartbeat: true,
         native: identity.device !== null,
         title: label || `Stream ${hash.slice(0, 8)}`,
@@ -2054,6 +2071,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         signal,
         writeNowPlaying: true,
         lite: client === 'ios' && query.lite === '1',
+        ...(options.partyKey ? { partyKey: options.partyKey } : {}),
       });
       const { session, viewer } = placed;
       /* 0.9.8: el remux ya copiaba (otro visor, o este antes de pedir calidad ligera): se relanza ligero si

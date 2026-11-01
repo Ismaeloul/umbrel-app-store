@@ -1,8 +1,9 @@
 // Genera los PNG de la app (public/icon-180.png, icon-192.png, icon-512.png e
 // icon-maskable-512.png) a partir de public/icon.svg, que es una copia exacta
 // del icono de la tienda de Umbrel (ismaeloul-ace-player-neo/icon.svg):
-// cuadrado oscuro redondeado, anillo azul partido y «reproducir» blanco. La
-// marca de la barra superior (src/ui/BrandMark.tsx) es el mismo dibujo.
+// «Pantalla-campo» (pantalla amarilla sobre #0b0d11, medio campo y círculo
+// central con «reproducir»). La marca del menú lateral (src/ui/BrandMark.tsx)
+// es el mismo dibujo.
 //
 // Tres variantes del mismo SVG:
 //   - «any» (192 y 512): tal cual, esquinas redondeadas sobre transparente
@@ -59,7 +60,7 @@ try {
     });
     const dataUrl = `data:image/svg+xml;base64,${Buffer.from(source).toString('base64')}`;
     await page.setContent(
-      `<!doctype html><html><body style="margin:0;background:${transparent ? 'transparent' : '#020617'};width:${size}px;height:${size}px;overflow:hidden">` +
+      `<!doctype html><html><body style="margin:0;background:${transparent ? 'transparent' : '#0b0d11'};width:${size}px;height:${size}px;overflow:hidden">` +
         `<img src="${dataUrl}" style="display:block;width:${size}px;height:${size}px"></body></html>`,
     );
     await page.waitForFunction(() => document.images[0]?.complete === true);

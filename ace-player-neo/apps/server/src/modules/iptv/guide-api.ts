@@ -34,11 +34,13 @@ import {
   type IptvGuideQuery,
   type IptvGuideReadiness,
   type IptvGuideResponse,
+  type IptvType,
 } from '@ace/shared';
 import { AppError } from '../../core/errors.js';
 import type { Catalog, CatalogEntry, QualityOf } from './catalog.js';
 import { channelIdOf } from './catalog.js';
 import type { GuideArt, GuideArtReply } from './guide-art.js';
+import { FacetDeriver } from './facets.js';
 import type { GuideChannelInfo, GuideCoverage, GuideGridRow, GuideReader } from './guide-db.js';
 import { planVariants } from './match.js';
 
@@ -55,6 +57,13 @@ export interface GuideApiSource {
   status(): GuideSourceStatus;
   /** Canales (`channelIdOf`) de tus favoritos que son de la IPTV, en su orden. */
   favoriteChannels(): readonly string[];
+  /**
+   * Para `iptvGuideNow`: el canal de la IPTV (`channelIdOf`) de cada id de tu
+   * biblioteca que NO es de la IPTV (un canal AceStream de favoritos,
+   * recientes o tus listas), emparejado por nombre (≥ 92, el mismo del
+   * buscador). Los que no casan no están.
+   */
+  libraryChannels?(ids: readonly string[]): ReadonlyMap<string, string>;
   /** La calidad que manda de una variante (la medida o la del nombre). */
   readonly qualityOf: QualityOf;
   now(): number;
@@ -80,6 +89,8 @@ export interface GuideSourceStatus {
 interface GuideRow extends IptvGuideChannel {
   /** `channelIdOf`: clave y país. */
   readonly channel: string;
+  /** Tipos de §16.4 de sus variantes (los de la faceta de Canales): el filtro `type`. */
+  readonly types: readonly IptvType[];
 }
 
 interface Rows {
@@ -89,6 +100,16 @@ interface Rows {
   readonly byChannel: ReadonlyMap<string, GuideRow>;
   /** Hasta dónde llega la programación de «Todos». */
   readonly coverage: GuideCoverage | null;
+}
+
+/** Las variantes de un canal (`channelIdOf`: clave y país), o ninguna si ya no está. */
+function channelEntries(catalog: Catalog, channel: string): readonly CatalogEntry[] {
+  const cut = channel.indexOf('\u0000');
+  if (cut < 0) return [];
+  const bucket = channel.slice(cut + 1);
+  return (
+    catalog.buckets(channel.slice(0, cut)).find((item) => item.bucket === bucket)?.entries ?? []
+  );
 }
 
 function iso(ms: number): string {
@@ -115,6 +136,9 @@ function parseProgrammeId(id: string): [number, number] | null {
 export class GuideApi {
   private rows: Rows | null = null;
   private building: { key: string; promise: Promise<Rows> } | null = null;
+  private readonly facets = new FacetDeriver();
+  /** La cobertura de «Todos» con un tipo, por filas: se calcula una vez por guía y tipo. */
+  private readonly typeCoverage = new WeakMap<Rows, Map<string, GuideCoverage | null>>();
 
   constructor(private readonly source: GuideApiSource) {}
 
@@ -164,13 +188,25 @@ export class GuideApi {
     const fellBack = asked === 'favorites' && withGuide === 0;
     const scope = fellBack ? 'all' : asked;
     const favoriteSet = new Set(favorites.map((row) => row.channel));
-    const list: readonly GuideRow[] = scope === 'favorites' ? favorites : rows.all;
+    const type = query.type;
+    const scoped: readonly GuideRow[] = scope === 'favorites' ? favorites : rows.all;
+    const list = type ? scoped.filter((row) => row.types.includes(type)) : scoped;
     /* Hasta dónde llega la programación de las filas del ámbito («Todos»: la de toda la guía
        que sale en filas; se calcula una vez por guía en el lector). */
-    const covered =
-      scope === 'favorites'
-        ? reader.coverage(list.flatMap((row) => (row.guide === null ? [] : [row.guide])))
-        : rows.coverage;
+    const coverageOf = () =>
+      reader.coverage(list.flatMap((row) => (row.guide === null ? [] : [row.guide])));
+    let covered: GuideCoverage | null;
+    if (scope === 'favorites') covered = coverageOf();
+    else if (!type) covered = rows.coverage;
+    else {
+      /* «Todos» con un tipo: las mismas filas en cada página, así que se
+         guarda (con las filas: otra guía u otro catálogo, otras filas). */
+      let byType = this.typeCoverage.get(rows);
+      if (!byType) this.typeCoverage.set(rows, (byType = new Map()));
+      const key = `${reader.version}|${type}`;
+      if (!byType.has(key)) byType.set(key, coverageOf());
+      covered = byType.get(key) ?? null;
+    }
     return {
       ...base,
       state: 'ready',
@@ -286,8 +322,20 @@ export class GuideApi {
   ): GuideRow {
     const best = entries[0] as CatalogEntry;
     const plays = planVariants(entries, { qualityOf: this.source.qualityOf })?.posters[0] ?? best;
+    const types = new Set<IptvType>();
+    for (const entry of entries)
+      for (const type of this.facets.derive({
+        title: entry.title,
+        group: entry.group,
+        tvgCountry: entry.tvgCountry,
+        tvgLanguage: entry.tvgLanguage,
+        quality: entry.quality,
+        nameCountry: entry.country,
+      }).types)
+        types.add(type);
     return {
       channel: channelIdOf(best),
+      types: [...types],
       guide: info ? info.g : null,
       id: plays.id,
       number,
@@ -387,21 +435,26 @@ export class GuideApi {
     }
     const channels = reader.channels();
     const now = this.source.now();
-    const seen = new Set<string>();
+    const ids = [...new Set(query.ids.split(',').map((raw) => raw.toLowerCase()))];
+    /* Los que no son de la IPTV: canales AceStream de tu biblioteca, por su nombre. */
+    const foreign = ids.filter((id) => !catalog.get(id));
+    const linked = foreign.length ? (this.source.libraryChannels?.(foreign) ?? null) : null;
     const items: IptvGuideNowItem[] = [];
-    for (const raw of query.ids.split(',')) {
-      const id = raw.toLowerCase();
-      if (seen.has(id)) continue;
-      seen.add(id);
+    for (const id of ids) {
       const entry = catalog.get(id);
+      const channel = entry ? null : linked?.get(id);
+      /* La variante tocada y, si no tiene guía, las demás de su canal; un
+         canal de tu lista, las variantes del canal de la IPTV que es. */
+      const variants = entry
+        ? [entry, ...catalog.channelOf(entry)]
+        : channel
+          ? channelEntries(catalog, channel)
+          : [];
       let info: GuideChannelInfo | undefined;
-      if (entry) {
-        /* La variante tocada y, si no tiene guía, las demás de su canal. */
-        for (const variant of [entry, ...catalog.channelOf(entry)]) {
-          const tvg = variant.tvgId.trim().toLowerCase();
-          info = tvg ? channels.get(tvg) : undefined;
-          if (info) break;
-        }
+      for (const variant of variants) {
+        const tvg = variant.tvgId.trim().toLowerCase();
+        info = tvg ? channels.get(tvg) : undefined;
+        if (info) break;
       }
       if (!info) {
         items.push({ id, guide: null, now: null, next: null });
@@ -413,6 +466,7 @@ export class GuideApi {
         guide: info.g,
         now: around.now ? programmeOf(info.g, around.now) : null,
         next: around.next ? programmeOf(info.g, around.next) : null,
+        logo: info.hasIcon,
       });
     }
     return { available: true, version: reader.version, items };

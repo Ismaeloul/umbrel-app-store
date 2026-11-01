@@ -64,3 +64,10 @@
 .chip--button:disabled {
   opacity: 0.55;
 }
+/* Táctil desde 768: el escritorio estrecha los chips a 30 px (agenda, guía,
+   canales); la zona invisible crece hasta 44. Con ratón no cambia nada. */
+@media (min-width: 768px) and (pointer: coarse) {
+  .chip--button::before {
+    inset: -7px -2px;
+  }
+}

@@ -32,6 +32,7 @@ import type {
   SettingsResponse,
 } from '@ace/shared';
 import { readJson, STORAGE_KEYS, writeJson } from '../../lib/storage.ts';
+import { WEB_VERSION } from '../../lib/version.ts';
 import { registeredDemoHandler, type DemoRequest } from '../demo-registry.ts';
 import { ApiError } from '../errors.ts';
 import type { ApiResponse, JsonRouteId } from '../routes.ts';
@@ -255,6 +256,8 @@ export async function handleDemo<Id extends JsonRouteId>(
       const base = fixture<BootstrapResponse>('bootstrap');
       result = {
         ...base,
+        // El ejemplo es de la 0.7.0: la demo dice la versión de esta web.
+        version: WEB_VERSION,
         origin: 'web',
         device: null,
         serverTime: Date.now(),

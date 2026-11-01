@@ -172,18 +172,28 @@ export function openCineGrid(patch: Partial<CineUrlState>): void {
 /**
  * Vuelve a la portada: «Atrás» si la rejilla se abrió desde ella (deshace la
  * entrada del historial); si se llegó por un enlace, cambia el estado.
+ *
+ * En el móvil, la portada vuelve con el tipo que se dejó en la rejilla (de
+ * Series, a la portada de series). La pestaña «Mi lista» de escritorio pasa
+ * `keepKind: false`: su portada no tiene tipo, y si no, la URL se quedaría
+ * en Series y, al estrechar la ventana a móvil, la portada saldría en Series.
  */
-export function closeCineGrid(): void {
+export function closeCineGrid({ keepKind = true }: { keepKind?: boolean } = {}): void {
   if ((history.state as GridHistoryState | null)?.cineGrid) {
     // Si en la rejilla se cambió de tipo, la portada a la que se vuelve es la de ese tipo.
-    pendingHomeKind = {
-      kind: readCineState(location.search).kind,
-      until: Date.now() + PENDING_KIND_MS,
-    };
+    pendingHomeKind = keepKind
+      ? { kind: readCineState(location.search).kind, until: Date.now() + PENDING_KIND_MS }
+      : null;
     history.back();
     return;
   }
-  setCineState({ cat: null, tag: null, order: 'novedades', q: '' });
+  setCineState({
+    cat: null,
+    tag: null,
+    order: 'novedades',
+    q: '',
+    ...(keepKind ? {} : { kind: 'movie' as const }),
+  });
 }
 
 /**

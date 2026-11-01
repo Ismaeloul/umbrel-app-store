@@ -39,12 +39,14 @@ import {
   enterMatch,
   leaveSession,
   openPaste,
+  research,
   useSession,
 } from '../sources/session.ts';
 import { ChannelCenter } from './ChannelCenter.tsx';
 import { findMatch } from './find.ts';
-import { MatchHead } from './MatchHead.tsx';
+import { DeskMatchHead, MatchHead } from './MatchHead.tsx';
 import { Scoreboard } from './Scoreboard.tsx';
+import { SourcesSheet } from './SourcesSheet.tsx';
 import { MatchTabs } from './TheaterTabs.tsx';
 import './match-center.css';
 
@@ -55,6 +57,7 @@ function MatchSheets({ inMatch }: { inMatch: boolean }) {
   const pasteOpen = useSession((state) => state.pasteOpen);
   return (
     <>
+      <SourcesSheet />
       <ResolverSheet />
       <ReportSheet />
       {inMatch ? (
@@ -90,6 +93,20 @@ function MatchSkeleton() {
   );
 }
 
+/** «Rebuscar fuentes» a la derecha de las pestañas (escritorio: la lista va sin cabecera). */
+function ResearchButton() {
+  const researching = useSession((state) => state.researching);
+  return (
+    <IconButton
+      icon="refresh"
+      label={researching ? 'Rebuscando…' : 'Rebuscar fuentes'}
+      busy={researching}
+      className="mc-tabs__research"
+      onClick={() => void research()}
+    />
+  );
+}
+
 /** La cápsula del marcador: sobre el vídeo si hay escenario; si no, arriba de la vista. */
 function ScoreCapsuleSlot({ children }: { children: ReactNode }) {
   const slot = useStageSlot();
@@ -122,7 +139,9 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
 
   if (!match && schedule.isPending) return <MatchSkeleton />;
 
-  const desktop = layout.kind === 'desktop' || layout.kind === 'wide';
+  // Desde 768 la ficha lleva la cabecera de escritorio, las fuentes en filas
+  // (también en la tableta) y el vídeo, los controles «1B».
+  const desk = layout.kind !== 'mobile';
   const tabs = layout.asideVisible ? null : (
     <MatchTabs
       match={match}
@@ -130,7 +149,7 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
       now={now}
       channels={channels}
       today={today}
-      variant={desktop ? 'rack' : 'list'}
+      variant={desk ? 'line' : 'list'}
       className="mc-tabs--view"
       extra={
         layout.asideAvailable ? (
@@ -139,6 +158,8 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
             label="Mostrar el panel lateral"
             onClick={() => layout.setAsideOpen(true)}
           />
+        ) : desk ? (
+          <ResearchButton />
         ) : null
       }
     />
@@ -189,12 +210,18 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
       data-layout={layout.kind}
       data-aside={layout.asideVisible ? 'true' : 'false'}
     >
-      {active ? (
+      {/* En escritorio el vídeo va limpio (rediseño, pantalla 2): el marcador,
+          tapado como siempre, va junto al titular. */}
+      {active && !desk ? (
         <ScoreCapsuleSlot>
           <Scoreboard key={match.id} match={match} score={score} now={now} />
         </ScoreCapsuleSlot>
       ) : null}
-      <MatchHead match={match} score={score} now={now} />
+      {desk ? (
+        <DeskMatchHead key={match.id} match={match} score={score} now={now} active={active} />
+      ) : (
+        <MatchHead match={match} score={score} now={now} />
+      )}
       {tabs}
       <MatchSheets inMatch />
     </div>

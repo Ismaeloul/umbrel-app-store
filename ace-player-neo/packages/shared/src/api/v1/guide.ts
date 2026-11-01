@@ -22,7 +22,7 @@
 
 import { z } from 'zod';
 import { IPTV_GUIDE_API, IPTV_GUIDE_STORE, GUIDE_FLAGS_ALL } from '../../constants/guide.js';
-import { IPTV_NAME_MAX } from '../../constants/iptv.js';
+import { IPTV_NAME_MAX, IPTV_TYPES } from '../../constants/iptv.js';
 import { HashSchema, IsoDateTimeSchema } from '../../primitives.js';
 
 export const IPTV_GUIDE_SCOPES = ['favorites', 'all'] as const;
@@ -63,6 +63,13 @@ export const IptvGuideQuerySchema = z.strictObject({
   offset: z.coerce.number().int().min(0).max(1_000_000).optional(),
   /** Por defecto 200; `0` solo da el estado y los recuentos. */
   limit: z.coerce.number().int().min(0).max(IPTV_GUIDE_API.channelsPageMax).optional(),
+  /**
+   * Solo los canales de un tipo (§16.4, los mismos de la faceta de Canales),
+   * dentro del ámbito: los chips «Deportes», «Cine», «Noticias»… de la Guía
+   * de escritorio. `total` y `coveredFrom`/`coveredTo` son los de esas filas;
+   * `favorites` y `all` no cambian. Sin `fellBack`: un tipo sin canales es 0.
+   */
+  type: z.enum(IPTV_TYPES).optional(),
 });
 export type IptvGuideQuery = z.infer<typeof IptvGuideQuerySchema>;
 
@@ -229,7 +236,11 @@ export type IptvGuideProgrammeDetail = z.infer<typeof IptvGuideProgrammeDetailSc
 // --- iptvGuideNow: «ahora / después» para Canales ---
 
 export const IptvGuideNowQuerySchema = z.strictObject({
-  /** Ids IPTV de §4.1 separados por comas (100 como mucho): los de las filas de la pestaña IPTV. */
+  /**
+   * Ids separados por comas (100 como mucho): ids IPTV de §4.1 y también ids
+   * AceStream de tu biblioteca, que se emparejan por nombre con un canal de
+   * tu IPTV (≥ 92) para la tabla de Canales.
+   */
   ids: z
     .string()
     .regex(
@@ -246,6 +257,8 @@ export const IptvGuideNowItemSchema = z.strictObject({
   /** Lo que se emite ahora y lo siguiente; null si la guía no lo sabe. */
   now: IptvGuideProgrammeSchema.nullable(),
   next: IptvGuideProgrammeSchema.nullable(),
+  /** El canal de la guía tiene logo (`iptvGuideArt` con `c<guide>`); sin guía, no viene. */
+  logo: z.boolean().optional(),
 });
 export type IptvGuideNowItem = z.infer<typeof IptvGuideNowItemSchema>;
 

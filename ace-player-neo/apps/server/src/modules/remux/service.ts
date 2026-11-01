@@ -54,7 +54,18 @@
    directo pero contando en el tope de 3. `serveFile` sirve sus ficheros
    (la lista desde el índice con `EXT-X-START`; los segmentos, cuando el
    productor los tiene; 503 con `Retry-After: 1` si aún no). Al arrancar se
-   barren las carpetas `vod-*` que no son de nadie. */
+   barren las carpetas `vod-*` que no son de nadie.
+
+   «Calidad ligera para invitados» (docs/ver-juntos.md §17), con
+   `ACE_PARTY_LITE=1` y solo por la ruta de la sala (`party: true`):
+   `master.m3u8` y `lo.m3u8` salen del índice, como `index.m3u8`, y
+   `lo_init.mp4` y `lo_index<N>.m4s` de la `LiteRendition` de la sesión, que
+   se crea con la primera petición `lo_*`. Un `lo_index<N>` mueve el cursor
+   del productor (`touch`) y NUNCA se sirve con los bytes de la original (su
+   SPS no es el de `lo_init.mp4`): si no hay ligero, 503 o 404 y el
+   reproductor coge la original. Sus trabajos cuentan en `MAX_DEINTERLACE`
+   con el desentrelazado y la ligera del directo: el primero que llega se
+   queda la plaza, sin quitársela a nadie. */
 
 import { randomBytes } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
@@ -100,11 +111,23 @@ import { pickVodAudio } from './vod/audio.js';
 import { assertPlayable, readVodIndex, VodIndexCache } from './vod/index.js';
 import { VOD_DIR_PREFIX, VodProducer, sweepVodDirs } from './vod/producer.js';
 import { createHttpRangeReader } from './vod/reader.js';
+import { LiteRendition, liteOfferFor, liteVariantFor } from './vod/lite.js';
+import {
+  LITE_INIT_FILE,
+  LITE_PLAYLIST_FILE,
+  LITE_PREFIX,
+  VOD_MASTER_FILE,
+  buildVodMaster,
+  buildVodPlaylist,
+  liteSegmentIndexOf,
+} from './vod/playlist.js';
+import type { VodIndex } from './vod/types.js';
 import type {
   RemuxCloseReason,
   RemuxDeps,
   RemuxHandle,
   RemuxListener,
+  RemuxLiteOffer,
   RemuxProcess,
   RemuxService,
   RemuxSource,
@@ -115,6 +138,12 @@ export const READY_POLL_MS = 1000;
 
 /** Ficheros que genera ffmpeg y que sirve /api/v1/video (nunca un log); `init_<n>.mp4` tras un reinicio continuo. */
 const VIDEO_FILE_RE = /^(?:index\.m3u8|init(?:_\d{1,6})?\.mp4|index\d{1,9}\.m4s)$/;
+/**
+ * Los de la ruta de la sala (`partyVideo`): los de siempre más la lista maestra y la versión ligera de
+ * los invitados (docs/ver-juntos.md §17). Solo ahí: la ruta de vídeo de siempre nunca los sirve.
+ */
+export const PARTY_FILE_RE =
+  /^(?:index\.m3u8|init(?:_\d{1,6})?\.mp4|index\d{1,9}\.m4s|master\.m3u8|lo\.m3u8|lo_init\.mp4|lo_index\d{1,9}\.m4s)$/;
 
 /** Vigilante de salida de la IPTV (B3): cada cuánto se mira la lista. */
 export const IPTV_STALL_CHECK_MS = 2_000;
@@ -146,6 +175,17 @@ const STALE_GRACE_MIN_MS = 2_000;
 const STALE_GRACE_MAX_MS = 10_000;
 
 const LEGACY_PREFIX = '/remux/';
+
+/** Una sesión VOD abierta (docs/vod.md §9.7) y su versión ligera de «Ver juntos» (§17). */
+interface VodEntry {
+  readonly producer: VodProducer;
+  startS: number;
+  readonly index: VodIndex;
+  /** Tiene audio (siempre AAC-LC a la salida del productor). */
+  readonly audio: boolean;
+  /** Se crea con la primera petición `lo_*` (y solo con `ACE_PARTY_LITE=1`). */
+  lite: LiteRendition | null;
+}
 
 interface LegacyClient {
   readonly token: string;
@@ -313,8 +353,11 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const registry = new SerialLock();
   /* Sesiones a mitad de un restart/retarget: si entre medias no hay entrada, «aún no está» y no 410. */
   const replacing = new Map<string, number>();
-  /** Productores VOD por sesión (docs/vod.md §9.7) y dónde empieza su lista. */
-  const vods = new Map<string, { readonly producer: VodProducer; startS: number }>();
+  /**
+   * Productores VOD por sesión (docs/vod.md §9.7), dónde empieza su lista, su índice y audio (para
+   * la lista maestra) y la versión ligera de «Ver juntos» si alguien la ha pedido (§17).
+   */
+  const vods = new Map<string, VodEntry>();
   /**
    * Sesiones VOD a medio abrir: `VodProducer.open` lanza ffmpeg antes de que
    * la sesión entre en `vods`, y el recolector de huérfanos no debe matarlo.
@@ -328,6 +371,14 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       /* En Windows (solo desarrollo), «nice 10» se queda sin turno con la CPU llena. */
       ...(process.platform === 'win32' ? { niceness: 0 } : {}),
     });
+  const liteLauncher =
+    deps.liteLauncher ??
+    createSpawnLauncher({
+      stdout: 'pipe',
+      stdin: 'pipe',
+      ...(process.platform === 'win32' ? { niceness: 0 } : {}),
+    });
+  const partyLite = config.party.lite;
   let ffmpegMissing = false;
   let reaper: TimerHandle | null = null;
   let stallTimer: TimerHandle | null = null;
@@ -435,7 +486,48 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     let count = 0;
     for (const entry of byHash.values())
       if ((entry.deinterlace || entry.lite) && !entry.closed) count += 1;
+    /* La ligera de «Ver juntos» (§17) mientras tiene plaza (la suelta tras 60 s sin peticiones). */
+    for (const vod of vods.values()) if (vod.lite?.holdsSlot) count += 1;
     return count;
+  }
+
+  /** La versión ligera de la sesión: la de antes o una nueva (con la primera petición `lo_*`). */
+  function liteOf(sessionId: string, vod: VodEntry): LiteRendition | null {
+    if (!partyLite || ffmpegMissing) return null;
+    if (vod.lite) return vod.lite;
+    vod.lite = new LiteRendition(
+      {
+        clock,
+        logger,
+        launcher: liteLauncher,
+        redact,
+        slot: {
+          acquire: () => {
+            if (deinterlacing() < MAX_DEINTERLACE) return true;
+            logger.info(
+              { sessionId, max: MAX_DEINTERLACE },
+              'Ver juntos: sin plaza de recodificación para la calidad ligera',
+            );
+            return false;
+          },
+          /* La plaza es `holdsSlot`: soltarla no tiene más que hacer. */
+          release: () => undefined,
+        },
+        /* El fusible es de la sesión: nunca apaga nada del remux de siempre (ni `ffmpegMissing`). */
+      },
+      {
+        sessionId,
+        dir: path.join(remuxDir, `${VOD_DIR_PREFIX}${sessionId}`),
+        source: vod.producer,
+      },
+    );
+    return vod.lite;
+  }
+
+  /** Cierra la versión ligera (si la hay) y el productor de una entrada VOD. */
+  async function closeVodEntry(entry: VodEntry): Promise<void> {
+    await entry.lite?.close();
+    await entry.producer.close();
   }
 
   function wantsLite(source: RemuxSource): boolean {
@@ -1003,16 +1095,25 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   async function serveVodFile(
     reply: FastifyReply,
     sessionId: string,
-    vod: { readonly producer: VodProducer; readonly startS: number },
+    vod: VodEntry,
     file: string,
     options: {
       readonly rangeHeader?: string;
       readonly head?: boolean;
       readonly videoToken?: string;
       readonly deviceId?: string | null;
+      readonly party?: boolean;
     },
   ): Promise<void> {
-    if (!VIDEO_FILE_RE.test(file)) throw new AppError('not_found');
+    const allowed = options.party ? PARTY_FILE_RE : VIDEO_FILE_RE;
+    if (!allowed.test(file)) throw new AppError('not_found');
+    const liteName =
+      file === VOD_MASTER_FILE || file === LITE_PLAYLIST_FILE || file.startsWith(LITE_PREFIX);
+    if (liteName && !partyLite) {
+      /* Con `ACE_PARTY_LITE` apagado no existe nada de la versión ligera (§17). */
+      await sendBare(reply, 404, { 'cache-control': 'no-store' });
+      return;
+    }
     /* Pedir ficheros cuenta como actividad del visor (latido). */
     for (const listener of [...listeners]) {
       try {
@@ -1023,10 +1124,23 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     }
     const dir = path.join(remuxDir, `${VOD_DIR_PREFIX}${sessionId}`);
     const send = { rangeHeader: options.rangeHeader, head: options.head };
-    if (file === 'index.m3u8') {
-      const text = vod.producer.playlist(vod.startS > 0 ? vod.startS : undefined);
+    if (file === 'index.m3u8' || file === VOD_MASTER_FILE || file === LITE_PLAYLIST_FILE) {
+      const startS = vod.startS > 0 ? vod.startS : undefined;
+      const text =
+        file === VOD_MASTER_FILE
+          ? buildVodMaster({ index: vod.index, plan: vod.producer.plan, audio: vod.audio })
+          : file === LITE_PLAYLIST_FILE
+            ? buildVodPlaylist(vod.producer.plan, {
+                ...(startS === undefined ? {} : { startS }),
+                prefix: LITE_PREFIX,
+              })
+            : vod.producer.playlist(startS);
       const body = options.videoToken ? rewritePlaylist(text, options.videoToken) : text;
       await sendBuffer(reply, path.join(dir, file), Buffer.from(body), send);
+      return;
+    }
+    if (file.startsWith(LITE_PREFIX)) {
+      await serveLiteFile(reply, sessionId, vod, file, send);
       return;
     }
     const controller = new AbortController();
@@ -1046,6 +1160,50 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     if (result.kind === 'not_yet') {
       /* Aún no está: hls.js reintenta (la app nativa, el 404 de siempre con Retry-After). */
       await sendBare(reply, options.videoToken ? 404 : 503, { ...NOT_YET_HEADERS });
+      return;
+    }
+    await sendBare(reply, 404, { 'cache-control': 'no-store' });
+  }
+
+  /**
+   * `lo_init.mp4` o `lo_index<N>.m4s` (§17). El segmento cuenta como pedir `index<N>.m4s` para el
+   * productor (`touch`: el cursor es uno); lo que se sirve sale SIEMPRE de la versión ligera.
+   */
+  async function serveLiteFile(
+    reply: FastifyReply,
+    sessionId: string,
+    vod: VodEntry,
+    file: string,
+    send: { readonly rangeHeader?: string | undefined; readonly head?: boolean | undefined },
+  ): Promise<void> {
+    const segment = liteSegmentIndexOf(file);
+    if (segment !== null) vod.producer.touch(segment);
+    const lite = liteOf(sessionId, vod);
+    if (!lite || lite.tripped) {
+      await sendBare(reply, 404, { 'cache-control': 'no-store' });
+      return;
+    }
+    const controller = new AbortController();
+    const onClose = (): void => controller.abort();
+    reply.raw.once('close', onClose);
+    let result: Awaited<ReturnType<LiteRendition['segmentFile']>>;
+    try {
+      result =
+        file === LITE_INIT_FILE
+          ? await lite.initFile(controller.signal)
+          : segment !== null
+            ? await lite.segmentFile(segment, controller.signal)
+            : { kind: 'missing' };
+    } finally {
+      reply.raw.off('close', onClose);
+    }
+    if (reply.raw.destroyed) return;
+    if (result.kind === 'file') {
+      await sendFile(reply, result.path, send);
+      return;
+    }
+    if (result.kind === 'not_yet') {
+      await sendBare(reply, 503, { ...NOT_YET_HEADERS });
       return;
     }
     await sendBare(reply, 404, { 'cache-control': 'no-store' });
@@ -1275,7 +1433,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         const previous = vods.get(request.sessionId);
         if (previous) {
           vods.delete(request.sessionId);
-          await previous.producer.close();
+          await closeVodEntry(previous);
         }
         await makeRoomLocked();
         /* «Arrancando» antes de lanzar ffmpeg: el recolector no lo toma por huérfano. */
@@ -1304,7 +1462,13 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
               startS,
             },
           );
-          vods.set(request.sessionId, { producer, startS });
+          vods.set(request.sessionId, {
+            producer,
+            startS,
+            index,
+            audio: audio !== null,
+            lite: null,
+          });
         } finally {
           vodOpening.delete(request.sessionId);
         }
@@ -1336,7 +1500,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         const entry = vods.get(sessionId);
         if (!entry) return;
         vods.delete(sessionId);
-        await entry.producer.close();
+        await closeVodEntry(entry);
       });
     },
 
@@ -1347,6 +1511,35 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
 
     vodStats(sessionId) {
       return vods.get(sessionId)?.producer.stats() ?? null;
+    },
+
+    vodLiteOffer(sessionId, hevcOk): RemuxLiteOffer | null {
+      const vod = vods.get(sessionId);
+      if (!vod || stopped) return null;
+      return liteOfferFor({
+        enabled: partyLite,
+        ffmpegMissing,
+        tripped: vod.lite?.tripped != null,
+        /* Sin plaza, la original: el primero que llegó se la queda (nunca se le quita a nadie). */
+        slot: vod.lite?.holdsSlot === true || deinterlacing() < MAX_DEINTERLACE,
+        index: vod.index,
+        hevcOk,
+      });
+    },
+
+    async vodLiteCovers(titleId, sessionId) {
+      if (!partyLite || ffmpegMissing || stopped) return false;
+      /* La sesión de la sala, si ya la hay: con su ligera fundida no salva a nadie, y si ya tiene
+         su plaza no hace falta otra (lo mismo que mira `vodLiteOffer`). */
+      const vod = sessionId ? vods.get(sessionId) : undefined;
+      if (vod?.lite?.tripped != null) return false;
+      if (vod?.lite?.holdsSlot !== true && deinterlacing() >= MAX_DEINTERLACE) return false;
+      const cached = vodIndexes.peek(titleId);
+      if (!cached) return false;
+      const index = await cached.catch(() => null);
+      return (
+        index !== null && index.video.codec === 'hevc' && liteVariantFor(index, false) === 'lite'
+      );
     },
 
     async detach(sessionId, viewerId) {
@@ -1496,7 +1689,12 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     },
 
     stats() {
-      return { sessions: byHash.size, max: MAX_REMUX_SESSIONS, ffmpegMissing };
+      const base = { sessions: byHash.size, max: MAX_REMUX_SESSIONS, ffmpegMissing };
+      if (!partyLite) return base;
+      const lites = [...vods].flatMap(([sessionId, vod]) =>
+        vod.lite ? [{ sessionId, ...vod.lite.status() }] : [],
+      );
+      return { ...base, partyLite: lites };
     },
 
     async stopAll() {
@@ -1505,7 +1703,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         for (const entry of [...byHash.values()]) await closeLocked(entry, 'shutdown', true);
         for (const [sessionId, entry] of [...vods]) {
           vods.delete(sessionId);
-          await entry.producer.close();
+          await closeVodEntry(entry);
         }
       });
     },

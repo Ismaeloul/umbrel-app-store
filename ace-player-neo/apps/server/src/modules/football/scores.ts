@@ -35,7 +35,11 @@ function flat(value: unknown): string {
 }
 
 /* Competición tal como la rotula futbolenlatv → código de liga en ESPN
-   (server.js:2111-2141). Todos comprobados uno por uno contra el endpoint. */
+   (server.js:2111-2141). Todos comprobados uno por uno contra el endpoint.
+   Con los rótulos de futbolenlatv.es de 2026-11: «2. Bundesliga» es la
+   segunda alemana y «2. Liga» la segunda AUSTRIACA (FC Liefering, Amstetten…),
+   que se queda sin código: aut.2 responde pero sin partidos y gastaría una de
+   las ligas por consulta. Las claves antiguas siguen como alias. */
 const ESPN_LEAGUES: Readonly<Record<string, readonly string[]>> = {
   'la liga ea sports': ['esp.1'],
   laliga: ['esp.1'],
@@ -47,12 +51,13 @@ const ESPN_LEAGUES: Readonly<Record<string, readonly string[]>> = {
   'serie a italiana': ['ita.1'],
   'serie b italiana': ['ita.2'],
   bundesliga: ['ger.1'],
-  '2. liga': ['ger.2'],
+  '2. bundesliga': ['ger.2'],
   'copa de alemania': ['ger.dfb_pokal'],
   'francia ligue 1': ['fra.1'],
   'ligue 1': ['fra.1'],
   eredivisie: ['ned.1'],
   'primeira liga': ['por.1'],
+  'liga portuguesa': ['por.1'],
   mls: ['usa.1'],
   'primera division argentina': ['arg.1'],
   'serie a brasil': ['bra.1'],
@@ -63,7 +68,10 @@ const ESPN_LEAGUES: Readonly<Record<string, readonly string[]>> = {
   'conference league': ['uefa.europa.conf'],
   'liga mx': ['mex.1'],
   'primera a colombia': ['col.1'],
+  'liga colombiana': ['col.1'],
   'primera division uruguay': ['uru.1'],
+  'liga auf uruguaya': ['uru.1'],
+  'uefa nations league': ['uefa.nations'],
   'premiership escocesa': ['sco.1'],
   'superliga turca': ['tur.1'],
 };
@@ -144,11 +152,18 @@ export function bestTeamSimilarity(mine: unknown, side: unknown): number {
   );
 }
 
-/* ESPN indexa por SU fecha: se pide de ayer a mañana (server.js:2212-2216). */
-export function espnDateRange(now: number): string {
+/* ESPN indexa por SU fecha (la de la costa este de EE. UU.). Antes se pedía
+   «de ayer a mañana» de una vez (server.js:2212-2216), pero desde octubre de
+   2026 ESPN contesta 400 a un intervalo de fechas y no salía ningún marcador:
+   ahora se piden sueltos los días que tocan la ventana de los partidos
+   (de 3 h 30 min antes a 15 min después de ahora), contados con 6 h de
+   margen para el desfase de su fecha. Casi siempre es uno; a lo sumo, dos. */
+export function espnDays(now: number): string[] {
   const stamp = (ms: number): string => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '');
-  const day = 24 * 60 * 60 * 1000;
-  return `${stamp(now - day)}-${stamp(now + day)}`;
+  const lag = 6 * 60 * 60 * 1000;
+  const from = now - SCORES_WINDOW_AFTER_MS;
+  const to = now + SCORES_WINDOW_BEFORE_MS;
+  return [...new Set([stamp(from - lag), stamp(from), stamp(to - lag), stamp(to)])].sort();
 }
 
 /** Evento de ESPN ya leído (`readEspnEvent`). */
@@ -231,18 +246,24 @@ export interface ScoresContext {
  * sola descarga a la vez y, si falla, la última respuesta (una liga caída no
  * tumba el resto del marcador).
  */
-export function fetchEspnLeague(
+/** Los eventos de una liga en esos días de ESPN (uno por petición), juntos. */
+export async function fetchEspnLeague(
   ctx: ScoresContext,
   league: string,
-  range: string,
+  days: readonly string[],
 ): Promise<unknown[]> {
-  const key = `${league}@${range}`;
+  const lists = await Promise.all(days.map((day) => fetchEspnDay(ctx, league, day)));
+  return lists.flat();
+}
+
+function fetchEspnDay(ctx: ScoresContext, league: string, day: string): Promise<unknown[]> {
+  const key = `${league}@${day}`;
   const entry = ctx.cache.get(key);
   if (entry && entry.payload && ctx.now() < entry.expiresAt) return Promise.resolve(entry.payload);
   if (entry && entry.pending) return entry.pending;
 
   const pending = ctx
-    .fetchText(`${ESPN_BASE}/${league}/scoreboard?dates=${range}`, {
+    .fetchText(`${ESPN_BASE}/${league}/scoreboard?dates=${day}`, {
       totalTimeoutMs: SCORES_FETCH_MS,
       maxBytes: SCORES_MAX_BYTES,
     })
@@ -287,6 +308,37 @@ export type LegacyScores =
  * sin agenda). Solo partidos en su ventana y con liga conocida; como mucho 8
  * ligas; empareja por saque (±45 min) y nombres (media ≥ 0,5 y uno ≥ 0,6).
  */
+/* Las que se piden antes cuando hay más de SCORES_MAX_LEAGUES ligas en juego. */
+const PRIORITY_LEAGUES: readonly string[] = [
+  'esp.1',
+  'uefa.champions',
+  'eng.1',
+  'uefa.europa',
+  'esp.copa_del_rey',
+  'ita.1',
+  'ger.1',
+  'fra.1',
+  'esp.2',
+  'uefa.europa.conf',
+];
+
+/**
+ * Ligas de ESPN sin repetir: primero las grandes y luego por cuántos partidos
+ * traen. Un sábado con 50 ligas en la agenda, en el orden de llegada LaLiga
+ * se quedaba fuera de las 8 que se piden y su resultado no salía nunca.
+ */
+export function scoreLeaguesByPriority(leagues: readonly string[]): string[] {
+  const count = new Map<string, number>();
+  for (const league of leagues) count.set(league, (count.get(league) ?? 0) + 1);
+  const rank = (league: string) => {
+    const index = PRIORITY_LEAGUES.indexOf(league);
+    return index < 0 ? PRIORITY_LEAGUES.length : index;
+  };
+  return [...count.keys()].sort(
+    (a, b) => rank(a) - rank(b) || (count.get(b) ?? 0) - (count.get(a) ?? 0),
+  );
+}
+
 export async function computeLiveScores(
   ctx: ScoresContext & { readonly nowIso: () => string },
   schedule: unknown,
@@ -304,14 +356,14 @@ export async function computeLiveScores(
     return { success: true, generatedAt: ctx.nowIso(), source: 'espn', leagues: 0, scores: {} };
   }
 
-  const wanted = [...new Set(candidates.flatMap((entry) => entry.leagues))].slice(
+  const wanted = scoreLeaguesByPriority(candidates.flatMap((entry) => entry.leagues)).slice(
     0,
     SCORES_MAX_LEAGUES,
   );
-  const range = espnDateRange(now);
+  const days = espnDays(now);
   const fetched = await Promise.all(
     wanted.map((league) =>
-      fetchEspnLeague(ctx, league, range).then((events) => [league, events] as const),
+      fetchEspnLeague(ctx, league, days).then((events) => [league, events] as const),
     ),
   );
   const byLeague = new Map<string, unknown[]>(fetched);

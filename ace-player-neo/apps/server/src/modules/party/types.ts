@@ -16,21 +16,33 @@ import type {
   PartyControlBody,
   PartyCreateBody,
   PartyJoinResponse,
+  PartyList,
   PartyMemberBody,
   PartyPreview,
   PartyQueueBody,
-  PartyReactBody,
   PartySettingsBody,
   PartyStatusBody,
   PartyStatusResponse,
+  PartyStreamGrant,
   PartyStreamQuery,
-  VodGrant,
 } from '@ace/shared';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { PlaybackService, ViewerIdentity } from '../playback/types.js';
+import type { RemuxService } from '../remux/types.js';
 
 export interface PartyDeps extends CoreDeps {
-  readonly playback: Pick<PlaybackService, 'acquireVod' | 'heartbeat' | 'release'>;
+  readonly playback: Pick<PlaybackService, 'acquire' | 'acquireVod' | 'heartbeat' | 'release'>;
+  /**
+   * La calidad ligera de los invitados (docs/ver-juntos.md §17). Sin él (tests viejos), nadie la
+   * recibe: `index.m3u8` como siempre.
+   */
+  readonly remux?: Pick<RemuxService, 'vodLiteOffer' | 'vodLiteCovers'>;
+}
+
+/** De dónde viene la petición de `partyStream`. */
+export interface PartyStreamOptions {
+  /** Entró por el proxy de la sala (`X-Ace-Origin: guest`, §9): un invitado de fuera. */
+  readonly guest?: boolean;
 }
 
 /** Lo mínimo de `http.ServerResponse` que usa el SSE de la sala (los tests pasan uno falso). */
@@ -64,18 +76,24 @@ export interface PartyService extends Lifecycle {
     query: PartyStreamQuery,
     viewer: ViewerIdentity,
     signal: AbortSignal,
-  ): Promise<VodGrant>;
+    options?: PartyStreamOptions,
+  ): Promise<PartyStreamGrant>;
   /** La sesión de vídeo de la persona con esta clave (`partyVideo`). */
   videoSession(code: string, key: string): string;
   control(code: string, body: PartyControlBody): PartyStatusResponse;
   status(code: string, body: PartyStatusBody): Promise<PartyStatusResponse>;
   chat(code: string, body: PartyChatBody): void;
-  /** Reacciones, líder, ajustes y lista (docs/ver-juntos.md §11). */
-  react(code: string, body: PartyReactBody): void;
+  /** «Está escribiendo» (§13): se reenvía a la sala, como mucho uno cada `typingIntervalMs`. */
+  typing(code: string, token: string): void;
+  /** Líder, co-líderes, ajustes y lista (docs/ver-juntos.md §11 y §13). */
   settings(code: string, body: PartySettingsBody): void;
   member(code: string, body: PartyMemberBody): void;
   queue(code: string, body: PartyQueueBody): void;
   leave(code: string, token: string): void;
   close(code: string, token: string): void;
+  /** Las salas abiertas (`partyList`, solo la web de casa). */
+  list(): PartyList;
+  /** Cerrar una sala desde casa, sin su credencial (`partyEnd`). */
+  end(code: string): void;
   health(): PartyHealth;
 }

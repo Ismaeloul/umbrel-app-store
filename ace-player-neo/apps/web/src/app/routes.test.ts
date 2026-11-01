@@ -10,6 +10,8 @@ import {
   routeDepth,
   sameRoute,
   searchFor,
+  sideParent,
+  sideVistas,
   viewParams,
   VISTA_PARAMS,
   VISTA_TITLE,
@@ -218,12 +220,29 @@ describe('sala (docs/vod.md §12.2 y §12.8)', () => {
 
 describe('juntos («Ver juntos», docs/ver-juntos.md §7)', () => {
   const CODE = 'k3J9xQ2mZpL8wR4t';
-  it('`juntos/<código>` respeta mayúsculas; un código que no vale lleva a la portada de cine', () => {
+  it('`juntos/<código>` respeta mayúsculas; sin un código que valga, la portada de «Ver juntos»', () => {
     expect(parseVista(`juntos/${CODE}`)).toEqual({ vista: 'juntos', code: CODE });
-    expect(parseVista('juntos/corto')).toEqual({ vista: 'cine', id: null });
-    expect(parseVista(`juntos/${CODE}x`)).toEqual({ vista: 'cine', id: null });
+    expect(parseVista('juntos')).toEqual({ vista: 'juntos', code: null });
+    expect(parseVista('juntos/corto')).toEqual({ vista: 'juntos', code: null });
+    expect(parseVista(`juntos/${CODE}x`)).toEqual({ vista: 'juntos', code: null });
     expect(formatVista({ vista: 'juntos', code: CODE })).toBe(`juntos/${CODE}`);
+    expect(formatVista({ vista: 'juntos', code: null })).toBe('juntos');
     expect(routeDepth({ vista: 'juntos', code: CODE })).toBe(12);
     expect(navParent('juntos')).toBe('cine');
+  });
+});
+
+describe('menú lateral (escritorio)', () => {
+  it('Agenda, Canales, Guía, Pelis y series (con VOD) y Ver juntos; Ajustes va aparte', () => {
+    expect(sideVistas({ vod: true })).toEqual(['agenda', 'biblioteca', 'guia', 'cine', 'juntos']);
+    expect(sideVistas({ vod: false })).toEqual(['agenda', 'biblioteca', 'guia', 'juntos']);
+  });
+
+  it('el partido es de la Agenda y la sala de una peli, de Pelis y series', () => {
+    expect(sideParent('partido')).toBe('agenda');
+    expect(sideParent('sala')).toBe('cine');
+    expect(sideParent('guia')).toBe('guia');
+    expect(sideParent('juntos')).toBe('juntos');
+    expect(sideParent('buscar')).toBeNull();
   });
 });

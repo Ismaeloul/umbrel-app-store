@@ -133,7 +133,7 @@ describe('vista Agenda', () => {
       'polite',
     );
     expect(within(live).getByText('Tu equipo')).toBeInTheDocument();
-    expect(screen.getByText('futbolenlatv.com', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('futbolenlatv.es', { exact: false })).toBeInTheDocument();
     expect(screen.getByText(/horario peninsular/)).toBeInTheDocument();
   });
 
@@ -176,7 +176,7 @@ describe('vista Agenda', () => {
       );
       const view = renderAgenda();
       expect(await screen.findByText(text)).toBeInTheDocument();
-      expect(screen.getByText('Datos: futbolenlatv.com')).toBeInTheDocument();
+      expect(screen.getByText('Datos: futbolenlatv.es')).toBeInTheDocument();
       view.unmount();
     }
   });
@@ -491,200 +491,231 @@ describe('vista Agenda', () => {
     expect(net.calls.some((call) => call.url.startsWith('/api/v1/scores'))).toBe(false);
   });
 
-  it('escritorio: sin héroe; el panel enseña el destacado y un clic en otra tarjeta la lleva allí', async () => {
+  it('escritorio: al entrar NADA abierto (sin destacado); lista con pestañas, día y píldoras', async () => {
     net = mockFetch(routes());
     renderAgenda('desktop');
-    // Toda la página es el calendario: ni héroe ni su esqueleto.
-    const side = await screen.findByRole('complementary', { name: 'Partido elegido' });
+    const side = await screen.findByRole('complementary', { name: 'Detalle del partido' });
     expect(document.querySelector('.agenda-hero')).toBeNull();
-    expect(document.querySelector('.agenda')).not.toHaveClass('has-hero');
-    expect(screen.queryByRole('region', { name: 'Real Madrid vs Girona' })).toBeNull();
-    // El elegido de entrada es el destacado (tu equipo en directo), con su canal.
-    expect(
-      await within(side).findByRole('heading', { name: 'Real Madrid vs Girona' }),
-    ).toBeInTheDocument();
-    expect(within(side).getByText('M+ Liga de Campeones')).toBeInTheDocument();
-    expect(
-      within(side).getByRole('button', { name: `Buscar canal para ${LIVE.title}` }),
-    ).toBeInTheDocument();
-    // Y su tarjeta de la lista va marcada como elegida.
-    expect(within(rows()).getByRole('button', { name: /^Real Madrid vs Girona/ })).toHaveAttribute(
-      'aria-current',
+    // Ningún partido elegido: la invitación y el resumen del día, nunca el destacado.
+    expect(within(side).getByRole('heading', { name: 'Elige un partido' })).toBeInTheDocument();
+    expect(within(side).queryByRole('heading', { name: 'Real Madrid vs Girona' })).toBeNull();
+    expect(within(side).queryByRole('button', { name: /^Ver partido/ })).toBeNull();
+    await waitFor(() =>
+      expect(side.querySelector('.agenda-detail__summary')).toHaveTextContent(
+        /^Hoy: 3 partidos1 en directo$/,
+      ),
+    );
+    expect(document.querySelector('.desk-row[aria-current="true"]')).toBeNull();
+    // La barra, la misma que con un partido abierto (título y buscador):
+    // «Editar mis gustos» y «Actualizar» van al pie del detalle.
+    const bar = document.querySelector('.agenda-head') as HTMLElement;
+    expect(within(bar).queryByRole('button', { name: 'Editar mis gustos' })).toBeNull();
+    expect(within(bar).queryByRole('button', { name: /^Actualizar agenda/ })).toBeNull();
+    expect(within(side).getByRole('button', { name: 'Editar mis gustos' })).toBeInTheDocument();
+    expect(within(side).getByRole('button', { name: /^Actualizar agenda/ })).toBeInTheDocument();
+    // Pestañas «Todo» / «Para ti», el día en su píldora y las píldoras de estado.
+    const tabs = screen.getByRole('group', { name: 'Qué partidos ver' });
+    expect(within(tabs).getByRole('button', { name: /^Todo/ })).toHaveAttribute(
+      'aria-pressed',
       'true',
     );
-    fireEvent.click(screen.getByRole('radio', { name: /Todos/ }));
-    // Con otro filtro la lista se vuelve a montar: se busca otra vez.
-    const list = rows();
-    fireEvent.click(await within(list).findByRole('button', { name: /^Arsenal vs Chelsea/ }));
-    expect(
-      await within(side).findByRole('heading', { name: 'Arsenal vs Chelsea' }),
-    ).toBeInTheDocument();
-    expect(
-      within(side).getByRole('button', { name: `Ver canal para ${SOON.title}` }),
-    ).toBeInTheDocument();
-    // Volver a elegir el destacado lo vuelve a enseñar (antes el panel desaparecía).
-    fireEvent.click(within(list).getByRole('button', { name: /^Real Madrid vs Girona/ }));
-    expect(
-      await within(side).findByRole('heading', { name: 'Real Madrid vs Girona' }),
-    ).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Día' })).getByText('Hoy')).toBeInTheDocument();
+    const pills = screen.getByRole('group', { name: 'Filtrar partidos' });
+    expect(within(pills).getByRole('button', { name: 'En directo: 1' })).toBeInTheDocument();
+    expect(within(pills).getByRole('button', { name: 'Terminados' })).toBeInTheDocument();
+    expect(within(pills).getByRole('button', { name: 'Próximos' })).toBeInTheDocument();
+    // Filas compactas agrupadas por competición (con su país); el directo
+    // enseña su marcador (no es el que estás viendo: Isma, 1-11-2026).
+    const liveRow = await screen.findByRole('button', {
+      name: /^Real Madrid contra Girona, en directo/,
+    });
+    const premier = screen.getByRole('region', { name: 'Premier League' });
+    expect(within(premier).getByText('Inglaterra')).toBeInTheDocument();
+    await waitFor(() => expect(liveRow.querySelector('.desk-row__score--live')).not.toBeNull());
+    // El lector de pantalla oye el minuto, el marcador, el canal y la señal
+    // (el nombre del botón son solo los equipos y el estado).
+    await waitFor(() =>
+      expect(liveRow).toHaveAccessibleDescription(
+        /^Minuto 54\. Marcador: 2 a 1\. En M\+ Liga de Campeones\. .+/,
+      ),
+    );
   });
 
-  it('el partido de TUS EQUIPOS (no el de tus ligas) lleva el aura en la lista y en «Luego»', async () => {
-    const mineLater = matchAt(45, {
-      home: 'Real Madrid',
-      away: 'Valencia',
+  it('escritorio: un clic ELIGE (detalle a la derecha, sin navegar); «Ver partido» lo abre y la X lo cierra', async () => {
+    net = mockFetch(routes());
+    renderAgenda('desktop');
+    const row = await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    fireEvent.click(row);
+    expect(location.search).not.toContain('vista=partido');
+    expect(row).toHaveAttribute('aria-current', 'true');
+    const side = screen.getByRole('complementary', { name: 'Detalle del partido' });
+    const detail = within(side).getByRole('article', { name: 'Real Madrid vs Girona' });
+    // Migas «País › Competición», los dos equipos y, en directo, el minuto.
+    expect(detail.querySelector('.agenda-detail__crumbs')).toHaveTextContent(
+      'EuropaChampions League',
+    );
+    expect(within(detail).getByText('Real Madrid')).toBeInTheDocument();
+    expect(within(detail).getByText('Girona')).toBeInTheDocument();
+    expect(await within(detail).findByText("54'")).toBeInTheDocument();
+    // El marcador, A LA VISTA sin tocar nada: no es el partido que estás viendo.
+    expect(within(detail).getByLabelText('Marcador: 2 a 1')).toBeInTheDocument();
+    expect(within(detail).queryByRole('button', { name: /^Ver marcador/ })).toBeNull();
+    // «Dónde se ve»: los canales en filas y «Ver juntos».
+    expect(within(detail).getByRole('heading', { name: 'Dónde se ve' })).toBeInTheDocument();
+    expect(
+      within(detail).getByRole('button', { name: /M\+ Liga de Campeones/ }),
+    ).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Ver juntos' })).toBeEnabled();
+    // La X cierra el detalle: vuelve la invitación y el foco, a la fila.
+    fireEvent.click(within(detail).getByRole('button', { name: 'Cerrar el detalle' }));
+    expect(within(side).getByRole('heading', { name: 'Elige un partido' })).toBeInTheDocument();
+    expect(row).not.toHaveAttribute('aria-current');
+    await waitFor(() => expect(row).toHaveFocus());
+    // Escape también lo cierra (y devuelve el foco a la fila).
+    fireEvent.click(row);
+    expect(
+      within(side).getByRole('article', { name: 'Real Madrid vs Girona' }),
+    ).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(within(side).getByRole('heading', { name: 'Elige un partido' })).toBeInTheDocument();
+    await waitFor(() => expect(row).toHaveFocus());
+    // Otro partido y «Ver partido»: el centro de partido con el vídeo.
+    fireEvent.click(screen.getByRole('button', { name: /^Arsenal contra Chelsea/ }));
+    fireEvent.click(within(side).getByRole('button', { name: 'Ver partido: Arsenal vs Chelsea' }));
+    await waitFor(() => expect(location.search).toContain(`vista=partido/${SOON.id}`));
+  });
+
+  it('escritorio: doble clic, Intro o la O abren el partido; sin canal, «Ver partido» no se puede y avisa', async () => {
+    net = mockFetch(routes());
+    renderAgenda('desktop');
+    const soon = await screen.findByRole('button', { name: /^Arsenal contra Chelsea/ });
+    fireEvent.doubleClick(soon);
+    await waitFor(() => expect(location.search).toContain(`vista=partido/${SOON.id}`));
+    history.replaceState(null, '', '/?vista=agenda');
+    const live = screen.getByRole('button', { name: /^Real Madrid contra Girona/ });
+    fireEvent.keyDown(live, { key: 'Enter' });
+    await waitFor(() => expect(location.search).toContain(`vista=partido/${LIVE.id}`));
+    history.replaceState(null, '', '/?vista=agenda');
+    // O: abre el elegido.
+    fireEvent.click(soon);
+    fireEvent.keyDown(window, { key: 'o' });
+    await waitFor(() => expect(location.search).toContain(`vista=partido/${SOON.id}`));
+    history.replaceState(null, '', '/?vista=agenda');
+    // Sin canal: el detalle lo dice y «Ver partido» no se puede; Intro avisa.
+    const none = screen.getByRole('button', { name: /^Getafe contra Elche/ });
+    fireEvent.click(none);
+    const side = screen.getByRole('complementary', { name: 'Detalle del partido' });
+    expect(within(side).getByText('Sin canal anunciado todavía.')).toBeInTheDocument();
+    expect(within(side).getByRole('button', { name: 'Ver partido' })).toBeDisabled();
+    fireEvent.keyDown(none, { key: 'Enter' });
+    expect(toastStore.get().map((t) => t.text)).toContain('El canal todavía no está anunciado');
+    expect(location.search).not.toContain('vista=partido');
+  });
+
+  it('escritorio: píldoras «En directo», «Terminados» y «Próximos» y plegar un grupo', async () => {
+    const DONE = matchAt(-240, {
+      home: 'Osasuna',
+      away: 'Alavés',
       competition: 'LaLiga',
-      channels: [{ id: 'd', name: 'DAZN LaLiga' }],
-    });
-    const leagueOnly = matchAt(15, {
-      home: 'Betis',
-      away: 'Osasuna',
-      competition: 'LaLiga',
-      channels: [{ id: 'e', name: 'M+ LaLiga' }],
+      channels: [{ id: 'c', name: 'DAZN LaLiga' }],
     });
     net = mockFetch(
       routes({
-        'GET /api/v1/football': scheduleOf({ [TODAY]: [LIVE, leagueOnly, mineLater, SOON] }),
+        'GET /api/v1/football': scheduleOf({ [TODAY]: [LIVE, SOON, NO_CHANNEL, DONE] }),
       }),
     );
     renderAgenda('desktop');
-    const list = await screen.findByRole('region', { name: 'Partidos' });
-    const row = (id: string) => list.querySelector(`[data-match="${id}"]`);
-    await waitFor(() => expect(row(LIVE.id)).toHaveClass('is-mine'));
-    expect(row(mineLater.id)).toHaveClass('is-mine');
-    // LaLiga es una de tus ligas, pero el aura es solo para tus equipos.
-    expect(row(leagueOnly.id)).not.toHaveClass('is-mine');
-    // «Luego» se queda, con el de tu equipo resaltado igual.
-    const side = screen.getByRole('complementary', { name: 'Partido elegido' });
-    const later = side.querySelector('.agenda-later') as HTMLElement;
-    expect(within(later).getByRole('heading', { name: 'Luego' })).toBeInTheDocument();
-    expect(later.querySelector(`[data-match="${mineLater.id}"]`)).toHaveClass('is-mine');
-    expect(later.querySelector(`[data-match="${leagueOnly.id}"]`)).not.toHaveClass('is-mine');
+    await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    const pills = screen.getByRole('group', { name: 'Filtrar partidos' });
+    const shownRows = () =>
+      [...document.querySelectorAll('.desk-row')].map((row) =>
+        row.getAttribute('aria-label')?.replace(/ contra .*/, ''),
+      );
+    fireEvent.click(within(pills).getByRole('button', { name: 'En directo: 1' }));
+    await waitFor(() => expect(shownRows()).toEqual(['Real Madrid']));
+    fireEvent.click(within(pills).getByRole('button', { name: 'Terminados' }));
+    await waitFor(() => expect(shownRows()).toEqual(['Osasuna']));
+    // El terminado dice «Final» bajo la hora.
+    expect(document.querySelector('.desk-row__state')).toHaveTextContent('Final');
+    fireEvent.click(within(pills).getByRole('button', { name: 'Próximos' }));
+    await waitFor(() => expect(shownRows().sort()).toEqual(['Arsenal', 'Getafe']));
+    // Otro toque en la misma píldora la quita: todos otra vez.
+    fireEvent.click(within(pills).getByRole('button', { name: 'Próximos' }));
+    await waitFor(() => expect(shownRows()).toHaveLength(4));
+    // Plegar un grupo esconde sus filas; desplegarlo las devuelve.
+    const laliga = screen.getByRole('region', { name: 'LaLiga' });
+    const fold = within(laliga).getByRole('button', { name: 'Plegar LaLiga' });
+    expect(fold).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(fold);
+    expect(within(laliga).queryByRole('button', { name: /^Getafe contra Elche/ })).toBeNull();
+    fireEvent.click(within(laliga).getByRole('button', { name: 'Desplegar LaLiga' }));
+    expect(
+      within(laliga).getByRole('button', { name: /^Getafe contra Elche/ }),
+    ).toBeInTheDocument();
   });
 
-  it('pantalla ancha: «En directo» con el marcador junto al minuto; tocar CUALQUIER directo enseña su canal abajo', async () => {
-    const otherLive = matchAt(-30, {
-      home: 'Girona',
-      away: 'Sevilla',
-      competition: 'LaLiga',
-      channels: [{ id: 'f', name: 'DAZN 1' }],
-    });
-    net = mockFetch(
-      routes({
-        'GET /api/v1/football': scheduleOf({ [TODAY]: [LIVE, otherLive, SOON] }),
-        'GET /api/v1/scores': {
-          available: true,
-          generatedAt: new Date(NOW).toISOString(),
-          source: 'espn',
-          attribution: 'ESPN',
-          leagues: 1,
-          scores: {
-            [LIVE.id]: liveScore(2, 1, "54'"),
-            [otherLive.id]: liveScore(1, 0, "33'"),
-          },
-        },
-        [`GET /api/v1/football/preheat/${otherLive.id}`]: { preheat: null },
-      }),
-    );
-    renderAgenda('wide');
-    const strip = await screen.findByRole('navigation', { name: 'En directo' });
-    // «RMA 2–1 GIR · 54'»: el marcador a la vista junto al minuto.
-    const chip = await within(strip).findByRole('button', {
-      name: 'Real Madrid vs Girona, 2 a 1, minuto 54',
-    });
-    expect(chip.querySelector('.agenda-strip__score')).toHaveTextContent(/2.*1/);
-    expect(chip.querySelector('.agenda-strip__minute')).toHaveTextContent("54'");
-    const side = screen.getByRole('complementary', { name: 'Partido elegido' });
-    // El destacado ya está en el panel; tocarlo lo deja ahí con su canal.
-    fireEvent.click(chip);
-    expect(
-      await within(side).findByRole('heading', { name: 'Real Madrid vs Girona' }),
-    ).toBeInTheDocument();
-    expect(within(side).getByText('M+ Liga de Campeones')).toBeInTheDocument();
-    expect(chip).toHaveAttribute('aria-current', 'true');
-    // Otro directo: abajo su canal y su acción (no los de «Luego»).
-    const other = within(strip).getByRole('button', {
-      name: 'Girona vs Sevilla, 1 a 0, minuto 33',
-    });
-    fireEvent.click(other);
-    expect(
-      await within(side).findByRole('heading', { name: 'Girona vs Sevilla' }),
-    ).toBeInTheDocument();
-    expect(within(side).getByText('DAZN 1')).toBeInTheDocument();
-    expect(
-      within(side).getByRole('button', { name: /canal para Girona vs Sevilla/ }),
-    ).toBeInTheDocument();
-    expect(other).toHaveAttribute('aria-current', 'true');
-    // Las tarjetas siguen tapadas: solo la tira enseña el resultado.
-    expect(document.querySelectorAll('.agenda-score .num')).toHaveLength(0);
-  });
-
-  it('pantalla ancha: el partido que estás viendo sale tapado también en «En directo» (regla 29)', async () => {
+  it('escritorio: el partido que estás VIENDO sale tapado en la fila y en el detalle (regla 29)', async () => {
     net = mockFetch(routes());
     setPlayerPresence({ active: true, route: { vista: 'partido', id: LIVE.id, canal: null } });
-    renderAgenda('wide');
-    const strip = await screen.findByRole('navigation', { name: 'En directo' });
-    const chip = await within(strip).findByRole('button', {
-      name: 'Real Madrid vs Girona, minuto 54',
-    });
-    expect(chip.querySelector('.agenda-strip__score')).toBeNull();
-    const side = screen.getByRole('complementary', { name: 'Partido elegido' });
-    fireEvent.click(
-      await within(side).findByRole('button', { name: 'Ver marcador de Real Madrid vs Girona' }),
-    );
-    await waitFor(() =>
-      expect(chip).toHaveAccessibleName('Real Madrid vs Girona, 2 a 1, minuto 54'),
-    );
-    expect(strip.querySelector('.agenda-strip__score')).toHaveTextContent(/2.*1/);
+    renderAgenda('desktop');
+    const row = await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    await waitFor(() => expect(row.querySelector('.player-eq')).not.toBeNull());
+    expect(row.querySelector('.desk-row__score')).toBeNull();
+    fireEvent.click(row);
+    const side = screen.getByRole('complementary', { name: 'Detalle del partido' });
+    const name = 'Ver marcador de Real Madrid vs Girona';
+    const capsule = await within(side).findByRole('button', { name });
+    expect(within(side).queryByLabelText('Marcador: 2 a 1')).toBeNull();
+    // Destaparlo lo enseña también en la fila; otro toque lo vuelve a tapar.
+    fireEvent.click(capsule);
+    await waitFor(() => expect(row.querySelector('.desk-row__score')).not.toBeNull());
+    expect(row).toHaveAccessibleDescription(/Marcador: 2 a 1\. .*Lo estás viendo$/);
+    fireEvent.click(within(side).getByRole('button', { name: /^Tapar el marcador/ }));
+    expect(await within(side).findByRole('button', { name })).toBeInTheDocument();
+    expect(row.querySelector('.desk-row__score')).toBeNull();
   });
 
-  it('pantalla ancha: si tapas a mano un marcador, «En directo» tampoco lo enseña (hasta destaparlo)', async () => {
+  it('escritorio: el partido de TUS EQUIPOS va resaltado en la lista', async () => {
     net = mockFetch(routes());
-    renderAgenda('wide');
-    const strip = await screen.findByRole('navigation', { name: 'En directo' });
-    const chip = await within(strip).findByRole('button', {
-      name: 'Real Madrid vs Girona, 2 a 1, minuto 54',
-    });
-    const side = screen.getByRole('complementary', { name: 'Partido elegido' });
-    // Destapar y volver a tapar en el panel (la cápsula «Marcador»).
-    fireEvent.click(
-      await within(side).findByRole('button', { name: 'Ver marcador de Real Madrid vs Girona' }),
-    );
-    fireEvent.click(
-      await within(side).findByRole('button', {
-        name: /^Tapar el marcador de Real Madrid vs Girona/,
-      }),
-    );
-    await waitFor(() => expect(chip).toHaveAccessibleName('Real Madrid vs Girona, minuto 54'));
-    expect(chip.querySelector('.agenda-strip__score')).toBeNull();
-    // Destapado otra vez: vuelve a la tira.
-    fireEvent.click(
-      within(side).getByRole('button', { name: 'Ver marcador de Real Madrid vs Girona' }),
-    );
-    await waitFor(() =>
-      expect(chip).toHaveAccessibleName('Real Madrid vs Girona, 2 a 1, minuto 54'),
+    renderAgenda('desktop');
+    const live = await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    expect(live).toHaveClass('desk-row--mine');
+    expect(screen.getByRole('button', { name: /^Arsenal contra Chelsea/ })).not.toHaveClass(
+      'desk-row--mine',
     );
   });
+  it('escritorio: el resumen para lectores de pantalla cuenta lo que enseña la lista (pestaña y píldora)', async () => {
+    net = mockFetch(routes());
+    renderAgenda('desktop');
+    await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    const status = () =>
+      [...document.querySelectorAll('.agenda--desk [role="status"]')].pop()?.textContent ?? '';
+    // Abre en «Todo» (aunque en el móvil sería «Para ti»): 3 partidos, 1 en directo.
+    await waitFor(() => expect(status()).toMatch(/: 3 partidos, 1 en directo$/));
+    const tabs = screen.getByRole('group', { name: 'Qué partidos ver' });
+    fireEvent.click(within(tabs).getByRole('button', { name: /^Para ti/ }));
+    await waitFor(() => expect(status()).toMatch(/: 2 partidos, 1 en directo, solo los tuyos$/));
+    const pills = screen.getByRole('group', { name: 'Filtrar partidos' });
+    fireEvent.click(within(pills).getByRole('button', { name: 'Próximos' }));
+    await waitFor(() => expect(status()).toMatch(/: 1 partido, solo los tuyos$/));
+  });
 
-  it('pantalla ancha: con muchos directos, «En directo» cuenta cuántos y no crece más de dos líneas', async () => {
-    const extra = Array.from({ length: 5 }, (_, index) =>
-      matchAt(-20 - index, {
-        home: `Local ${index}`,
-        away: `Visitante ${index}`,
-        competition: 'LaLiga',
-        channels: [{ id: `x${index}`, name: `Canal ${index}` }],
-      }),
+  it('escritorio: T cambia entre las pestañas «Todo» y «Para ti»', async () => {
+    net = mockFetch(routes());
+    renderAgenda('desktop');
+    await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    const tabs = screen.getByRole('group', { name: 'Qué partidos ver' });
+    const forYou = await within(tabs).findByRole('button', { name: /^Para ti/ });
+    const all = within(tabs).getByRole('button', { name: /^Todo/ });
+    expect(all).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.keyDown(window, { key: 't' });
+    await waitFor(() => expect(forYou).toHaveAttribute('aria-pressed', 'true'));
+    expect(document.querySelectorAll('.desk-row')).toHaveLength(2);
+    fireEvent.keyDown(window, { key: 't' });
+    await waitFor(() => expect(all).toHaveAttribute('aria-pressed', 'true'));
+    expect(document.querySelectorAll('.desk-row')).toHaveLength(3);
+    expect(shortcutStore.get().find((item) => item.id === 'agenda.filtro')?.label).toBe(
+      'Cambia entre «Para ti» y «Todo»',
     );
-    net = mockFetch(
-      routes({
-        'GET /api/v1/football': scheduleOf({ [TODAY]: [LIVE, ...extra, SOON] }),
-      }),
-    );
-    renderAgenda('wide');
-    const strip = await screen.findByRole('navigation', { name: 'En directo' });
-    await waitFor(() => expect(within(strip).getAllByRole('button')).toHaveLength(6));
-    expect(strip.querySelector('.agenda-strip__count')).toHaveTextContent('6');
-    // Todos están (se llega desplazando la tira); la lista lleva el tope de alto.
-    expect(strip.querySelector('.agenda-strip__list')).toHaveClass('agenda-strip__list--more');
   });
 });

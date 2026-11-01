@@ -126,7 +126,7 @@ export function schedule(
     timezone: 'Europe/Madrid',
     country: 'Spain',
     source: 'futbolenlatv',
-    attribution: 'futbolenlatv.com',
+    attribution: 'futbolenlatv.es',
     demo: false,
     limited: false,
     partial: false,

@@ -29,6 +29,15 @@ export const PARTY = {
   holdMaxMs: 20_000,
   /** Un aviso de «cargando» tiene que durar esto antes de parar a los demás. */
   bufferingGraceMs: 800,
+  /**
+   * La sala sigue cuando quien cargaba lleva esto diciendo «ya no cargo» (§16).
+   * Antes seguía con el primer aviso y, en el iPhone, se paraba otra vez enseguida.
+   */
+  resumeSettleMs: 700,
+  /** Con dos esperas o más en este tiempo por la misma persona, su margen sube a `repeatBufferingGraceMs`. */
+  repeatHoldWindowMs: 60_000,
+  /** El margen de quien se atasca a menudo: sus atascos cortos no paran la sala. */
+  repeatBufferingGraceMs: 2_500,
   /** Con más desfase que esto, el reproductor salta a la posición de la sala. */
   driftSeekS: 1.0,
   /** Por encima de esto (y por debajo del salto) se corrige acelerando o frenando un poco. */
@@ -41,10 +50,10 @@ export const PARTY = {
   queueMax: 30,
   /** Al acabar, lo siguiente empieza tras esta cuenta atrás (el líder la puede cancelar). */
   upNextMs: 10_000,
-  /** Reacciones por persona en `reactionWindowMs`. */
-  reactionsPerWindow: 10,
-  reactionWindowMs: 10_000,
+  /** Entre dos avisos de «está escribiendo» de la misma persona (los de en medio no salen). */
+  typingIntervalMs: 2_000,
+  /** Lo que se ve «Ana está escribiendo…» tras su último aviso. */
+  typingShowMs: 4_000,
+  /** En «Esperando a todos» (§13), segundos de vídeo por delante que cuentan como «listo» (el 100 %). */
+  lobbyBufferS: 8,
 } as const;
-
-/** Las reacciones que se pueden lanzar sobre el vídeo (§11). */
-export const PARTY_REACTIONS = ['😂', '❤️', '😮', '😢', '👏', '🔥', '😱', '👍'] as const;

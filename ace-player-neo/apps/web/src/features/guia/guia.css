@@ -49,13 +49,12 @@
   font-size: var(--fs-13);
 }
 
-/* ---- El tablero: parrilla + franja ---------------------------------------- */
+/* ---- El tablero ----------------------------------------------------------- */
 .guia-board {
   --guia-bottom: calc(var(--safe-bottom) + var(--tabbar-h) + var(--tabbar-gap) + 12px);
   display: flex;
   flex-direction: column;
-  /* Tope, no alto fijo: con pocos canales la parrilla mide lo que tiene y la
-     franja va justo debajo (a 1920×1080 quedaban ~260 px vacíos en medio). */
+  /* Tope, no alto fijo: con pocos canales la parrilla mide lo que tiene. */
   max-height: max(340px, calc(100dvh - var(--guia-top, 200px) - var(--guia-bottom)));
   /* En el móvil, de borde a borde: cada píxel de ancho es tiempo que se ve. */
   margin-inline: calc(-1 * var(--gutter));
@@ -389,94 +388,6 @@
   transform: translate(-50%, -50%);
 }
 
-/* ---- Franja del programa elegido (PC) -------------------------------------- */
-.guia-strip {
-  flex: none;
-  display: grid;
-  grid-template-columns: var(--col-w) minmax(0, 1fr);
-  height: var(--strip-h);
-  background: var(--surface);
-  border-bottom: 1px solid var(--line-soft);
-}
-.guia-strip--empty {
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-}
-.guia-strip__channel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 12px;
-  border-right: 1px solid var(--line-soft);
-  text-align: center;
-}
-.guia-strip__chname {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  font-size: var(--fs-13);
-  font-weight: var(--wght-strong);
-}
-.guia-strip__num {
-  color: var(--text-2);
-  font-size: var(--fs-15);
-}
-.guia-strip__main {
-  display: grid;
-  align-content: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 14px 24px;
-}
-.guia-strip__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-.guia-strip__title {
-  margin: 0;
-  overflow: hidden;
-  font-size: var(--fs-22);
-  font-weight: var(--wght-strong);
-  font-stretch: var(--w-tight);
-  line-height: var(--lh-tight);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.guia-strip__bar {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  max-width: 720px;
-}
-.guia-strip__time {
-  color: var(--text-2);
-  font-size: var(--fs-13);
-  font-variant-numeric: tabular-nums;
-}
-.guia-strip__foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  max-width: 720px;
-}
-.guia-strip__when {
-  color: var(--text-2);
-  font-size: var(--fs-13);
-}
-.guia-strip__actions {
-  display: flex;
-  gap: 8px;
-}
-
 /* ---- Hoja «Más info» ------------------------------------------------------- */
 .guia-sheet__body {
   display: grid;
@@ -568,31 +479,461 @@
   font-size: var(--fs-13);
 }
 
-/* ---- Desde 768: tarjeta con esquinas y sin barra de abajo ------------------- */
-@media (min-width: 768px) {
-  .guia-board {
-    --guia-bottom: calc(var(--safe-bottom) + 20px);
-    margin-inline: 0;
-    border: 1px solid var(--line-soft);
-    border-radius: var(--r-l);
-    overflow: hidden;
-  }
-  .app[data-mini='true'] .guia-board {
-    --guia-bottom: calc(var(--safe-bottom) + var(--mini-h) + 40px);
-  }
-  .guia-board--skeleton {
-    padding-inline: 0;
-    border: 0;
-  }
-  .guia-grid-wrap {
-    border-block: 0;
-    border-bottom: 1px solid var(--line-soft);
-  }
-  .guia-strip {
-    border-bottom: 0;
-  }
-}
 .guia-sheet__num {
   color: var(--text-2);
   font-weight: var(--wght-medium);
+}
+
+/* ==== Desde 768: la Guía del rediseño de escritorio (01-escritorio.html §2) ====
+   Parrilla a lo ancho, de borde a borde de la columna: canales con su logo y
+   su nombre sobre el fondo, programas en tarjetas de 12 px con la hora en
+   mono, los directos de verdad teñidos de rojo con su punto, lo pasado
+   apagado y la raya de «ahora» amarilla con su hora en una píldora. */
+@media (min-width: 768px) {
+  .guia-board {
+    --guia-bottom: calc(var(--safe-bottom) + 0px);
+    margin-inline: calc(-1 * var(--gutter)) calc(-1 * (var(--gutter) + var(--safe-right)));
+  }
+  .app[data-mini='true'] .guia-board {
+    --guia-bottom: calc(var(--safe-bottom) + 0px);
+  }
+  .guia-board--skeleton {
+    padding: var(--s-3) var(--gutter);
+  }
+
+  /* ---- Barra: días y chips (dgbar) ---- */
+  .guia-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px var(--s-3);
+    min-width: 0;
+    padding: 12px 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .guia-bar::-webkit-scrollbar {
+    display: none;
+  }
+  .guia-bar__days {
+    display: flex;
+    flex: none;
+    gap: 6px;
+  }
+  .guia-bar__day {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-width: 78px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 12px;
+    color: var(--text-2);
+    font-size: var(--fs-12);
+    font-weight: 620;
+    white-space: nowrap;
+  }
+  /* Zona de 44 px aunque el dibujo mida 32. */
+  .guia-bar__day::before {
+    content: '';
+    position: absolute;
+    inset: -6px 0;
+  }
+  .guia-bar__day[aria-pressed='true'] {
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: var(--fs-13);
+    font-weight: var(--wght-strong);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .guia-bar__day[aria-pressed='false']:hover {
+      background: var(--line-soft);
+      color: var(--text);
+    }
+  }
+  .guia-bar__chips {
+    display: flex;
+    flex: none;
+    gap: 6px;
+  }
+  .guia-bar__chips .chip {
+    height: 30px;
+  }
+  .guia-bar__hint {
+    flex: none;
+    margin: 0;
+    color: var(--text-3);
+    font-size: var(--fs-12);
+    white-space: nowrap;
+  }
+  /* Como la maqueta: el elegido es el velo de acento, sin filo. */
+  .guia-bar__chips .chip[aria-pressed='true'] {
+    box-shadow: none;
+  }
+
+  /* ---- La parrilla, sin tarjeta ---- */
+  .guia--desk .guia-grid-wrap {
+    border-block: 0;
+    background: var(--bg);
+  }
+  .guia--desk .guia-ruler {
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .guia--desk .guia-ruler__corner {
+    background: var(--bg);
+    border-right: 1px solid var(--line);
+  }
+  .guia--desk .guia-ruler__day,
+  .guia--desk .guia-ruler__date {
+    display: none;
+  }
+  .guia--desk .guia-ruler__mark {
+    border-left: 0;
+    padding-left: 0;
+    color: var(--text-3);
+    font-family: var(--mono);
+    font-size: var(--fs-11);
+    font-weight: 400;
+  }
+  .guia--desk .guia-ruler__mark--day {
+    color: var(--text-2);
+    font-weight: var(--wght-strong);
+  }
+  /* Como la maqueta, cada hora en su sitio, sin pegarse a la columna al
+     desplazar (con el margen del móvil asomaba un «1» suelto y una hora se
+     montaba sobre la siguiente): la que pasa por debajo de la esquina queda
+     tapada por ella. */
+  .guia--desk .guia-ruler__label {
+    margin-left: 0;
+    overflow: visible;
+    padding-left: 6px;
+    translate: -6px 0;
+  }
+  /* La hora que la píldora taparía a medias no se pinta (Board.tsx la marca). */
+  .guia--desk .guia-ruler__mark[data-covered] .guia-ruler__label {
+    visibility: hidden;
+  }
+  .guia--desk .guia-ruler__now {
+    padding: 0 7px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-family: var(--mono);
+    font-size: var(--fs-11);
+    font-weight: var(--wght-strong);
+    /* Tapa la hora de la media hora que tenga debajo (la maqueta: «19:30» y «19:42»). */
+    box-shadow: 0 0 0 3px var(--bg);
+  }
+  .guia--desk .guia-now {
+    bottom: 0;
+    background: var(--accent);
+  }
+  /* La parrilla llena la pantalla hasta abajo (la raya de «ahora» también). */
+  .guia--desk .guia-board {
+    height: max(340px, calc(100dvh - var(--guia-top, 200px) - var(--guia-bottom)));
+  }
+  .guia--desk .guia-grid-wrap {
+    flex: 1 1 auto;
+    height: auto;
+  }
+  .guia--desk .guia-grid__content {
+    min-height: 100%;
+  }
+
+  /* Canales: 120 px con solo el logo sobre el fondo, filo a la derecha y debajo. */
+  .guia--desk .guia-chan {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    background: var(--bg);
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .guia--desk .guia-chan__logo {
+    width: auto;
+    max-width: 100%;
+    height: 40px;
+    border-radius: 10px;
+  }
+  /* Sin logo, el nombre en una ficha del tono del canal (la maqueta: `.lg`). */
+  .guia-chan__badge {
+    display: grid;
+    place-items: center;
+    max-width: 100%;
+    min-width: 46px;
+    height: 40px;
+    padding: 0 8px;
+    border-radius: 10px;
+    background: var(--tone);
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+    color: #fff;
+  }
+  .guia-chan__badge-text {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: var(--fs-11);
+    font-weight: 800;
+    font-stretch: 85%;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+  .guia--desk .guia-row {
+    border-bottom: 1px solid var(--line);
+    box-sizing: border-box;
+  }
+
+  /* Programas: tarjetas de 12 px con 6 px de aire arriba, abajo y entre ellas. */
+  .guia--desk .guia-block {
+    top: 6px;
+    height: calc(var(--row-h) - 13px);
+    margin-left: 3px;
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+  }
+  .guia--desk .guia-block__label {
+    gap: 3px;
+    padding: 0 10px;
+    /* Su ancho es lo que asoma del programa (el margen lo empuja hasta la
+       columna): si no cabe ni una palabra, nada de una letra suelta. */
+    container-type: inline-size;
+  }
+  @container (max-width: 24px) {
+    .guia--desk .guia-block__title,
+    .guia--desk .guia-block__time {
+      visibility: hidden;
+    }
+  }
+  .guia--desk .guia-block__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: var(--fs-13);
+    font-weight: 650;
+    font-stretch: 100%;
+  }
+  .guia--desk .guia-block__text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Lo que empezó antes de lo visible llega hasta la columna con la esquina
+     de la izquierda recortada (la maqueta: `.prog.cut`), también mientras se
+     desplaza: 4 px si su borde (--bx) queda bajo la columna (--sl, el
+     desplazamiento, lo pone Board.tsx en cada fotograma) y 12 si no. */
+  .guia--desk .guia-block {
+    --cut-r: clamp(4px, calc((var(--bx) - var(--sl, 0px) - var(--col-w) + 2px) * 100), 12px);
+    border-start-start-radius: var(--cut-r);
+    border-end-start-radius: var(--cut-r);
+  }
+  .guia--desk .guia-block__time {
+    color: var(--text-3);
+    font-family: var(--mono);
+    font-size: var(--fs-11);
+  }
+  /* Lo que se emite ahora: un punto más de relieve. */
+  .guia--desk .guia-block--live {
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  /* Un directo de verdad (marca de la guía) en emisión: teñido de rojo. */
+  .guia--desk .guia-block--onair {
+    background: color-mix(in oklab, var(--live) 14%, var(--surface));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--live) 22%, transparent);
+  }
+  .guia-block__dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--live);
+  }
+  /* Lo pasado, apagado como en la maqueta, pero sin bajar la opacidad: la
+     tarjeta se funde con el fondo y el texto pasa a --text-3, que sigue en
+     4,5:1 o más (la maqueta, al 45 %, se quedaba en 2-3:1). */
+  .guia--desk .guia-block--past {
+    background: color-mix(in oklab, var(--surface) 45%, var(--bg));
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+  }
+  .guia--desk .guia-block--past .guia-block__title {
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  /* Un programa de unos minutos no cabe ni en una letra: en lugar de una
+     tarjeta vacía, una muesca sin relleno entre las de al lado (el nombre va
+     en su `title` y en la etiqueta para lectores de pantalla). */
+  .guia--desk .guia-block--narrow:not(.guia-block--onair) {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+  }
+  .guia--desk .guia-block--none,
+  .guia--desk .guia-block--loading,
+  .guia--desk .guia-block--error {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .guia--desk .guia-block:hover {
+      background: color-mix(in oklab, var(--surface), var(--text) 6%);
+    }
+    .guia--desk .guia-block--onair:hover {
+      background: color-mix(in oklab, var(--live) 20%, var(--surface));
+    }
+  }
+  /* Lo elegido solo se marca con el teclado o con su popover abierto. */
+  .guia--desk .guia-block--selected,
+  .guia--desk .guia-block--selected:hover {
+    outline: 0;
+  }
+  .guia--desk .guia-block--selected .guia-block__title {
+    color: inherit;
+  }
+  .guia--desk .guia-grid:focus-visible .guia-block--selected {
+    box-shadow: inset 0 0 0 2px var(--accent-edge);
+    opacity: 1;
+  }
+
+  /* ---- «‹ Ahora 19:42» flotante y el brillo del borde ---- */
+  .guia-nowfloat {
+    position: absolute;
+    bottom: 20px;
+    left: calc(var(--col-w) + (100% - var(--col-w)) / 2);
+    z-index: 6;
+    min-height: 44px;
+    padding: 0 18px;
+    font-size: var(--fs-15);
+    translate: -50% 0;
+    box-shadow: var(--shadow-2);
+  }
+  .guia-nowfloat__time {
+    font-family: var(--mono);
+    font-size: var(--fs-12);
+    font-weight: var(--wght-strong);
+  }
+  .guia-nowglow {
+    position: absolute;
+    top: var(--ruler-h);
+    bottom: 0;
+    z-index: 5;
+    width: 28px;
+    pointer-events: none;
+  }
+  .guia-nowglow--left {
+    left: var(--col-w);
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--accent) 34%, transparent),
+      transparent
+    );
+  }
+  .guia-nowglow--right {
+    right: 0;
+    background: linear-gradient(
+      270deg,
+      color-mix(in oklab, var(--accent) 34%, transparent),
+      transparent
+    );
+  }
+}
+
+/* ---- El popover del programa (escritorio) ---------------------------------- */
+/* La ficha del canal, más pequeña (la maqueta: 48 × 32 con radio 9). Fuera
+   del bloque de escritorio porque el popover va en un portal. */
+.guia-chan__badge--sm {
+  flex: none;
+  min-width: 48px;
+  max-width: 96px;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 9px;
+}
+.guia-chan__logo--sm {
+  flex: none;
+  width: auto;
+  max-width: 96px;
+  height: 32px;
+  border-radius: 9px;
+}
+.guia-pop {
+  width: 340px;
+}
+.guia-pop__body {
+  display: grid;
+}
+.guia-pop__channel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.guia-pop__chname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.guia-pop__title {
+  margin: 14px 0 0;
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
+  font-stretch: 115%;
+  letter-spacing: var(--tracking-head);
+  line-height: var(--lh-tight);
+  overflow-wrap: anywhere;
+}
+.guia-pop__time {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 8px 0 0;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+.guia-pop__when {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-family: var(--font);
+  font-size: var(--fs-12);
+  font-weight: 650;
+}
+.guia-pop__when--now,
+.guia-pop__when--past {
+  background: var(--line-soft);
+  color: var(--text-2);
+}
+.guia-pop__when--live {
+  background: color-mix(in oklab, var(--live) 14%, transparent);
+  color: var(--live-ink);
+}
+.guia-pop__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.guia-pop__actions .btn {
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: var(--fs-15);
+}
+/* «Te aviso»: el velo de acento (con la tinta de acento) también sin pulsar. */
+.guia-pop__aviso,
+.guia-pop__aviso[aria-pressed='false'] {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
 }

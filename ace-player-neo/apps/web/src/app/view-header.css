@@ -76,17 +76,106 @@
     clip-path: inset(50%);
   }
 }
+/* El buscador de la barra (Ctrl K): solo desde 768; en el móvil, Buscar es una pestaña. */
+.view-head__search {
+  display: none;
+}
 @media (min-width: 768px) {
-  /* En la barra superior ya está el motor. Doble clase: .engine (shell.css)
-     se carga después y pondría display otra vez. */
+  /* La barra de la sección (rediseño de escritorio): 64 px pegados arriba,
+     opaca y con su filo. Los hijos (chips, pestañas) van debajo, dentro. */
+  .view-head {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+    gap: var(--s-3);
+    margin-inline: calc(-1 * var(--gutter)) calc(-1 * (var(--gutter) + var(--safe-right)));
+    padding: var(--safe-top) calc(var(--gutter) + var(--safe-right)) 0 var(--gutter);
+    background: var(--bg);
+    box-shadow: inset 0 -1px 0 var(--line-soft);
+  }
+  .view-head > :last-child {
+    margin-bottom: var(--s-3);
+  }
+  .view-head > .view-head__row:last-child {
+    margin-bottom: 0;
+  }
+  .view-head__row {
+    flex-wrap: nowrap;
+    min-height: var(--topbar-h);
+  }
   .view-head .view-head__engine {
     display: none;
   }
+  /* Maqueta 01: 24 px, el peso y la anchura de los titulares. */
   .view-head__title {
-    font-size: var(--fs-44);
+    font-size: 1.5rem;
   }
-  /* La barra superior ya ocupa su fila: la cabecera solo añade su aire. */
-  .view-head {
-    padding-top: var(--s-6);
+  .view-head__subtitle {
+    font-size: var(--fs-12);
+  }
+  /* El título no se corta («Cana…» tapado por «Modo demo»): si falta sitio,
+     cede el buscador, que se estrecha hasta 120 px. */
+  .view-head__titles {
+    min-width: auto;
+  }
+  .view-head__title {
+    overflow: visible;
+  }
+  .view-head__actions {
+    flex-wrap: nowrap;
+  }
+  .view-head__actions > * {
+    flex: none;
+  }
+  .view-head__actions > .view-head__search {
+    flex: 0 1 clamp(180px, 26vw, 340px);
+    min-width: 120px;
+  }
+  .view-head__search {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    width: clamp(180px, 26vw, 340px);
+    min-height: 40px;
+    margin-left: var(--s-2);
+    padding: 0 8px 0 12px;
+    border-radius: var(--r-m);
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--text-3);
+    font-size: 0.875rem;
+    text-align: left;
+  }
+  .view-head__search-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .view-head__search kbd {
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: var(--line-soft);
+    color: var(--text-2);
+    font-family: var(--mono);
+    font-size: var(--fs-11);
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .view-head__search:hover {
+    color: var(--text-2);
+  }
+}
+/* Tableta y móvil en horizontal (táctil desde 768): el buscador mide 40, su
+   zona invisible llega a 44 sin mover la barra. Con ratón no cambia nada. */
+@media (min-width: 768px) and (pointer: coarse) {
+  .view-head__search {
+    position: relative;
+  }
+  .view-head__search::before {
+    content: '';
+    position: absolute;
+    inset: -2px 0;
   }
 }

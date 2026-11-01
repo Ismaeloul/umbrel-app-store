@@ -88,11 +88,19 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
       'mem_limit',
       'pids_limit',
     ];
+    /* storage sube de memoria y de procesos por la calidad ligera de «Ver juntos»
+       (docs/ver-juntos.md §17): x264 en el backend; lo demás, como en la 0.6.59. */
+    const raised: Record<string, Record<string, unknown>> = {
+      storage: { mem_limit: '1280m', pids_limit: 192 },
+    };
     for (const name of Object.keys(LEGACY.services)) {
       for (const key of kept) {
-        expect(service(name)[key], `${name}.${key}`).toEqual(legacy(name)[key]);
+        const expected = raised[name]?.[key] ?? legacy(name)[key];
+        expect(service(name)[key], `${name}.${key}`).toEqual(expected);
       }
     }
+    expect(legacy('storage').mem_limit).toBe('768m');
+    expect(legacy('storage').pids_limit).toBe(128);
   });
 
   it('toda imagen va fijada por digest y todo contenedor con el prefijo de la tienda (U1, U3)', () => {
@@ -112,13 +120,16 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
     expect(RAW).toContain('PROXY_AUTH_WHITELIST: "/native/*"');
   });
 
-  it('storage: el entorno de la 0.6.59 más ACE_SEED de APP_SEED, el enlace público de «Ver juntos» y sin root (ACE_RUN_AS)', () => {
+  it('storage: el entorno de la 0.6.59 más ACE_SEED de APP_SEED, el enlace público de «Ver juntos», sin root (ACE_RUN_AS) y la calidad ligera encendida desde la 1.0.0', () => {
     expect(service('storage').environment).toEqual({
       ...legacy('storage').environment,
       ACE_SEED: '${APP_SEED}',
       PARTY_PUBLIC_URL: 'https://sala.ismaeloul.es',
+      ACE_PARTY_LITE: '1',
       ACE_RUN_AS: '1000:1000',
     });
+    /* Encendida desde la 1.0.0 (docs/ver-juntos.md §17): si el NAS no da abasto, el fusible vuelve a la original. */
+    expect(RAW).toContain('ACE_PARTY_LITE: "1"');
     expect(RAW).toContain('ACE_SEED: "${APP_SEED}"');
     expect(service('engine_control').environment).toEqual(legacy('engine_control').environment);
   });
@@ -229,6 +240,13 @@ describe('Pila local (deploy/local/compose.local.yml)', () => {
     expect(local('nginx')).toBe(production('nginx'));
     expect(local('storage')).toBe(production('storage'));
     expect(LOCAL.services.storage?.healthcheck).toEqual(service('storage').healthcheck);
+  });
+
+  it('los mismos límites de storage que en el NAS (también la imagen del perfil test)', () => {
+    for (const name of ['storage', 'servidor_imagen']) {
+      expect(LOCAL.services[name]?.mem_limit, name).toBe(service('storage').mem_limit);
+      expect(LOCAL.services[name]?.pids_limit, name).toBe(service('storage').pids_limit);
+    }
   });
 
   it('el mismo entorno de storage, salvo la semilla de pruebas', () => {

@@ -52,7 +52,7 @@ function schedule(matches: FootballMatch[]): FootballSchedule {
     timezone: 'Europe/Madrid',
     country: 'España',
     source: 'futbolenlatv',
-    attribution: 'futbolenlatv.com',
+    attribution: 'futbolenlatv.es',
     demo: false,
     limited: false,
     partial: false,

@@ -56,6 +56,8 @@ import { applyGuideAgenda, guideAgendaRequest } from './guide-overlay.js';
 import {
   ENGINE_STAGE_MS,
   FOOTBALL_CACHE_MS,
+  FOOTBALL_FALLBACK_CACHE_MS,
+  FOOTBALL_FULL_KEEP_MS,
   PREHEAT_FIRST_RUN_MS,
   PREHEAT_HEALTH_STATES,
   PREHEAT_TICK_MS,
@@ -112,6 +114,8 @@ interface AgendaCache {
   stale: boolean;
   /** La copia con `stale: true` de `payload` (la misma en cada llamada: la agenda híbrida la reconoce). */
   stalePayload: FootballSchedule | null;
+  /** Cuándo llegó `payload` si es de futbolenlatv (la completa); null si no. */
+  fullAt: number | null;
 }
 
 function asRecord(value: unknown): Loose {
@@ -143,6 +147,7 @@ export class FootballServiceImpl implements FootballService {
     pending: null,
     stale: false,
     stalePayload: null,
+    fullAt: null,
   };
   private readonly embed: EmbedFunction;
   private demoPayload: FootballSchedule | null = null;
@@ -253,9 +258,8 @@ export class FootballServiceImpl implements FootballService {
       this.demoPayload = payload;
       return Promise.resolve(payload);
     }
-    if (this.agenda.payload && clock.now() < this.agenda.expiresAt) {
-      return Promise.resolve(this.agenda.payload);
-    }
+    const cached = this.cachedAgenda();
+    if (cached && clock.now() < this.agenda.expiresAt) return Promise.resolve(cached);
     if (this.agenda.pending) return this.agenda.pending;
     const pending = this.refreshAgenda().finally(() => {
       this.agenda.pending = null;
@@ -324,8 +328,20 @@ export class FootballServiceImpl implements FootballService {
    * canal o la hora de antes. Síncrono y barato (todo en caché).
    */
   private refreshHybrid(): void {
-    const raw = this.deps.config.football.demoOnly ? this.demoPayload : this.agenda.payload;
+    const raw = this.deps.config.football.demoOnly ? this.demoPayload : this.cachedAgenda();
     if (raw) this.withGuide(raw);
+  }
+
+  /**
+   * La agenda guardada tal y como se dio la última vez: si se sigue con la
+   * última completa (`stale`), la copia marcada, siempre el mismo objeto (el
+   * memo de la agenda híbrida y el catálogo de programación no se rehacen y la
+   * nota «Última copia disponible» no parpadea).
+   */
+  private cachedAgenda(): FootballSchedule | null {
+    const { payload, stale, stalePayload } = this.agenda;
+    if (!payload) return null;
+    return stale ? (stalePayload ?? payload) : payload;
   }
 
   private agendaContext(): AgendaContext {
@@ -377,8 +393,25 @@ export class FootballServiceImpl implements FootballService {
     deadline.catch(() => {});
     try {
       const payload = await Promise.race([chain, deadline]);
+      const now = clock.now();
+      const full = payload.source === 'futbolenlatv';
+      /* Una de respaldo no pisa una completa reciente: se sigue con esa, marcada
+         `stale`, y se vuelve a probar futbolenlatv en `FOOTBALL_FALLBACK_CACHE_MS`. */
+      const previous = this.agenda.payload;
+      const fullAt = this.agenda.fullAt;
+      if (!full && previous && fullAt !== null && now - fullAt < FOOTBALL_FULL_KEEP_MS) {
+        logger.warn(
+          { source: payload.source },
+          'agenda: futbolenlatv sin datos; se sigue con su última agenda',
+        );
+        this.agenda.expiresAt = now + FOOTBALL_FALLBACK_CACHE_MS;
+        this.agenda.stale = true;
+        this.agenda.stalePayload ??= { ...previous, stale: true };
+        return this.agenda.stalePayload;
+      }
       this.agenda.payload = payload;
-      this.agenda.expiresAt = clock.now() + FOOTBALL_CACHE_MS;
+      this.agenda.fullAt = full ? now : null;
+      this.agenda.expiresAt = now + (full ? FOOTBALL_CACHE_MS : FOOTBALL_FALLBACK_CACHE_MS);
       this.agenda.stale = false;
       this.agenda.stalePayload = null;
       /* El catálogo de programación lo recuerda `withGuide` (con la guía encima). */

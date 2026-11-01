@@ -7,11 +7,11 @@
 import type { LiveScore } from '@ace/shared';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetScoreRevealForTests } from '../agenda/score-reveal.ts';
+import { resetScoreReveal, resetScoreRevealForTests, revealScore } from '../agenda/score-reveal.ts';
 import { matchAt, NOW, TODAY } from '../agenda/test-utils.tsx';
 import { MatchHead } from './MatchHead.tsx';
 import { MatchPanel } from './MatchPanel.tsx';
-import { GOAL_MS, Scoreboard } from './Scoreboard.tsx';
+import { GOAL_MS, ScoreChip, Scoreboard } from './Scoreboard.tsx';
 
 const score = (home: number, away: number, state = 'in', clock = "72'"): LiveScore => ({
   home,
@@ -53,6 +53,16 @@ describe('cápsula del marcador (sobre el vídeo)', () => {
     expect(screen.getByRole('button', { name: 'Ver marcador' })).toBeInTheDocument();
   });
 
+  it('el foco sigue al botón que aparece al destapar y al tapar', () => {
+    render(<Scoreboard match={live} score={score(2, 1)} now={NOW} />);
+    const cover = screen.getByRole('button', { name: 'Ver marcador' });
+    cover.focus();
+    fireEvent.click(cover);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /Tapar el marcador/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Tapar el marcador/ }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Ver marcador' }));
+  });
+
   it('«pre» nunca se pinta: sale la hora y cuánto falta', () => {
     const later = matchAt(90, { id: 'm-later' });
     render(<Scoreboard match={later} score={score(0, 0, 'pre', '')} now={NOW} />);
@@ -91,6 +101,48 @@ describe('cápsula del marcador (sobre el vídeo)', () => {
     );
     rerender(<Scoreboard match={live} score={score(1, 2)} now={NOW} />);
     expect(container.querySelector('.mc-scap')).not.toHaveClass('is-goal-away');
+  });
+});
+
+describe('marcador de la ficha de escritorio (ScoreChip)', () => {
+  it('la región aria-live está siempre montada: con el botón tapado y con las cifras', () => {
+    const { container } = render(<ScoreChip match={live} score={score(2, 1)} now={NOW} />);
+    const region = container.querySelector('.mc-schip-wrap');
+    expect(region).toHaveAttribute('aria-live', 'polite');
+    expect(region).toContainElement(screen.getByRole('button', { name: 'Ver marcador' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ver marcador' }));
+    // La misma región (no una nueva) recibe las cifras, que se leen con los nombres.
+    expect(container.querySelector('.mc-schip-wrap')).toBe(region);
+    expect(region).toContainElement(screen.getByLabelText('Atlético de Madrid 2, Tottenham 1'));
+    expect(region).toHaveTextContent('Atlético de Madrid 2');
+    expect(region).toHaveTextContent('Tottenham 1');
+  });
+
+  it('el foco pasa de «Ver marcador» a «Tapar» y vuelve (nunca al <body>)', () => {
+    render(<ScoreChip match={live} score={score(2, 1)} now={NOW} />);
+    const cover = screen.getByRole('button', { name: 'Ver marcador' });
+    cover.focus();
+    fireEvent.click(cover);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /Tapar el marcador/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Tapar el marcador/ }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Ver marcador' }));
+  });
+
+  it('si se destapa o tapa desde otra parte (score-reveal compartido), no roba el foco', () => {
+    render(
+      <>
+        <button type="button">Otro sitio</button>
+        <ScoreChip match={live} score={score(2, 1)} now={NOW} />
+      </>,
+    );
+    const elsewhere = screen.getByRole('button', { name: 'Otro sitio' });
+    elsewhere.focus();
+    act(() => revealScore(live.id));
+    expect(screen.getByRole('button', { name: /Tapar el marcador/ })).toBeInTheDocument();
+    expect(document.activeElement).toBe(elsewhere);
+    act(() => resetScoreReveal());
+    expect(screen.getByRole('button', { name: 'Ver marcador' })).toBeInTheDocument();
+    expect(document.activeElement).toBe(elsewhere);
   });
 });
 

@@ -13,7 +13,7 @@
    | partido/<id>               | { vista: 'partido', id, canal: null }       |
    | partido/canal/<hash>       | { vista: 'partido', id: null, canal: hash } |
    | sala/<40 hex>              | { vista: 'sala', id } (película o episodio) |
-   | juntos/<código>            | { vista: 'juntos', code } (Ver juntos)      |
+   | juntos · juntos/<código>   | { vista: 'juntos', code } (Ver juntos)      |
    | sistema                    | { vista: 'sistema' } (solo con el flag)     |
 
    Lo que no se entiende acaba en la agenda.
@@ -56,8 +56,9 @@ export type Route =
   /* El escenario de una película o un episodio (docs/vod.md §12.2 y §12.8):
      el reproductor en grande, como en un partido. */
   | { vista: 'sala'; id: string }
-  /* «Ver juntos» (docs/ver-juntos.md §7): una sala por su código de 16 caracteres. */
-  | { vista: 'juntos'; code: string }
+  /* «Ver juntos» (docs/ver-juntos.md §7): una sala por su código de 16
+     caracteres; sin código, la portada de «Ver juntos» (menú lateral). */
+  | { vista: 'juntos'; code: string | null }
   | { vista: 'sistema' };
 
 /**
@@ -114,6 +115,34 @@ export function navLabel(vista: NavVista): string {
   return NAV_LABEL[vista] ?? VISTA_TITLE[vista];
 }
 
+/**
+ * Los destinos del menú lateral de escritorio (desde 768 px, rediseño de
+ * escritorio): la Guía es un destino propio y «Ver juntos» también; Buscar va
+ * en la barra de cada sección (Ctrl K) y Ajustes, abajo del todo, aparte.
+ * «Pelis y series» solo con `features.vod`, como en la barra del móvil.
+ */
+export const SIDE_VISTAS = [
+  'agenda',
+  'biblioteca',
+  'guia',
+  'cine',
+  'juntos',
+] as const satisfies readonly Vista[];
+export type SideVista = (typeof SIDE_VISTAS)[number] | 'ajustes';
+
+export function sideVistas(features: { vod?: boolean } | null | undefined): readonly SideVista[] {
+  const withCine = features?.vod === true;
+  return SIDE_VISTAS.filter((vista) => vista !== 'cine' || withCine);
+}
+
+/** El destino del menú lateral que se ilumina en una vista (null: ninguno, p. ej. Buscar). */
+export function sideParent(vista: Vista): SideVista | null {
+  if (vista === 'partido') return 'agenda';
+  if (vista === 'sala') return 'cine';
+  if (vista === 'buscar' || vista === 'sistema') return null;
+  return vista;
+}
+
 export const DEFAULT_ROUTE: Route = { vista: 'agenda' };
 
 const SEGMENT_RE = /^[A-Za-z0-9._~:-]{1,120}$/;
@@ -164,9 +193,9 @@ export function parseVista(
         : { vista: 'cine', id: null };
     }
     case 'juntos': {
-      // `juntos/<código>`: el código distingue mayúsculas; sin uno válido, la portada de cine.
+      // `juntos/<código>`: el código distingue mayúsculas; sin uno válido, la portada de «Ver juntos».
       const code = rest[0] ?? '';
-      return PARTY_CODE_RE.test(code) ? { vista: 'juntos', code } : { vista: 'cine', id: null };
+      return { vista: 'juntos', code: PARTY_CODE_RE.test(code) ? code : null };
     }
     case 'sistema':
       return allowSystem ? { vista: 'sistema' } : DEFAULT_ROUTE;
@@ -194,7 +223,7 @@ export function formatVista(route: Route): string {
     case 'sala':
       return `sala/${route.id}`;
     case 'juntos':
-      return `juntos/${route.code}`;
+      return route.code ? `juntos/${route.code}` : 'juntos';
     default:
       return route.vista;
   }

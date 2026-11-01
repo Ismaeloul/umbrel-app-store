@@ -47,6 +47,7 @@ import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
 import {
   Button,
+  Chip,
   EmptyState,
   IconButton,
   Segmented,
@@ -56,6 +57,7 @@ import {
 } from '../../ui/index.ts';
 import { CategoryChips, CategorySheet } from './CategorySheet.tsx';
 import { ContinueRail } from './ContinueRail.tsx';
+import { DeskHome } from './Escaparate.tsx';
 import {
   CINE_TEXT_DELAY_MS,
   closeCineGrid,
@@ -69,6 +71,7 @@ import {
   useLangScope,
   useSettled,
   useVodHome,
+  useVodList,
   useVodPages,
 } from './data.ts';
 import { PosterGrid } from './Grid.tsx';
@@ -91,7 +94,9 @@ import { CardRow, CategoryRail } from './Rows.tsx';
 import { TagChips } from './TagChips.tsx';
 import {
   CINE_TEXT,
+  DESK_TEXT,
   elsewhereText,
+  listTabText,
   LANG_TEXT,
   noneInLangs,
   nothingFound,
@@ -287,6 +292,39 @@ function gridTitle(state: CineUrlState, q: string, home: VodHomeData): string {
   );
 }
 
+/** La pestaña de la barra en escritorio. */
+export type DeskTab = 'lista' | 'movie' | 'series';
+
+/**
+ * Mi lista · N / Películas / Series (escritorio): Mi lista es la portada; las
+ * otras abren la rejilla (con su entrada en el historial, como «Ver todo»:
+ * Atrás vuelve a Mi lista). Ir de una a otra cambia la rejilla sin sumar
+ * entradas: desde cualquiera, un solo Atrás vuelve a Mi lista.
+ */
+export function DeskTabs({ value, active }: { value: DeskTab; active: boolean }) {
+  const list = useVodList(active);
+  const count = list.data ? list.data.items.length : null;
+  const go = (tab: DeskTab) => {
+    if (tab === value && tab === 'lista') return;
+    haptic('selection');
+    if (tab === 'lista') closeCineGrid({ keepKind: false });
+    else openCineGrid({ kind: tab, cat: 'all', tag: null, q: '' });
+  };
+  return (
+    <div className="cine-tabs" role="group" aria-label={DESK_TEXT.tabs}>
+      <Chip pressed={value === 'lista'} onClick={() => go('lista')}>
+        {listTabText(count)}
+      </Chip>
+      <Chip pressed={value === 'movie'} onClick={() => go('movie')}>
+        {CINE_TEXT.movies}
+      </Chip>
+      <Chip pressed={value === 'series'} onClick={() => go('series')}>
+        {CINE_TEXT.series}
+      </Chip>
+    </div>
+  );
+}
+
 export interface HomeProps {
   active: boolean;
 }
@@ -308,7 +346,16 @@ export function Home({ active }: HomeProps) {
   /* Borrar el texto vuelve a la portada al momento; escribir espera a que se pare. */
   const q = typed === '' ? '' : settled;
   const searching = q !== '';
-  const grid = showsGrid(state, q);
+  /* Rediseño de escritorio (desde 768): pestañas Mi lista / Películas / Series
+     en la barra; la portada es Mi lista (DeskHome) y las otras, la rejilla con
+     sus filtros y su buscador. El móvil sigue como estaba. */
+  const desk = layout.kind !== 'mobile';
+  /* En escritorio, «Mi lista» ES la portada: la URL de su antigua pestaña
+     (`cinecat=milista`) también cae en ella, no en una rejilla aparte, aunque
+     lleve un distintivo o un texto de búsqueda (desde la interfaz no se llega;
+     escrito a mano, abría la pantalla de Mi lista del móvil, con su flecha). */
+  const deskList = desk && state.cat === MY_LIST_CAT;
+  const grid = showsGrid(state, q) && !deskList;
   const ready = home.data?.active === true && home.data.state === 'ready';
   /* La primera vez (aún sin elegir idiomas), el selector antes que nada. */
   const welcome = ready && lang.prefs !== null && !lang.prefs.chosen;
@@ -359,7 +406,9 @@ export function Home({ active }: HomeProps) {
       group: 'Películas y series',
       handler: () => void requestFocus('buscar-cine'),
     },
-    active,
+    /* En la portada de escritorio (Mi lista) no hay buscador propio: «/» sigue
+       siendo el de la barra (`app.buscar`) y la ayuda no promete este. */
+    active && (!desk || grid),
   );
 
   const first: VodBrowseResponse | undefined = pages.data?.pages[0];
@@ -394,12 +443,43 @@ export function Home({ active }: HomeProps) {
     });
   };
 
+  const tab: DeskTab = grid ? state.kind : 'lista';
   const categories = home.data?.categories[state.kind] ?? [];
-  const showSheetButton = !layout.asideVisible && ready && !welcome && categories.length > 0;
+  const showSheetButton =
+    !desk && !layout.asideVisible && ready && !welcome && categories.length > 0;
   /* El botón de idiomas, si el servidor los sabe y ya se eligieron. */
   const showLangButton = ready && !welcome && lang.prefs !== null;
 
-  const header = welcome ? (
+  const searchBox = (
+    <TextField
+      label={state.kind === 'movie' ? CINE_TEXT.searchMovies : CINE_TEXT.searchSeries}
+      hideLabel
+      variant="search"
+      icon="buscar"
+      kbd={active ? '/' : undefined}
+      focusTarget="buscar-cine"
+      placeholder={state.kind === 'movie' ? CINE_TEXT.searchMovies : CINE_TEXT.searchSeries}
+      value={text}
+      type="search"
+      enterKeyHint="search"
+      autoComplete="off"
+      spellCheck={false}
+      maxLength={200}
+      className="cine-head__search"
+      onChange={(event) => onText(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && text) {
+          event.preventDefault();
+          onText('');
+        }
+      }}
+    />
+  );
+  const header = desk ? (
+    <ViewHeader title={DESK_TEXT.title} className="cine-deskhead">
+      {welcome ? null : <DeskTabs value={tab} active={active} />}
+    </ViewHeader>
+  ) : welcome ? (
     <ViewHeader title={CINE_TEXT.title} />
   ) : (
     <ViewHeader title={CINE_TEXT.title}>
@@ -430,29 +510,7 @@ export function Home({ active }: HomeProps) {
             onClick={() => setLangsOpen(true)}
           />
         ) : null}
-        <TextField
-          label={state.kind === 'movie' ? CINE_TEXT.searchMovies : CINE_TEXT.searchSeries}
-          hideLabel
-          variant="search"
-          icon="buscar"
-          kbd={active ? '/' : undefined}
-          focusTarget="buscar-cine"
-          placeholder={state.kind === 'movie' ? CINE_TEXT.searchMovies : CINE_TEXT.searchSeries}
-          value={text}
-          type="search"
-          enterKeyHint="search"
-          autoComplete="off"
-          spellCheck={false}
-          maxLength={200}
-          className="cine-head__search"
-          onChange={(event) => onText(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape' && text) {
-              event.preventDefault();
-              onText('');
-            }
-          }}
-        />
+        {searchBox}
       </div>
     </ViewHeader>
   );
@@ -482,13 +540,17 @@ export function Home({ active }: HomeProps) {
           <p className="cine-note">{truncatedText(data.counts, VOD_LIMITS)}</p>
         ) : null}
         <div className="cine-portada" hidden={grid}>
-          <Portada
-            data={data}
-            kind={state.kind}
-            active={active && !grid}
-            prefs={lang.prefs}
-            onChangeLangs={() => setLangsOpen(true)}
-          />
+          {desk ? (
+            <DeskHome data={data} active={active && !grid} />
+          ) : (
+            <Portada
+              data={data}
+              kind={state.kind}
+              active={active && !grid}
+              prefs={lang.prefs}
+              onChangeLangs={() => setLangsOpen(true)}
+            />
+          )}
         </div>
         {grid && myList ? <MyListScreen kind={state.kind} active={active} /> : null}
         {grid && !myList ? (
@@ -500,6 +562,20 @@ export function Home({ active }: HomeProps) {
             cards={cards}
             pages={pages}
             asideVisible={layout.asideVisible}
+            desk={
+              desk
+                ? {
+                    search: searchBox,
+                    langs: showLangButton ? (
+                      <LanguageButton
+                        prefs={lang.prefs}
+                        className="cine-head__langs"
+                        onClick={() => setLangsOpen(true)}
+                      />
+                    ) : null,
+                  }
+                : null
+            }
             onClearSearch={() => onText('')}
             langsOn={filtersLangs(lang.prefs)}
             onChangeLangs={() => setLangsOpen(true)}
@@ -639,6 +715,8 @@ interface GridScreenProps {
   cards: readonly VodCard[];
   pages: ReturnType<typeof useVodPages>;
   asideVisible: boolean;
+  /** Escritorio: el buscador y los idiomas van en la fila de filtros (la barra lleva las pestañas). */
+  desk: { search: ReactNode; langs: ReactNode } | null;
   /** Filtra por los idiomas elegidos (solo salen esos, §4.10). */
   langsOn: boolean;
   onClearSearch(): void;
@@ -654,6 +732,7 @@ function GridScreen({
   cards,
   pages,
   asideVisible,
+  desk,
   langsOn,
   onClearSearch,
   onChangeLangs,
@@ -671,15 +750,42 @@ function GridScreen({
   const subtitle = total !== null ? count(total) : state.tag ? TAG_LABEL[state.tag] : '';
   const live = first && !pages.isFetching ? count(first.total) : '';
   const searchAll = () => setCineState({ cat: 'all' });
+  /* En escritorio, «Todas las películas» es la pestaña: sin flecha (Mi lista vuelve). */
+  const arrow = !desk || searching || state.cat !== 'all' || state.tag !== null;
   return (
-    <section className="cine-browse" aria-labelledby={GRID_TITLE_ID}>
+    <section
+      className={desk ? 'cine-browse cine-browse--desk' : 'cine-browse'}
+      aria-labelledby={GRID_TITLE_ID}
+    >
+      {desk ? (
+        <div className="cine-desk-tools">
+          {desk.search}
+          {desk.langs}
+        </div>
+      ) : null}
       <div className="cine-browse__head">
-        <IconButton
-          icon="chev-l"
-          variant="quiet"
-          label={searching ? CINE_TEXT.exitSearch : CINE_TEXT.backHome}
-          onClick={searching ? onClearSearch : closeCineGrid}
-        />
+        {arrow ? (
+          <IconButton
+            icon="chev-l"
+            variant="quiet"
+            label={
+              searching
+                ? CINE_TEXT.exitSearch
+                : desk
+                  ? state.kind === 'movie'
+                    ? CINE_TEXT.allMovies
+                    : CINE_TEXT.allSeries
+                  : CINE_TEXT.backHome
+            }
+            onClick={
+              searching
+                ? onClearSearch
+                : desk
+                  ? () => setCineState({ cat: 'all', tag: null })
+                  : () => closeCineGrid()
+            }
+          />
+        ) : null}
         <div className="cine-browse__titles">
           {/* Enfocable: al abrir la rejilla desde la portada, el foco viene aquí. */}
           <h2 id={GRID_TITLE_ID} className="cine-browse__title" tabIndex={-1}>

@@ -115,6 +115,158 @@ const NO_FAVORITES = [
   { url: /\/api\/v1\/library(\?|$)/, edit: (json) => ({ ...json, favorites: [] }) },
 ];
 
+// ---- «Ver juntos» (docs/ver-juntos.md): una sala de mentira ------------------
+// La demo no tiene salas y el invitado (invitado.html) siempre va en vivo. Para
+// revisar la sala (Theater, Panels, Chat) y la página del invitado sin backend:
+//   - el SSE de la sala lo contesta un EventSource falso (fakePartyEvents, en
+//     cada contexto) con una foto de la sala;
+//   - la credencial se deja en localStorage antes de abrir la vista (storage);
+//   - las rutas de la sala que el invitado pide por red (vista previa, latido,
+//     vídeo) las contesta page.route (fulfill).
+// El vídeo no llega (no hay motor): la sala sale con su aviso de error, que
+// también se revisa.
+
+const PARTY_FIXTURE = JSON.parse(
+  readFileSync(
+    path.join(WEB, '..', '..', 'packages', 'shared', 'fixtures', 'v1', 'partyCreate.json'),
+    'utf8',
+  ),
+);
+const PARTY_CODE = PARTY_FIXTURE.room.code;
+const PARTY_HOST = PARTY_FIXTURE.member;
+const PARTY_GUEST = { id: 'm_AnaInvitada', token: 'm_AnaInvitada.c2VjcmV0b0RlQW5hSW52aXRhZGEx' };
+
+/** La sala tal y como llega en `party.snapshot`: Isma (anfitrión), Ana y Yassin, con chat. */
+function partySnapshot() {
+  const base = PARTY_FIXTURE.room;
+  const member = (id, name, extra = {}) => ({
+    id,
+    name,
+    host: false,
+    leader: false,
+    role: 'guest',
+    ready: true,
+    progress: 100,
+    online: true,
+    buffering: false,
+    ...extra,
+  });
+  return {
+    room: {
+      ...base,
+      members: [
+        ...base.members,
+        member(PARTY_GUEST.id, 'Ana'),
+        member('m_YassinInvitado', 'Yassin', { online: false }),
+      ],
+      playback: { playing: false, positionS: 1834, at: 0, rev: 3, waitingFor: [], lobby: false },
+    },
+    chat: [
+      ...PARTY_FIXTURE.chat,
+      { id: 2, at: 0, kind: 'system', memberId: null, name: 'Sala', text: 'Ana se ha unido.' },
+      { id: 3, at: 0, kind: 'chat', memberId: PARTY_GUEST.id, name: 'Ana', text: '¡Ya estoy!' },
+      {
+        id: 4,
+        at: 0,
+        kind: 'chat',
+        memberId: PARTY_HOST.id,
+        name: 'Isma',
+        text: 'Le doy al play en cuanto llegue Yassin.',
+      },
+    ],
+    serverNow: 0,
+  };
+}
+
+/** Corre en el navegador (addInitScript): un EventSource que contesta el SSE de
+    la sala de mentira con su foto; los demás, el de verdad. */
+function fakePartyEvents({ code, snapshot }) {
+  const Real = globalThis.EventSource;
+  if (!Real) return;
+  const target = `/api/v1/party/${code}/events`;
+  class FakeSource extends EventTarget {
+    constructor(url) {
+      super();
+      this.url = String(url);
+      this.readyState = 0;
+      this.withCredentials = false;
+      setTimeout(() => {
+        if (this.readyState === 2) return;
+        this.readyState = 1;
+        this.dispatchEvent(new Event('open'));
+        const now = Date.now();
+        const data = structuredClone(snapshot);
+        data.serverNow = now;
+        data.room.playback.at = now;
+        for (const message of data.chat) message.at = now - (5 - message.id) * 60_000;
+        this.dispatchEvent(new MessageEvent('party.snapshot', { data: JSON.stringify(data) }));
+      }, 60);
+    }
+    close() {
+      this.readyState = 2;
+    }
+  }
+  function EventSourceForReview(url, init) {
+    return String(url).includes(target) ? new FakeSource(url) : new Real(url, init);
+  }
+  EventSourceForReview.CONNECTING = 0;
+  EventSourceForReview.OPEN = 1;
+  EventSourceForReview.CLOSED = 2;
+  EventSourceForReview.prototype = Real.prototype;
+  globalThis.EventSource = EventSourceForReview;
+}
+
+const credentialKey = (code) => `aceneo-juntos-${code}`;
+
+/** Lo que el invitado pide por red a su sala (el proxy solo deja pasar estas rutas). */
+const PARTY_ROUTES = [
+  {
+    url: new RegExp(`/api/v1/party/${PARTY_CODE}(/[a-z]+)?(\\?|$)`),
+    fulfill: (route) => {
+      const { pathname } = new URL(route.request().url());
+      const tail = pathname.split('/').pop();
+      if (tail === PARTY_CODE) {
+        const { room } = partySnapshot();
+        return route.fulfill({
+          json: {
+            code: PARTY_CODE,
+            title: room.title,
+            members: room.members.filter((m) => m.online).map((m) => m.name),
+            full: false,
+          },
+        });
+      }
+      // El vídeo no está (no hay motor): la sala lo cuenta con su aviso.
+      if (tail === 'stream')
+        return route.fulfill({
+          status: 404,
+          json: { error: { code: 'not_found', message: 'Sin vídeo en la revisión.' } },
+        });
+      return route.fulfill({ json: { serverNow: Date.now(), rev: 3, stream: 'none' } });
+    },
+  },
+];
+
+/** La página del invitado: el proxy la sirve en `/s/<código>`; vite preview, en `/invitado.html`. */
+function guestRoutes(base) {
+  return [
+    {
+      url: `${base}/s/${PARTY_CODE}`,
+      fulfill: async (route) => {
+        const response = await route.fetch({ url: `${base}/invitado.html` });
+        return route.fulfill({ response });
+      },
+    },
+    ...PARTY_ROUTES,
+  ];
+}
+
+/** La sala ya con su foto (sin el «Conectando…» del principio). */
+async function partyReady(page) {
+  await page.waitForSelector('.juntos-chat, .juntos-people', { timeout: 15_000 });
+  await page.waitForTimeout(800);
+}
+
 async function waitPlaying(page, timeout = 25_000) {
   await page.waitForSelector('.player[data-phase="reproduciendo"]', { timeout });
 }
@@ -135,9 +287,37 @@ async function passCineLanguages(page) {
   await page.mouse.move(0, 0);
 }
 
-/** Abre la primera película de la portada y le da a reproducir: la sala (`sala/<id>`). */
+/** La portada de Películas y series, lista: en el móvil sus filas (`.cine-row`);
+    desde 768 (rediseño de escritorio) Mi lista (`.cine-esc`) con sus carteles. */
+const CINE_HOME = '.cine-row .cine-card, .cine-esc .cine-card';
+
+/** ¿Pelis y series de escritorio? Desde 768 de ancho (también el móvil en
+    horizontal): la barra lleva las pestañas Inicio / Películas / Series / Mi lista. */
+async function isCineDesk(page) {
+  return (await page.locator('.cine-deskhead').count()) > 0;
+}
+
+/** Escritorio: abre la rejilla de una pestaña (Películas o Series). */
+async function openCineTab(page, name) {
+  await page.locator('.cine-tabs').getByRole('button', { name, exact: true }).click();
+  await page.waitForSelector('.cine-grid .cine-card', { timeout: 10_000 });
+}
+
+/** Abre la ficha del primer título: en el móvil, el primero de la portada; en
+    escritorio (el escaparate mezcla películas y series), el primero de la
+    rejilla de su pestaña. */
+async function openFirstTitle(page, kind) {
+  if (await isCineDesk(page)) {
+    await openCineTab(page, kind === 'series' ? 'Series' : 'Películas');
+    await page.locator('.cine-grid .cine-card').first().click();
+  } else {
+    await page.locator('.cine-row .cine-card').first().click();
+  }
+}
+
+/** Abre la primera película y le da a reproducir: la sala (`sala/<id>`). */
 async function openSala(page) {
-  await page.locator('.cine-row .cine-card').first().click();
+  await openFirstTitle(page, 'movie');
   await page.waitForSelector('.cine-hero__title', { timeout: 10_000 });
   await page
     .getByRole('button', { name: /^(Reproducir|Seguir viendo|Continuar|Ver T)/ })
@@ -230,7 +410,11 @@ const VIEWS = [
     routes: DEMO ? null : NO_FAVORITES,
     prepare: async (page) => {
       if (DEMO) {
-        await page.locator('.lib input').first().fill('zzzz');
+        // Escritorio (`.lib--desk`): el filtro va plegado en una lupa (el
+        // <input> mide 0 hasta tener el foco); se enfoca y crece.
+        const filter = page.locator('.lib input').first();
+        if ((await page.locator('.lib--desk').count()) > 0) await filter.focus();
+        await filter.fill('zzzz');
         await page.waitForTimeout(500);
       }
       await page.waitForSelector('.empty', { timeout: 10_000 }).catch(() => {});
@@ -249,10 +433,17 @@ const VIEWS = [
     search: '?vista=biblioteca',
     ready: '.lib',
     prepare: async (page) => {
-      await page
-        .getByRole('button', { name: /^Pegar un Content ID/ })
-        .first()
-        .click();
+      if ((await page.locator('.lib--desk').count()) > 0) {
+        // Escritorio: «Pegar un hash o enlace» va en «Más opciones» de Canales.
+        await page.getByRole('button', { name: 'Más opciones de Canales' }).click();
+        await page.getByRole('menuitem', { name: /^Pegar un hash/ }).click();
+      } else {
+        // Móvil: el botón de la cabecera.
+        await page
+          .getByRole('button', { name: /^Pegar un Content ID/ })
+          .first()
+          .click();
+      }
       await dialogOpen(page);
       await page
         .locator('[role="dialog"] input')
@@ -311,22 +502,33 @@ const VIEWS = [
   },
   { name: 'sistema', search: '?vista=sistema&flag=sistema' },
   // Películas y series (docs/vod.md §12.11): sin interruptor desde la 0.9.0; en vivo solo
-  // salen si el servidor ya tiene películas y series. La portada va en filas
-  // (`.cine-row`); la rejilla (`.cine-grid`) es otra pantalla.
+  // salen si el servidor ya tiene películas y series. En el móvil la portada va en
+  // filas (`.cine-row`); desde 768, el escaparate (`.cine-esc`) y las pestañas
+  // Inicio / Películas / Series / Mi lista. La rejilla (`.cine-grid`) es otra pantalla.
   // La primera vez, el selector de idiomas (antes de pasarlo).
   { name: 'cine-idiomas', search: '?vista=cine', ready: '.cine-welcome' },
-  { name: 'cine', search: '?vista=cine', cine: true, ready: '.cine-row .cine-card' },
+  { name: 'cine', search: '?vista=cine', cine: true, ready: CINE_HOME },
   {
     name: 'cine-categoria',
     cine: true,
     search: '?vista=cine',
-    ready: '.cine-row .cine-card',
+    ready: CINE_HOME,
     prepare: async (page) => {
-      // «Ver todo» de la fila de la categoría: abre su rejilla.
-      await page
-        .getByRole('button', { name: /^Ver todo: 4K/ })
-        .first()
-        .click();
+      if (await isCineDesk(page)) {
+        // Escritorio: la pestaña Películas y, en su rejilla, el chip de la categoría.
+        await openCineTab(page, 'Películas');
+        await page
+          .locator('.cine-browse__cats')
+          .getByRole('button', { name: /^4K/ })
+          .first()
+          .click();
+      } else {
+        // Móvil: «Ver todo» de la fila de la categoría: abre su rejilla.
+        await page
+          .getByRole('button', { name: /^Ver todo: 4K/ })
+          .first()
+          .click();
+      }
       await page.waitForSelector('.cine-grid .cine-card', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
@@ -341,9 +543,9 @@ const VIEWS = [
     name: 'cine-pelicula',
     cine: true,
     search: '?vista=cine',
-    ready: '.cine-row .cine-card',
+    ready: CINE_HOME,
     prepare: async (page) => {
-      await page.locator('.cine-row .cine-card').first().click();
+      await openFirstTitle(page, 'movie');
       await page.waitForSelector('.cine-hero__title', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
@@ -352,9 +554,9 @@ const VIEWS = [
     name: 'cine-serie',
     cine: true,
     search: '?vista=cine&cine=series',
-    ready: '.cine-row .cine-card',
+    ready: CINE_HOME,
     prepare: async (page) => {
-      await page.locator('.cine-row .cine-card').first().click();
+      await openFirstTitle(page, 'series');
       await page.waitForSelector('.cine-episodes', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
@@ -364,9 +566,74 @@ const VIEWS = [
     name: 'sala',
     search: '?vista=cine',
     cine: true,
-    ready: '.cine-row .cine-card',
+    ready: CINE_HOME,
     player: true,
     prepare: openSala,
+  },
+  // «Ver juntos» (docs/ver-juntos.md), al final: entrar en la sala la recuerda
+  // («Volver a tu sala», «Añadir a la sala») y cambiaría las vistas de detrás.
+  // La portada, el destino de la barra lateral; sin sala recordada.
+  {
+    name: 'juntos',
+    search: '?vista=juntos',
+    ready: '.empty',
+    storage: { 'aceneo-juntos-ultima': null },
+  },
+  // La sala desde casa, con la credencial del anfitrión (§7).
+  {
+    name: 'juntos-sala',
+    search: `?vista=juntos/${PARTY_CODE}`,
+    storage: { [credentialKey(PARTY_CODE)]: JSON.stringify(PARTY_HOST) },
+    // En vivo, el latido y el vídeo irían al backend, que no conoce la sala.
+    routes: PARTY_ROUTES,
+    prepare: partyReady,
+  },
+  // «Salas abiertas» (§14): solo en vivo (la demo contesta sin red y no tiene
+  // salas), con la lista retocada al vuelo.
+  ...(DEMO
+    ? []
+    : [
+        {
+          name: 'juntos-abiertas',
+          search: '?vista=juntos',
+          ready: '.juntos-open',
+          storage: { 'aceneo-juntos-ultima': null },
+          routes: [
+            {
+              url: /\/api\/v1\/party(\?|$)/,
+              fulfill: (route) => {
+                const { room } = partySnapshot();
+                return route.fulfill({
+                  json: {
+                    rooms: [
+                      {
+                        code: PARTY_CODE,
+                        title: room.title,
+                        host: 'Isma',
+                        members: room.members.length,
+                        online: room.members.filter((m) => m.online).length,
+                        createdAt: Date.now() - 20 * 60_000,
+                      },
+                    ],
+                  },
+                });
+              },
+            },
+          ],
+        },
+      ]),
+  // La página del invitado (§9): primero la entrada (el nombre) y luego la sala.
+  {
+    name: 'invitado-entrada',
+    guest: true,
+    ready: '.juntos-join__sub',
+    storage: { [credentialKey(PARTY_CODE)]: null },
+  },
+  {
+    name: 'invitado',
+    guest: true,
+    storage: { [credentialKey(PARTY_CODE)]: JSON.stringify(PARTY_GUEST) },
+    prepare: partyReady,
   },
 ].filter((view) => !ONLY_VIEWS || ONLY_VIEWS.includes(view.name));
 
@@ -869,6 +1136,8 @@ async function checkAxe(page) {
 // ---------------------------------------------------------------------------
 
 function urlFor(base, view) {
+  // El invitado va siempre en vivo (sin «demo=1»): su página no tiene demo.
+  if (view.guest) return `${base}/s/${PARTY_CODE}`;
   const search = typeof view.search === 'function' ? view.search() : view.search;
   return `${base}/${search}${DEMO ? '&demo=1' : ''}`;
 }
@@ -906,17 +1175,33 @@ async function openView(page, base, view, size) {
   for (let attempt = 1; attempt <= 4; attempt += 1) {
     try {
       await page.unrouteAll({ behavior: 'ignoreErrors' });
-      for (const { url, edit } of view.routes ?? []) {
+      const routes = [...(view.routes ?? []), ...(view.guest ? guestRoutes(base) : [])];
+      for (const { url, edit, fulfill } of routes) {
+        // `fulfill`: la respuesta entera es nuestra; `edit`: se retoca la del backend.
+        if (fulfill) {
+          await page.route(url, fulfill);
+          continue;
+        }
         await page.route(url, async (route) => {
           if (route.request().method() !== 'GET') return route.continue();
           const response = await route.fetch();
           return route.fulfill({ response, json: edit(await response.json()) });
         });
       }
+      if (view.storage) {
+        // localStorage es del origen: se escribe desde un fichero cualquiera de él.
+        await page.goto(`${base}/icon.svg`, { waitUntil: 'load', timeout: 30_000 });
+        await page.evaluate((entries) => {
+          for (const [key, value] of Object.entries(entries)) {
+            if (value === null) localStorage.removeItem(key);
+            else localStorage.setItem(key, value);
+          }
+        }, view.storage);
+      }
       await page.goto(urlFor(base, view), { waitUntil: 'load', timeout: 30_000 });
-      await page.waitForSelector('.app', { timeout: 15_000 });
+      await page.waitForSelector(view.guest ? '.guest__main' : '.app', { timeout: 15_000 });
       await page.evaluate(() => document.fonts.ready);
-      if (!DEMO) {
+      if (!DEMO && !view.guest) {
         const demo = await page
           .waitForFunction(() => document.body.innerText.includes('Modo demo'), null, {
             timeout: 3000,
@@ -957,6 +1242,8 @@ async function runCombo(browser, base, size, scheme, extras) {
     locale: 'es-ES',
     timezoneId: 'Europe/Madrid',
   });
+  // El SSE de la sala de mentira de «Ver juntos» (solo ese; los demás, de verdad).
+  await context.addInitScript(fakePartyEvents, { code: PARTY_CODE, snapshot: partySnapshot() });
   if (extras.transparency)
     await context.addInitScript(() => {
       try {

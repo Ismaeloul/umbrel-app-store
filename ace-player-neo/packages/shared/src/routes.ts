@@ -168,16 +168,17 @@ import {
   PartyEventsQuerySchema,
   PartyJoinBodySchema,
   PartyJoinResponseSchema,
+  PartyListSchema,
   PartyMemberBodySchema,
   PartyOkSchema,
   PartyParamsSchema,
   PartyPreviewSchema,
   PartyQueueBodySchema,
-  PartyReactBodySchema,
   PartySettingsBodySchema,
   PartyStatusBodySchema,
   PartyStatusResponseSchema,
   PartyStreamQuerySchema,
+  PartyStreamGrantSchema,
   PartyTokenBodySchema,
   PartyVideoParamsSchema,
 } from './api/v1/party.js';
@@ -858,6 +859,7 @@ export const V1_ROUTES = {
     summary: 'Guía TV: «ahora / después» de unos canales IPTV (para Canales)',
     description:
       'Para cada id IPTV pedido (los de las filas de la pestaña IPTV o del buscador), lo que echa ahora y lo siguiente según la guía (docs/iptv.md §20.6). ' +
+      'Un id AceStream de tu biblioteca (favoritos, recientes o tus listas) vale el canal de tu IPTV que es por su nombre (≥ 92, como el buscador). ' +
       'Sin guía o sin IPTV activa, 200 con `available: false`: no es un error.',
     query: IptvGuideNowQuerySchema,
     response: IptvGuideNowResponseSchema,
@@ -1679,7 +1681,8 @@ export const V1_ROUTES = {
     module: 'party',
     summary: 'Tiempo real de la sala por SSE: estado, personas y chat',
     description:
-      'Empieza con `party.snapshot` y luego manda `party.playback`, `party.room`, `party.chat` y `party.closed`. ' +
+      'Empieza con `party.snapshot` y luego manda `party.playback`, `party.room`, `party.chat`, `party.typing` y ' +
+      '`party.closed`. ' +
       'Con la conexión abierta la persona cuenta como presente.',
     params: PartyParamsSchema,
     query: PartyEventsQuerySchema,
@@ -1696,18 +1699,31 @@ export const V1_ROUTES = {
     access: 'any',
     credential: 'party',
     module: 'party',
-    summary: 'Abrir el vídeo de la sala: la misma sesión VOD para todos',
+    summary: 'Abrir el vídeo de la sala: la misma sesión para todos',
     description:
       'Como `vodStream`, pero el título, el audio y la posición los pone la sala, y quien ya está en la sesión no ' +
       'recibe un traspaso: todos leen la misma lista HLS (una sola plaza del proveedor). La `url` es la de ' +
-      '`partyVideo`, con la clave de vídeo de la persona; el latido de la sesión lo da `partyStatus`.',
+      '`partyVideo`, con la clave de vídeo de la persona; el latido de la sesión lo da `partyStatus`. En una sala ' +
+      'en directo (§14) es como `channelStream` del canal de la sala, siempre por el remux, y devuelve una `StreamGrant`.',
     params: PartyParamsSchema,
     query: PartyStreamQuerySchema,
-    response: VodGrantSchema,
+    response: PartyStreamGrantSchema,
     status: 200,
     content: 'json',
     sideEffects: true,
-    errors: [...PARTY_MEMBER_ERRORS, ...VOD_STREAM_ERRORS],
+    errors: [
+      ...PARTY_MEMBER_ERRORS,
+      /* La sala pasó a otro título mientras se abría este: hay que abrir el nuevo. */
+      'party_gone',
+      ...VOD_STREAM_ERRORS,
+      'engine_unavailable',
+      'engine_timeout',
+      'source_no_peers',
+      'remux_timeout',
+      'remux_died',
+      'ffmpeg_missing',
+      ...IPTV_STREAM_ERRORS,
+    ],
     legacyTwin: null,
   }),
   partyVideo: defineRoute({
@@ -1776,20 +1792,23 @@ export const V1_ROUTES = {
     errors: [...PARTY_MEMBER_ERRORS, 'rate_limited'],
     legacyTwin: null,
   }),
-  partyReact: defineRoute({
+  partyTyping: defineRoute({
     method: 'POST',
-    path: '/api/v1/party/:code/react',
+    path: '/api/v1/party/:code/typing',
     access: 'any',
     credential: 'party',
     module: 'party',
-    summary: 'Lanzar una reacción que sube por encima del vídeo de todos',
+    summary: 'Avisar de que se está escribiendo en el chat («Ana está escribiendo…»)',
+    description:
+      'Ligero y sin error por frecuencia: el servidor reenvía como mucho uno cada `PARTY.typingIntervalMs` por ' +
+      'persona (`party.typing`) y descarta los demás.',
     params: PartyParamsSchema,
-    body: PartyReactBodySchema,
+    body: PartyTokenBodySchema,
     response: PartyOkSchema,
     status: 200,
     content: 'json',
     sideEffects: true,
-    errors: [...PARTY_MEMBER_ERRORS, 'rate_limited'],
+    errors: PARTY_MEMBER_ERRORS,
     legacyTwin: null,
   }),
   partySettings: defineRoute({
@@ -1798,7 +1817,8 @@ export const V1_ROUTES = {
     access: 'any',
     credential: 'party',
     module: 'party',
-    summary: 'Ajustes de la sala: quién controla y qué pasa al acabar (solo el líder)',
+    summary:
+      'Ajustes de la sala: quién controla (el líder) y qué pasa al acabar (el líder y los co-líderes)',
     params: PartyParamsSchema,
     body: PartySettingsBodySchema,
     response: PartyOkSchema,
@@ -1814,7 +1834,7 @@ export const V1_ROUTES = {
     access: 'any',
     credential: 'party',
     module: 'party',
-    summary: 'Echar a alguien o darle el liderazgo (solo el líder)',
+    summary: 'Echar a alguien, darle el liderazgo o hacerle co-líder (solo el líder)',
     params: PartyParamsSchema,
     body: PartyMemberBodySchema,
     response: PartyOkSchema,
@@ -1871,6 +1891,41 @@ export const V1_ROUTES = {
     content: 'json',
     sideEffects: true,
     errors: [...PARTY_MEMBER_ERRORS, 'party_host_only'],
+    legacyTwin: null,
+  }),
+  partyList: defineRoute({
+    method: 'GET',
+    path: '/api/v1/party',
+    access: 'web',
+    credential: 'bearer',
+    module: 'party',
+    summary: 'Las salas abiertas (solo la web de casa)',
+    description:
+      'Para volver a una sala o cerrarla aunque este navegador ya no tenga su credencial: quien se salió sin ' +
+      'querer, o la creó en otro aparato. Solo la web de casa (detrás del login de Umbrel); nunca por el proxy.',
+    response: PartyListSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  partyEnd: defineRoute({
+    method: 'POST',
+    path: '/api/v1/party/:code/end',
+    access: 'web',
+    credential: 'bearer',
+    module: 'party',
+    summary: 'Cerrar una sala para todos desde casa (sin credencial de la sala)',
+    description:
+      'Como `partyClose`, pero desde la web de casa y sin la credencial del anfitrión: en casa manda quien ' +
+      'tiene el Umbrel. Los de dentro reciben `party.closed` con `host`.',
+    params: PartyParamsSchema,
+    response: PartyOkSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: ['party_not_found'],
     legacyTwin: null,
   }),
 } as const satisfies Record<string, V1RouteDefinition>;

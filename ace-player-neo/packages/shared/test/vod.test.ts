@@ -14,6 +14,9 @@ import {
   ERROR_CATALOG,
   IPTV_ERROR_CODES,
   IptvStatusSchema,
+  LITE_VOD,
+  PartyStreamQuerySchema,
+  PartyVideoParamsSchema,
   StreamSourceSchema,
   V1_ROUTES,
   V1_ROUTE_IDS,
@@ -21,6 +24,7 @@ import {
   VOD_ERROR_CODES,
   VOD_EXTENSIONS,
   VOD_LIMITS,
+  VOD_PLAY,
   VOD_PROGRESS,
   VOD_TAGS,
   VOD_TIMINGS,
@@ -375,6 +379,69 @@ describe('lo que ve la app no cambia (docs/vod.md §17)', () => {
     expect(BootstrapResponseSchema.safeParse(withVod).success).toBe(true);
     expect(IptvStatusSchema.safeParse(WEB_EVENT_FIXTURES['iptv.status']).success).toBe(true);
     expect(WEB_EVENT_FIXTURES['iptv.status'].vod?.state).toBe('ready');
+  });
+});
+
+describe('calidad ligera para invitados (docs/ver-juntos.md §17)', () => {
+  it('la ruta de la sala admite la maestra y los lo_*; la de vídeo de siempre, no', () => {
+    const sid = 's_Q2FuYWxEZVBydWViYQ';
+    const code = 'AbCdEfGhIjKlMnOp';
+    const key = 'k'.repeat(32);
+    for (const file of [
+      'master.m3u8',
+      'lo.m3u8',
+      'lo_init.mp4',
+      'lo_index0.m4s',
+      'lo_index123456789.m4s',
+    ]) {
+      expect(PartyVideoParamsSchema.safeParse({ code, key, file }).success, file).toBe(true);
+      expect(VideoParamsSchema.safeParse({ sid, file }).success, file).toBe(false);
+      /* Nombres planos que caben en el proxy de la sala (Caddyfile). */
+      expect(/^[A-Za-z0-9_.-]{1,40}$/.test(file), file).toBe(true);
+    }
+    for (const file of ['index.m3u8', 'init.mp4', 'init_2.mp4', 'index7.m4s']) {
+      expect(PartyVideoParamsSchema.safeParse({ code, key, file }).success, file).toBe(true);
+      expect(VideoParamsSchema.safeParse({ sid, file }).success, file).toBe(true);
+    }
+    for (const file of [
+      'lo_index.m4s',
+      'lo_init_2.mp4',
+      'lo.m3u',
+      'master.m3u8.part',
+      '../lo.m3u8',
+    ]) {
+      expect(PartyVideoParamsSchema.safeParse({ code, key, file }).success, file).toBe(false);
+    }
+  });
+
+  it('partyStream: abr opcional (0 por defecto, las consultas de antes siguen valiendo)', () => {
+    const t = `m_${'a'.repeat(12)}.${'s'.repeat(32)}`;
+    const base = { client: 'web', viewer: 'v-ana', t };
+    const old = PartyStreamQuerySchema.safeParse(base);
+    expect(old.success && old.data.abr).toBe('0');
+    expect(PartyStreamQuerySchema.safeParse({ ...base, abr: '1' }).success).toBe(true);
+    expect(PartyStreamQuerySchema.safeParse({ ...base, abr: '2' }).success).toBe(false);
+  });
+
+  it('VodGrant.variants es opcional: la concesión de siempre vale sin él y con él', () => {
+    const grant = WEB_V1_FIXTURES.vodStream as object;
+    expect(VodGrantSchema.safeParse(grant).success).toBe(true);
+    for (const variants of [
+      { hd: 'avc1.640028', lite: 'avc1.640028' },
+      { hd: null, lite: 'avc1.640028' },
+    ]) {
+      expect(VodGrantSchema.safeParse({ ...grant, variants }).success).toBe(true);
+    }
+    expect(VodGrantSchema.safeParse({ ...grant, variants: { hd: null } }).success).toBe(false);
+  });
+
+  it('LITE_VOD: la cola por debajo del reinicio del productor, y 404 a la segunda', () => {
+    expect(LITE_VOD.aheadMaxS).toBeLessThan(VOD_PLAY.restartAheadS);
+    expect(LITE_VOD.waitMs).toBeLessThan(VOD_PLAY.segmentWaitMs);
+    expect(LITE_VOD.repositionWaitMs).toBeLessThan(VOD_PLAY.segmentWaitMs);
+    expect(LITE_VOD.missesBeforeGone).toBe(2);
+    expect(LITE_VOD.average).toBeLessThan(LITE_VOD.bandwidth);
+    expect(LITE_VOD.minSpeed).toBeGreaterThan(1);
   });
 });
 

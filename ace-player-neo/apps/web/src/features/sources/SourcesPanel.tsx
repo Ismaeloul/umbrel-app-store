@@ -133,6 +133,9 @@ export interface SourcesPanelProps {
   headerExtra?: ReactNode;
   /** Con el reproductor en otra cosa: el inspector del canal que suena (modo canal sin hermanas). */
   channelFallback?: InspectorTarget | null;
+  /** Sin cabecera (la ficha de escritorio: el título y «Rebuscar» van en la
+      barra de pestañas). El panel lateral del reproductor la conserva. */
+  bare?: boolean;
   className?: string;
 }
 
@@ -140,6 +143,7 @@ export function SourcesPanel({
   variant,
   headerExtra,
   channelFallback = null,
+  bare: bareProp = false,
   className,
 }: SourcesPanelProps) {
   const view = useSourcesView();
@@ -272,6 +276,14 @@ export function SourcesPanel({
 
   // Modo canal sin hermanas: sin selector (§7.1), solo el inspector.
   const hideHeader = !inMatch && !rows.length;
+  /* Filas de escritorio en la ficha del partido: la lista va directa bajo las
+     pestañas, como en la maqueta; el título queda para los lectores de
+     pantalla, «Rebuscar» va junto a las pestañas y el progreso solo se ve
+     mientras se comprueba. En el panel lateral del reproductor no: ahí la
+     cabecera es la única que tiene «Rebuscar». */
+  const bare = bareProp && inMatch;
+  const scanning =
+    state.phase === 'resolving' || (state.scan !== null && state.scan.status !== 'complete');
 
   return (
     <section
@@ -280,7 +292,11 @@ export function SourcesPanel({
       aria-labelledby={hideHeader ? undefined : headingId}
       aria-label={hideHeader ? 'Acciones del canal' : undefined}
     >
-      {hideHeader ? null : (
+      {hideHeader ? null : bare ? (
+        <h2 id={headingId} className="sr-only">
+          Fuentes
+        </h2>
+      ) : (
         <header className="src__head">
           <h2 id={headingId} className="src__title">
             {inMatch ? 'Fuentes' : 'Otras fuentes'}
@@ -304,7 +320,7 @@ export function SourcesPanel({
           </div>
         </header>
       )}
-      {showProgress ? (
+      {showProgress && (!bare || scanning) ? (
         <div className="src__progress" aria-live="polite">
           <ProgressBar
             value={state.phase === 'resolving' ? 0 : scanProgress(state.scan, state.entries)}

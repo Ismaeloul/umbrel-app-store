@@ -56,6 +56,18 @@ export function resolveOrigin(header: string | string[] | undefined, url: string
 }
 
 /**
+ * ¿Entró por el proxy de la sala de «Ver juntos»? (deploy/umbrel/Caddyfile: `X-Ace-Origin: guest`,
+ * que Caddy pone siempre, docs/ver-juntos.md §9). Para el backend ese origen es `native` (el más
+ * estricto, `resolveOrigin`); esto solo distingue al invitado de fuera para darle la calidad ligera
+ * (§17). nginx sobrescribe la cabecera con `web` o `native`: desde casa nunca sale `guest`.
+ */
+export function isGuestOrigin(header: string | string[] | undefined, url: string): boolean {
+  if (isNativePath(url)) return false;
+  const value = Array.isArray(header) ? header[0] : header;
+  return value?.trim().toLowerCase() === 'guest';
+}
+
+/**
  * Token de `Authorization: Bearer <token>`. Devuelve null si no hay o no
  * tiene esa forma (el valor en sí lo comprueba auth).
  */

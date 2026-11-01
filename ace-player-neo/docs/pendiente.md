@@ -103,9 +103,14 @@ a los lados) y copia de seguridad. **Hechos en la 0.9.0 (4-oct):** 4 y 7 (Pelis 
     - **Cambiar de canal rápido** entre favoritos (flechas en PC, deslizar en el móvil), como en la tele.
     - **Copia de seguridad de los ajustes:** exportar e importar listas, favoritos, IPTV y preferencias (por si
       formatea).
-    Descartadas: avisos de partido (usa SofaScore), aprender qué canales fallan (los de la IPTV no cambian: si
+    Descartadas: aprender qué canales fallan (los de la IPTV no cambian: si
     uno falla, se lo dice al proveedor), retroceder más tiempo, dos partidos a la vez, página de equipo con historial de fuentes,
     marcador en el reproductor, calendario exportable, grabar, perfiles, mando remoto y modo tele.
+    Los avisos de partido se descartaron aquí, pero la maqueta aprobada del rediseño de escritorio los trae y
+    están en la 1.0.0, en el escritorio y con la pestaña abierta: Ajustes → «Avisos» (5 min por defecto; «Nunca»
+    los apaga) avisa de los partidos de Mis equipos (`settings/match-alerts.tsx`) y de lo apuntado con «Te aviso»
+    en la Guía, que se ve en la campana de la barra (`features/avisos`). Un partido avisa una sola vez aunque esté
+    en los dos sitios.
 14. **App de iPhone: al final, con el Mac de su hermano** (simulador de iPhone y cambios al momento, mucho más
     práctico que compilar en GitHub y bajar la IPA). Primero pulir al máximo la web; la app irá basada en la web.
     Idea solo para la app: **descargar películas y episodios en el iPhone** para verlos sin conexión y borrarlos

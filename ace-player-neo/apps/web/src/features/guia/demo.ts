@@ -8,7 +8,12 @@
    - `hoy`: como la guía real del panel de Isma (Paso 0 del 3-oct), que solo
      cubre de ayer a hoy: sin «Mañana» ni «Pasado».
    - `grande`: «Todos» con 4 391 canales (los 55 repetidos con otro nombre),
-     para ver la parrilla virtual con el tamaño del proveedor de Isma. */
+     para ver la parrilla virtual con el tamaño del proveedor de Isma.
+
+   Encima, el próximo partido de HOY de la Agenda de ejemplo (el que aún no ha
+   empezado) se mete en la parrilla del favorito «M+ LaLiga TV», con su previa
+   delante, como en la maqueta («Previa · Valencia – Sevilla» y el partido):
+   así el popover enseña «Te aviso» + «Ver ficha» también en la demo. */
 
 import {
   DemoGuideError,
@@ -19,7 +24,11 @@ import {
   type DemoGuideOptions,
   type DemoGuideProgrammesQuery,
   type DemoGuideQuery,
+  GUIDE_FLAGS,
   type IptvGuideChannel,
+  type IptvGuideProgramme,
+  type IptvGuideProgrammeDetail,
+  type IptvGuideProgrammesResponse,
   type IptvGuideResponse,
 } from '@ace/shared';
 import { ApiError, registerDemoHandlers } from '../../api/index.ts';
@@ -88,33 +97,149 @@ function bigGuide(
   return { ...response, all, total: all, channels: rows };
 }
 
+// ---- El partido de la Agenda en la parrilla -------------------------------------------
+
+const MINUTE = 60_000;
+/** El favorito de fútbol de la guía de ejemplo donde se emite el partido. */
+const MATCH_CHANNEL = 'M+ LaLiga TV';
+
+interface Overlay {
+  guide: number;
+  from: number;
+  to: number;
+  programmes: readonly IptvGuideProgramme[];
+  details: ReadonlyMap<string, Omit<IptvGuideProgrammeDetail, 'version'>>;
+}
+
+let overlayCache: Promise<Overlay | null> | null = null;
+
+/** Previa de 30 min y el partido (1 h 55) del próximo partido de hoy de la Agenda de ejemplo. */
+function overlayFor(options: DemoGuideOptions): Promise<Overlay | null> {
+  overlayCache ??= (async () => {
+    const channel = baseChannels(options).find((item) => item.name === MATCH_CHANNEL);
+    if (!channel || channel.guide === null) return null;
+    const { demoSchedule } = await import('../agenda/demo-data.ts');
+    const now = Date.now();
+    const [today] = demoSchedule().days;
+    const match = today?.matches
+      .filter((item) => typeof item.start === 'number' && (item.start as number) > now)
+      .sort((a, b) => (a.start as number) - (b.start as number))[0];
+    if (!match || typeof match.start !== 'number' || !match.home || !match.away) return null;
+    const kickoff = match.start;
+    const guide = channel.guide;
+    const versus = `${match.home} - ${match.away}`;
+    const make = (start: number, end: number, title: string, description: string) => ({
+      programme: {
+        id: `${guide}.${Math.floor(start / MINUTE)}`,
+        start,
+        end,
+        title,
+        flags: GUIDE_FLAGS.live | GUIDE_FLAGS.detail,
+      },
+      description,
+    });
+    const items = [
+      make(
+        kickoff - 30 * MINUTE,
+        kickoff,
+        `Previa · ${versus}`,
+        'La previa del partido: alineaciones, la última hora de los vestuarios y el análisis.',
+      ),
+      make(
+        kickoff,
+        kickoff + 115 * MINUTE,
+        versus,
+        `${match.competition}: ${match.home} recibe al ${match.away}, en directo.`,
+      ),
+    ];
+    return {
+      guide,
+      from: kickoff - 30 * MINUTE,
+      to: kickoff + 115 * MINUTE,
+      programmes: items.map((item) => item.programme),
+      details: new Map(
+        items.map((item) => [
+          item.programme.id,
+          {
+            ...item.programme,
+            guide,
+            subTitle: null,
+            description: item.description,
+            categories: ['Fútbol'],
+            season: null,
+            episode: null,
+            episodeText: null,
+            year: null,
+            rating: 'TP',
+            stars: null,
+            directors: [],
+            actors: [],
+          },
+        ]),
+      ),
+    };
+  })().catch(() => null);
+  return overlayCache;
+}
+
+/** Recorta lo que pisaba el partido en su canal y mete la previa y el partido. */
+function withOverlay(
+  response: IptvGuideProgrammesResponse,
+  overlay: Overlay | null,
+): IptvGuideProgrammesResponse {
+  if (!overlay || overlay.to <= response.from || overlay.from >= response.to) return response;
+  return {
+    ...response,
+    channels: response.channels.map((row) => {
+      if (row.guide !== overlay.guide) return row;
+      const kept: IptvGuideProgramme[] = [];
+      for (const item of row.programmes) {
+        if (item.end <= overlay.from || item.start >= overlay.to) kept.push(item);
+        else if (item.start < overlay.from) kept.push({ ...item, end: overlay.from });
+        else if (item.end > overlay.to) kept.push({ ...item, start: overlay.to });
+      }
+      const added = overlay.programmes.filter(
+        (item) => item.end > response.from && item.start < response.to,
+      );
+      return { ...row, programmes: [...kept, ...added].sort((a, b) => a.start - b.start) };
+    }),
+  };
+}
+
 registerDemoHandlers({
   iptvGuide: async ({ query }) => {
     const { options, big } = variants();
     await wait(110);
     const response = demoGuide((query ?? {}) as DemoGuideQuery, Date.now(), options);
     const limit = Math.min(1000, Math.max(0, Number(query?.limit ?? 200) || 0));
-    return big ? bigGuide(response, options, limit) : response;
+    return big && !query?.type ? bigGuide(response, options, limit) : response;
   },
   iptvGuideProgrammes: async ({ query: raw }) => {
     const query = raw as DemoGuideProgrammesQuery;
     const { options, big } = variants();
     await wait(70 + Math.round(Math.random() * 90));
+    const overlay = await overlayFor(options);
     if (!big)
-      return demoOrApiError('iptvGuideProgrammes', () =>
-        demoGuideProgrammes(query, Date.now(), options),
+      return withOverlay(
+        demoOrApiError('iptvGuideProgrammes', () =>
+          demoGuideProgrammes(query, Date.now(), options),
+        ),
+        overlay,
       );
     const size = baseChannels(options).length;
     const refs = String(query.ch)
       .split(',')
       .map(Number)
       .filter((ref) => Number.isInteger(ref) && ref > 0);
-    const response = demoOrApiError('iptvGuideProgrammes', () =>
-      demoGuideProgrammes(
-        { ...query, ch: [...new Set(refs.map((ref) => baseRef(ref, size)))].join(',') },
-        Date.now(),
-        options,
+    const response = withOverlay(
+      demoOrApiError('iptvGuideProgrammes', () =>
+        demoGuideProgrammes(
+          { ...query, ch: [...new Set(refs.map((ref) => baseRef(ref, size)))].join(',') },
+          Date.now(),
+          options,
+        ),
       ),
+      overlay,
     );
     const byBase = new Map(response.channels.map((channel) => [channel.guide, channel]));
     return {
@@ -134,6 +259,11 @@ registerDemoHandlers({
     const [ref = '0', minute = '0'] = params.id.split('.');
     const size = baseChannels(options).length;
     const id = big ? `${baseRef(Number(ref), size)}.${minute}` : params.id;
+    const extra = (await overlayFor(options))?.details.get(id);
+    if (extra) {
+      const version = demoGuide({ limit: 0 }, Date.now(), options).version;
+      return big ? { ...extra, version, id: params.id, guide: Number(ref) } : { ...extra, version };
+    }
     const detail = demoOrApiError('iptvGuideProgramme', () =>
       demoGuideProgramme(id, query, Date.now(), options),
     );

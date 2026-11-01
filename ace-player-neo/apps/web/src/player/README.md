@@ -182,7 +182,9 @@ Reglas que cumple (inventario §8, §9, §11, §17, §18 y §26):
   ámbar o rojo); luz ambiental de los dos clubes (22 %, respira despacio,
   quieta con movimiento reducido); corte a negro de ~0,5 s al cambiar de
   fuente (`.player-cut`, solo opacidad); **modo teatro** (escritorio sin
-  pantalla completa: botón y F; Esc sale) = el mismo `data-immersive`; mini
+  pantalla completa: botón y F; también de reserva si la pantalla completa
+  no contesta en 1,5 s o falla, y entonces el botón dice «Salir del modo
+  teatro»; Esc sale) = el mismo `data-immersive`; mini
   con la imagen viva a 96×54 (el mismo `<video>`, solo CSS), «Marcador
   oculto» o el minuto si es un partido (nunca las cifras). Toques hápticos en
   los puntos de `HAPTIC_MAP` (`lib/haptics.ts`).

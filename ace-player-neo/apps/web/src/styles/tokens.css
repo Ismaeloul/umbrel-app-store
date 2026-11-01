@@ -108,7 +108,7 @@
   /* Barra superior (desde 768): sustituye al carril lateral, así que ya no
      hay anchura que restar al contenido (decisión W3). */
   --topbar-h: 64px;
-  --column-w: 300px;
+  --column-w: 380px;
   --aside-w: 340px;
   --tabbar-h: 64px;
   --tabbar-gap: 10px;

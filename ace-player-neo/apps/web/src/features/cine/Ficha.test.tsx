@@ -146,13 +146,23 @@ describe('película', () => {
     resetPlayerApi();
   });
 
-  it('«Ver juntos» pide el nombre, crea la sala con la película y abre juntos/<código>', async () => {
+  it('«Ver juntos» pide el nombre, crea la sala con la película (yo y co-líderes, votar) y abre juntos/<código>', async () => {
     const created = (await import('@fixtures/v1/partyCreate.json')).default;
     serveTitle({ ...MOVIE, progress: null }, { 'POST /api/v1/party': () => json(created, 201) });
     fireEvent.click(await screen.findByRole('button', { name: 'Ver juntos' }));
     const dialog = await screen.findByRole('dialog', { name: 'Ver juntos' });
     fireEvent.change(within(dialog).getByLabelText('Tu nombre'), { target: { value: ' Isma ' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Crear sala' }));
+    /* Solo «Con enlace» y, por defecto, «Yo y co-líderes» y «Votar lo siguiente» (§13). */
+    expect(within(dialog).getByRole('radio', { name: 'Yo y co-líderes' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(within(dialog).getByRole('switch', { name: 'Votar lo siguiente' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(within(dialog).queryByText(/Chat de voz/)).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Crear sala e invitar' }));
     await waitFor(() => expect(location.search).toContain(`vista=juntos/${created.room.code}`));
     const call = net.calls.find((c) => c.url.endsWith('/api/v1/party'));
     expect(call?.body).toEqual({
@@ -164,6 +174,9 @@ describe('película', () => {
       subtitle: null,
       name: 'Isma',
       audio: null,
+      control: 'leader',
+      coleaders: true,
+      queueMode: 'vote',
     });
     expect(localStorage.getItem(`aceneo-juntos-${created.room.code}`)).toContain(
       created.member.token,

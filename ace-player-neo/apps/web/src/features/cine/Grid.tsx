@@ -13,7 +13,8 @@
 import type { VodCard } from '@ace/shared';
 import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { VirtualList } from '../library/VirtualList.tsx';
-import { chunk, columnsFor } from './model.ts';
+import { useLayout } from '../../app/layout.tsx';
+import { chunk, columnsFor, deskColumnsFor } from './model.ts';
 import { PosterCard } from './PosterCard.tsx';
 
 /** Ancho de un elemento, al día con ResizeObserver (sin él, el de la ventana). */
@@ -56,7 +57,9 @@ interface Row {
 
 export function PosterGrid({ cards, total, label, onEndReached, noteOf, goneOf }: PosterGridProps) {
   const [ref, width] = useWidth<HTMLDivElement>();
-  const columns = columnsFor(width);
+  /* En escritorio (rediseño), carteles de unos 150 px: caben más por fila. */
+  const desk = useLayout().kind !== 'mobile';
+  const columns = desk && width > 0 ? deskColumnsFor(width) : columnsFor(width);
   const rows: Row[] = chunk(cards, columns).map((row, index) => ({
     key: `${columns}:${index}`,
     start: index * columns,

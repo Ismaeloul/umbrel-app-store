@@ -16,7 +16,12 @@ import path from 'node:path';
 import { REMUX_LOG_BYTES } from '@ace/shared';
 import { ACE_SESSION_MARK } from './args.js';
 import type { ProcessLauncher, RemuxProcess } from './types.js';
-import type { VodProcess, VodProcessLauncher } from './vod/types.js';
+import type {
+  LiteProcess,
+  LiteProcessLauncher,
+  VodProcess,
+  VodProcessLauncher,
+} from './vod/types.js';
 
 /** Prioridad de los ffmpeg (arquitectura §5.7: nice 10). */
 export const REMUX_NICENESS = 10;
@@ -48,25 +53,34 @@ export interface SpawnLauncherOptions {
    * `pipe:1`, docs/vod.md §9.6). Por defecto se tira, como en el directo.
    */
   readonly stdout?: 'ignore' | 'pipe';
+  /**
+   * `pipe`: se le escribe por `stdin` (el trabajo ligero de «Ver juntos» recibe `init.mp4` +
+   * `index<N>.m4s` por `pipe:0`, docs/ver-juntos.md §17). Por defecto, nada.
+   */
+  readonly stdin?: 'ignore' | 'pipe';
 }
 
 /** Lanzador real con `child_process.spawn`. */
+export function createSpawnLauncher(
+  options: SpawnLauncherOptions & { readonly stdout: 'pipe'; readonly stdin: 'pipe' },
+): LiteProcessLauncher;
 export function createSpawnLauncher(
   options: SpawnLauncherOptions & { readonly stdout: 'pipe' },
 ): VodProcessLauncher;
 export function createSpawnLauncher(options?: SpawnLauncherOptions): ProcessLauncher;
 export function createSpawnLauncher(
   options: SpawnLauncherOptions = {},
-): ProcessLauncher | VodProcessLauncher {
+): ProcessLauncher | VodProcessLauncher | LiteProcessLauncher {
   const command = options.command ?? 'ffmpeg';
   const prefix = options.prefixArgs ?? [];
   const niceness = options.niceness ?? REMUX_NICENESS;
   const piped = options.stdout === 'pipe';
+  const fed = options.stdin === 'pipe';
   return {
     spawn(args: readonly string[]) {
       const child = spawn(command, [...prefix, ...args], {
         detached: !IS_WINDOWS,
-        stdio: ['ignore', piped ? 'pipe' : 'ignore', 'pipe'],
+        stdio: [fed ? 'pipe' : 'ignore', piped ? 'pipe' : 'ignore', 'pipe'],
         windowsHide: true,
       });
       /* Un 'error' sin escuchar tumbaría el proceso: el servicio pone el suyo,
@@ -92,6 +106,11 @@ export function createSpawnLauncher(
           killProcessTree(child.pid, child);
         },
       };
+      if (piped && fed && child.stdout && child.stdin) {
+        /* Un EPIPE (ffmpeg que sale antes de leerlo todo) no debe tumbar el proceso. */
+        child.stdin.on('error', () => {});
+        return { ...handle, stdout: child.stdout, stdin: child.stdin } satisfies LiteProcess;
+      }
       if (piped && child.stdout) return { ...handle, stdout: child.stdout } satisfies VodProcess;
       return handle;
     },

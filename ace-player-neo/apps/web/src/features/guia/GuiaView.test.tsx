@@ -1,13 +1,17 @@
 /* La vista Guía TV con un servidor simulado que contesta con la guía de
    ejemplo (@ace/shared, la misma de la demo): estados, «Favoritos | Todos»,
    la parrilla, el teclado y la hoja «Más info». jsdom no maqueta: la lista
-   virtual pinta con su tamaño inicial y `matchMedia` no casa (móvil). */
+   virtual pinta con su tamaño inicial y `matchMedia` no casa (móvil), salvo
+   en «escritorio», que simula 1280 px (días, chips de tipo, popover y
+   «Te aviso»). */
 
 import { demoGuide, demoGuideProgrammes, type IptvGuideResponse } from '@ace/shared';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '../../api/query.ts';
+import { resetMemoryStorage } from '../../lib/storage.ts';
+import { getAvisos, resetAvisos } from '../avisos/store.ts';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { LayoutContext, type LayoutValue } from '../../app/layout.tsx';
 import { RouterProvider, useRoute } from '../../app/router.tsx';
@@ -65,6 +69,7 @@ beforeEach(() => {
   try {
     localStorage.clear();
   } catch {}
+  resetMemoryStorage();
   // jsdom no maqueta: la parrilla mide 1200 × 640 para la lista virtual.
   for (const [prop, size] of [
     ['offsetHeight', 640],
@@ -74,7 +79,38 @@ beforeEach(() => {
       return this.classList.contains('guia-grid') ? size : 0;
     });
 });
+const realMatchMedia = window.matchMedia;
+
+/** Simula un ancho de pantalla para `useLayoutKind` (min-width). */
+function setViewport(width: number) {
+  window.matchMedia = ((query: string) => {
+    const min = /min-width:\s*(\d+)px/.exec(query);
+    return {
+      matches: min ? width >= Number(min[1]) : false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    } as unknown as MediaQueryList;
+  }) as typeof window.matchMedia;
+}
+
+/** jsdom no desplaza: «ahora» a la vista como en el navegador (scrollTo deja scrollLeft). */
+function scrollable() {
+  vi.spyOn(Element.prototype, 'scrollTo').mockImplementation(function (
+    this: Element,
+    options?: ScrollToOptions | number,
+  ) {
+    if (typeof options === 'object' && options.left !== undefined) this.scrollLeft = options.left;
+  });
+}
+
 afterEach(() => {
+  window.matchMedia = realMatchMedia;
+  resetAvisos();
   vi.restoreAllMocks();
   net?.restore();
   resetMode();
@@ -156,5 +192,78 @@ describe('Guía TV', () => {
     expect(
       await screen.findByRole('heading', { name: 'Tu proveedor no da guía' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('Guía de escritorio (desde 768)', () => {
+  it('barra «Guía» con días y chips; un tipo filtra en el servidor, se suma a Favoritos y va en la URL', async () => {
+    setViewport(1280);
+    scrollable();
+    serve();
+    renderGuia();
+    expect(screen.getByRole('heading', { level: 1, name: 'Guía' })).toBeInTheDocument();
+    await screen.findByRole('grid', { name: 'Guía TV' });
+    expect(screen.getByRole('button', { name: 'Hoy' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Favoritos' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    // En escritorio no hay «Favoritos | Todos» arriba: son chips.
+    expect(screen.queryByRole('radio', { name: /Favoritos/ })).toBeNull();
+    // Como la maqueta: no hay chip «Todos»; Favoritos se quita y se pone.
+    expect(screen.queryByRole('button', { name: 'Todos' })).toBeNull();
+    const guideCalls = () => net.calls.filter((call) => call.url.startsWith('/api/v1/iptv/guide?'));
+    fireEvent.click(screen.getByRole('button', { name: 'Noticias' }));
+    await waitFor(() => expect(location.search).toContain('tipo=noticias'));
+    await waitFor(() =>
+      expect(queryOf(guideCalls().at(-1) as MockCall)).toMatchObject({
+        scope: 'favorites',
+        type: 'noticias',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Favoritos' }));
+    expect(screen.getByRole('button', { name: 'Favoritos' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('grid', { name: 'Guía TV' })).toHaveAttribute('aria-rowcount', '4'),
+    );
+    expect(queryOf(guideCalls().at(-1) as MockCall)).toMatchObject({
+      scope: 'all',
+      type: 'noticias',
+    });
+    expect(
+      within(screen.getByRole('grid', { name: 'Guía TV' })).getByRole('rowheader', {
+        name: /Euronews/,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('pulsar un programa que aún no ha empezado abre el popover con «Te aviso»', async () => {
+    setViewport(1280);
+    scrollable();
+    serve();
+    renderGuia('?vista=guia&ambito=todos');
+    const grid = await screen.findByRole('grid', { name: 'Guía TV' });
+    const cell = await waitFor(() => {
+      const found = within(grid)
+        .getAllByRole('gridcell', { name: /, de \d\d:\d\d a \d\d:\d\d$/ })
+        .find((node) => node.classList.contains('guia-block--future'));
+      if (!found) throw new Error('sin programas futuros');
+      return found;
+    });
+    fireEvent.click(cell);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/^Empieza en|a las \d\d:\d\d$/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Te aviso' }));
+    expect(within(dialog).getByRole('button', { name: 'Te avisaré' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(getAvisos()).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Avisos: 1 pendiente' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

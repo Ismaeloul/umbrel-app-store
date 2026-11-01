@@ -5,14 +5,16 @@ mismo a la vez y chatean. Pausar, avanzar o cambiar el idioma pasa para todos.
 
 ## 1. Fases
 
-| Fase | Qué | Estado |
-|---|---|---|
-| 1 | Sala dentro de casa (la web de siempre, con el login de Umbrel): sincronización, chat, idioma | 0.9.4 |
-| 2 | Invitados desde fuera en `https://sala.ismaeloul.es/s/<código>` (§9) | 0.9.5 |
-| 2b | La app del iPhone (Ace Neo) crea, entra y cierra salas (§10) | 0.9.6 |
-| 3 | Como Rave (§11): líder, echar, reacciones, lista con votos, siguiente episodio para todos | 0.9.13 (web) |
-| 3c | Reproductor nuevo: controles sobre el vídeo, pantalla completa con chat (§12) | 0.9.15 (web) |
-| 3b | Lo mismo en la app del iPhone; chat de voz; que los invitados busquen y añadan títulos | ideas |
+| Fase | Qué                                                                                               | Estado                  |
+| ---- | ------------------------------------------------------------------------------------------------- | ----------------------- |
+| 1    | Sala dentro de casa (la web de siempre, con el login de Umbrel): sincronización, chat, idioma     | 0.9.4                   |
+| 2    | Invitados desde fuera en `https://sala.ismaeloul.es/s/<código>` (§9)                              | 0.9.5                   |
+| 2b   | La app del iPhone (Ace Neo) crea, entra y cierra salas (§10)                                      | 0.9.6                   |
+| 3    | Como Rave (§11): líder, echar, reacciones, lista con votos, siguiente episodio para todos         | 0.9.13 (web)            |
+| 3c   | Reproductor nuevo: controles sobre el vídeo, pantalla completa con chat (§12)                     | 0.9.15 (web)            |
+| 3d   | Rediseño de escritorio: co-líderes, «Esperando a todos», «está escribiendo», sin reacciones (§13) | 0.10.x (web y servidor) |
+| 3e   | La sala de un partido en directo: una conexión del NAS para todos (§14)                           | 0.10.x (web y servidor) |
+| 3b   | Lo mismo en la app del iPhone; chat de voz; que los invitados busquen y añadan títulos            | ideas                   |
 
 Descartado para la fase 2: Cloudflare Tunnel (sus condiciones no quieren mucho vídeo y Isma quiere algo que no dependa
 de terceros) y Tailscale (el invitado tendría que instalar algo).
@@ -40,18 +42,19 @@ de terceros) y Tailscale (el invitado tendría que instalar algo).
 
 ## 4. Rutas
 
-| Id | Método y ruta | Qué |
-|---|---|---|
-| `partyCreate` | `POST /api/v1/party` | crear (201) con el título y el nombre del anfitrión |
-| `partyPreview` | `GET /api/v1/party/:code` | lo que se ve antes de entrar (sin credencial) |
-| `partyJoin` | `POST /api/v1/party/:code/join` | entrar con un nombre |
-| `partyEvents` | `GET /api/v1/party/:code/events?t=` | SSE: `party.snapshot`, `party.playback`, `party.room`, `party.chat`, `party.closed` |
-| `partyStream` | `GET /api/v1/party/:code/stream` | el vídeo (una `VodGrant`) |
-| `partyControl` | `POST /api/v1/party/:code/control` | `play`, `pause`, `seek` o `audio` para todos |
-| `partyStatus` | `POST /api/v1/party/:code/status` | latido de cada uno: posición y si carga |
-| `partyChat` | `POST /api/v1/party/:code/chat` | un mensaje |
-| `partyLeave` | `POST /api/v1/party/:code/leave` | salir |
-| `partyClose` | `POST /api/v1/party/:code/close` | cerrar (solo el anfitrión) |
+| Id             | Método y ruta                       | Qué                                                                                 |
+| -------------- | ----------------------------------- | ----------------------------------------------------------------------------------- |
+| `partyCreate`  | `POST /api/v1/party`                | crear (201) con el título y el nombre del anfitrión                                 |
+| `partyPreview` | `GET /api/v1/party/:code`           | lo que se ve antes de entrar (sin credencial)                                       |
+| `partyJoin`    | `POST /api/v1/party/:code/join`     | entrar con un nombre                                                                |
+| `partyEvents`  | `GET /api/v1/party/:code/events?t=` | SSE: `party.snapshot`, `party.playback`, `party.room`, `party.chat`, `party.closed` |
+| `partyStream`  | `GET /api/v1/party/:code/stream`    | el vídeo (una `VodGrant`)                                                           |
+| `partyControl` | `POST /api/v1/party/:code/control`  | `play`, `pause`, `seek` o `audio` para todos                                        |
+| `partyStatus`  | `POST /api/v1/party/:code/status`   | latido de cada uno: posición y si carga                                             |
+| `partyChat`    | `POST /api/v1/party/:code/chat`     | un mensaje                                                                          |
+| `partyTyping`  | `POST /api/v1/party/:code/typing`   | «está escribiendo» (uno cada 2 s por persona; §13)                                  |
+| `partyLeave`   | `POST /api/v1/party/:code/leave`    | salir                                                                               |
+| `partyClose`   | `POST /api/v1/party/:code/close`    | cerrar (solo el anfitrión)                                                          |
 
 El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 salen como JSON normal.
 
@@ -136,7 +139,7 @@ iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:84
   `/api/v1/party/<código>/v/<clave>/index.m3u8` y los segmentos, relativos, la heredan. `partyVideo` sirve los mismos
   ficheros que `video` (Range 206/416) de la sesión de esa persona.
 - **Latido por la sala**: `partyStatus` da el latido de la sesión de playback de la persona y dice `stream: ok | lost |
-  none`; con `lost`, el reproductor vuelve a abrir (si la sala no está interrumpida). Así ni la web de casa ni el
+none`; con `lost`, el reproductor vuelve a abrir (si la sala no está interrumpida). Así ni la web de casa ni el
   invitado llaman a las rutas de playback. Salir o cerrar suelta los visores.
 - **Enlace público**: `PARTY_PUBLIC_URL=https://sala.ismaeloul.es` en storage; `room.inviteUrl` es
   `https://sala.ismaeloul.es/s/<código>` y «Copiar enlace» lo usa (sin él, el de casa).
@@ -163,7 +166,6 @@ iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:84
   desde la ficha, play/pausa/salto en los dos sentidos (0,1 s de diferencia tras un salto), chat, entrar a mitad de
   película y cerrar la sala para todos.
 
-
 ## 11. Como en Rave (fase 3, 0.9.13)
 
 Isma y sus amigos venían de Rave (Apple la quitó de la App Store en agosto de 2025): la sala imita su manejo para que
@@ -178,8 +180,7 @@ no haya que aprender nada. Lo que se sabe de Rave sale de fuentes públicas (no 
   recuperarlo cuando quiera («Ser líder otra vez»).
 - **Echar** (`partyMember` con `kick`): solo el líder, no a sí mismo ni a quien creó la sala. A quien echan le llega
   `party.closed` con `kicked` y su credencial deja de valer; con el enlace puede volver a entrar (como en Rave).
-- **Reacciones** (`partyReact`): 😂 ❤️ 😮 😢 👏 🔥 😱 👍, 10 cada 10 s por persona. Llegan a todos como
-  `party.reaction` y suben unos 3 s por encima del vídeo con el nombre de quien la lanza. No van al chat.
+- **Reacciones**: quitadas en la fase 3d (§13). Ya no existen `partyReact` ni `party.reaction`.
 - **Lista** (`partyQueue`): `add` (cualquiera; en «Elige el líder», solo él), `remove` (quien lo añadió o el líder),
   `vote` (cada uno, uno por título, se quita pulsando otra vez), `play` (poner ya), `next` y `cancel`. Hasta 30.
   Desde fuera no se ve el catálogo de casa: se añade desde la ficha de una película o un episodio («Ver juntos» →
@@ -226,3 +227,281 @@ de casa y como Rave: todo encima del vídeo y escondiéndose solo.
 - **Móvil:** el vídeo de lado a lado, la cabecera en una fila (Invitar y Cerrar, solo con icono por debajo de
   480 px) y la pestaña «Gente» (antes «Personas», que no cabía).
 - **Pruebas:** `Theater.test.tsx` y a mano en el PC (ordenador y móvil, sin vídeo: sin ffmpeg no hay muestras).
+
+## 13. Rediseño de escritorio: co-líderes y «Esperando a todos» (fase 3d)
+
+La sala de escritorio sigue la maqueta 01-escritorio (sección 5) y las de móvil `ver-juntos*.html`: el vídeo y el
+control a la izquierda; a la derecha las caras de la gente y las pestañas Chat, Siguiente y Gente. Por debajo de
+768 px la sala del móvil se ve como antes (cabecera, vídeo y las pestañas Chat, Lista, Gente y Ajustes; el chat en
+lista con nombre y hora): `Room.tsx` pinta otro marcado a cada lado de 768 (`Mobile.tsx` para las pestañas del
+móvil) y `juntos.css` separa lo común, el móvil y el escritorio. Lo que cambia en los dos es el funcionamiento: sin
+reacciones, los co-líderes (escudo junto al nombre y su opción en el menú del líder; las tres opciones de «Quién
+controla» en Ajustes) y «Esperando a todos».
+
+- **Papeles** (`member.role`): `leader` (la corona), `coleader` (el escudo azul) y `guest`. El booleano `leader` se
+  mantiene igual que antes (las apps de iPhone y Android solo leen ese). El líder hace co-líder a quien quiera y se lo
+  quita (`partyMember` con `coleader` / `guest`). El co-líder controla como el líder, pero no echa ni pasa ni quita la
+  corona. Quien pasa la corona se queda de invitado (y quien recupera la corona no deja co-líder al que la tenía):
+  nadie sigue controlando sin que el líder lo decida.
+- **Quién controla, en pantalla**: bajo el título, «Tú controlas · todos van sincronizados» (en la espera,
+  «· esperando a todos»); para los demás, «Sala de Ismael · controla Ismael» o «· controlan Ismael y Yassin» (sin
+  dar por hecho el género). Quien no controla ve la barra de solo lectura: sin tirador, sin foco y anunciada como
+  barra de progreso, no como deslizador.
+- **Quién controla**, sin romper las apps viejas (que solo conocen `leader` y `everyone`):
+
+  | En la web                     | `settings.control` | `settings.coleaders` |
+  | ----------------------------- | ------------------ | -------------------- |
+  | Solo yo                       | `leader`           | `false`              |
+  | Yo y co-líderes (por defecto) | `leader`           | `true`               |
+  | Todos                         | `everyone`         | (da igual)           |
+
+  Una sala sin `coleaders` (una app vieja que crea con lo de siempre) se queda con `true`: si no hay co-líderes,
+  es lo mismo que «Solo yo». `partyCreate` acepta `control`, `coleaders` y `queueMode`; `partySettings`, lo mismo
+  (solo el líder).
+
+- **Sin control** (invitado, o co-líder con «Solo yo»): ni pausa ni ±10 s, y la barra sin tirador. En Gente, «Solo
+  Ismael y Yassin pueden pausar o cambiar lo que se ve. Tú puedes chatear y proponer lo siguiente.». En pelis y
+  series los invitados SÍ proponen y votan lo siguiente (también en «Elijo yo»); quitar lo de otro, el líder o los
+  co-líderes.
+- **Siguiente** («Cuando acabe»): la regla En orden / Por votos / Elijo yo es `queueMode` `autoplay` / `vote` /
+  `leader` (`once` sigue valiendo para las apps viejas, pero la web no lo ofrece). En series, sin nada propuesto,
+  sigue solo el siguiente episodio. Bajo el vídeo, la tarjeta «Cuando acabe · Por votos» con «Ver la lista». En la
+  pestaña, «Cuando acabe» lleva el anillo de la maqueta: lo que queda de película o, en la cuenta atrás, sus
+  segundos. Cada propuesta lleva solo su voto, como la maqueta; «Poner ya» y «Quitar» van en su menú contextual
+  (clic derecho, pulsación larga o la tecla de menú). En el móvil, la Lista de siempre con sus botones.
+- **«Esperando a todos»** (`playback.lobby`): cada título empieza parado y arranca solo cuando todos los conectados
+  están listos (al crear, en cuanto entra el segundo), o cuando quien controla pulsa «Empezar para todos». Cada uno
+  manda en `partyStatus` `ready` y `progress` (0-100, lo cargado); sin ellos (una app vieja), cuenta como lista al
+  abrir el vídeo y no estar cargando. La web enseña quién está listo y a quién le falta, con su %. El paso a
+  «listo» se manda al momento; el % va espaciado (un tramo de 10 puntos, como mucho uno por segundo, o con el
+  latido). Si quien crea la sala está solo, no arranca sola: espera a que entre alguien o a «Empezar para todos».
+- **«X está escribiendo…»**: `partyTyping` y el evento `party.typing` (`memberId`, `name`). El cliente lo manda como
+  mucho cada `PARTY.typingIntervalMs` (2 s) y el servidor ignora, sin error, lo que llegue más deprisa; se enseña
+  `PARTY.typingShowMs` (4 s) y se quita al llegar un mensaje de esa persona.
+- **Fuera las reacciones**: ni bandeja ni emojis encima del vídeo; tampoco `partyReact`, `party.reaction`, su
+  límite ni la ruta en la lista blanca del Caddyfile del proxy. El chat es solo texto (los emojis, del teclado).
+- **Pantalla completa**: solo el vídeo, sin chat encima (también en el móvil).
+- **Escritorio, lo que no trae la maqueta**: sin volumen en la barra del vídeo (globo y pantalla completa; la M
+  silencia) y sin la X junto a «Invitar»: quien creó la sala la cierra con «Cerrar sala» al final de Gente; los
+  demás tienen «Salir» en esa fila.
+- **Crear sala** (desde la ficha): tu nombre, «Quién entra» solo «Con enlace» (no hay amigos ni sala pública),
+  «Quién controla», «Votar lo siguiente» (interruptor: `vote` o `autoplay`) y «Crear sala e invitar». Sin chat de
+  voz: queda para otra fase y no se pinta nada de él (ni micros en las caras).
+- **Pruebas:** `modules/party/service.test.ts` y `routes.test.ts` (papeles, permisos del co-líder, lobby, typing y
+  que `react` ya no existe), `test/security.test.ts`, y en la web `Panels.test.tsx`, `Theater.test.tsx`,
+  `sync.test.ts` y `cine/Ficha.test.tsx`.
+- **Pendiente:** la sala en directo de fútbol (otra fase); las apps de iPhone y Android aún no enseñan co-líderes,
+  lobby ni «está escribiendo» (siguen funcionando con `leader` y sin `ready`/`progress`).
+
+## 14. La sala de un partido en directo (fase 3e)
+
+Como «compartir pantalla»: el NAS abre UNA conexión (la plaza de la IPTV o un AceStream) y la reparte a todos por la
+ruta de la sala. Los invitados nunca se conectan a la IPTV ni al motor: ven exactamente lo mismo que el líder, en
+directo y a la vez. Sigue la maqueta `ver-juntos.html` (sala de fútbol).
+
+- **Crear**: «Ver juntos» en la ficha del partido (`MatchHead`) y en la de la Agenda de escritorio (`Stage`),
+  `features/juntos/LiveCreate.tsx`. Tu nombre, «Con enlace» y quién controla (sin «Votar lo siguiente»). La fuente es
+  la que suena en casa si es ese partido (y el reproductor de casa se para: si no, se pelea con la sala por la misma
+  conexión); si no, la mejor del servidor (`footballResolve`, la primera candidata).
+- **Servidor**: `partyCreate` acepta `{ live: { hash, channel, source, matchId, match }, name, control, coleaders }`.
+  La sala lleva `room.live` (con `auto`, el cambio automático) y un título `kind: 'live'` (el partido, con el canal de
+  subtítulo). Empieza ya (sin «Esperando a todos»), siempre reproduciendo; `queueMode` queda en `once` y la lista
+  (`partyQueue`), la pausa, los saltos y el idioma responden `validation_error` (`party_live`). Nadie espera al que
+  carga.
+- **El vídeo**: `partyStream` llama a `playback.acquire` del canal con `{ partyKey }`: el visor consume el remux
+  (también en la web) para que `partyVideo` sirva sus ficheros con la clave de cada persona, y los visores de la misma
+  sala comparten la sesión sin traspaso aunque la política sea `handoff` (`liveParty` en `playback/service.ts`). Si
+  alguien de casa abre ese canal con `handoff`, la sala queda «interrumpida» (`taken`), como en pelis y series. La
+  concesión dice si es IPTV y corrige `live.source`.
+- **Cambiar de canal**: `partyControl` con `{ action: 'live', live }` (quien controla). Se sueltan los visores de
+  todos, `party.room` trae el canal nuevo y `party.playback` la acción `title`: cada reproductor vuelve a abrir. El
+  chat dice «Isma ha cambiado a M+ LaLiga».
+- **Web**: sin barra de tiempo, pausa ni ±10 s; abajo la píldora roja DIRECTO, el canal y el volumen; arriba «● En
+  directo». Quien controla tiene Chat, Fuentes, Partidos y Gente; los demás, Chat y Gente. Fuentes y Partidos usan la
+  agenda y las fuentes de casa, así que solo salen en casa (`liveTools`), no en la página del invitado.
+  - **Fuentes**: «Cambio automático si se cae» (`partySettings` con `auto`) y las conexiones del partido por canal,
+    con la calidad, IPTV o AceStream y «Poner» o «En la sala».
+  - **Partidos**: los de hoy en directo y los de más tarde con «Poner» (su mejor fuente) y «Poner un canal» (tus
+    favoritos).
+  - **Cambio automático**: lo hace el navegador del líder (o de quien controle si el líder no está) cuando el vídeo
+    falla: la siguiente fuente no probada, sin repetir la IPTV si la caída fue de la IPTV. Con freno: un salto cada
+    30 s y 3 seguidos sin que suene ninguna (con el motor caído, en local se comía las siete fuentes en un minuto).
+- **Pruebas**: `modules/party/live.test.ts` y, a mano en el PC contra el motor del NAS, crear desde la ficha, ver el
+  partido en la sala, Fuentes y «Poner», y cerrar la sala.
+- **Salir o cerrar** una sala en directo lleva a la Agenda (una de pelis y series, a Pelis y series).
+- **Pendiente**: las apps de iPhone y Android no entienden una sala en directo (esperan una `VodGrant`).
+
+## 15. Salas abiertas: volver o cerrarlas desde casa
+
+Quien se salía sin querer (o creaba la sala en otro aparato) no podía volver a ella ni cerrarla: la portada solo
+ofrecía «Volver a tu sala» con la credencial de ESE navegador, y cerrar pedía la del anfitrión. La sala se quedaba
+abierta hasta caducar (10 min sin nadie, 12 h como mucho).
+
+- **Servidor**: `partyList` (`GET /api/v1/party`) da las salas abiertas (código, título, quién la creó, cuántos hay y
+  cuántos en línea) y `partyEnd` (`POST /api/v1/party/:code/end`) la cierra para todos sin credencial de sala
+  (`party.closed` con `host`). Las dos son solo de la web de casa (`access: 'web'`, detrás del login de Umbrel): la app
+  nativa recibe 403 y el proxy de la sala no las deja pasar (su lista blanca solo admite `/api/v1/party/<código>/…` de
+  los invitados). Lo fija `test/security.test.ts`.
+- **Web**: en la portada de Ver juntos, «Salas abiertas» (`features/juntos/OpenRooms.tsx`, se refresca cada 10 s):
+  cada sala con «Volver» (si este navegador tiene su credencial: vuelves a tu sitio y a tu corona) o «Entrar» (se pide
+  el nombre) y «Cerrar» con segundo toque.
+- **Pruebas**: `modules/party/live.test.ts` y `features/juntos/OpenRooms.test.tsx`.
+
+## 16. El «CD rayado» en el iPhone y el móvil (nov 2026)
+
+Con la 0.9.15, un invitado desde fuera con un iPhone veía la película a tirones: se paraba, volvía un poco atrás y
+seguía, una y otra vez. Un análisis con agentes independientes (y otros que intentaban refutarlo) dejó una causa
+confirmada, el bucle de la espera, y descartó o rebajó otras 16 hipótesis.
+
+- **El bucle**: el iPhone se queda sin datos → avisa «cargando» → a los 0,8 s la sala para a todos («Esperando a…»)
+  → Safari vuelve a `readyState` 3 con apenas un fotograma → el siguiente tic dice «ya no cargo» → la sala sigue al
+  momento → el iPhone, sin colchón, se para otra vez. Los demás recibían la pausa hasta medio segundo tarde, ya
+  pasados del punto, y la corrección en pausa los devolvía atrás (el «vuelve un poquito»).
+- **Web** (`sync.ts`, `StallDetector`; `player.ts`): «atascado» ya no es `readyState < 3`. Entra si reproduce y el
+  tiempo no avanza 0,8 s, con el evento `waiting` o con `readyState < 2`; sale solo con colchón por delante (3 s con
+  hls.js, 4 s con el HLS nativo del iPhone; 6 y 10 s si los atascos se repiten en un minuto, y vuelve al de partida
+  tras 2 min sin atascos), con `readyState` 4 y 2 s, o si el vídeo avanza de verdad. Cerca del final basta con lo
+  que queda. Reproduciendo, un salto de corrección cada 4 s como mucho (cada salto tira lo que se estaba bajando). Una
+  orden nueva de la sala (`playback.rev`) se aplica al momento, no en el siguiente tic. En «Esperando a todos»,
+  `readyState` 4 cuenta como listo solo con 4 s por delante.
+- **Servidor** (`party/service.ts`): un «ya no cargo» no reanuda la sala; el barrido la reanuda cuando lleva
+  `PARTY.resumeSettleMs` (700 ms) así. Quien ha parado la sala dos veces en el último minuto tiene 2,5 s de margen
+  (`repeatBufferingGraceMs`) en vez de 0,8 s: sus atascos cortos no paran a los demás.
+- **Revisión**: otra tanda de agentes revisó el cambio y encontró 5 fallos, ya arreglados: el reloj de «no avanza»
+  corría en pausa (al reanudar, la pausa contaba como atasco y volvía a parar la sala), el colchón no unía tramos
+  cargados separados por huecos de centésimas (`forwardBufferEnd`), el freno de 4 s frenaba también los saltos del
+  líder y quien se recuperaba justo antes de los 20 s se llevaba el enfriamiento de 30 s.
+- **Lo que falta**: la película va a la calidad original (unos 4,3 Mbit/s en el registro, trozos de 6 s y ~3,2 MB).
+  Si la conexión del invitado no llega a eso, se seguirá atascando, solo que mucho menos a menudo. El arreglo de
+  fondo es una calidad más baja para los invitados de fuera (una segunda versión recodificada o calidad adaptativa).
+- **Pruebas**: `features/juntos/sync.test.ts` (detector) y `modules/party/service.test.ts` (reanudar tras 700 ms y
+  el margen de quien se atasca a menudo).
+
+## 17. Calidad ligera para invitados
+
+Lo que faltaba en §16: el invitado de fuera con poca conexión recibe una versión 720p H.264 a unos 2,5 Mbit/s y
+sube a la original si su línea aguanta (unos 6,5 Mbit/s medidos). En casa (la web, el escritorio y las apps) todo
+sigue igual, byte a byte: `index.m3u8` y la calidad original. Lo peor que puede pasar es lo de hoy. Primero el
+servidor; la web, al final de la sección.
+
+- **De dónde sale** (`remux/vod/lite.ts`, `LiteRendition`): NUNCA de otra conexión con el relé o el proveedor (una
+  sola plaza, y el relé da la razón a la petición más nueva, docs/vod.md §9.1). Cada segmento ligero se hace con un
+  ffmpeg corto que lee por la tubería el `init.mp4` + `index<N>.m4s` que el productor ya tiene en disco
+  (`vod/lite-args.ts`: `-copyts -fps_mode passthrough`, `scale=-2:'min(720,ih)'`, libx264 veryfast High 4.0, CRF 23
+  con tope de 2500k, sin fotogramas B, un solo GOP, el audio copiado) y saca `lo_index<N>.m4s`. Los límites, los
+  `EXTINF` y los tiempos son los de la original por construcción: el reloj de la sala, `placeFragment` y la
+  sincronía (§6) no cambian.
+- **Cuándo**: perezosa. Se crea con la primera petición `lo_*` de la sesión; un trabajo a la vez, en orden, como mucho
+  3 segmentos y 20 s por delante del último `lo_index<N>` pedido (`LITE_VOD`), por debajo de los 30 s de
+  `restartAheadS`: nunca pide un reinicio al productor. Fija en el productor `[cursor − 1, cursor + 3]` para que el
+  recorte no le borre lo que aún tiene que leer; sus ficheros, en la misma carpeta `vod-<sid>`, cuentan en el tope de
+  1,5 GiB y se recortan con la ventana de 120 s.
+- **Varios invitados en la ligera**: cada uno pide desde su búfer (uno 30 s por delante, otro que acaba de entrar),
+  así que se recuerdan los cursores de las peticiones recientes (al menos 10 s y dos segmentos, `recentMs`) y la cola
+  es la unión de sus ventanas: se fija `[min − 1, max + 3]`, se codifica primero lo que alguien espera y luego lo más
+  bajo, y un trabajo solo se mata si cae fuera de TODAS las ventanas y nadie lo espera. Con un único cursor, dos
+  invitados a más de 3 segmentos se mataban el trabajo el uno al otro hasta el 404 de los dos.
+- **Un solo cursor**: la versión ligera lee del productor sin moverlo (`readySegment`, `onSegmentReady`,
+  `onRestart`). Un `lo_index<N>` de un invitado lo mueve desde la ruta con `touch(N)`, que es `file()` sin esperar:
+  actividad, contrapresión, recorte y la misma regla de reinicio (así una sala solo de invitados también tira del
+  productor, y un salto del invitado reinicia la original como hoy).
+- **Comprobaciones**: el primer init es `lo_init.mp4` y los siguientes tienen que casar con él (los mismos `stsd`
+  salvo el `btrt` y los caudales del `esds` del audio, que ffmpeg mide en cada trabajo); el primer fragmento es clave
+  y empieza donde el original, a menos de un fotograma (en presentación y en `tfdt`). Se escribe `.part` y se
+  renombra. Con el ffmpeg de verdad (9.0 en Windows y 6.1 en WSL) y una fuente con fotogramas B: los tiempos casan
+  exactos, el audio sale idéntico byte a byte y el segundo segmento se decodifica con el init del primero
+  (`vod/lite.ffmpeg.test.ts`, se salta sin ffmpeg).
+- **Servir** (`remux/service.ts`, solo por la ruta de la sala, `partyVideo` con `party: true`, `PARTY_FILE_RE` y
+  `PartyVideoFileSchema`): `master.m3u8` (la ligera PRIMERO, AVPlayer empieza por la primera; `CODECS`,
+  `BANDWIDTH` 2,9 M y `AVERAGE-BANDWIDTH` 2,2 M, `RESOLUTION`; la original con el pico por segmento de las posiciones
+  del índice o la media × 1,5) y `lo.m3u8` salen del índice como `index.m3u8`. Un `lo_index<N>` listo sale con Range;
+  si se está codificando se espera 4 s; si no estaba en la cola (un salto) el cursor se va allí y se espera 6 s;
+  después 503 «aún no está» y, a la segunda vez, 404 (`no-store`): hls.js o AVPlayer cogen ese trozo de la original en
+  vez de parar la sala. NUNCA se sirven bytes de la original con un nombre `lo_` (su SPS no es el de `lo_init.mp4`).
+  La ruta de vídeo de siempre (`/api/v1/video`, `VIDEO_FILE_RE`, `VideoParamsSchema`) no conoce ninguno de los
+  nuevos. Los nombres caben en el proxy de la sala (Caddyfile, `[A-Za-z0-9_.-]{1,40}`): sin cambios en Caddy.
+- **Quién la recibe** (`party.stream`): `master.m3u8` solo si TODO se cumple: entró por el proxy de la sala
+  (`X-Ace-Origin: guest`, `isGuestOrigin`; para todo lo demás sigue siendo `native`), manda `abr=1` (solo la web del
+  invitado; `PartyStreamQuerySchema`, por defecto `0`), `ACE_PARTY_LITE=1`, la original es H.264 de 8 bits hasta 1080
+  que pasa de 720 o de 3 Mbit/s (`liteVariantFor`), el fusible de la sesión no está fundido y hay plaza de
+  recodificación. Con HEVC no hay maestra (hls.js no cambia de nivel entre `hvc1` y `avc1`): quien no decodifica HEVC
+  (hoy rechazado) recibe `lo.m3u8` sola y la concesión dice H.264 720p; si era el primero en abrirla, se abre igual
+  para los demás (el productor copia la original). Si al final no hay ligera para esa persona (la de la sesión de la
+  sala ya estaba fundida, o se funde o se queda sin plaza mientras se abre), se suelta lo recién cogido y vuelve el
+  rechazo de antes (`vod_unsupported`, `hevc`), nunca una concesión HEVC que no decodifica. En cualquier otro caso, `index.m3u8` como siempre. Con oferta, la
+  `VodGrant` lleva `variants: { hd, lite }` (códecs de vídeo; `hd` null si solo hay ligera), que solo llega a quien
+  manda `abr=1`: las apps no lo ven.
+- **Plaza**: los trabajos ligeros cuentan en `MAX_DEINTERLACE` (2) con el desentrelazado y la ligera del directo
+  (`deinterlacing()`). El primero que llega se queda la plaza, sin quitársela a nadie; se suelta tras 60 s sin
+  peticiones `lo_*` y la siguiente la vuelve a coger.
+- **Fusible** (para toda la sesión): 3 trabajos seguidos fallidos o inválidos, menos de 1,5× el tiempo real de media
+  en 3 segmentos, un init que no casa, sin plaza o sin ffmpeg. Con él, `lo_*` da 404 y las concesiones nuevas de la sala
+  vuelven a `index.m3u8`. Se escribe una vez en el registro y sale en `remux.stats().partyLite` (`on`, `off` o
+  `tripped` y por qué; solo con `ACE_PARTY_LITE=1`).
+- **Interruptores**, de menos a más: «Alta» en el menú «Calidad» del invitado (la web), el fusible de la sesión y
+  `ACE_PARTY_LITE` en el Compose (`"1"` desde la 1.0.0, que la sube encendida porque el fusible ya vuelve a la original si
+  el NAS no da abasto; con `"0"`, `master.m3u8`, `lo.m3u8` y los
+  `lo_*` dan 404 y nadie recibe oferta). El ajuste de casa «Calidad para invitados» del plan NO está hecho: haría falta
+  otro fichero de ajustes, rutas y la pantalla de Ajustes; el interruptor del Compose cubre lo mismo con un reinicio.
+- **Despliegue**: storage pasa de `mem_limit` 768m a 1280m y de `pids_limit` 128 a 192 (decodificar más x264 son
+  150-300 MB y unos hilos por trabajo; un OOM tumbaría el backend entero), en el Compose de Umbrel, su copia de la
+  tienda y la pila local (`deploy/test/compose.test.ts`). Solo x264 por software: `/dev/dri` sigue sin montarse.
+- **Por medir en el NAS**: la velocidad y la memoria de un trabajo con una película 1080p H.264 y otra HEVC de 8 bits
+  dentro del contenedor (sigue si un segmento de 6 s tarda 3 s o menos), y una sala de verdad con un invitado por 4G
+  y otro con la red limitada a 3 Mbit/s.
+- **Pruebas**: `remux/vod/lite.test.ts` (cola, salto, fijado, fusible, 503/404, plaza; con un ffmpeg falso),
+  `vod/lite-args.test.ts`, `vod/playlist.test.ts` (lista ligera y maestra), `vod/producer.test.ts` (`touch`, leer sin
+  mover el cursor, recorte con lo fijado), `remux/party-lite.test.ts` (servir por la sala y no por la ruta de vídeo,
+  `ACE_PARTY_LITE=0`), `party/routes.test.ts` (origen `guest` y `abr`), `party/service.test.ts` (la tabla entera:
+  origen × `abr` × interruptor × fuente × HEVC × plaza × fusible) y `vod/lite.ffmpeg.test.ts`.
+
+### Web (`features/juntos/player.ts`, `Theater.tsx`, `player/engines/hls.ts`)
+
+- **Quién pide**: solo la página del invitado (`guest/App.tsx` → `Room guest` → `new RoomPlayer(…, { guest })`)
+  añade `abr=1` a `partyStream`, junto a `hevc`. La web de casa manda la consulta de siempre (sin `abr`): segunda
+  barrera después del origen.
+- **Filtro de códecs**: sin `variants`, el de siempre (`grant.vod.video.codecs`). Con `variants`, vale si este
+  navegador decodifica alguna (`<códec>,mp4a.40.2`). Con las dos, la maestra y el menú «Calidad». Con una sola,
+  esa lista sin menú (`lo.m3u8` o `index.m3u8`, la misma URL de la sala con otro fichero, `variantUrl`). La ligera
+  sola (HEVC con `hevc=0`) ya llega así del servidor: la persona que hoy veía «Este navegador no puede reproducir
+  este vídeo» ahora la ve en 720p.
+- **hls.js con la maestra** (`HLS_GUEST_ABR` encima de `HLS_VOD_CONFIG`, los búferes 30/60/60 sin tocar):
+  `startLevel` 0 (la ligera: hls.js ordena los niveles por altura), estimación de partida 1,5 Mbit/s (en Android,
+  el 80 % de `navigator.connection.downlink`, 5 Mbit/s como mucho, con try/catch; `guestAbrConfig`), medias de 3 y 12
+  fragmentos, 85 % del caudal para quedarse y 70 % para subir, y sin `capLevelToPlayerSize`. **Sin**
+  `abrSwitchInterval`, aunque el plan pedía 20 s: en hls.js 1.7.3 ese freno vale para todo cambio automático, también
+  para BAJAR (`set nextLoadLevel` de `level-controller.ts`, que usan el abandono de emergencia, el propio
+  stream-controller y nuestra regla del atasco). Un invitado que acaba de subir y se atasca se quedaría hasta 20 s en
+  la original con la sala esperándole.
+- **Regla del atasco** (el tic de 500 ms): al ENTRAR en un atasco (`StallDetector`), en «Automática»
+  (`autoLevelEnabled`) y fuera de la ligera, `hls.nextLoadLevel = <ligera>` (sin vaciar lo cargado y sin salir de la
+  automática) y `stall.moved(now, true)`, para que el rellenado no suba el colchón. Hace falta porque la bajada de
+  emergencia de hls.js no corre con el vídeo en pausa, y la sala lo pausa mientras espera a este aparato. Nunca
+  `currentLevel` (vacía el búfer al momento y hace esperar a todos). La ligera se busca por su lista (`lo.m3u8`), no
+  por el número.
+- **Safari (HLS nativo)**: la maestra va en `src` y AVPlayer empieza por la primera, la ligera. Tras un atasco
+  REPETIDO (el que sube el colchón, `StallDetector.escalations`), se pasa a `lo.m3u8` hasta el final del título
+  (también si se vuelve a abrir por idioma o sesión perdida) y no se sube solo nunca. El cambio de `src` va en
+  'preparing': `onNative` no manda nada (ni la pausa ni el salto de la recarga), la sala espera a este aparato como en
+  cualquier carga y, con `loadedmetadata`, se coloca en la posición de la sala. Si en 20 s no llegan los datos, se
+  vuelve a abrir todo como con una sesión perdida. Con la pantalla completa del iPhone (`webkitDisplayingFullscreen`)
+  no se cambia: la cerraría.
+- **«Calidad»** (`Theater.tsx`, junto a Idioma; `view.quality`): Automática (con lo que se carga ahora, «ahora 720p»
+  u «ahora original»), Alta (original) y Ligera (720p). Solo con las dos versiones que este navegador decodifica y
+  nunca en directo; lo puede tocar cualquiera, controle o no. Es de este aparato: `player.setQuality`, nunca
+  `client.control`. Con hls.js, Ligera es `nextLevel` (al siguiente fragmento), Alta `loadLevel` (sin vaciar lo
+  cargado) y Automática `loadLevel = -1`. En Safari, el cambio de `src` en 'preparing' de antes (`index.m3u8`,
+  `lo.m3u8` o la maestra; elegir Automática a mano vuelve a la maestra aunque el título ya hubiera bajado). Se
+  recuerda en este navegador (`aceneo-juntos-calidad`, `lib/storage.ts`, con try/catch) y se vuelve a poner al abrir
+  el siguiente vídeo (hls.js: al leer la maestra, antes del primer fragmento). El menú sale antes de leer la maestra:
+  lo que se elija mientras tanto solo se guarda, y MANIFEST_PARSED pone la elección de ESE momento (sin niveles,
+  «Alta» sería el nivel 0, la ligera, y hls.js borra la elección manual al cargar la maestra).
+- **Lo que no cambia**: sin maestra (en casa, las apps, `ACE_PARTY_LITE=0`, el fusible fundido), ni `abr`, ni
+  configuración nueva de hls.js, ni regla, ni menú: lo de antes, línea a línea.
+- **Pruebas**: `features/juntos/player.test.ts` (quién manda `abr=1`, el filtro con `variants`, la configuración con
+  la maestra, la regla del atasco, «Calidad» sin órdenes y recordada, Safari a `lo.m3u8` en 'preparing' sin órdenes,
+  sin volver a subir y no en pantalla completa), `Theater.test.tsx` (el menú), `sync.test.ts` (`escalations`),
+  `player/engines/engines.test.ts` (`HLS_GUEST_ABR` y `guestAbrConfig`), `Room.test.tsx` y `guest/App.test.tsx` (el
+  invitado crea el reproductor con `guest`). Sin probar en un navegador de verdad: el cambio de nivel de hls.js con
+  la ligera y la original de un mismo título (el salto de audio y vídeo) y el cambio de variante de AVPlayer quedan
+  para la prueba en el NAS.

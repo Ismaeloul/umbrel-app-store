@@ -1,11 +1,11 @@
-/* Marca de Ace Player Neo: el MISMO dibujo que el icono de la tienda de Umbrel
-   (ismaeloul-ace-player-neo/icon.svg, copiado tal cual en public/icon.svg):
-   cuadrado oscuro redondeado, anillo azul partido y «reproducir» blanco.
+/* Marca de Ace Player Neo, «Pantalla-campo»: el MISMO dibujo que el icono de
+   la tienda de Umbrel (ismaeloul-ace-player-neo/icon.svg, copiado tal cual en
+   public/icon.svg): pantalla redondeada amarilla sobre #0b0d11, la línea de
+   medio campo y el círculo central amarillo con «reproducir» oscuro.
 
-   En línea (no <img src="/icon.svg">) para que la barra superior lo pinte
-   nítido a 28 px sin otra petición. Los id de los degradados salen de useId:
-   únicos aunque haya dos marcas en la página. Decorativa: el nombre accesible
-   lo pone quien la usa. */
+   En línea (no <img src="/icon.svg">) para que el menú lateral lo pinte nítido
+   sin otra petición. El id del fondo sale de useId: único aunque haya dos
+   marcas en la página. Decorativa: el nombre accesible lo pone quien la usa. */
 
 import { useId } from 'react';
 
@@ -16,10 +16,7 @@ export interface BrandMarkProps {
 }
 
 export function BrandMark({ size = 28, className }: BrandMarkProps) {
-  const id = useId().replace(/:/g, '');
-  const bg = `${id}-bg`;
-  const neo = `${id}-neo`;
-  const glow = `${id}-glow`;
+  const bg = `${useId().replace(/:/g, '')}-bg`;
   return (
     <svg
       className={className}
@@ -31,42 +28,31 @@ export function BrandMark({ size = 28, className }: BrandMarkProps) {
       data-brand-mark=""
     >
       <defs>
-        <linearGradient id={bg} x1="72" x2="440" y1="52" y2="460" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#0f172a" />
-          <stop offset=".55" stopColor="#09090b" />
-          <stop offset="1" stopColor="#020617" />
+        <linearGradient id={bg} x1="0" x2="0" y1="0" y2="512" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#0b0d11" />
+          <stop offset="1" stopColor="#0b0d11" />
         </linearGradient>
-        <linearGradient id={neo} x1="156" x2="366" y1="146" y2="366" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#38bdf8" />
-          <stop offset="1" stopColor="#0ea5e9" />
-        </linearGradient>
-        <filter id={glow} x="-35%" y="-35%" width="170%" height="170%">
-          <feGaussianBlur stdDeviation="18" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
       </defs>
       <rect width="512" height="512" rx="112" fill={`url(#${bg})`} />
-      <circle cx="256" cy="256" r="158" fill="none" stroke="#1e293b" strokeWidth="28" />
-      <path
-        d="M256 98a158 158 0 0 1 158 158"
+      <rect
+        x="86"
+        y="132"
+        width="340"
+        height="248"
+        rx="40"
         fill="none"
-        stroke="#38bdf8"
-        strokeLinecap="round"
-        strokeWidth="28"
-        filter={`url(#${glow})`}
+        stroke="#ffd60a"
+        strokeWidth="26"
       />
+      <path d="M256 145v222" stroke="#ffd60a" strokeWidth="14" strokeOpacity=".45" />
+      <circle cx="256" cy="256" r="72" fill="#ffd60a" />
       <path
-        d="M256 414A158 158 0 0 1 98 256"
-        fill="none"
-        stroke="#0ea5e9"
-        strokeLinecap="round"
-        strokeWidth="28"
+        d="M238 222l54 34-54 34z"
+        fill="#1a1400"
+        stroke="#1a1400"
+        strokeWidth="10"
+        strokeLinejoin="round"
       />
-      <circle cx="256" cy="256" r="78" fill="#f8fafc" />
-      <path d="M235 214l75 42-75 42z" fill={`url(#${neo})`} />
     </svg>
   );
 }

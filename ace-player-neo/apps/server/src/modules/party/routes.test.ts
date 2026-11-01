@@ -2,8 +2,9 @@
    salir y cerrar, con los errores del catálogo (docs/ver-juntos.md §4). Que
    desde /native no existe en la fase 1 lo fija test/security.test.ts. */
 
-import { describe, expect, it } from 'vitest';
-import { PartyJoinResponseSchema, PartyPreviewSchema } from '@ace/shared';
+import { readFileSync } from 'node:fs';
+import { describe, expect, it, vi } from 'vitest';
+import { PartyJoinResponseSchema, PartyPreviewSchema, type VodGrant } from '@ace/shared';
 import { createTestApp, web } from '../../../test/helpers/index.js';
 
 const PELI = '4b5c6d7e8f9012345678abcdef0123457a8b9c0d';
@@ -53,6 +54,25 @@ describe('rutas de «Ver juntos»', () => {
       payload: { token: ana.member.token, text: 'hola' },
     });
     expect(chat.json()).toEqual({ ok: true });
+
+    /* «Está escribiendo» (§13): ligero y sin error aunque se repita. */
+    for (let i = 0; i < 3; i += 1) {
+      const typing = await app.inject({
+        method: 'POST',
+        url: `/api/v1/party/${code}/typing`,
+        headers: web(),
+        payload: { token: ana.member.token },
+      });
+      expect(typing.json()).toEqual({ ok: true });
+    }
+    /* Las reacciones ya no existen. */
+    const react = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/react`,
+      headers: web(),
+      payload: { token: ana.member.token, emoji: '😂' },
+    });
+    expect(react.statusCode).toBe(404);
 
     const notHost = await app.inject({
       method: 'POST',
@@ -190,5 +210,101 @@ describe('rutas de «Ver juntos»', () => {
     /* Nada más de la casa: ni el estado ni los ajustes. */
     const settings = await app.inject({ method: 'GET', url: '/api/v1/settings', headers: guest });
     expect(settings.statusCode).toBe(401);
+  });
+});
+
+describe('«Calidad ligera para invitados» por HTTP (docs/ver-juntos.md §17)', () => {
+  const GRANT = JSON.parse(
+    readFileSync(
+      new URL('../../../../../packages/shared/fixtures/web/v1/partyStream.json', import.meta.url),
+      'utf8',
+    ),
+  ) as VodGrant;
+
+  async function room() {
+    const { app, services } = await createTestApp();
+    const host = PartyJoinResponseSchema.parse(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/party',
+          headers: web(),
+          payload: createBody,
+        })
+      ).json(),
+    );
+    const code = host.room.code;
+    const ana = PartyJoinResponseSchema.parse(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/api/v1/party/${code}/join`,
+          headers: { 'x-ace-origin': 'guest' },
+          payload: { name: 'Ana' },
+        })
+      ).json(),
+    );
+    return { app, services, code, host, ana };
+  }
+
+  it('partyStream: solo el que entra por el proxy de la sala llega como invitado; abr por defecto 0', async () => {
+    const { app, services, code, ana } = await room();
+    const stream = vi.spyOn(services.party, 'stream').mockResolvedValue(GRANT);
+    const url = (extra: string) =>
+      `/api/v1/party/${code}/stream?client=web&viewer=v-ana&t=${encodeURIComponent(ana.member.token)}${extra}`;
+    const cases: [Record<string, string>, string, boolean, '0' | '1'][] = [
+      [{ 'x-ace-origin': 'guest' }, '&abr=1', true, '1'],
+      [{ 'x-ace-origin': 'GUEST ' }, '', true, '0'],
+      [web(), '&abr=1', false, '1'],
+      [{ 'x-ace-origin': 'native' }, '&abr=1', false, '1'],
+      [{}, '&abr=1', false, '1'],
+    ];
+    for (const [headers, extra, guest, abr] of cases) {
+      const response = await app.inject({ method: 'GET', url: url(extra), headers });
+      expect(response.statusCode, JSON.stringify(headers)).toBe(200);
+      const call = stream.mock.calls.at(-1);
+      expect(call?.[1].abr).toBe(abr);
+      expect(call?.[4]).toEqual({ guest });
+    }
+    /* Un valor raro de abr no vale. */
+    const bad = await app.inject({ method: 'GET', url: url('&abr=2'), headers: web() });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it('partyVideo sirve la maestra y los lo_* (con party: true); la ruta de vídeo de siempre, nunca', async () => {
+    const { app, services, code } = await room();
+    vi.spyOn(services.party, 'videoSession').mockReturnValue('s_abcdefgh12');
+    const serve = vi
+      .spyOn(services.remux, 'serveFile')
+      .mockImplementation(async (reply) => void (await reply.code(204).send()));
+    for (const file of ['master.m3u8', 'lo.m3u8', 'lo_init.mp4', 'lo_index12.m4s', 'index.m3u8']) {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/party/${code}/v/${'x'.repeat(32)}/${file}`,
+        headers: { 'x-ace-origin': 'guest' },
+      });
+      expect(response.statusCode, file).toBe(204);
+      const call = serve.mock.calls.at(-1);
+      expect(call?.[2]).toBe(file);
+      expect(call?.[3]).toMatchObject({ party: true });
+    }
+    for (const file of ['lo_index.m4s', 'lo_x.mp4', 'master.m3u', 'lo_init_1.mp4']) {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/party/${code}/v/${'x'.repeat(32)}/${file}`,
+        headers: { 'x-ace-origin': 'guest' },
+      });
+      expect(response.statusCode, file).toBe(400);
+    }
+    serve.mockClear();
+    for (const file of ['master.m3u8', 'lo.m3u8', 'lo_init.mp4', 'lo_index12.m4s']) {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/video/s_abcdefgh12/${file}`,
+        headers: web(),
+      });
+      expect(response.statusCode, file).toBeGreaterThanOrEqual(400);
+    }
+    expect(serve).not.toHaveBeenCalled();
   });
 });

@@ -344,7 +344,7 @@ FootballSchedule = {
   timezone: "Europe/Madrid",
   country: "España",
   source: "futbolenlatv" | "movistarplus" | "thesportsdb" | "demo",
-  attribution: string,       // "futbolenlatv.com" | "EPG de Movistar Plus+" | "TheSportsDB" | "Datos de muestra"
+  attribution: string,       // "futbolenlatv.es" | "EPG de Movistar Plus+" | "TheSportsDB" | "Datos de muestra"
   demo: boolean,
   limited: boolean,          // solo true con TheSportsDB y la clave pública "123"
   partial: boolean,
@@ -549,7 +549,7 @@ Valores de `reason` que aparecen en el código: `playable_media`, `unverified_me
 - **Query**: se acepta `?…` pero se ignora.
 - **Respuesta 200**: `FootballSchedule` (§3.12).
 - **Caché**: en memoria 30 min (`FOOTBALL_CACHE_MS`, `server.js:77`). Las peticiones simultáneas comparten la misma promesa (`footballCache.pending`).
-- **Fuentes, en cascada** (`server.js:2734-2736`): futbolenlatv.com (HTML ≤6 MiB, `server.js:1991-1992`) → EPG de Movistar+ → TheSportsDB (`eventstv.php` por día, más `lookupevent.php` para la liga, hasta 40 consultas, `server.js:1960-1982`). Con `FOOTBALL_DEMO_ONLY=true` devuelve siempre la demo sin salir a internet (`server.js:2724-2728`; así corren los tests, `test:12`).
+- **Fuentes, en cascada** (`server.js:2734-2736`): futbolenlatv.es (HTML ≤6 MiB, `server.js:1991-1992`) → EPG de Movistar+ → TheSportsDB (`eventstv.php` por día, más `lookupevent.php` para la liga, hasta 40 consultas, `server.js:1960-1982`). Con `FOOTBALL_DEMO_ONLY=true` devuelve siempre la demo sin salir a internet (`server.js:2724-2728`; así corren los tests, `test:12`).
 - **Si todo falla**: con una agenda anterior en caché devuelve esa con `stale: true` (`server.js:2743-2745`); sin caché, `502 {"error":"football_unavailable"}`.
 - **Efectos**: `rememberFootballProgramming` (`server.js:2682-2717`) guarda en memoria los partidos y canales (los usa `/api/football/resolve`) y, si Ollama está configurado, calienta en segundo plano los embeddings de canales y biblioteca (llama a `POST ${OLLAMA_BASE_URL}/api/embed`).
 - **Test**: `test:549-562` (modo demo).

@@ -223,6 +223,31 @@ describe('Guía TV en el servicio (§20.5)', () => {
     );
   });
 
+  it('«ahora» de un canal AceStream de tu biblioteca: el del canal de tu IPTV que es por su nombre', async () => {
+    const r = await rig({ fake: { guiaCompleta: true } });
+    await saveXtream(r);
+    await downloadGuide(r);
+    const ace = 'e2e0'.padEnd(40, '7');
+    const lost = 'e2e1'.padEnd(40, '7');
+    await r.state.mutateLibrary({
+      action: 'favorite-upsert',
+      item: { id: ace, title: 'M+ LaLiga TV 2', ih: false },
+    });
+    await r.state.mutateLibrary({
+      action: 'favorite-upsert',
+      item: { id: lost, title: 'Canal que no existe en ningún sitio', ih: false },
+    });
+    const all = await r.service.tvGuide.channels({ scope: 'all', limit: 1000 });
+    const liga = all.channels.find((row) => row.name === 'M+ LaLiga TV 2');
+    expect(liga?.guide).toBeTypeOf('number');
+    const now = r.service.tvGuide.now({ ids: [ace, lost].join(',') });
+    expect(now.available).toBe(true);
+    expect(now.items.map((item) => [item.id, item.guide])).toEqual([
+      [ace, liga?.guide],
+      [lost, null],
+    ]);
+  });
+
   it('al reiniciar se abre la guardada sin descargar; sin ella (0.8.x) se descarga a los 15 s', async () => {
     const r = await rig({ fake: { guiaCompleta: true } });
     await saveXtream(r);

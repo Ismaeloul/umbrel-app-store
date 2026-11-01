@@ -19,10 +19,11 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject }
 import { cx } from '../../lib/cx.ts';
 import { prefersReducedMotion } from '../../lib/media.ts';
 import { Icon } from '../../ui/index.ts';
-import { SourcePoster } from './SourcePoster.tsx';
+import { SourceLine, SourcePoster } from './SourcePoster.tsx';
 import type { SourceRow } from './useSources.ts';
 
-export type SourceListVariant = 'list' | 'rack';
+/** `line`: filas compactas (escritorio, ficha del partido); `list` y `rack`: carteles. */
+export type SourceListVariant = 'list' | 'rack' | 'line';
 
 const ARROWS = new Set(['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight']);
 
@@ -111,18 +112,13 @@ export function SourceList({ shown, tucked, variant, inMatch, label }: SourceLis
   const onScreen = [...shown, ...tucked].find((row) => row.onScreen)?.entry.id ?? null;
   useOnAirSlide(listRef, onScreen);
   const onArrow = (event: KeyboardEvent<HTMLButtonElement>) => focusSibling(event, listRef);
+  const Item = variant === 'line' ? SourceLine : SourcePoster;
   return (
     <div className={cx('src-list', `src-list--${variant}`)} ref={listRef}>
       {shown.length ? (
         <ol className="src-list__rows stagger" aria-label={label}>
           {shown.map((row, index) => (
-            <SourcePoster
-              key={row.entry.id}
-              row={row}
-              inMatch={inMatch}
-              index={index}
-              onArrow={onArrow}
-            />
+            <Item key={row.entry.id} row={row} inMatch={inMatch} index={index} onArrow={onArrow} />
           ))}
         </ol>
       ) : null}
@@ -151,7 +147,7 @@ export function SourceList({ shown, tucked, variant, inMatch, label }: SourceLis
               aria-label={`${label}: sin señal o en cola`}
             >
               {tucked.map((row, index) => (
-                <SourcePoster
+                <Item
                   key={row.entry.id}
                   row={row}
                   inMatch={inMatch}

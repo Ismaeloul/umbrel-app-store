@@ -80,6 +80,12 @@ export interface ViewerIdentity {
   readonly deviceName?: string | null;
 }
 
+/** Lo que añade «Ver juntos» al abrir un canal en directo (docs/ver-juntos.md §14). */
+export interface LiveAcquireOptions {
+  /** Sala: sus visores comparten el canal sin traspaso y siempre por el remux. */
+  readonly partyKey?: string;
+}
+
 /** Lo que añade «Ver juntos» al abrir un VOD (docs/ver-juntos.md §5). */
 export interface VodAcquireOptions {
   /** Sala: los visores con la misma comparten la sesión sin traspaso. */
@@ -145,6 +151,7 @@ export interface PlaybackService extends Lifecycle {
     query: ChannelStreamQuery,
     viewer: ViewerIdentity,
     signal: AbortSignal,
+    options?: LiveAcquireOptions,
   ): Promise<StreamGrant>;
   /**
    * GET /api/v1/vod/titles/:id/stream (docs/vod.md §9.8): abre la película o

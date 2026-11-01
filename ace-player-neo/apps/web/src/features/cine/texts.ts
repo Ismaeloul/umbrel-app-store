@@ -49,7 +49,6 @@ export const CINE_TEXT = {
   seeAllSeries: 'Ver todas las series',
   allMovies: 'Todas las películas',
   allSeries: 'Todas las series',
-  home: 'Inicio',
   backHome: 'Volver a Películas y series',
   exitSearch: 'Salir de la búsqueda',
   searchAllMovies: 'Buscar en todas las películas',
@@ -400,4 +399,45 @@ export function listFailedText(title: string, adding: boolean): string {
   return adding
     ? `No se ha podido añadir «${title}» a Mi lista.`
     : `No se ha podido quitar «${title}» de Mi lista.`;
+}
+
+// ---- Rediseño de escritorio (≥ 768 px): pestañas, portada (Mi lista) y ficha -------------
+
+export const DESK_TEXT = {
+  /** El titular de la barra, como en el menú lateral. */
+  title: 'Pelis y series',
+  tabs: 'Secciones de Pelis y series',
+  exploreMovies: 'Explorar películas',
+  exploreSeries: 'Explorar series',
+  search: 'Buscar',
+  follow: 'Seguir',
+  share: 'Compartir',
+  shared: 'Enlace copiado: pégalo donde quieras.',
+  shareFailed: 'No se ha podido copiar el enlace.',
+  noTrailer: 'Este título no tiene tráiler',
+  moreActions: 'Más acciones',
+  emptyTitle: 'Tu lista está vacía',
+  emptyText:
+    'Añade películas y series desde su ficha con «Añadir a mi lista» y saldrán aquí, separadas en Series y Películas.',
+} as const;
+
+/** «Mi lista · 12» (la pestaña); sin saber cuántos, «Mi lista». */
+export function listTabText(n: number | null): string {
+  return n === null ? CINE_TEXT.myList : `${CINE_TEXT.myList} · ${formatCount(n)}`;
+}
+
+/** «T3 E4» (el botón «Seguir · T3 E4»); en la temporada 0, «Especial 2». */
+export function shortCode(season: number, n: number): string {
+  return season === 0 ? `Especial ${n}` : `T${season} E${n}`;
+}
+
+/** «Seguir · T3 E4» o «Seguir · 43:12». */
+export function followText(where: string): string {
+  return `${DESK_TEXT.follow} · ${where}`;
+}
+
+/** «1:12» (horas y minutos, como «1:12 de 2:46» en las tarjetas a medias). */
+export function hoursText(seconds: number): string {
+  const total = Math.max(0, Math.floor((Number.isFinite(seconds) ? seconds : 0) / 60));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }

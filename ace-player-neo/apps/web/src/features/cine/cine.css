@@ -601,7 +601,10 @@
   .cine-browse {
     gap: var(--s-3);
   }
-  .cine-browse__cats {
+  /* Solo en el diseño de móvil: con el teléfono en horizontal (desde 768 de
+     ancho) va el de escritorio, sin botón «Categorías», y los chips son la
+     única forma de elegir una. */
+  .cine-browse:not(.cine-browse--desk) .cine-browse__cats {
     display: none;
   }
   .cine-filters {
@@ -654,10 +657,6 @@
   color: var(--accent-ink);
   font-weight: var(--wght-strong);
 }
-.cine-cat--home {
-  margin-bottom: 4px;
-  font-weight: var(--wght-strong);
-}
 @media (hover: hover) and (pointer: fine) {
   .cine-cat:hover {
     background: var(--line-soft);
@@ -685,20 +684,6 @@
   color: var(--text-3);
   font-size: var(--fs-13);
 }
-.cine-aside {
-  display: grid;
-  gap: var(--s-2);
-  padding-top: var(--s-6);
-}
-.cine-aside__title {
-  padding-inline: 12px;
-  color: var(--text-3);
-  font-size: var(--fs-kicker);
-  font-weight: 700;
-  letter-spacing: var(--tracking-kicker);
-  text-transform: uppercase;
-}
-
 /* ---- «Seguir viendo» (ContinueRail.tsx) ----------------------------------------- */
 /* La tarjeta y su «Más opciones» uno al lado del otro (nunca encima: dos
    controles pisados no se pueden tocar bien). */
@@ -1496,4 +1481,375 @@
 .cine-episode--compact .cine-episode__body {
   min-height: 44px;
   align-content: center;
+}
+
+/* ==========================================================================
+   Rediseño de escritorio (≥ 768 px; maqueta 01-escritorio.html §4 y
+   pelis-y-series-escaparate.html). El móvil no cambia: todo lo de aquí
+   cuelga de clases que solo pinta el escritorio (`.cine-deskhead`,
+   `.cine-esc…` (la portada, Mi lista), `.cine-icons`, `.cine-browse--desk`) o de min-width: 768px.
+   ========================================================================== */
+
+/* ---- La barra: «Pelis y series», las pestañas y el buscador en una línea ---- */
+@media (min-width: 768px) {
+  .view-head.cine-deskhead {
+    display: flex;
+    align-items: center;
+    gap: var(--s-5);
+    min-height: var(--topbar-h);
+  }
+  .cine-deskhead > .view-head__row {
+    display: contents;
+  }
+  .cine-deskhead .view-head__titles {
+    flex: none;
+    min-width: 0;
+  }
+  .view-head.cine-deskhead > .cine-tabs {
+    flex: 1 1 auto;
+    margin: 0;
+  }
+  .cine-deskhead .view-head__actions {
+    order: 2;
+  }
+  .cine-deskhead .view-head__title {
+    font-size: var(--fs-22);
+  }
+}
+/* Hasta 1119 px (tableta y portátil pequeño, con el menú lateral ancho desde
+   1024) las pestañas no caben junto al título y el buscador:
+   bajan a su propia línea, debajo, en vez de deslizarse. */
+@media (min-width: 768px) and (max-width: 1119px) {
+  .view-head.cine-deskhead {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+  .cine-deskhead .view-head__actions {
+    margin-left: auto;
+  }
+  .view-head.cine-deskhead > .cine-tabs {
+    order: 3;
+    flex-basis: 100%;
+    padding-top: 0;
+  }
+}
+.cine-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Sitio para la zona táctil de los chips (no se recorta). */
+  padding-block: 8px;
+}
+/* Las pestañas no se encogen («Ini…»): si no caben, la fila se desliza. */
+.cine-tabs .chip {
+  flex: none;
+}
+.cine-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- La portada: Mi lista (Seguir viendo, Series y Películas) -------------------
+   Las tres secciones comparten columnas: `--cols` y `--esc-card-w` los pone
+   DeskHome con el ancho de la portada, como la rejilla de la pestaña Películas
+   (carteles de unos 150 px y 20 px de hueco). Así los carteles de «Seguir
+   viendo» caen justo encima de los de Series y Películas, a la misma altura. */
+.cine-esc {
+  --cols: 6;
+  --esc-card-w: 150px;
+  display: grid;
+  gap: var(--s-8);
+  min-width: 0;
+  padding-top: var(--s-2);
+}
+
+/* ---- Cabecera de cada sección: «Series  2» ------------------------------------- */
+.cine-esc-row {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.cine-esc-row__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.cine-esc-row__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-width: 0;
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  font-stretch: 120%;
+  letter-spacing: -0.02em;
+}
+@media (min-width: 1024px) {
+  .cine-esc-row__title {
+    font-size: var(--fs-22);
+  }
+}
+.cine-esc-row__count {
+  color: var(--text-2);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  font-stretch: 100%;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* «Seguir viendo»: la pista con el ancho de una columna de la rejilla. La pista
+   recorta (overflow): el relleno de 8 px a los lados (devuelto con el margen
+   negativo, que no llega al menú lateral) y el de abajo dejan sitio al anillo del
+   foco, al levantarse con el ratón y a la sombra, más corta que la de un cartel
+   suelto (la de siempre, de 24 px, se cortaba en seco y dibujaba una franja gris
+   detrás de la fila en el tema claro). */
+.prail.cine-esc-rail {
+  --prail-item-w: var(--esc-card-w);
+  --prail-gap: 20px;
+  --prail-pad: 8px;
+  --prail-pad-top: 8px;
+  --prail-pad-bottom: 18px;
+  margin: -8px -8px -18px;
+}
+.cine-esc-rail .cine-half__card {
+  box-shadow: var(--shadow-1);
+}
+/* Las columnas caen justas (a 1024 px, 4 carteles enteros y ninguno asomando):
+   la flecha de «más» no espera a pasar el ratón mientras quede algo a la
+   derecha; la de «antes», como siempre. */
+@media (hover: hover) and (pointer: fine) {
+  .cine-esc-rail.prail--arrows .prail__arrow--next:not([aria-disabled='true']) {
+    opacity: 1;
+  }
+}
+
+/* Mi lista: la rejilla (sin virtualizar; la lista es corta), con las mismas
+   columnas y huecos que la de Películas. */
+.cine-esc-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: 26px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cine-esc-grid__cell {
+  min-width: 0;
+}
+
+/* La tarjeta a medias: el cartel con «T2 · E7» arriba y el título y la barra abajo, dentro. */
+/* El cartel es la capa de toque de la tarjeta (la cubre entera) y «Más
+   opciones» va encima, en su esquina: por eso la tarjeta lleva su medida. */
+.cine-half {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 2 / 3;
+}
+.cine-half__card {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  border-radius: var(--r-m);
+  overflow: hidden;
+  color: #fff;
+  text-align: left;
+  box-shadow: var(--shadow-poster);
+}
+.cine-half__art {
+  display: block;
+}
+.cine-half__art .cine-art {
+  aspect-ratio: 2 / 3;
+}
+.cine-half__art .cine-art__name {
+  visibility: hidden;
+}
+.cine-half__card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.78), rgb(0 0 0 / 0) 42%);
+  pointer-events: none;
+}
+.cine-half__badge {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  left: 8px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  padding: 3px 7px;
+  border-radius: var(--r-xs);
+  background: rgb(0 0 0 / 0.66);
+  color: #fff;
+  font-size: var(--fs-11);
+  font-weight: var(--wght-strong);
+  font-stretch: var(--w-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cine-half__foot {
+  position: absolute;
+  z-index: 1;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  display: grid;
+  gap: 8px;
+}
+.cine-half__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.cine-half__track {
+  position: relative;
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.25);
+}
+.cine-half__fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform-origin: left center;
+}
+/* Un cartel de verdad ya lleva su título: encima, solo si no hay imagen (o es un fondo). */
+.cine-half__card:has(.cine-half__art[data-art='poster'] .cine-art[data-state='image'])
+  .cine-half__title {
+  visibility: hidden;
+}
+.cine-half__card:focus-visible {
+  outline-offset: 3px;
+}
+/* «Más opciones»: arriba a la derecha (la cápsula va a la izquierda). Con
+   ratón sale al pasar por encima o al llegar con el teclado; sin ratón (una
+   tableta), siempre. */
+.cine-half__more {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  /* 44 px para el dedo; el círculo oscuro que se ve, de 32. */
+  padding: 6px;
+  background: rgb(0 0 0 / 0.55);
+  background-clip: content-box;
+  color: #fff;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cine-half__more {
+    opacity: 0;
+    transition: opacity var(--dur-rapido) var(--ease-rapido);
+  }
+  .cine-half:hover .cine-half__more,
+  .cine-half:focus-within .cine-half__more,
+  .cine-half__more[aria-expanded='true'] {
+    opacity: 1;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .cine-half__card {
+    transition: transform var(--dur-rapido) var(--ease-rapido);
+  }
+  .cine-half__card:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* ---- Películas / Series: la rejilla con su buscador y filtros --------- */
+.cine-desk-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  padding-top: var(--s-4);
+}
+/* Es el filtro de la rejilla (busca dentro de la categoría, §12.5), no el buscador
+   global de la barra: más corto, para que no parezca un segundo Ctrl K. */
+.cine-desk-tools .cine-head__search {
+  flex: 0 1 360px;
+}
+.cine-browse--desk .cine-desk-tools {
+  padding-top: 0;
+}
+/* Sin la flecha, el título se alinea con el filtro y los chips (el −4 px es para
+   cuadrar la flecha con el borde). */
+.cine-browse--desk .cine-browse__head:not(:has(> button)) {
+  margin-left: 0;
+}
+.cine-browse--desk .cine-browse__title {
+  font-size: var(--fs-22);
+}
+
+/* ---- Ficha: Mi lista / Ver juntos / Tráiler / Compartir (icono encima del nombre) -- */
+/* Repartidos a lo ancho, como la maqueta (.tf__icons): los iconos en el color del
+   texto y solo el activo («En mi lista») en amarillo. */
+.cine-icons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+  gap: var(--s-2);
+}
+.cine-icons .cine-icons__btn.btn {
+  flex-direction: column;
+  gap: 6px;
+  min-width: 92px;
+  min-height: 64px;
+  padding: 8px 12px;
+  border-radius: var(--r-m);
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  font-weight: var(--wght-strong);
+  text-decoration: none;
+}
+.cine-icons .cine-icons__btn .icon {
+  width: 22px;
+  height: 22px;
+  color: var(--text);
+}
+.cine-icons .cine-icons__btn.btn[aria-pressed='true'] {
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+}
+.cine-icons .cine-icons__btn.btn[aria-pressed='true'] .icon {
+  color: var(--accent-ink);
+}
+.cine-icons .cine-icons__btn.btn:disabled .icon {
+  color: var(--text-3);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cine-icons .cine-icons__btn.btn:not(:disabled):hover {
+    background: var(--line-soft);
+    color: var(--text);
+  }
+}
+
+/* ---- Episodios: «Siguiente · 4. Dame la mano» --------------------------------- */
+.cine-episode__lead {
+  color: var(--accent-ink);
+}
+/* La fila compacta de la maqueta (.ep): miniatura de 120 px con su barra, el título
+   y los datos, y la sinopsis en una sola línea. */
+@media (min-width: 768px) {
+  .cine-episode__play {
+    grid-template-columns: 120px minmax(0, 1fr);
+    align-items: center;
+  }
+  .cine-episode__plot {
+    -webkit-line-clamp: 1;
+  }
 }

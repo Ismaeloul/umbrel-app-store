@@ -27,9 +27,11 @@
 import type { VodMovie, VodSeries, VodTitle } from '@ace/shared';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { ApiError, describeFailure, isDemo } from '../../api/index.ts';
+import { useLayout } from '../../app/layout.tsx';
 import { useBack, useNavigate } from '../../app/router.tsx';
 import { useShortcut } from '../../app/shortcuts.ts';
 import { notify } from '../../notices/index.ts';
+import { copyText } from '../../player/clipboard.ts';
 import {
   Button,
   Capsule,
@@ -40,14 +42,16 @@ import {
   Skeleton,
   SkeletonRows,
 } from '../../ui/index.ts';
-import { JuntosButton } from '../juntos/CreateButton.tsx';
+import { JuntosButton, type JuntosTarget } from '../juntos/CreateButton.tsx';
 import { Art, artFill } from './Art.tsx';
 import {
   prepareGridFromFicha,
   seenCard,
   titleFromCard,
+  useListToggle,
   useProgressMark,
   useVodTitle,
+  type ListTarget,
 } from './data.ts';
 import {
   ageText,
@@ -69,17 +73,20 @@ import {
   type PlayBlock,
 } from './model.ts';
 import { canPlayHevc, playVod } from './play.ts';
-import { ListButton, RemoveGoneButton } from './MyList.tsx';
+import { ListButton, RemoveGoneButton, useInList } from './MyList.tsx';
 import { Seasons } from './Seasons.tsx';
 import { Synopsis } from './Synopsis.tsx';
 import {
   CINE_TEXT,
+  DESK_TEXT,
   detectedAudioText,
+  followText,
   detectedSubtitlesText,
   episodeRunText,
   formatBlocked,
   resumeFromText,
   seasonsText,
+  shortCode,
   TAG_LABEL,
 } from './texts.ts';
 
@@ -132,6 +139,8 @@ function realSeasons(series: VodSeries): number {
 
 /** «2021 · 2 h 36 min · ★ 8,0 · +12»: cada dato en su sitio, con su nombre para el lector. */
 function MetaLine({ title }: { title: VodTitle }) {
+  /* En escritorio las temporadas ya van arriba («SERIE · 5 TEMPORADAS»). */
+  const desk = useDesk();
   const rating = ratingText(title.rating);
   const age = ageText(title.ageRating);
   const items: Array<{ key: string; node: ReactNode }> = [];
@@ -140,7 +149,7 @@ function MetaLine({ title }: { title: VodTitle }) {
   if (title.kind === 'movie') {
     const duration = durationText(title.durationS);
     if (duration) items.push({ key: 'dur', node: duration });
-  } else {
+  } else if (!desk) {
     const n = realSeasons(title);
     if (n > 0) items.push({ key: 'seasons', node: seasonsText(n) });
   }
@@ -202,8 +211,112 @@ function TrailerButton({ id, title }: { id: string | null | undefined; title: st
 
 // ---- Acciones -----------------------------------------------------------------------
 
+/** ¿Rediseño de escritorio? (desde 768; el móvil sigue como estaba). */
+function useDesk(): boolean {
+  return useLayout().kind !== 'mobile';
+}
+
+/** Copia el enlace de la ficha (también por http en la LAN) y lo dice. */
+async function shareTitle(): Promise<void> {
+  const ok = await copyText(globalThis.location?.href ?? '');
+  notify(ok ? DESK_TEXT.shared : DESK_TEXT.shareFailed, {
+    tone: ok ? 'ok' : 'err',
+    icon: ok ? 'copy' : undefined,
+  });
+}
+
+function DeskListButton({ target }: { target: ListTarget }) {
+  const inList = useInList(target.id, true);
+  const toggle = useListToggle();
+  const [busy, setBusy] = useState(false);
+  const pressed = inList === true;
+  return (
+    <Button
+      variant="quiet"
+      icon={pressed ? 'marcado' : 'marcador'}
+      pressed={pressed}
+      className="cine-icons__btn"
+      onClick={() => {
+        if (busy) return;
+        setBusy(true);
+        void toggle(target, !pressed).finally(() => setBusy(false));
+      }}
+    >
+      {pressed ? CINE_TEXT.inList : CINE_TEXT.myList}
+    </Button>
+  );
+}
+
+/**
+ * Escritorio (maqueta «Ficha de un título»): bajo el botón grande, Mi lista,
+ * Ver juntos, Tráiler (la claqueta) y Compartir, cada uno con su icono
+ * encima del nombre. Sin tráiler, el botón se queda apagado y lo dice.
+ */
+function DeskIcons({
+  list,
+  juntos,
+  juntosDisabled,
+  trailer,
+  title,
+}: {
+  list: ListTarget;
+  juntos: JuntosTarget | null;
+  juntosDisabled: boolean;
+  trailer: string | null | undefined;
+  title: string;
+}) {
+  return (
+    <div className="cine-icons" role="group" aria-label={DESK_TEXT.moreActions}>
+      <DeskListButton target={list} />
+      {juntos ? (
+        <JuntosButton
+          disabled={juntosDisabled}
+          target={juntos}
+          look={{ className: 'cine-icons__btn', icon: 'personas', size: 'md' }}
+        />
+      ) : null}
+      {trailer ? (
+        <a
+          className="btn btn--quiet press cine-icons__btn"
+          href={trailerUrl(trailer)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${CINE_TEXT.trailer} de ${title} (${CINE_TEXT.newTab})`}
+          onClick={(event) => {
+            if (!isDemo()) return;
+            event.preventDefault();
+            notify(CINE_TEXT.trailerDemo, { tone: 'info', icon: 'info' });
+          }}
+        >
+          <Icon name="claqueta" size={20} />
+          <span className="btn__label">{CINE_TEXT.trailer}</span>
+        </a>
+      ) : (
+        <Button
+          variant="quiet"
+          icon="claqueta"
+          className="cine-icons__btn"
+          disabled
+          title={DESK_TEXT.noTrailer}
+        >
+          {CINE_TEXT.trailer}
+        </Button>
+      )}
+      <Button
+        variant="quiet"
+        icon="copy"
+        className="cine-icons__btn"
+        onClick={() => void shareTitle()}
+      >
+        {DESK_TEXT.share}
+      </Button>
+    </div>
+  );
+}
+
 function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
   const navigate = useNavigate();
+  const desk = useDesk();
   const mark = useProgressMark();
   const [busy, setBusy] = useState(false);
   const block = playBlock(movie.playable, canPlayHevc(), movie.tech.container);
@@ -235,6 +348,14 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
     if (error) notify(describeFailure(error), { tone: 'err' });
   };
   const line = [left, ends].filter(Boolean).join(' · ');
+  const juntos: JuntosTarget = {
+    titleId: movie.id,
+    kind: 'movie',
+    artId: movie.id,
+    poster: movie.poster,
+    title: movie.title,
+    subtitle: null,
+  };
   return (
     <div className="cine-actions">
       <div className="cine-actions__main">
@@ -247,9 +368,13 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
             aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
             onClick={() => play()}
           >
-            {resuming ? resumeFromText(clockText(progress.posS)) : CINE_TEXT.play}
+            {resuming
+              ? desk
+                ? followText(clockText(progress.posS))
+                : resumeFromText(clockText(progress.posS))
+              : CINE_TEXT.play}
           </Button>
-          <ListButton target={movie} className="cine-list" />
+          {desk ? null : <ListButton target={movie} className="cine-list" />}
         </div>
         {ratio !== null || line ? (
           <div className="cine-actions__progress">
@@ -269,6 +394,15 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
           </div>
         ) : null}
       </div>
+      {desk ? (
+        <DeskIcons
+          list={movie}
+          juntos={juntos}
+          juntosDisabled={block !== null}
+          trailer={movie.trailer}
+          title={movie.title}
+        />
+      ) : null}
       <div className="cine-actions__more">
         {resuming && !block ? (
           <Button variant="quiet" size="sm" icon="back" onClick={() => play(0)}>
@@ -284,18 +418,12 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
         >
           {watched ? CINE_TEXT.markMovieUnwatched : CINE_TEXT.markMovieWatched}
         </Button>
-        <JuntosButton
-          disabled={block !== null}
-          target={{
-            titleId: movie.id,
-            kind: 'movie',
-            artId: movie.id,
-            poster: movie.poster,
-            title: movie.title,
-            subtitle: null,
-          }}
-        />
-        <TrailerButton id={movie.trailer} title={movie.title} />
+        {desk ? null : (
+          <>
+            <JuntosButton disabled={block !== null} target={juntos} />
+            <TrailerButton id={movie.trailer} title={movie.title} />
+          </>
+        )}
       </div>
       {reason ? (
         <p id="cine-play-reason" className="cine-actions__reason">
@@ -308,6 +436,7 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
 
 function SeriesActions({ series }: { series: VodSeries }) {
   const navigate = useNavigate();
+  const desk = useDesk();
   const main = series.main;
   const entry = main
     ? series.seasons
@@ -323,6 +452,23 @@ function SeriesActions({ series }: { series: VodSeries }) {
   const line = entry
     ? [entry.item.title, left ?? durationText(entry.item.durationS)].filter(Boolean).join(' · ')
     : '';
+  const subtitle = entry ? `${episodeTag(entry.season, entry.item.n)} · ${entry.item.title}` : null;
+  const juntos: JuntosTarget | null = main
+    ? {
+        titleId: main.episodeId,
+        kind: 'episode',
+        artId: series.id,
+        poster: series.poster,
+        title: series.title,
+        subtitle,
+      }
+    : null;
+  /* En escritorio, «Seguir · T3 E4» si se va por ese episodio (a medias o el siguiente). */
+  const label = entry
+    ? desk && (main?.action === 'resume' || main?.action === 'next')
+      ? followText(shortCode(entry.season, entry.item.n))
+      : seriesPlayLabel(main?.action ?? 'start', entry.season, entry.item.n)
+    : (main?.label ?? '');
   return (
     <div className="cine-actions">
       {main ? (
@@ -340,9 +486,7 @@ function SeriesActions({ series }: { series: VodSeries }) {
                     id: main.episodeId,
                     kind: 'episode',
                     title: series.title,
-                    subtitle: entry
-                      ? `${episodeTag(entry.season, entry.item.n)} · ${entry.item.title}`
-                      : null,
+                    subtitle,
                     seriesId: series.id,
                     startS: main.posS,
                   },
@@ -350,9 +494,9 @@ function SeriesActions({ series }: { series: VodSeries }) {
                 )
               }
             >
-              {entry ? seriesPlayLabel(main.action, entry.season, entry.item.n) : main.label}
+              {label}
             </Button>
-            <ListButton target={series} className="cine-list" />
+            {desk ? null : <ListButton target={series} className="cine-list" />}
           </div>
           {ratio !== null || line ? (
             <div className="cine-actions__progress">
@@ -373,28 +517,23 @@ function SeriesActions({ series }: { series: VodSeries }) {
           ) : null}
         </div>
       ) : null}
-      {main ? null : (
+      {desk ? (
+        <DeskIcons
+          list={series}
+          juntos={juntos}
+          juntosDisabled={block !== null}
+          trailer={series.trailer}
+          title={series.title}
+        />
+      ) : null}
+      {main || desk ? null : (
         <div className="cine-actions__buttons">
           <ListButton target={series} className="cine-list" />
         </div>
       )}
-      {series.trailer || main ? (
+      {!desk && (series.trailer || juntos) ? (
         <div className="cine-actions__more">
-          {main ? (
-            <JuntosButton
-              disabled={block !== null}
-              target={{
-                titleId: main.episodeId,
-                kind: 'episode',
-                artId: series.id,
-                poster: series.poster,
-                title: series.title,
-                subtitle: entry
-                  ? `${episodeTag(entry.season, entry.item.n)} · ${entry.item.title}`
-                  : null,
-              }}
-            />
-          ) : null}
+          {juntos ? <JuntosButton disabled={block !== null} target={juntos} /> : null}
           {series.trailer ? <TrailerButton id={series.trailer} title={series.title} /> : null}
         </div>
       ) : null}
@@ -486,6 +625,11 @@ function Hero({ title, onBack, now }: { title: VodTitle; onBack(): void; now: nu
     detectedSubtitlesText(title.detectedAudio?.subtitles),
   ].filter((text): text is string => text !== null);
   const background = title.backdrop ? 'backdrop' : title.poster ? 'blur' : 'tone';
+  /* Escritorio (maqueta): «SERIE · 5 TEMPORADAS»; la categoría sigue en los detalles. */
+  const desk = useDesk();
+  const seasons = desk && title.kind === 'series' ? realSeasons(title) : 0;
+  const kickerExtra =
+    seasons > 0 ? seasonsText(seasons) : title.category ? categoryLabel(title.category.name) : null;
   const style = { '--hero-fill': artFill(title.title) } as CSSProperties;
   return (
     <div className="cine-hero" data-bg={background} style={style}>
@@ -520,12 +664,12 @@ function Hero({ title, onBack, now }: { title: VodTitle; onBack(): void; now: nu
                 <span className="cine-hero__sep" aria-hidden="true" />
                 {title.kind === 'movie' ? CINE_TEXT.movieKicker : CINE_TEXT.seriesKicker}
               </span>
-              {title.category ? (
+              {kickerExtra ? (
                 <span className="cine-hero__kicker-part cine-hero__cat">
                   <span className="cine-hero__sep" aria-hidden="true">
                     ·
                   </span>
-                  {categoryLabel(title.category.name)}
+                  {kickerExtra}
                 </span>
               ) : null}
             </span>

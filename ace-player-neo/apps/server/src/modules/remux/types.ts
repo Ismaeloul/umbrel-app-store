@@ -28,7 +28,8 @@ import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { AppError } from '../../core/errors.js';
 import type { EngineService } from '../engine/types.js';
 import type { VodProducerStats } from './vod/producer.js';
-import type { VodIndex, VodProcessLauncher, VodTrack } from './vod/types.js';
+import type { LiteOffer, LiteStatus } from './vod/lite.js';
+import type { LiteProcessLauncher, VodIndex, VodProcessLauncher, VodTrack } from './vod/types.js';
 
 export interface RemuxDeps extends CoreDeps {
   readonly engine: EngineService;
@@ -36,6 +37,11 @@ export interface RemuxDeps extends CoreDeps {
   readonly launcher?: ProcessLauncher;
   /** Quién lanza el ffmpeg del VOD (salida por la tubería). Por defecto `spawn('ffmpeg')`. */
   readonly vodLauncher?: VodProcessLauncher;
+  /**
+   * Quién lanza los trabajos de la calidad ligera de «Ver juntos» (entrada y salida por la tubería,
+   * docs/ver-juntos.md §17). Por defecto `spawn('ffmpeg')`.
+   */
+  readonly liteLauncher?: LiteProcessLauncher;
   /** Cómo se lee el índice de una película (tests). Por defecto, por HTTP con Range sobre el relé. */
   readonly readVodIndex?: (inputUrl: string, signal?: AbortSignal) => Promise<VodIndex>;
   /**
@@ -218,7 +224,15 @@ export interface RemuxStats {
   readonly max: number;
   /** No hay ffmpeg: el remux está desactivado (`ffmpeg_missing`). */
   readonly ffmpegMissing?: boolean;
+  /**
+   * La calidad ligera de «Ver juntos» (docs/ver-juntos.md §17), solo con `ACE_PARTY_LITE=1`: cada
+   * sesión que la ha usado, `on` / `off` / `tripped` y por qué.
+   */
+  readonly partyLite?: readonly (LiteStatus & { readonly sessionId: string })[];
 }
+
+/** Lo que una sala puede dar a un invitado de fuera en vez de `index.m3u8` (§17, vod/lite.ts). */
+export type RemuxLiteOffer = LiteOffer;
 
 /** Rango HTTP ya interpretado (`parseByteRange`, server.js:346). */
 export interface ByteRange {
@@ -294,6 +308,20 @@ export interface RemuxService extends Lifecycle {
   setVodStart(sessionId: string, startS: number): void;
   /** Estado del productor de una sesión VOD (null si no es VOD). */
   vodStats(sessionId: string): VodProducerStats | null;
+  /**
+   * «Calidad ligera para invitados» (docs/ver-juntos.md §17): qué puede recibir un invitado de
+   * fuera en esta sesión VOD en vez de `index.m3u8`, o null (lo de siempre). null si
+   * `ACE_PARTY_LITE` no es "1", sin ffmpeg, con el fusible de la sesión fundido, sin plaza de
+   * recodificación o con una original que no la necesita (o no da abasto).
+   */
+  vodLiteOffer(sessionId: string, hevcOk: boolean): RemuxLiteOffer | null;
+  /**
+   * ¿La versión ligera salvaría este título para quien no decodifica HEVC? Solo mira el índice ya
+   * leído (la caché por título, sin red): HEVC de 8 bits y hasta 1080, con la calidad ligera
+   * encendida, ffmpeg y plaza. Con `sessionId` (la sesión que la sala ya tiene abierta), false si
+   * su ligera está fundida; si ya tiene su plaza, no hace falta otra libre.
+   */
+  vodLiteCovers(titleId: string, sessionId?: string | null): Promise<boolean>;
   /** Un visor deja la sesión; sin visores, ffmpeg se para. */
   detach(sessionId: string, viewerId: string): Promise<void>;
   /** Sirve un fichero de la sesión con Range (206/416) y `no-store`; en m3u8, reescribe las URI con `?t=`. */
@@ -307,6 +335,11 @@ export interface RemuxService extends Lifecycle {
       readonly videoToken?: string;
       /** Dispositivo del token de vídeo: la petición cuenta como su latido. */
       readonly deviceId?: string | null;
+      /**
+       * Por la ruta de la sala (`partyVideo`): además valen `master.m3u8`, `lo.m3u8`,
+       * `lo_init.mp4` y `lo_index<N>.m4s` (§17). La ruta de vídeo de siempre nunca los sirve.
+       */
+      readonly party?: boolean;
     },
   ): Promise<void>;
   /** Suscribe a los avisos del remux (playback). Devuelve la baja. */

@@ -1,0 +1,453 @@
+/* ==========================================================================
+   Canales en escritorio (rediseño, sección 3 de la maqueta; DeskChannels.tsx):
+   pestañas y chips bajo la barra de la sección y la TABLA canal · ahora ·
+   después. Pestañas y cabecera de la tabla se quedan pegadas arriba.
+   Superficies opacas con filo de 1 px, sin cristal; solo se anima transform y
+   opacity (las barritas del canal que suena y la estrella al pasar el ratón);
+   nada por debajo de 11 px.
+   ========================================================================== */
+/* Con dos clases: library.css se carga después y su `.lib` pondría otro hueco. */
+.lib.lib--desk {
+  gap: 0;
+  max-width: none;
+}
+/* Lo que miden pegadas: la barra de la sección (view-header.css) y la de pestañas. */
+.lib--desk {
+  --ctab-top: calc(var(--safe-top) + var(--topbar-h));
+  --ctab-bar-h: 60px;
+}
+/* Pestañas y chips: la fila de debajo de la barra de la sección, pegada a
+   ella al desplazarse (opaca, sin cristal). */
+.ctab-bar {
+  position: sticky;
+  top: var(--ctab-top);
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: var(--ctab-bar-h);
+  background: var(--bg);
+}
+/* Pestañas compactas: «Favoritos · 4», «Recientes», «Todos · 214». */
+.ctab-tabs {
+  flex: none;
+  padding: 3px;
+}
+.ctab-tabs::before {
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--n));
+  box-shadow: var(--shadow-1);
+}
+.ctab-tabs .seg__item {
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: var(--fs-12);
+  font-weight: 650;
+}
+.ctab-chips {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+  /* Si no caben todos, se desplazan de lado (sin barra), nunca se encogen. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ctab-chips::-webkit-scrollbar {
+  display: none;
+}
+.ctab-chips .chip {
+  flex: none;
+  min-height: 30px;
+  padding: 0 11px;
+  font-size: var(--fs-12);
+}
+/* Como la maqueta: el chip elegido es solo el relleno amarillo, sin filo. */
+.ctab-chips .chip--button[aria-pressed='true'] {
+  box-shadow: none;
+}
+.ctab-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: none;
+}
+/* El filtro, plegado en una lupa de 36 px como la maqueta (que no lo trae):
+   se abre al enfocarlo (clic o «/») y se queda abierto con texto. */
+.ctab-filter {
+  position: relative;
+  width: 36px;
+  min-width: 0;
+}
+.ctab-filter:focus-within,
+.ctab-filter--open {
+  width: 220px;
+}
+.ctab-filter:not(:focus-within, .ctab-filter--open) .field__box {
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+/* Plegado, el <input> transparente tapa la lupa: el clic lo enfoca y lo abre.
+   Con .ctab-bar delante para ganar al «width: 0» de más abajo: con él, el
+   campo medía 0 px, el clic caía en la lupa y el filtro no se abría. */
+.ctab-bar .ctab-filter:not(:focus-within, .ctab-filter--open) .field__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.ctab-filter:not(:focus-within, .ctab-filter--open) .field__kbd {
+  display: none;
+}
+.ctab-more {
+  width: 36px;
+  height: 36px;
+}
+.ctab-bar .ctab-filter .field__input {
+  /* Ancho 0 y que crezca: si no, el ancho propio del <input> desborda la caja. */
+  width: 0;
+  height: 34px;
+  font-size: var(--fs-13);
+}
+.ctab-bar .ctab-filter .kbd {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+}
+.ctab-bar .ctab-filter .field__box {
+  min-height: 36px;
+  padding: 0 6px 0 12px;
+  gap: 8px;
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+/* El anillo de foco del campo (Field.css): la regla de arriba pesa más que
+   `.field__box:focus-within` y la lupa abierta se quedaba sin foco visible. */
+.ctab-bar .ctab-filter .field__box:focus-within {
+  box-shadow:
+    inset 0 0 0 1px var(--accent-edge),
+    0 0 0 3px color-mix(in oklab, var(--accent-edge) 30%, transparent);
+}
+
+/* ---- La tabla ------------------------------------------------------------- */
+.ctab {
+  display: grid;
+  align-content: start;
+  gap: 0;
+  min-width: 0;
+  padding: 0 0 var(--s-6);
+}
+/* «Buscar en el motor» bajo la tabla, con aire. */
+.ctab > .lib-engine {
+  justify-self: start;
+  margin-top: var(--s-3);
+}
+.ctab:focus-visible {
+  outline-offset: 4px;
+  border-radius: var(--r-m);
+}
+/* Logo · canal · ahora · después · estrella (las mismas columnas en la cabecera).
+   El nombre crece con el ancho: con un tope fijo, «ES: DAZN LALIGA 1080p» se
+   cortaba aunque sobrase sitio en «Ahora». */
+.ctab-head,
+.ctab-row,
+.ctab-loading {
+  display: grid;
+  grid-template-columns: 72px minmax(140px, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 76px;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 12px;
+}
+/* La cabecera CANAL · AHORA · DESPUÉS, pegada bajo las pestañas. */
+.ctab-head {
+  position: sticky;
+  top: calc(var(--ctab-top) + var(--ctab-bar-h));
+  z-index: var(--z-sticky);
+  min-height: 40px;
+  padding-block: 0;
+  background: var(--bg);
+  color: var(--text-3);
+  font-size: var(--fs-11);
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.ctab-list {
+  min-width: 0;
+}
+/* El filo entre filas (no encima de la primera). */
+.ctab-item--channel + .ctab-item--channel .ctab-row {
+  box-shadow: 0 -1px 0 var(--line);
+}
+.ctab-row {
+  position: relative;
+  min-height: 64px;
+  border-radius: 14px;
+}
+/* El canal que suena: la fila amarilla clara (sin filos que la corten). */
+.ctab-row[data-playing] {
+  background: var(--accent-wash);
+}
+.ctab-item--channel + .ctab-item--channel .ctab-row[data-playing],
+.ctab-item:has(.ctab-row[data-playing]) + .ctab-item .ctab-row {
+  box-shadow: none;
+}
+.ctab-row:has(.ctab-row__link:focus-visible) {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: -2px;
+}
+/* La placa del canal: 60 × 40 con el color de su marca (ChannelPlate.tsx). */
+.ctab-row__logo {
+  justify-self: start;
+}
+.plate {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 60px;
+  height: 40px;
+  overflow: hidden;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: var(--plate-bg);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--plate-ink);
+  font-size: var(--fs-11);
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+}
+/* Con logo de la guía: sobre una placa clara en los dos temas (los logos
+   suelen ser para fondo claro). */
+.plate--logo {
+  padding: 5px 7px;
+  background: #f4f4f5;
+}
+.plate--logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.ctab-row__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* IPTV o AceStream, la misma etiqueta que en la lista de fuentes. */
+.ctab-row__origin {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-11);
+  font-weight: 650;
+}
+.ctab-row__origin--iptv {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+.ctab-row__link {
+  min-width: 0;
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 650;
+}
+.ctab-row__link:focus-visible {
+  outline: none;
+}
+/* Toda la fila es el enlace: su ::after la cubre (la estrella y «Más», encima). */
+.ctab-row__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.ctab-row__title {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ctab-row .player-eq {
+  width: 12px;
+  height: 12px;
+  color: var(--accent-ink);
+}
+.ctab-row .player-eq i {
+  width: 3px;
+}
+.ctab-row__fallen {
+  display: inline-grid;
+  color: var(--weak-ink);
+}
+.ctab-row__now {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.ctab-row__show {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 560;
+}
+/* El programa: hasta dos líneas y «…» en la segunda. A 1024 la columna de
+   «Ahora» se queda en unos 110 px y «Goles de la jornada» no cabía en una. */
+.ctab-row__text {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+/* Lo que lleva emitido: 3 px; gris, o rojo si es en directo. */
+.ctab-row__bar {
+  display: block;
+  height: 3px;
+  max-width: 220px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line-soft);
+}
+.ctab-row__bar i {
+  display: block;
+  height: 100%;
+  background: var(--text-3);
+  transform: scaleX(var(--p, 0));
+  transform-origin: left;
+}
+.ctab-row__now--live .ctab-row__bar i {
+  background: var(--live);
+}
+.ctab-row__next {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.ctab-row__time {
+  flex: none;
+  margin-right: 8px;
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+}
+.ctab-row__none {
+  color: var(--text-3);
+  font-size: var(--fs-12);
+}
+/* Sobre el amarillo del canal que suena, --text-3 no llega a AA en oscuro
+   (4,16:1): ahí el texto apagado va con --text-2. */
+.ctab-row[data-playing] .ctab-row__none,
+.ctab-row[data-playing] .ctab-row__time {
+  color: var(--text-2);
+}
+/* Estrella y «Más» por encima del enlace de la fila. */
+.ctab-row__acts {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+.ctab-row__acts .icon-btn {
+  width: 36px;
+  height: 36px;
+}
+.ctab-row__fav[aria-pressed='true'] {
+  color: var(--accent-ink);
+}
+/* La fila de carga al pedir otra página de tu IPTV (las columnas, las de la tabla). */
+.ctab-loading {
+  min-height: 64px;
+}
+/* Con ratón: la fila se ilumina y la estrella vacía y «Más» aparecen al pasar
+   (con teclado, al enfocarlos; en táctil se ven siempre). */
+@media (hover: hover) and (pointer: fine) {
+  .ctab-row:not([data-playing]):hover {
+    background: var(--surface);
+  }
+  .ctab-row__fav:not([aria-pressed='true']),
+  .ctab-row__more {
+    opacity: 0;
+    transition: opacity var(--dur-rapido) var(--ease-estandar);
+  }
+  .ctab-row:hover .ctab-row__fav,
+  .ctab-row:hover .ctab-row__more,
+  .ctab-row__acts :focus-visible,
+  .ctab-row__more[aria-expanded='true'] {
+    opacity: 1;
+  }
+}
+/* Tableta (768-1023): sin «Después», para que «Ahora» respire. Los chips se
+   quedan y se desplazan de lado si no caben; el filtro abierto, más corto. */
+@media (max-width: 1023px) {
+  .ctab-head,
+  .ctab-row,
+  .ctab-loading {
+    grid-template-columns: 72px minmax(150px, 1.2fr) minmax(0, 1fr) 76px;
+  }
+  .ctab-head > :nth-child(4),
+  .ctab-row__next {
+    display: none;
+  }
+  .ctab-filter:focus-within,
+  .ctab-filter--open {
+    width: 180px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ctab-row__fav,
+  .ctab-row__more {
+    transition: none;
+  }
+}
+/* ---- Táctil desde 768 (tableta, móvil en horizontal): zonas de 44 ----------
+   El dibujo es el de la maqueta (pestañas y chips de 30, iconos de 36); solo
+   crece la zona invisible. Con ratón (pointer: fine) no cambia nada. */
+@media (min-width: 768px) and (pointer: coarse) {
+  .ctab-tabs .seg__item::after {
+    inset: -7px 0;
+  }
+  /* El filtro abierto: 44 de alto para el dedo. */
+  .ctab-bar .ctab-filter .field__input {
+    height: 44px;
+  }
+  /* La fila de chips se desliza (overflow): sitio arriba y abajo para que no
+     recorte la zona de los chips, sin mover la barra. */
+  .ctab-chips {
+    margin-block: -7px;
+    padding-block: 7px;
+  }
+  .ctab-more::before,
+  .ctab-row__acts .icon-btn::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+  }
+  /* El nombre del canal: su ::after ya cubre la fila; el enlace mismo, alto
+     como el contenido de la fila (64 − 2 × 10) y de 44 de ancho aunque el
+     nombre sea corto («DAZN»), para contar como objetivo. */
+  .ctab-row__link {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .ctab-row__link .ctab-row__title {
+    min-width: 0;
+  }
+}

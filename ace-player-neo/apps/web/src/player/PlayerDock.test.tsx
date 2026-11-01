@@ -179,6 +179,35 @@ describe('reproductor en grande', () => {
     expect(screen.getByRole('button', { name: 'Reproducir' })).toBeInTheDocument();
   });
 
+  it('escritorio (1B): silencio y barra de volumen junto a la barra del directo', () => {
+    const realMatchMedia = window.matchMedia;
+    // 1280 px con ratón: casan las de ancho y la de puntero fino.
+    window.matchMedia = ((query: string) => ({
+      matches: /min-width|pointer: fine/.test(query),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const { container } = renderDock();
+      setPlayer(playing());
+      const bottom = container.querySelector('.player-1b__bottom') as HTMLElement;
+      expect(bottom).not.toBeNull();
+      fireEvent.click(within(bottom).getByRole('button', { name: 'Silenciar' }));
+      const video = container.querySelector('video') as HTMLVideoElement;
+      expect(video.muted).toBe(true);
+      const slider = within(bottom).getByRole('slider', { name: 'Volumen' });
+      fireEvent.change(slider, { target: { value: '0.4' } });
+      expect(video.volume).toBeCloseTo(0.4);
+    } finally {
+      window.matchMedia = realMatchMedia;
+    }
+  });
+
   it('controles: pausa, −30 s, silencio y minimizar; y la línea de estado bajo el vídeo', () => {
     // Sin matchMedia (jsdom) cuenta como móvil: detener va en «Más opciones», como en la maqueta.
     const { handlers } = renderDock();
@@ -246,6 +275,77 @@ describe('reproductor en grande', () => {
     const video = container.querySelector('video')!;
     video.setAttribute('controls', '');
     await waitFor(() => expect(video).not.toHaveAttribute('controls'));
+  });
+
+  /** Escritorio con pantalla completa anunciada; `requestFullscreen` hace lo que diga la prueba. */
+  async function withDesktopFullscreen(
+    requestFullscreen: () => Promise<void>,
+    body: () => Promise<void> | void,
+  ) {
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+    Object.defineProperty(document.documentElement, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    });
+    const realMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: /min-width|pointer: fine/.test(query),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      await body();
+    } finally {
+      vi.useRealTimers();
+      window.matchMedia = realMatchMedia;
+      Reflect.deleteProperty(document, 'fullscreenEnabled');
+      Reflect.deleteProperty(document.documentElement, 'requestFullscreen');
+    }
+  }
+
+  /** En el modo teatro de reserva, los botones «full» dicen cómo salir y Esc sale. */
+  function expectTheaterFallbackThenEscape() {
+    expect(playerPresence.get().immersive).toBe(true);
+    const exits = screen.getAllByRole('button', { name: 'Salir del modo teatro' });
+    expect(exits.length).toBeGreaterThan(0);
+    for (const button of exits) expect(button).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'Pantalla completa' })).toBeNull();
+    act(() => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+    expect(playerPresence.get().immersive).toBe(false);
+    for (const button of screen.getAllByRole('button', { name: 'Pantalla completa' }))
+      expect(button).toHaveAttribute('aria-pressed', 'false');
+  }
+
+  it('pantalla completa que el navegador no contesta nunca: a los 1,5 s, el modo teatro (y Esc sale)', async () => {
+    const requestFullscreen = vi.fn(() => new Promise<void>(() => {}));
+    await withDesktopFullscreen(requestFullscreen, () => {
+      renderDock();
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      setPlayer(playing());
+      fireEvent.click(screen.getAllByRole('button', { name: 'Pantalla completa' })[0]!);
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+      act(() => vi.advanceTimersByTime(1_400));
+      expect(playerPresence.get().immersive).toBe(false);
+      act(() => vi.advanceTimersByTime(200));
+      expectTheaterFallbackThenEscape();
+    });
+  });
+
+  it('pantalla completa que falla (iframe sin allowfullscreen): el modo teatro, que se deja con Esc', async () => {
+    const requestFullscreen = vi.fn(() => Promise.reject(new TypeError('no permitido')));
+    await withDesktopFullscreen(requestFullscreen, async () => {
+      renderDock();
+      setPlayer(playing());
+      fireEvent.click(screen.getAllByRole('button', { name: 'Pantalla completa' })[0]!);
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(playerPresence.get().immersive).toBe(true));
+      expectTheaterFallbackThenEscape();
+    });
   });
 
   it('controles: el foco que deja un clic no los retiene (pantalla completa), el del teclado sí', () => {
@@ -687,8 +787,14 @@ describe('mini-reproductor «Sonando»', () => {
     const { handlers } = renderDock('mini');
     setPlayer(playing());
     expect(screen.getByText('Sonando')).toBeInTheDocument();
-    expect(screen.getByText('M+ Liga de Campeones')).toBeInTheDocument();
+    // La banda (móvil y tableta) y la tarjeta del menú lateral (desde 1024; el CSS elige).
+    expect(document.querySelector('.player-mini__title')).toHaveTextContent('M+ Liga de Campeones');
+    expect(document.querySelector('.player-mini__side-title')).toHaveTextContent(
+      'M+ Liga de Campeones',
+    );
     expect(screen.getByText('Fuente 1, Elcano')).toBeInTheDocument();
+    // Un canal en directo: la cápsula «Directo» sobre la imagen y la línea llena.
+    expect(document.querySelector('.player-mini__cap')).toHaveTextContent('Directo');
     fireEvent.click(screen.getByRole('button', { name: 'Volver al vídeo: M+ Liga de Campeones' }));
     expect(handlers.onExpand).toHaveBeenCalled();
     act(() => playerPresence.set({ active: true, route: ROUTE, immersive: false }));
@@ -714,8 +820,13 @@ describe('mini-reproductor «Sonando»', () => {
     setPlayer(playing({ route: { vista: 'partido', id: 'm-1', canal: null } }));
     expect(screen.getByText('Marcador oculto')).toBeInTheDocument();
     expect(screen.getByText('Fuente 1, Elcano')).toBeInTheDocument();
+    // La tarjeta del menú lateral dice el minuto (no es un spoiler) y su línea va al 80 %.
+    expect(document.querySelector('.player-mini__side-sub')).toHaveTextContent("72'");
+    expect(
+      document.querySelector<HTMLElement>('.player-mini__line')?.style.getPropertyValue('--v'),
+    ).toBe(String(72 / 90));
     act(() => revealScore('m-1'));
-    expect(screen.getByText("72'")).toBeInTheDocument();
+    expect(document.querySelector('.player-mini__sub')).toHaveTextContent("72'");
     expect(screen.queryByText(/2.1/)).toBeNull();
   });
 

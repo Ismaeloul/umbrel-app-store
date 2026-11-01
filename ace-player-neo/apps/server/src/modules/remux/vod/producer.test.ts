@@ -481,6 +481,72 @@ describe('VodProducer', () => {
     expect(same.dropped).toEqual([]);
   });
 
+  it('§17: touch() cuenta como pedir el segmento (cursor y reinicio lejos) pero no espera nada', async () => {
+    const r = await rig({ behavior: { fragmentDelayMs: 5 } });
+    await r.get('index0.m4s');
+    const before = r.launcher.runs.length;
+    const result: unknown = r.producer.touch(15);
+    expect(result).toBeUndefined();
+    expect(r.producer.requestedSegment()).toBe(15);
+    expect(r.producer.stats().lastRequested).toBe(15);
+    /* 90 s: más de 30 s por delante → el mismo reinicio que con `file()`. */
+    await until(() => r.launcher.runs.length === before + 1, 'el reinicio');
+    expect(r.launcher.starts).toEqual([0, 90.2]);
+    await until(() => r.producer.readySegment(15) !== null, 'el segmento 15');
+    /* Fuera del plan, nada. */
+    r.producer.touch(999);
+    r.producer.touch(-1);
+    expect(r.producer.requestedSegment()).toBe(15);
+    expect(r.dropped).toEqual([]);
+  });
+
+  it('§17: leer lo que hay en disco (readySegment, avisos) no mueve el cursor ni reinicia', async () => {
+    const r = await rig();
+    const ready: number[] = [];
+    const restarts: number[] = [];
+    r.producer.onSegmentReady((segment) => ready.push(segment));
+    const off = r.producer.onRestart((segment) => restarts.push(segment));
+    await r.get('index0.m4s');
+    expect(r.producer.initFilePath()).not.toBeNull();
+    await until(() => ready.length >= 3, 'tres segmentos');
+    for (let i = 0; i < r.producer.plan.segments.length; i += 1) r.producer.readySegment(i);
+    expect(ready.slice(0, 3)).toEqual([0, 1, 2]);
+    expect(r.producer.readySegment(0)).toBe(path.join(r.dir, 'index0.m4s'));
+    expect(r.producer.readySegment(19)).toBeNull();
+    expect(r.launcher.runs).toHaveLength(1);
+    expect(r.producer.stats().restarts).toBe(0);
+    expect(r.producer.requestedSegment()).toBe(0);
+    /* Un reinicio de verdad sí se avisa (con su segmento): el 19 (114 s) queda siempre a más de
+       30 s de lo producido, parado por la contrapresión hacia los 66 s. Tras la baja, ya no. */
+    await r.get('index19.m4s');
+    expect(restarts).toEqual([19]);
+    off();
+    await r.get('index2.m4s');
+    expect(restarts).toEqual([19]);
+  });
+
+  it('§17: el recorte no toca lo fijado, y los bytes de fuera cuentan en el tope', async () => {
+    const r = await rig({ limits: { keepBehindS: 20 } });
+    r.producer.pin(1, 2);
+    for (let i = 0; i <= 10; i += 1) await r.get(`index${i}.m4s`);
+    await sleep(50);
+    const kept = r.producer.segmentsOnDisk().filter((s) => s <= 10);
+    expect(kept).toEqual([1, 2, 6, 7, 8, 9, 10]);
+    r.producer.unpin();
+    await r.get('index10.m4s');
+    await sleep(50);
+    expect(r.producer.segmentsOnDisk().filter((s) => s <= 10)[0]).toBe(6);
+
+    const capped = await rig({ limits: { sessionDiskMaxBytes: 5 * 120_000 + 10_000 } });
+    capped.producer.setExtraBytes(3 * 120_000);
+    for (let i = 0; i <= 3; i += 1) await capped.get(`index${i}.m4s`);
+    await until(() => capped.producer.stats().pausedBy.includes('adelanto'), 'la pausa');
+    await sleep(50);
+    /* Con 360 000 bytes de fuera, de los suyos caben dos segmentos. */
+    expect(capped.producer.stats().bytesOnDisk).toBeLessThanOrEqual(2 * 120_000 + 10_000);
+    expect(capped.producer.segmentsOnDisk()).toContain(3);
+  });
+
   it('al cerrar: nada vivo y la carpeta fuera', async () => {
     const r = await rig({ behavior: { fragmentDelayMs: 20 } });
     await r.get('init.mp4');

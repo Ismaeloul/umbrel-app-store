@@ -15,6 +15,8 @@ import { createQueryClient, routeKey } from '../api/query.ts';
 import { resetMode, setMode } from '../api/mode.ts';
 import { readItem, STORAGE_KEYS } from '../lib/storage.ts';
 import { noticeFlags } from '../notices/notify.ts';
+import { toastStore } from '../notices/toasts.ts';
+import { addAviso, resetAvisos } from '../features/avisos/store.ts';
 import { fixture, mockFetch } from '../test/fetch.ts';
 import { App } from './App.tsx';
 // Solo tipos: se borran al compilar, así que sirven dentro de la fábrica de vi.mock.
@@ -35,7 +37,8 @@ vi.mock('./views.tsx', async () => {
     const layout = useLayout();
     return (
       <div>
-        <ViewHeader title={VISTA_TITLE[route.vista]} />
+        {/* Como la de verdad, la sala (película o episodio) no tiene barra ni campana. */}
+        {route.vista === 'sala' ? null : <ViewHeader title={VISTA_TITLE[route.vista]} />}
         <label>
           Nota de {route.vista}
           <input value={note} onChange={(event) => setNote(event.target.value)} />
@@ -170,16 +173,26 @@ const nav = () => screen.getAllByRole('navigation', { name: 'Principal' });
 const app = () => document.querySelector('.app') as HTMLElement;
 
 describe('armazón', () => {
-  it('navegación con los cuatro destinos (barra inferior y superior) y enlace para saltar al contenido', async () => {
+  it('navegación (barra inferior y menú lateral) y enlace para saltar al contenido', async () => {
     renderApp();
     expect(nav()).toHaveLength(2);
-    // La barra superior tiene la marca, los destinos y la ayuda de atajos.
-    expect(document.querySelector('.topbar')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Atajos de teclado' })).toBeInTheDocument();
+    // El menú lateral tiene la marca, los destinos y Ajustes; como en la
+    // maqueta, ni botón de ayuda («?» la abre) ni motor si está en línea.
+    expect(document.querySelector('.sidenav')).not.toBeNull();
+    const side = document.querySelector('.sidenav') as HTMLElement;
+    expect(within(side).queryByRole('button', { name: 'Atajos de teclado' })).toBeNull();
+    expect(side.querySelector('.sidenav__engine')).toBeNull();
+    expect([...side.querySelectorAll('.sidenav__item')].map((a) => a.textContent)).toEqual([
+      'Agenda',
+      'Canales',
+      'Guía',
+      'Ver juntos',
+      'Ajustes',
+    ]);
     for (const bar of nav()) {
       const links = within(bar).getAllByRole('link');
       expect(links.map((a) => a.textContent)).toEqual(
-        expect.arrayContaining(['Agenda', 'Canales', 'Buscar', 'Ajustes']),
+        expect.arrayContaining(['Agenda', 'Canales', 'Ajustes']),
       );
       expect(within(bar).getByRole('link', { name: 'Agenda' })).toHaveAttribute(
         'aria-current',
@@ -264,6 +277,13 @@ describe('armazón', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Canales' })).toBeInTheDocument();
   });
 
+  it('en el ordenador no hay línea de estado sobre el vídeo (la fuente y DIRECTO van en píldoras)', async () => {
+    setViewport(1280, 800);
+    renderApp('?vista=partido/fltv-2026-09-23-3');
+    await screen.findByTestId('dock');
+    expect(document.querySelector('.stage__status')).toBeNull();
+  });
+
   it('el reproductor es UNO: de grande en el partido a «mini» fuera sin recrearse', async () => {
     renderApp('?vista=partido/fltv-2026-09-23-3');
     const dock = await screen.findByTestId('dock');
@@ -329,6 +349,12 @@ describe('armazón', () => {
     expect(await screen.findByText('Columna de agenda')).toBeInTheDocument();
     expect(screen.getByTestId('dock')).toHaveAttribute('data-presentation', 'stage');
     expect(app()).toHaveAttribute('data-column', 'true');
+    // La barra de la Agenda va encima de la columna y el vídeo (rediseño,
+    // pantalla 1); su título no es un <h1>: el de la vista es el del partido.
+    const bar = document.querySelector('.app-bar');
+    expect(bar).toHaveTextContent('Agenda');
+    expect(within(bar as HTMLElement).queryByRole('heading')).toBeNull();
+    expect(within(bar as HTMLElement).getByRole('button', { name: /Buscar/ })).toBeInTheDocument();
   });
 
   it('tableta (768-1023): barra superior y sin panel lateral', async () => {
@@ -337,6 +363,55 @@ describe('armazón', () => {
     await screen.findByRole('heading', { level: 1, name: 'Canales' });
     expect(app()).toHaveAttribute('data-layout', 'tablet');
     expect(screen.queryByText('Contenido del panel')).toBeNull();
+    expect(document.querySelector('.app-bar')).toBeNull();
+  });
+
+  it('«Te aviso» avisa también en la sala de una película, sin barra ni campana', async () => {
+    setViewport(1440, 900);
+    const realNotification = globalThis.Notification;
+    const shown: { title: string; onclick: (() => void) | null }[] = [];
+    class FakeNotification {
+      static permission = 'granted';
+      onclick: (() => void) | null = null;
+      title: string;
+      constructor(title: string) {
+        this.title = title;
+        shown.push(this);
+      }
+      close() {}
+    }
+    Object.defineProperty(globalThis, 'Notification', {
+      configurable: true,
+      writable: true,
+      value: FakeNotification,
+    });
+    try {
+      addAviso({
+        id: 'guia:prueba',
+        title: 'Programa de prueba',
+        channel: 'M+ LaLiga',
+        start: Date.now() + 4 * 60_000,
+        end: Date.now() + 120 * 60_000,
+      });
+      renderApp(`?vista=sala/${'a'.repeat(40)}`);
+      await screen.findByTestId('dock');
+      expect(document.querySelector('.avisos-bell')).toBeNull();
+      await waitFor(() => expect(shown.map((item) => item.title)).toEqual(['Programa de prueba']));
+      // Pulsar la notificación lleva a la Guía (no es un partido de la Agenda).
+      act(() => shown[0]?.onclick?.());
+      await waitFor(() => expect(location.search).toBe('?vista=guia'));
+    } finally {
+      Object.defineProperty(globalThis, 'Notification', {
+        configurable: true,
+        writable: true,
+        value: realNotification,
+      });
+      try {
+        localStorage.removeItem('aceneo-avisos');
+      } catch {}
+      resetAvisos();
+      toastStore.set([]);
+    }
   });
 
   it('?vista=sistema enseña la página de muestra en desarrollo', async () => {
@@ -346,47 +421,60 @@ describe('armazón', () => {
   });
 
   describe('«Pelis y series» (docs/vod.md §12.1, T17)', () => {
-    /* Los destinos (la barra superior lleva además la marca, que no cuenta). */
+    /* Los destinos de la barra inferior del móvil (el menú lateral tiene los suyos). */
+    const tabbar = () => document.querySelector('.tabbar') as HTMLElement;
     const labels = (bar: HTMLElement) =>
-      [...bar.querySelectorAll('.tabbar__item, .topbar__item')].map((a) => a.textContent);
+      [...bar.querySelectorAll('.tabbar__item')].map((a) => a.textContent);
+    const sideLabels = () =>
+      [...document.querySelectorAll('.sidenav__item')].map((a) => a.textContent);
 
     it('con features.vod, cinco destinos sin ?flag=cine; --n y la píldora salen de esa lista', async () => {
       history.replaceState(null, '', '/?vista=cine');
       renderApp('?vista=cine', clientWithVod(true));
       await screen.findAllByRole('heading', { level: 1 });
+      expect(labels(tabbar())).toEqual([
+        'Agenda',
+        'Canales',
+        'Pelis y series',
+        'Buscar',
+        'Ajustes',
+      ]);
+      expect(sideLabels()).toEqual([
+        'Agenda',
+        'Canales',
+        'Guía',
+        'Pelis y series',
+        'Ver juntos',
+        'Ajustes',
+      ]);
       for (const bar of nav()) {
-        expect(labels(bar)).toEqual(
-          expect.arrayContaining(['Agenda', 'Canales', 'Pelis y series', 'Buscar', 'Ajustes']),
-        );
         const cine = within(bar).getByRole('link', { name: 'Películas y series' });
         expect(cine).toHaveAttribute('title', 'Películas y series');
         expect(cine).toHaveAttribute('aria-current', 'page');
         expect(cine.getAttribute('href')).toContain('vista=cine');
       }
-      const tabbar = document.querySelector('.tabbar') as HTMLElement;
-      expect(tabbar.getAttribute('style')).toContain('--n: 5');
-      expect(tabbar.getAttribute('style')).toContain('--i: 2');
-      expect(document.querySelector('.topbar')?.getAttribute('style')).toContain('--n: 5');
+      expect(tabbar().getAttribute('style')).toContain('--n: 5');
+      expect(tabbar().getAttribute('style')).toContain('--i: 2');
       // Buscar pasa a la cuarta columna.
-      fireEvent.click(within(nav()[0] as HTMLElement).getByRole('link', { name: 'Buscar' }));
+      fireEvent.click(within(tabbar()).getByRole('link', { name: 'Buscar' }));
       await screen.findByRole('heading', { level: 1, name: 'Buscar' });
-      expect(tabbar.getAttribute('style')).toContain('--i: 3');
+      expect(tabbar().getAttribute('style')).toContain('--i: 3');
     });
 
     it('sin features.vod, los cuatro de siempre', async () => {
       renderApp('', clientWithVod(false));
       await screen.findByRole('heading', { level: 1, name: 'Agenda' });
-      for (const bar of nav())
-        expect(labels(bar)).toEqual(['Agenda', 'Canales', 'Buscar', 'Ajustes']);
-      expect(document.querySelector('.tabbar')?.getAttribute('style')).toContain('--n: 4');
+      expect(labels(tabbar())).toEqual(['Agenda', 'Canales', 'Buscar', 'Ajustes']);
+      expect(sideLabels()).toEqual(['Agenda', 'Canales', 'Guía', 'Ver juntos', 'Ajustes']);
+      expect(tabbar().getAttribute('style')).toContain('--n: 4');
     });
 
     it('sin películas en el servidor, Buscar sigue en la tercera columna', async () => {
       renderApp('', clientWithVod(false));
       await screen.findByRole('heading', { level: 1, name: 'Agenda' });
-      for (const bar of nav()) expect(labels(bar)).toHaveLength(4);
+      expect(labels(tabbar())).toHaveLength(4);
       // Buscar sigue en la tercera columna.
-      fireEvent.click(within(nav()[0] as HTMLElement).getByRole('link', { name: 'Buscar' }));
+      fireEvent.click(within(tabbar()).getByRole('link', { name: 'Buscar' }));
       await screen.findByRole('heading', { level: 1, name: 'Buscar' });
       expect(document.querySelector('.tabbar')?.getAttribute('style')).toContain('--i: 2');
     });

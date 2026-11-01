@@ -1,6 +1,8 @@
 /* La página de invitado de «Ver juntos» (docs/ver-juntos.md §9): la sala
    del enlace `/s/<código>` con los mismos Join y Room que la vista de casa,
-   con sus propias salidas: salir vuelve a la entrada de la sala. */
+   con sus propias salidas: salir vuelve a la entrada de la sala. Solo desde
+   aquí el reproductor pide las dos calidades (`guest`, §17): la web de casa
+   nunca manda `abr=1`. */
 
 import type { PartyCredential } from '@ace/shared';
 import { useCallback, useState } from 'react';
@@ -30,6 +32,7 @@ function GuestRoom({ code }: { code: string }) {
       onForbidden={reset}
       onLeft={reset}
       exitAction={null}
+      guest
     />
   );
 }

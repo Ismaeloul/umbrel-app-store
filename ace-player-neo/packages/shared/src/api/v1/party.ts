@@ -8,10 +8,10 @@
    quien entró. */
 
 import { z } from 'zod';
-import { PARTY, PARTY_REACTIONS } from '../../constants/party.js';
+import { PARTY } from '../../constants/party.js';
 import { HashSchema } from '../../primitives.js';
-import { ChannelStreamQuerySchema, VideoParamsSchema } from './playback.js';
-import { VodArtStampSchema } from './vod.js';
+import { ChannelStreamQuerySchema, StreamGrantSchema } from './playback.js';
+import { VodArtStampSchema, VodGrantSchema } from './vod.js';
 
 export const PartyCodeSchema = z
   .string()
@@ -31,10 +31,10 @@ export const PartyParamsSchema = z.strictObject({ code: PartyCodeSchema });
 export type PartyParams = z.infer<typeof PartyParamsSchema>;
 
 export const PartyTitleSchema = z.strictObject({
-  /** Película o episodio que se reproduce. */
+  /** Película o episodio que se reproduce; en directo (§14), el canal que suena. */
   id: HashSchema,
-  kind: z.enum(['movie', 'episode']),
-  /** Película o serie, para el cartel (`vodArt`). */
+  kind: z.enum(['movie', 'episode', 'live']),
+  /** Película o serie, para el cartel (`vodArt`); en directo, el canal. */
   artId: HashSchema,
   poster: VodArtStampSchema.nullable(),
   title: z.string().max(200),
@@ -53,13 +53,64 @@ export const PartyAudioSchema = z.strictObject({
 });
 export type PartyAudio = z.infer<typeof PartyAudioSchema>;
 
+/**
+ * Sala de un partido o un canal en directo (§14): el NAS abre UNA conexión (la
+ * plaza de la IPTV o un AceStream) y la reparte a todos por la ruta de la sala.
+ * Todos van en directo a la vez: sin pausa ni saltos.
+ */
+export const PartyLiveSchema = z.strictObject({
+  /** El canal que suena (el mismo id que `channelStream`). */
+  hash: HashSchema,
+  /** Cómo se llama: «DAZN 1 · 1080p». */
+  channel: z.string().max(120),
+  source: z.enum(['engine', 'iptv']),
+  /** El partido de la Agenda, o null con un canal suelto. */
+  matchId: z.string().max(120).nullable(),
+  /** «Real Madrid – Barcelona», o null. */
+  match: z.string().max(200).nullable(),
+  /** «Cambio automático si se cae»: quien controla salta solo a la siguiente fuente buena. */
+  auto: z.boolean(),
+});
+export type PartyLive = z.infer<typeof PartyLiveSchema>;
+
+/** Lo que se elige al crear una sala en directo o al cambiar de canal (`live` de `partyControl`). */
+export const PartyLiveChoiceSchema = z.strictObject({
+  hash: HashSchema,
+  channel: z.string().trim().min(1).max(120),
+  source: z.enum(['engine', 'iptv']),
+  matchId: z.string().max(120).nullable().default(null),
+  match: z.string().trim().max(200).nullable().default(null),
+});
+export type PartyLiveChoice = z.infer<typeof PartyLiveChoiceSchema>;
+
+/**
+ * Papel en la sala (§13): `leader` (la corona), `coleader` (el escudo: controla
+ * como el líder, pero no echa ni pasa la corona) o `guest` (ve, chatea y
+ * propone y vota lo siguiente).
+ */
+export const PartyRoleSchema = z.enum(['leader', 'coleader', 'guest']);
+export type PartyRole = z.infer<typeof PartyRoleSchema>;
+
 export const PartyMemberSchema = z.strictObject({
   id: PartyMemberIdSchema,
   name: z.string().max(PARTY.nameMaxChars),
   /** Quien creó la sala: solo él la cierra. */
   host: z.boolean(),
-  /** El líder (§11): manda en la sala. Al principio, quien la creó. */
+  /**
+   * El líder (§11): manda en la sala. Al principio, quien la creó. Se queda
+   * por las apps de iPhone y Android, que aún no leen `role`.
+   */
   leader: z.boolean(),
+  /** Su papel (§13); con un servidor viejo, `guest` (y `leader` dice quién manda). */
+  role: PartyRoleSchema.default('guest'),
+  /**
+   * «Esperando a todos» (§13): tiene vídeo de sobra para empezar. Lo dice su
+   * reproductor; si no lo dice (una app vieja), cuenta como listo en cuanto
+   * ha abierto el vídeo y no carga.
+   */
+  ready: z.boolean().default(false),
+  /** Cuánto lleva cargado para empezar (0-100), o null si no lo dice. */
+  progress: z.number().int().min(0).max(100).nullable().default(null),
   /** Tiene el SSE de la sala abierto o mandó su estado hace poco. */
   online: z.boolean(),
   /** Está cargando: la sala le espera (hasta `holdMaxMs`). */
@@ -80,6 +131,12 @@ export const PartyPlaybackSchema = z.strictObject({
   rev: z.number().int().nonnegative(),
   /** Personas a las que se está esperando (cargando). Con alguna, el reloj está parado. */
   waitingFor: z.array(PartyMemberIdSchema).max(PARTY.maxMembers),
+  /**
+   * «Esperando a todos» (§13): aún no ha empezado. Arranca sola cuando todos
+   * los conectados están listos (con dos o más) o cuando quien controla da a
+   * reproducir («Empezar para todos»). Mientras, `playing` es false.
+   */
+  lobby: z.boolean().default(false),
 });
 export type PartyPlayback = z.infer<typeof PartyPlaybackSchema>;
 
@@ -91,7 +148,12 @@ export type PartyPlayback = z.infer<typeof PartyPlaybackSchema>;
 export const PartyInterruptedSchema = z.enum(['taken', 'failed']).nullable();
 export type PartyInterrupted = z.infer<typeof PartyInterruptedSchema>;
 
-/** Quién controla el vídeo (§11): el líder, como en Rave, o todos. */
+/**
+ * Quién controla el vídeo (§11 y §13): `leader`, el líder (y los co-líderes si
+ * `settings.coleaders`), o `everyone`, todos. «Solo yo» es `leader` sin
+ * co-líderes; «Yo y co-líderes», `leader` con ellos. Así una app vieja, que solo
+ * conoce estos dos valores, sigue entendiendo la sala.
+ */
 export const PartyControlModeSchema = z.enum(['leader', 'everyone']);
 export type PartyControlMode = z.infer<typeof PartyControlModeSchema>;
 
@@ -105,6 +167,8 @@ export type PartyQueueMode = z.infer<typeof PartyQueueModeSchema>;
 
 export const PartySettingsSchema = z.strictObject({
   control: PartyControlModeSchema,
+  /** Con `control: leader`, los co-líderes también controlan (§13). */
+  coleaders: z.boolean().default(true),
   queueMode: PartyQueueModeSchema,
 });
 export type PartySettings = z.infer<typeof PartySettingsSchema>;
@@ -150,6 +214,8 @@ export const PartyRoomSchema = z.strictObject({
   settings: PartySettingsSchema,
   queue: z.array(PartyQueueItemSchema).max(PARTY.queueMax),
   upNext: PartyUpNextSchema.nullable(),
+  /** Sala en directo (§14), o null: película o episodio. */
+  live: PartyLiveSchema.nullable().default(null),
 });
 export type PartyRoom = z.infer<typeof PartyRoomSchema>;
 
@@ -178,8 +244,8 @@ export type PartyCredential = z.infer<typeof PartyCredentialSchema>;
 
 // --- Peticiones ---
 
-/** POST /api/v1/party: crear una sala con un título. */
-export const PartyCreateBodySchema = z.strictObject({
+/** POST /api/v1/party con una película o un episodio. */
+export const PartyCreateVodBodySchema = z.strictObject({
   /** Película o episodio. */
   titleId: HashSchema,
   kind: z.enum(['movie', 'episode']),
@@ -189,7 +255,24 @@ export const PartyCreateBodySchema = z.strictObject({
   subtitle: z.string().trim().max(200).nullable().default(null),
   audio: z.number().int().min(0).max(15).nullable().default(null),
   name: PartyNameSchema,
+  /** «Quién controla» y «Votar lo siguiente» al crearla (§13); sin ellos, lo de siempre. */
+  control: PartyControlModeSchema.default('leader'),
+  coleaders: z.boolean().default(true),
+  queueMode: PartyQueueModeSchema.default('autoplay'),
 });
+export type PartyCreateVodBody = z.infer<typeof PartyCreateVodBodySchema>;
+
+/** POST /api/v1/party con un partido o un canal en directo (§14). */
+export const PartyCreateLiveBodySchema = z.strictObject({
+  live: PartyLiveChoiceSchema,
+  name: PartyNameSchema,
+  control: PartyControlModeSchema.default('leader'),
+  coleaders: z.boolean().default(true),
+});
+export type PartyCreateLiveBody = z.infer<typeof PartyCreateLiveBodySchema>;
+
+/** POST /api/v1/party: crear una sala con un título o en directo. */
+export const PartyCreateBodySchema = z.union([PartyCreateLiveBodySchema, PartyCreateVodBodySchema]);
 export type PartyCreateBody = z.infer<typeof PartyCreateBodySchema>;
 
 /** POST /api/v1/party/:code/join. */
@@ -204,6 +287,27 @@ export const PartyJoinResponseSchema = z.strictObject({
   serverNow: z.number().int().nonnegative(),
 });
 export type PartyJoinResponse = z.infer<typeof PartyJoinResponseSchema>;
+
+/**
+ * GET /api/v1/party (solo la web de casa): las salas abiertas, para volver a
+ * entrar o cerrarlas aunque se haya perdido la credencial (se salió sin querer,
+ * o se creó en otro aparato).
+ */
+export const PartyListItemSchema = z.strictObject({
+  code: PartyCodeSchema,
+  title: PartyTitleSchema,
+  /** Quien la creó. */
+  host: z.string().max(PARTY.nameMaxChars),
+  members: z.number().int().nonnegative().max(PARTY.maxMembers),
+  online: z.number().int().nonnegative().max(PARTY.maxMembers),
+  createdAt: z.number().int().nonnegative(),
+});
+export type PartyListItem = z.infer<typeof PartyListItemSchema>;
+
+export const PartyListSchema = z.strictObject({
+  rooms: z.array(PartyListItemSchema).max(PARTY.maxRooms),
+});
+export type PartyList = z.infer<typeof PartyListSchema>;
 
 /** GET /api/v1/party/:code: lo que se ve antes de entrar (sin credencial). */
 export const PartyPreviewSchema = z.strictObject({
@@ -227,6 +331,12 @@ export const PartyControlBodySchema = z.discriminatedUnion('action', [
     positionS: z.number().min(0).max(86_400),
     audio: z.number().int().min(0).max(15),
   }),
+  /** En directo (§14): otro canal o fuente para todos. */
+  z.strictObject({
+    token: PartyTokenSchema,
+    action: z.literal('live'),
+    live: PartyLiveChoiceSchema,
+  }),
 ]);
 export type PartyControlBody = z.infer<typeof PartyControlBodySchema>;
 
@@ -235,6 +345,9 @@ export const PartyStatusBodySchema = z.strictObject({
   token: PartyTokenSchema,
   positionS: z.number().min(0).max(86_400),
   buffering: z.boolean(),
+  /** «Esperando a todos» (§13): si ya puede empezar y cuánto lleva cargado (las apps viejas no lo mandan). */
+  ready: z.boolean().optional(),
+  progress: z.number().int().min(0).max(100).optional(),
 });
 export type PartyStatusBody = z.infer<typeof PartyStatusBodySchema>;
 
@@ -269,26 +382,29 @@ export type PartyTokenBody = z.infer<typeof PartyTokenBodySchema>;
 
 export const PartyOkSchema = z.strictObject({ ok: z.literal(true) });
 
-/** POST /api/v1/party/:code/react: una reacción que sube por encima del vídeo de todos. */
-export const PartyReactBodySchema = z.strictObject({
-  token: PartyTokenSchema,
-  emoji: z.enum(PARTY_REACTIONS),
-});
-export type PartyReactBody = z.infer<typeof PartyReactBodySchema>;
-
-/** POST /api/v1/party/:code/settings (solo el líder): lo que no se manda no cambia. */
+/**
+ * POST /api/v1/party/:code/settings: lo que no se manda no cambia. Quién
+ * controla (`control`, `coleaders`), solo el líder; la regla de lo
+ * siguiente (`queueMode`), también los co-líderes (§13).
+ */
 export const PartySettingsBodySchema = z.strictObject({
   token: PartyTokenSchema,
   control: PartyControlModeSchema.optional(),
+  coleaders: z.boolean().optional(),
   queueMode: PartyQueueModeSchema.optional(),
+  /** En directo (§14): «Cambio automático si se cae» (quien controla). */
+  auto: z.boolean().optional(),
 });
 export type PartySettingsBody = z.infer<typeof PartySettingsBodySchema>;
 
-/** POST /api/v1/party/:code/member (solo el líder): echar a alguien o darle el liderazgo. */
+/**
+ * POST /api/v1/party/:code/member (solo el líder): echar a alguien, darle la
+ * corona, hacerle co-líder (`coleader`) o quitárselo (`guest`).
+ */
 export const PartyMemberBodySchema = z.strictObject({
   token: PartyTokenSchema,
   memberId: PartyMemberIdSchema,
-  action: z.enum(['kick', 'lead']),
+  action: z.enum(['kick', 'lead', 'coleader', 'guest']),
 });
 export type PartyMemberBody = z.infer<typeof PartyMemberBodySchema>;
 
@@ -317,11 +433,23 @@ export type PartyQueueBody = z.infer<typeof PartyQueueBodySchema>;
 /** Clave de vídeo de una persona (base64url de 24 bytes). */
 export const PartyVideoKeySchema = z.string().regex(/^[A-Za-z0-9_-]{32}$/, 'clave de vídeo');
 
-/** GET /api/v1/party/:code/v/:key/:file: los mismos ficheros que `video`. */
+/**
+ * Ficheros de la ruta de la sala: los de `video` (`VideoParamsSchema.shape.file`) más la lista
+ * maestra y la versión ligera de los invitados (docs/ver-juntos.md §17): `master.m3u8`, `lo.m3u8`,
+ * `lo_init.mp4` y `lo_index<N>.m4s`. Nombres planos de 40 caracteres como mucho (el proxy de la sala).
+ */
+export const PartyVideoFileSchema = z
+  .string()
+  .regex(
+    /^(?:index\.m3u8|init(?:_\d{1,6})?\.mp4|index\d{1,9}\.m4s|master\.m3u8|lo\.m3u8|lo_init\.mp4|lo_index\d{1,9}\.m4s)$/,
+    'fichero de la sala',
+  );
+
+/** GET /api/v1/party/:code/v/:key/:file: los ficheros de `video` y los de la versión ligera (§17). */
 export const PartyVideoParamsSchema = z.strictObject({
   code: PartyCodeSchema,
   key: PartyVideoKeySchema,
-  file: VideoParamsSchema.shape.file,
+  file: PartyVideoFileSchema,
 });
 export type PartyVideoParams = z.infer<typeof PartyVideoParamsSchema>;
 
@@ -337,8 +465,18 @@ export const PartyStreamQuerySchema = ChannelStreamQuerySchema.pick({
 }).extend({
   t: PartyTokenSchema,
   hevc: z.enum(['0', '1']).default('0'),
+  /**
+   * `1`: el cliente sabe elegir entre dos calidades (docs/ver-juntos.md §17). Solo lo manda la web del
+   * invitado; con él, y si entra de fuera por el proxy de la sala, puede recibir `master.m3u8` (o
+   * `lo.m3u8`) y `variants`. Sin él (las apps y la web de casa), `index.m3u8` como siempre.
+   */
+  abr: z.enum(['0', '1']).default('0'),
 });
 export type PartyStreamQuery = z.infer<typeof PartyStreamQuerySchema>;
+
+/** Lo que devuelve `partyStream`: una `VodGrant` o, en directo (§14), una `StreamGrant`. */
+export const PartyStreamGrantSchema = z.union([VodGrantSchema, StreamGrantSchema]);
+export type PartyStreamGrant = z.infer<typeof PartyStreamGrantSchema>;
 
 // --- Eventos del SSE de la sala ---
 
@@ -391,14 +529,15 @@ export const PartyEventSchema = z.discriminatedUnion('type', [
       settings: PartySettingsSchema,
       queue: z.array(PartyQueueItemSchema).max(PARTY.queueMax),
       upNext: PartyUpNextSchema.nullable(),
+      live: PartyLiveSchema.nullable().default(null),
     }),
   }),
+  /** «Ana está escribiendo…» (§13): como mucho uno cada `typingIntervalMs` por persona. */
   z.strictObject({
-    type: z.literal('party.reaction'),
+    type: z.literal('party.typing'),
     data: z.strictObject({
       memberId: PartyMemberIdSchema,
       name: z.string().max(PARTY.nameMaxChars),
-      emoji: z.enum(PARTY_REACTIONS),
     }),
   }),
   z.strictObject({

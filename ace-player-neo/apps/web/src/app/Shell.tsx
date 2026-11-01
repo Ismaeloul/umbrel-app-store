@@ -6,10 +6,14 @@
      destinos (5 con «Pelis y series», docs/vod.md §12.1) y el
      mini-reproductor encima. En el centro de partido no hay barra: el vídeo
      va arriba, pegado, y se minimiza con la flecha o deslizando.
-   - Tableta (768-1023): barra superior + la vista.
-   - Escritorio (1024-1279): barra superior + vista + panel lateral de la vista.
-   - Ancho (≥ 1280): en el centro de partido, columna de agenda + reproductor +
-     panel lateral, todo a la vez bajo la barra superior.
+   - Desde 768 (rediseño de escritorio): menú lateral fijo de 232 px con el
+     mini-reproductor abajo; cada vista lleva su barra (título, buscador con
+     Ctrl K) en su ViewHeader. En el partido la pone el armazón, a lo ancho
+     de la columna de agenda y el vídeo.
+   - Tableta (768-1023): menú + la vista.
+   - Escritorio (1024-1279): menú + vista + panel lateral de la vista.
+   - Ancho (≥ 1280): en el centro de partido, menú + columna de agenda +
+     reproductor + panel lateral.
    - Móvil en horizontal viendo un partido: el vídeo ocupa la pantalla (el
      reproductor oculta sus controles solo).
 
@@ -25,6 +29,7 @@
 
 import {
   Activity,
+  lazy,
   Suspense,
   useEffect,
   useLayoutEffect,
@@ -49,12 +54,14 @@ import type { PlayerPresentation } from './contracts.ts';
 import { ErrorBoundary } from './ErrorBoundary.tsx';
 import { requestFocus } from './focus.ts';
 import { LayoutContext, type LayoutValue } from './layout.tsx';
-import { TabBar, TopBar } from './Nav.tsx';
+import { SideNav, TabBar } from './Nav.tsx';
 import { usePlayerPresence } from './player-presence.ts';
 import { useBack, useNavigate, useRoute } from './router.tsx';
 import { formatVista, type Route, type Vista } from './routes.ts';
 import { restoreScroll } from './scroll-memory.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
+import { QuickSearchHost } from '../features/search/QuickSearchHost.tsx';
+import { AvisosClock } from '../features/avisos/Clock.tsx';
 import {
   finishEntranceAnimations,
   playerSwapsByName,
@@ -67,8 +74,15 @@ import {
 import { playPendingCrossfade } from './viewCrossfade.ts';
 import { installViewTransitionGuard, viewMotion } from './viewTransitionGuard.ts';
 import { useShortcut } from './shortcuts.ts';
+import { openSearch } from './search-open.ts';
+import { ViewHeader } from './ViewHeader.tsx';
 import { AgendaColumn, asideComponent, PlayerDock, viewComponent } from './views.tsx';
 import './shell.css';
+
+/* «Avisos» de Ajustes (rediseño, sección 7): solo en escritorio y en su trozo de JS. */
+const MatchAlerts = lazy(() =>
+  import('../features/settings/match-alerts.tsx').then((m) => ({ default: m.MatchAlerts })),
+);
 
 const WHAT: Record<Vista, string> = {
   agenda: 'la agenda',
@@ -210,11 +224,13 @@ export function Shell() {
   const dockMounted = PlayerDock !== null && (inStage || presence.active);
   const presentation: PlayerPresentation = inStage ? 'stage' : 'mini';
   const immersive = presence.immersive || (inStage && phoneLandscape);
-  const Aside = asideComponent(route.vista);
+  // El partido ya no lleva panel lateral en escritorio: sus pestañas van bajo
+  // el vídeo y a la izquierda está la agenda (rediseño, pantalla 1).
+  const Aside = inPartido ? null : asideComponent(route.vista);
   const wideEnough = kind === 'desktop' || kind === 'wide';
   const asideAvailable = Aside !== null && wideEnough;
   const asideVisible = asideAvailable && asideOpen;
-  const columnVisible = inPartido && kind === 'wide' && AgendaColumn !== null;
+  const columnVisible = inPartido && wideEnough && AgendaColumn !== null;
   const miniVisible = dockMounted && presentation === 'mini';
   const tabbarVisible = kind === 'mobile' && !inStage;
 
@@ -280,6 +296,19 @@ export function Shell() {
     },
   });
 
+  // Ctrl K (Cmd K en Mac): el buscador, también con el foco en un campo. El
+  // registro de atajos deja Ctrl y Cmd al navegador; este es la excepción.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.shiftKey) return;
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return;
+      event.preventDefault();
+      openSearch(navigate);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [navigate]);
+
   const setAsideOpen = (open: boolean) => {
     setAsideOpenState(open);
     writeItem(STORAGE_KEYS.aside, open ? 'abierto' : 'plegado');
@@ -318,7 +347,17 @@ export function Shell() {
         >
           Saltar al contenido
         </a>
-        <TopBar route={route} onHelp={() => setHelpOpen(true)} />
+        <SideNav route={route} />
+        {/* El reloj de «Te aviso», fuera de las vistas: avisa también en la
+            sala y en el partido, que no tienen campana (features/avisos). */}
+        <AvisosClock />
+        {/* La barra de la Agenda sobre la lista y el partido (rediseño,
+            pantalla 1): abrir un partido no cambia de pantalla. */}
+        {columnVisible ? (
+          <div className="app-bar">
+            <ViewHeader title="Agenda" titleAs="p" />
+          </div>
+        ) : null}
         {columnVisible && AgendaColumn ? (
           <aside className="app-column" aria-label="Agenda">
             <ErrorBoundary what="la agenda">
@@ -349,7 +388,9 @@ export function Shell() {
               ) : (
                 <StagePlaceholder />
               )}
-              {inStage ? <StatusLineHost className="stage__status" /> : null}
+              {/* En el ordenador, sin línea de estado sobre el vídeo: la fuente y DIRECTO ya
+                  van en sus píldoras. */}
+              {inStage && kind === 'mobile' ? <StatusLineHost className="stage__status" /> : null}
             </div>
           ) : null}
           <div className="views">
@@ -387,7 +428,13 @@ export function Shell() {
         <div className="bottom-veil" aria-hidden="true" hidden={!tabbarVisible} />
         <TabBar route={route} hidden={!tabbarVisible} />
         <Toaster bottomOffset={toastBottom} />
+        {kind === 'mobile' ? null : (
+          <Suspense fallback={null}>
+            <MatchAlerts />
+          </Suspense>
+        )}
         <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+        <QuickSearchHost />
       </div>
     </LayoutContext>
   );

@@ -3,8 +3,10 @@
    - La credencial de cada sala se guarda en este navegador (localStorage),
      así que recargar o volver a la sala no pide el nombre otra vez.
    - `PartyClient` abre el SSE de la sala, junta lo que llega (foto,
-     reproducción, personas, chat, reacciones), manda el latido de estado
-     cada 5 s y las órdenes, y estima el desfase de reloj con cada respuesta.
+     reproducción, personas, chat, «está escribiendo»), manda el latido de
+     estado cada 5 s y las órdenes, y estima el desfase de reloj con cada
+     respuesta. En «Esperando a todos» (§13) el latido lleva además si este
+     aparato ya puede empezar y cuánto lleva cargado.
      Lo leen los componentes con `useSyncExternalStore`.
    - La última sala en la que se entró desde este navegador: la ficha de una
      película ofrece «Añadir a la sala» (docs/ver-juntos.md §11). */
@@ -20,7 +22,7 @@ import {
   type PartyMemberBody,
   type PartyPlayback,
   type PartyQueueBody,
-  type PartyReactBody,
+  type PartyRole,
   type PartyRoom,
   type PartySettingsBody,
 } from '@ace/shared';
@@ -66,6 +68,16 @@ export function forgetLastRoom(): void {
   removeItem(LAST_ROOM_KEY);
 }
 
+/**
+ * Una sala que ya no sirve (cerrada, caducada o de la que se ha salido): se
+ * olvida su credencial y, si era la última, deja de ofrecerse «Volver a tu
+ * sala» o «Añadir a la sala».
+ */
+export function forgetRoom(code: string): void {
+  forgetCredential(code);
+  if (readItem(LAST_ROOM_KEY) === code) forgetLastRoom();
+}
+
 export function savedName(): string {
   return readItem(NAME_KEY) ?? '';
 }
@@ -98,19 +110,15 @@ export interface PartyState {
   readonly offsetMs: number;
   /** Lo que dijo el último latido de la sesión de vídeo (`partyStatus`). */
   readonly stream: 'ok' | 'lost' | 'none';
-  /** Las últimas reacciones (las pinta la vista mientras suben y luego las quita). */
-  readonly reactions: readonly Reaction[];
+  /** Quién está escribiendo (§13); cada uno hasta `until` (hora de este aparato). */
+  readonly typing: readonly Typing[];
 }
 
-export interface Reaction {
-  readonly id: number;
-  readonly emoji: string;
+export interface Typing {
+  readonly memberId: string;
   readonly name: string;
-  readonly self: boolean;
+  readonly until: number;
 }
-
-/** Reacciones a la vez como mucho (si llueven, las viejas se van antes). */
-const MAX_REACTIONS = 24;
 
 const INITIAL: PartyState = {
   room: null,
@@ -119,12 +127,36 @@ const INITIAL: PartyState = {
   closed: null,
   offsetMs: 0,
   stream: 'none',
-  reactions: [],
+  typing: [],
 };
 
-/** ¿Puede esta persona mandar en el vídeo? El líder, o todos si así lo ha dejado. */
+/** El papel de alguien en la sala (§13): el líder por `leaderId`, aunque el servidor sea viejo. */
+export function roleOf(room: PartyRoom | null, memberId: string): PartyRole {
+  if (!room) return 'guest';
+  if (room.leaderId === memberId) return 'leader';
+  return room.members.find((member) => member.id === memberId)?.role === 'coleader'
+    ? 'coleader'
+    : 'guest';
+}
+
+/** El líder, o un co-líder si la sala deja controlar a los co-líderes. */
+export function isManager(room: PartyRoom | null, selfId: string): boolean {
+  const role = roleOf(room, selfId);
+  return role === 'leader' || (role === 'coleader' && !!room?.settings.coleaders);
+}
+
+/** ¿Puede esta persona mandar en el vídeo? El líder (y los co-líderes), o todos si así lo ha dejado. */
 export function canControl(room: PartyRoom | null, selfId: string): boolean {
-  return !!room && (room.settings.control === 'everyone' || room.leaderId === selfId);
+  return !!room && (room.settings.control === 'everyone' || isManager(room, selfId));
+}
+
+/** Quiénes controlan, por su nombre («Ismael y Yassin»); null si controlan todos. */
+export function controllers(room: PartyRoom): string[] | null {
+  if (room.settings.control === 'everyone') return null;
+  return room.members
+    .filter((member) => isManager(room, member.id))
+    .sort((a, b) => Number(b.id === room.leaderId) - Number(a.id === room.leaderId))
+    .map((member) => member.name);
 }
 
 /** Lo que el cliente necesita del navegador (los tests lo cambian). */
@@ -134,6 +166,17 @@ export interface PartyEnv {
   setInterval(fn: () => void, ms: number): unknown;
   clearInterval(handle: unknown): void;
 }
+
+/** «Esperando a todos»: lo que el reproductor cuenta de su carga (o null fuera de la espera). */
+export interface LobbyReport {
+  readonly ready: boolean;
+  readonly progress: number;
+}
+
+/** En la espera, un cambio del % sale al momento si es de al menos esto (y `ready` siempre). */
+const PROGRESS_STEP = 10;
+/** Y no más de uno por segundo. */
+const LOBBY_STATUS_MS = 1_000;
 
 const BROWSER: PartyEnv = {
   now: () => Date.now(),
@@ -147,7 +190,7 @@ const EVENT_TYPES: readonly PartyEvent['type'][] = [
   'party.playback',
   'party.room',
   'party.chat',
-  'party.reaction',
+  'party.typing',
   'party.closed',
 ];
 
@@ -157,10 +200,20 @@ export class PartyClient {
   private source: EventSource | null = null;
   private statusTimer: unknown = null;
   private samples: OffsetSample[] = [];
+  /** Cuándo empezó la última sesión de vídeo (`resetStream`). */
+  private streamResetAt = Number.NEGATIVE_INFINITY;
   private stopped = false;
-  private nextReaction = 1;
   /** Lo que el reproductor dice de sí mismo para el latido. */
-  private local: { positionS: number; buffering: boolean } = { positionS: 0, buffering: false };
+  private local: { positionS: number; buffering: boolean; lobby: LobbyReport | null } = {
+    positionS: 0,
+    buffering: false,
+    lobby: null,
+  };
+  /** Lo último que se mandó de la espera (para no repetirlo) y cuándo. */
+  private sentLobby: LobbyReport | null = null;
+  private sentLobbyAt = Number.NEGATIVE_INFINITY;
+  /** El último «está escribiendo» mandado. */
+  private typingSentAt = Number.NEGATIVE_INFINITY;
 
   constructor(
     readonly code: string,
@@ -250,20 +303,28 @@ export class PartyClient {
         this.set({ room: { ...room, ...event.data } });
         break;
       }
-      case 'party.chat':
-        this.set({ chat: [...this.state.chat, event.data.message].slice(-PARTY.chatHistory) });
+      case 'party.chat': {
+        /* Quien manda su mensaje deja de estar «escribiendo». */
+        const author = event.data.message.memberId;
+        this.set({
+          chat: [...this.state.chat, event.data.message].slice(-PARTY.chatHistory),
+          typing: this.state.typing.filter((entry) => entry.memberId !== author),
+        });
         break;
-      case 'party.reaction': {
-        const reaction: Reaction = {
-          id: this.nextReaction++,
-          emoji: event.data.emoji,
-          name: event.data.name,
-          self: event.data.memberId === this.credential.id,
-        };
-        this.set({ reactions: [...this.state.reactions, reaction].slice(-MAX_REACTIONS) });
+      }
+      case 'party.typing': {
+        if (event.data.memberId === this.credential.id) return;
+        const until = this.env.now() + PARTY.typingShowMs;
+        this.set({
+          typing: [
+            ...this.state.typing.filter((entry) => entry.memberId !== event.data.memberId),
+            { memberId: event.data.memberId, name: event.data.name, until },
+          ],
+        });
         break;
       }
       case 'party.closed':
+        forgetRoom(this.code);
         this.set({ closed: event.data.reason });
         this.stop();
         break;
@@ -276,14 +337,25 @@ export class PartyClient {
     this.set({ offsetMs: serverNow - this.env.now() });
   }
 
-  private noteRoundTrip(sentAt: number, serverNow: number): void {
+  private noteRoundTrip(sentAt: number, serverNow: number, patch: Partial<PartyState> = {}): void {
     this.samples = addSample(this.samples, offsetSample(sentAt, this.env.now(), serverNow));
-    this.set({ offsetMs: bestOffset(this.samples) });
+    this.set({ ...patch, offsetMs: bestOffset(this.samples) });
+  }
+
+  /**
+   * Una sesión de vídeo nueva (el reproductor acaba de recibir la concesión): el «lost» que
+   * quedaba de la anterior ya no vale. Sin avisar a nadie; las respuestas de `status` que se
+   * enviaron antes de esto tampoco cuentan para `stream`.
+   */
+  resetStream(): void {
+    this.streamResetAt = this.env.now();
+    if (this.state.stream !== 'none') this.state = { ...this.state, stream: 'none' };
   }
 
   private handleFailure(error: unknown): void {
     if (!isApiError(error)) return;
     if (error.code === 'party_not_found') {
+      forgetRoom(this.code);
       this.set({ closed: 'gone' });
       this.stop();
     } else if (error.code === 'party_forbidden') {
@@ -293,16 +365,36 @@ export class PartyClient {
     }
   }
 
-  /** El reproductor cuenta dónde va y si está cargando; un cambio de «cargando» sale al momento. */
-  report(positionS: number, buffering: boolean): void {
-    const changed = buffering !== this.local.buffering;
-    this.local = { positionS, buffering };
-    if (changed) void this.sendStatus().catch(() => undefined);
+  /**
+   * El reproductor cuenta dónde va y si está cargando; un cambio de «cargando»
+   * sale al momento. En «Esperando a todos», también si ya puede empezar y su
+   * % (al momento si cambia `ready` o el % sube un tramo, uno por segundo).
+   */
+  report(positionS: number, buffering: boolean, lobby: LobbyReport | null = null): void {
+    let urgent = buffering !== this.local.buffering;
+    if (lobby) {
+      const sent = this.sentLobby;
+      /* «Listo» sale siempre al momento (la sala arranca con él); el % va espaciado. */
+      if (!sent || sent.ready !== lobby.ready) urgent = true;
+      else if (
+        Math.abs(sent.progress - lobby.progress) >= PROGRESS_STEP &&
+        this.env.now() - this.sentLobbyAt >= LOBBY_STATUS_MS
+      ) {
+        urgent = true;
+      }
+    }
+    this.local = { positionS, buffering, lobby };
+    if (urgent) void this.sendStatus().catch(() => undefined);
   }
 
   private async sendStatus(rethrow = false): Promise<void> {
     if (this.state.closed) return;
     const sentAt = this.env.now();
+    const lobby = this.local.lobby;
+    if (lobby) {
+      this.sentLobby = lobby;
+      this.sentLobbyAt = sentAt;
+    }
     try {
       const response = await api('partyStatus', {
         params: { code: this.code },
@@ -310,12 +402,21 @@ export class PartyClient {
           token: this.credential.token,
           positionS: Math.max(0, Math.min(86_400, this.local.positionS)),
           buffering: this.local.buffering,
+          ...(lobby
+            ? {
+                ready: lobby.ready,
+                progress: Math.round(Math.max(0, Math.min(100, lobby.progress))),
+              }
+            : {}),
         },
       });
-      this.noteRoundTrip(sentAt, response.serverNow);
-      if (response.stream && response.stream !== this.state.stream) {
-        this.set({ stream: response.stream });
-      }
+      /* La hora y la sesión en un solo cambio: nadie ve el «lost» viejo con la hora nueva. Una
+         respuesta a un envío de antes de la sesión nueva no dice nada de ella. */
+      const stream =
+        response.stream && response.stream !== this.state.stream && sentAt >= this.streamResetAt
+          ? { stream: response.stream }
+          : {};
+      this.noteRoundTrip(sentAt, response.serverNow, stream);
     } catch (error) {
       this.handleFailure(error);
       if (rethrow) throw error;
@@ -348,17 +449,22 @@ export class PartyClient {
     }
   }
 
-  /** La reacción ya ha terminado de subir: deja de pintarse. */
-  dropReaction(id: number): void {
-    if (!this.state.reactions.some((reaction) => reaction.id === id)) return;
-    this.set({ reactions: this.state.reactions.filter((reaction) => reaction.id !== id) });
+  /** Se está escribiendo en el chat: avisa a la sala, como mucho uno cada `typingIntervalMs`. */
+  typing(): void {
+    const now = this.env.now();
+    if (this.state.closed || now - this.typingSentAt < PARTY.typingIntervalMs) return;
+    this.typingSentAt = now;
+    void api('partyTyping', {
+      params: { code: this.code },
+      body: { token: this.credential.token },
+    }).catch(() => undefined);
   }
 
-  async react(emoji: PartyReactBody['emoji']): Promise<void> {
-    const { code, credential } = this;
-    await this.guard(() =>
-      api('partyReact', { params: { code }, body: { token: credential.token, emoji } }),
-    );
+  /** Quita los «está escribiendo» que ya han caducado (la vista lo llama con su reloj). */
+  expireTyping(): void {
+    const now = this.env.now();
+    if (!this.state.typing.some((entry) => entry.until <= now)) return;
+    this.set({ typing: this.state.typing.filter((entry) => entry.until > now) });
   }
 
   async settings(patch: Omit<PartySettingsBody, 'token'>): Promise<void> {
@@ -405,13 +511,28 @@ export class PartyClient {
       body: { token: this.credential.token },
       keepalive: true,
     }).catch(() => undefined);
+    forgetRoom(this.code);
   }
 
+  /**
+   * Cierra la sala para todos (quien la creó). Si ya no existía, también vale:
+   * el resultado es el mismo. Al acabar, este aparato deja de escuchar y la
+   * olvida; la vista se encarga de llevar a otro sitio.
+   */
   async close(): Promise<void> {
-    await api('partyClose', {
-      params: { code: this.code },
-      body: { token: this.credential.token },
-    });
+    try {
+      await api('partyClose', {
+        params: { code: this.code },
+        body: { token: this.credential.token },
+      });
+    } catch (error) {
+      if (!isApiError(error) || error.code !== 'party_not_found') {
+        this.handleFailure(error);
+        throw error;
+      }
+    }
+    this.stop();
+    forgetRoom(this.code);
   }
 
   /** Hora del servidor ahora mismo según este aparato. */

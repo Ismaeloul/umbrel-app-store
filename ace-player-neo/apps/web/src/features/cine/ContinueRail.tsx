@@ -31,17 +31,30 @@ export function continueLine(entry: VodContinue): string {
   return [entry.subtitle, left].filter(Boolean).join(' · ');
 }
 
-function ContinueCard({ entry }: { entry: VodContinue }) {
+/** Reproduce una entrada: desde donde se dejó o, el siguiente episodio, desde el principio. */
+export function playContinue(entry: VodContinue, navigate: ReturnType<typeof useNavigate>): void {
+  playVod(
+    {
+      id: entry.id,
+      kind: entry.kind,
+      title: entry.title,
+      subtitle: entry.subtitle,
+      seriesId: entry.seriesId,
+      ...(entry.isNext ? { startS: 0 } : {}),
+    },
+    navigate,
+  );
+}
+
+/** El menú de una entrada: «Quitar de Seguir viendo», «Marcar como visto» y «Ver ficha». */
+export function useContinueItems(entry: VodContinue): MenuItem[] {
   const navigate = useNavigate();
   const mark = useProgressMark();
-  const context = useContextMenu();
-  const ratio = entry.isNext ? null : progressRatio(entry);
-  const line = continueLine(entry);
   const run = async (event: 'hide' | 'mark') => {
     const error = await mark(entry.id, event);
     if (error) notify(describeFailure(error), { tone: 'err' });
   };
-  const items: MenuItem[] = [
+  return [
     {
       id: 'quitar',
       label: CINE_TEXT.hideContinue,
@@ -56,6 +69,14 @@ function ContinueCard({ entry }: { entry: VodContinue }) {
       onSelect: () => navigate({ vista: 'cine', id: entry.seriesId ?? entry.id }),
     },
   ];
+}
+
+function ContinueCard({ entry }: { entry: VodContinue }) {
+  const navigate = useNavigate();
+  const context = useContextMenu();
+  const ratio = entry.isNext ? null : progressRatio(entry);
+  const line = continueLine(entry);
+  const items = useContinueItems(entry);
   const art = entry.art;
   return (
     <div className="cine-continue__item" {...context.bind}>
@@ -63,19 +84,7 @@ function ContinueCard({ entry }: { entry: VodContinue }) {
         type="button"
         className="cine-continue__card press"
         aria-label={`${entry.title}. ${line}`}
-        onClick={() =>
-          playVod(
-            {
-              id: entry.id,
-              kind: entry.kind,
-              title: entry.title,
-              subtitle: entry.subtitle,
-              seriesId: entry.seriesId,
-              ...(entry.isNext ? { startS: 0 } : {}),
-            },
-            navigate,
-          )
-        }
+        onClick={() => playContinue(entry, navigate)}
       >
         <span className="cine-continue__art" data-art={art?.art ?? 'none'}>
           {art?.art === 'poster' ? (

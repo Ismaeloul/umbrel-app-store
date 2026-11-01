@@ -13,21 +13,22 @@
    cuando no tienen más que enseñar hacia ese lado); si habías bajado, la
    página vuelve a la tira para que se vea qué día es.
 
-   Escritorio (≥ 1024, 0.9.0): SIN héroe; toda la página es el calendario
-   (tira de días arriba y las filas a la izquierda) y, a la derecha, el panel
-   del partido ELEGIDO (de entrada, el destacado: tarjeta grande, señal,
-   dónde se emite, acción) y «Luego»; desde 1280, arriba del panel, la tira
-   «En directo» con marcador y minuto (B1). Un clic en una tarjeta o en un
-   directo la lleva al panel; un segundo clic, doble clic o Intro la abre.
-   Los partidos de TUS EQUIPOS (solo equipos, no ligas) llevan un aura
-   verde en la lista y en «Luego» (agenda.css › «Tu equipo»).
+   Escritorio (desde 768 px salvo el móvil en horizontal; Isma, 1-11-2026),
+   al estilo SofaScore: SIN héroe ni destacado. A la izquierda la lista
+   (DeskList: pestañas, día, píldoras de estado y ligas, grupos por
+   competición) y a la derecha el DETALLE del partido que elijas: al entrar
+   no hay ninguno abierto. Un clic en una fila lo elige; doble clic, Intro,
+   la O o «Ver partido» lo abren (el centro de partido); la X lo cierra.
 
    Marcadores: en las tarjetas van SIEMPRE tapados (corrección 1; DESIGN.md:
    «el marcador vive oculto tras un toque en la cápsula "Marcador", nunca en
    la imagen»). Cada partido con marcador lleva su cápsula «Marcador», que lo
    destapa y lo vuelve a tapar (score-reveal.ts); el menú contextual también.
    La tira «En directo» sí lo enseña junto al minuto (Isma, 0.9.0), salvo el
-   del partido que estás viendo (regla 29).
+   del partido que estás viendo (regla 29). En escritorio (desde 768 px), la
+   lista y el detalle lo enseñan SIEMPRE (Isma, 1-11-2026), salvo el del
+   partido que estás viendo o uno que tapaste a mano: esos, en su cápsula.
+   Escape (o la X) cierra el detalle y devuelve el foco a la fila.
 
    §5.1: sin canales anunciados sale «El canal todavía no está anunciado»; con
    canales se abre el centro de partido, que es quien resuelve el canal
@@ -44,11 +45,12 @@ import { describeFailure, useAppMode } from '../../api/index.ts';
 import type { ViewProps } from '../../app/contracts.ts';
 import { useLayout } from '../../app/layout.tsx';
 import { useNavigate } from '../../app/router.tsx';
-import { useShortcut } from '../../app/shortcuts.ts';
+import { isTypingTarget, useShortcut } from '../../app/shortcuts.ts';
 import { preloadView } from '../../app/views.tsx';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
+import { MEDIA, useMediaQuery } from '../../lib/media.ts';
 import { notify } from '../../notices/index.ts';
 import {
   Button,
@@ -73,6 +75,8 @@ import { AgendaRows, type RowSlot } from './AgendaList.tsx';
 import { useLibraryLookup, useNow, useSchedule, useScores } from './data.ts';
 import { useDaySwipe } from './day-swipe.ts';
 import { DayStrip } from './DayStrip.tsx';
+import { DeskList, deskView, FOR_YOU_CHIP } from './DeskList.tsx';
+import { AgendaDetail, AgendaDetailEmpty } from './Detail.tsx';
 import {
   asForYou,
   channelInfo,
@@ -82,7 +86,6 @@ import {
   featuredMatch,
   groupByCompetition,
   isMine,
-  laterMatches,
   madridClock,
   madridHour,
   paintableScore,
@@ -100,8 +103,13 @@ import {
   useRevealedScores,
   useWatchedMatch,
 } from './score-reveal.ts';
-import { AgendaStage, LiveStrip } from './Stage.tsx';
-import { setAgendaDay, setAgendaMode, setAgendaSelected, useAgendaUi } from './state.ts';
+import {
+  setAgendaChip,
+  setAgendaDay,
+  setAgendaMode,
+  setAgendaSelected,
+  useAgendaUi,
+} from './state.ts';
 
 const PreferencesSheet = lazy(() => import('../preferences/PreferencesSheet.tsx'));
 
@@ -143,6 +151,7 @@ export default function Agenda({ active }: ViewProps) {
   const save = useSavePreferences();
   const lookup = useLibraryLookup();
   const ui = useAgendaUi();
+  const phoneLandscape = useMediaQuery(MEDIA.phoneLandscape);
   const watched = useWatchedMatch();
   const revealed = useRevealedScores();
 
@@ -183,13 +192,28 @@ export default function Agenda({ active }: ViewProps) {
   );
   const liveCount = countLive(matches, now, scores);
 
-  const stageVisible = kind === 'desktop' || kind === 'wide';
+  /* Lista y detalle desde 768 px (la tableta también), salvo el móvil en
+     horizontal, que sigue con la portada del móvil. */
+  const stageVisible =
+    kind === 'desktop' || kind === 'wide' || (kind === 'tablet' && !phoneLandscape);
   const mobile = kind === 'mobile' || kind === 'tablet';
-  const featured = featuredMatch(matches, now, scores, preferences);
+  /* El héroe (el destacado) es solo del móvil: en escritorio, al entrar no
+     hay nada abierto y el detalle enseña SOLO el que elijas (de cualquier
+     pestaña o liga de la lista, por eso se busca en todo el día). */
+  /* Lo mismo que enseña la lista de escritorio (pestaña, liga y estado): el
+     resumen para lectores de pantalla y el atajo T salen de aquí, no de
+     `mode`, que es del móvil. */
+  const desk = useMemo(
+    () =>
+      stageVisible
+        ? deskView(dayMatches, { chip: ui.chip, status: ui.status }, now, scores, preferences)
+        : null,
+    [stageVisible, dayMatches, ui.chip, ui.status, now, scores, preferences],
+  );
+  const featured = stageVisible ? null : featuredMatch(matches, now, scores, preferences);
   const selected = stageVisible
-    ? (matches.find((match) => match.id === ui.selected) ?? featured)
+    ? (dayMatches.find((match) => match.id === ui.selected) ?? null)
     : null;
-  const later = stageVisible ? laterMatches(matches, now, scores, selected?.id ?? null) : [];
 
   /* El centro de partido se descarga en un rato libre con la agenda a la
      vista: abrir un partido lo pinta en la misma transición que el fundido,
@@ -349,6 +373,19 @@ export default function Agenda({ active }: ViewProps) {
     return items;
   };
 
+  /* Cerrar el detalle (la X o Escape) devuelve el foco a la fila que lo
+     abrió: quien llegó con el teclado sigue donde estaba en la lista. Si la
+     fila ya no está (otro filtro), a la primera de la lista. */
+  const closeDetail = () => {
+    const list = document.querySelector<HTMLElement>('.agenda-desk__list');
+    const row = list?.querySelector<HTMLElement>('.desk-row[aria-current="true"]') ?? null;
+    setAgendaSelected(null);
+    requestAnimationFrame(() => {
+      const target = row?.isConnected ? row : list?.querySelector<HTMLElement>('.desk-row');
+      target?.focus({ preventScroll: true });
+    });
+  };
+
   // ---- Atajos (solo con la vista a la vista: Activity los quita al ocultarse) ----
 
   useShortcut({
@@ -376,13 +413,22 @@ export default function Agenda({ active }: ViewProps) {
       if (days.some((item) => item.date === today)) changeDay(today);
     },
   });
+  /* En escritorio, T cambia de pestaña («Todo» / «Para ti»), que es lo que
+     filtra la lista; solo si hay pestaña «Para ti» (partidos tuyos ese día). */
   useShortcut({
     id: 'agenda.filtro',
     keys: ['t'],
-    label: 'Cambia entre «Para ti» y «Todos»',
+    label: desk ? 'Cambia entre «Para ti» y «Todo»' : 'Cambia entre «Para ti» y «Todos»',
     group: 'Agenda',
-    when: () => hasPrefs,
-    handler: () => changeMode(mode === 'forYou' ? 'all' : 'forYou'),
+    when: () => (desk ? desk.forYou > 0 : hasPrefs),
+    handler: () => {
+      if (desk) {
+        haptic('selection');
+        setAgendaChip(desk.chip === FOR_YOU_CHIP ? null : FOR_YOU_CHIP);
+        return;
+      }
+      changeMode(mode === 'forYou' ? 'all' : 'forYou');
+    },
   });
   useShortcut({
     id: 'agenda.actualizar',
@@ -399,9 +445,19 @@ export default function Agenda({ active }: ViewProps) {
     handler: openPreferences,
   });
   useShortcut({
+    id: 'agenda.cerrar-detalle',
+    keys: ['Escape'],
+    display: ['Esc'],
+    label: 'Cierra el detalle del partido',
+    group: 'Agenda',
+    // Escribiendo en el buscador, Escape es del buscador.
+    when: () => selected !== null && !isTypingTarget(document.activeElement),
+    handler: closeDetail,
+  });
+  useShortcut({
     id: 'agenda.abrir',
     keys: ['o'],
-    label: 'Abre el partido del panel',
+    label: 'Abre el partido elegido',
     group: 'Agenda',
     when: () => selected !== null,
     handler: () => {
@@ -473,18 +529,15 @@ export default function Agenda({ active }: ViewProps) {
         channels={channels}
         mine={isMine(match, preferences)}
         position={slot.position}
-        selected={stageVisible && selected?.id === match.id}
-        interaction={stageVisible ? 'select' : 'open'}
         onOpen={openMatch}
-        onSelect={(chosen) => setAgendaSelected(chosen.id)}
         menuItems={menuFor(match, available, scoreState)}
         staggerIndex={staggerIndex}
       />
     );
   };
 
-  /* El héroe solo en el móvil y la tableta: en escritorio toda la página es
-     el calendario y el destacado sale en el panel de la derecha (0.9.0). */
+  /* El héroe solo en el móvil: en escritorio no hay destacado (lista y
+     detalle del que elijas, al estilo SofaScore). */
   let hero = null;
   if (!stageVisible && schedule.isPending) {
     hero = (
@@ -616,31 +669,112 @@ export default function Agenda({ active }: ViewProps) {
     </p>
   );
 
-  const selectedScore = selected ? (scores[selected.id] ?? null) : null;
-  /* En escritorio el panel enseña SIEMPRE el elegido (de entrada, el
-     destacado): sin héroe ya no hay nada que no repetir, y tocar cualquier
-     directo de la tira lo trae aquí con su canal y «Ver canal». */
-  const sideVisible = stageVisible && selected !== null;
   const dayText = day ? dayLabel(day, today) : null;
 
   /* Resumen para lectores de pantalla (regla 36: `aria-live` en la agenda):
      una frase que solo cambia con el día, el filtro, la carga o los directos,
      en vez de anunciar las filas una a una. */
+  const deskLiveShown = desk ? countLive(desk.shown, now, scores) : 0;
   const announcement = schedule.isPending
     ? 'Cargando partidos'
     : schedule.isError && !data
       ? 'Error: la fuente de partidos no respondió'
-      : day
-        ? `${dayLabel(day, today).long}: ${matches.length} ${matches.length === 1 ? 'partido' : 'partidos'}${
-            liveCount > 0 ? `, ${liveCount} en directo` : ''
-          }${mode === 'forYou' ? ', solo los tuyos' : ''}`
-        : '';
+      : day && desk
+        ? `${dayLabel(day, today).long}: ${desk.shown.length} ${desk.shown.length === 1 ? 'partido' : 'partidos'}${
+            deskLiveShown > 0 ? `, ${deskLiveShown} en directo` : ''
+          }${
+            desk.chip === FOR_YOU_CHIP
+              ? ', solo los tuyos'
+              : desk.chip !== null
+                ? `, solo ${desk.chip}`
+                : ''
+          }`
+        : day
+          ? `${dayLabel(day, today).long}: ${matches.length} ${matches.length === 1 ? 'partido' : 'partidos'}${
+              liveCount > 0 ? `, ${liveCount} en directo` : ''
+            }${mode === 'forYou' ? ', solo los tuyos' : ''}`
+          : '';
+
+  /* Escritorio (desde 768 px), al estilo SofaScore: dos tarjetas. A la
+     izquierda la lista por competición (DeskList, la misma que acompaña al
+     vídeo del partido) y a la derecha el detalle del partido que elijas; al
+     entrar, ninguno: una invitación a elegir y el resumen del día. */
+  if (stageVisible) {
+    /* «Editar mis gustos» y «Actualizar» van al pie del detalle (siguen con E
+       y R): la barra queda igual que con un partido abierto, título y
+       buscador, como en la maqueta. */
+    const deskFoot = (
+      <div className="agenda-desk__foot">
+        {foot}
+        <div className="agenda-desk__tools">
+          <Button size="sm" variant="quiet" icon="pencil" onClick={openPreferences}>
+            Editar mis gustos
+          </Button>
+          <IconButton
+            icon="refresh"
+            label="Actualizar agenda de fútbol"
+            shortcut="R"
+            className="agenda-refresh"
+            busy={schedule.isFetching}
+            onClick={refresh}
+          />
+        </div>
+      </div>
+    );
+    const deskLive = countLive(dayMatches, now, scores);
+    return (
+      <div className="agenda agenda--desk" data-demo={appMode === 'demo' || undefined}>
+        {/* Solo el título, como en la maqueta: el día ya lo dice la lista. */}
+        <ViewHeader title="Agenda" className="agenda-head" />
+        {showCard ? (
+          <FirstUseCard onCustomize={openPreferences} onSkip={skipFirstUse} busy={save.isPending} />
+        ) : null}
+        <div className="agenda-desk">
+          <DeskList
+            className="agenda-desk__list"
+            selectedId={selected?.id ?? null}
+            active={active}
+            onOpen={openMatch}
+            onSelect={(match) => setAgendaSelected(match.id)}
+          />
+          <aside className="agenda-desk__side" aria-label="Detalle del partido">
+            {selected ? (
+              <AgendaDetail
+                key={selected.id}
+                match={selected}
+                now={now}
+                today={today}
+                score={scores[selected.id] ?? null}
+                channels={channelInfo(selected, lookup)}
+                mine={isMine(selected, preferences)}
+                watching={watched === selected.id}
+                onOpen={openMatch}
+                onClose={closeDetail}
+              />
+            ) : (
+              <AgendaDetailEmpty
+                dayText={schedule.isPending || !dayText ? null : dayText.primary}
+                total={dayMatches.length}
+                live={deskLive}
+              />
+            )}
+            {deskFoot}
+          </aside>
+        </div>
+        <p className="sr-only" role="status" aria-live="polite">
+          {announcement}
+        </p>
+        {prefsMounted ? (
+          <Suspense fallback={null}>
+            <PreferencesSheet open={prefsOpen} onClose={() => setPrefsOpen(false)} />
+          </Suspense>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
-    <div
-      className={cx('agenda', stageVisible && 'agenda--stage', hero && 'has-hero')}
-      data-demo={appMode === 'demo' || undefined}
-    >
+    <div className={cx('agenda', hero && 'has-hero')} data-demo={appMode === 'demo' || undefined}>
       <ViewHeader
         title="Agenda"
         className="agenda-head"
@@ -674,7 +808,7 @@ export default function Agenda({ active }: ViewProps) {
             const to = days.findIndex((item) => item.date === date);
             changeDay(date, to > from ? 'next' : 'prev');
           }}
-          variant={stageVisible ? 'tiles' : 'line'}
+          variant="line"
           controls="agenda-lista"
         />
         <div className="agenda-filter">
@@ -708,7 +842,7 @@ export default function Agenda({ active }: ViewProps) {
       {showCard ? (
         <FirstUseCard onCustomize={openPreferences} onSkip={skipFirstUse} busy={save.isPending} />
       ) : null}
-      <div className={cx('agenda__body', sideVisible && 'agenda__body--side')}>
+      <div className="agenda__body">
         <div
           ref={listRef}
           id="agenda-lista"
@@ -732,64 +866,6 @@ export default function Agenda({ active }: ViewProps) {
         >
           {content}
         </div>
-        {sideVisible && selected ? (
-          <aside className="agenda__side" aria-label="Partido elegido">
-            {kind === 'wide' ? (
-              <LiveStrip
-                matches={matches}
-                now={now}
-                scores={scores}
-                currentId={selected.id}
-                onSelect={(match) => setAgendaSelected(match.id)}
-              />
-            ) : null}
-            <AgendaStage
-              key={selected.id}
-              match={selected}
-              now={now}
-              today={today}
-              score={selectedScore}
-              channels={channelInfo(selected, lookup)}
-              mine={isMine(selected, preferences)}
-              watching={watched === selected.id}
-              onOpen={openMatch}
-            />
-            {later.length ? (
-              <section className="agenda-later" aria-labelledby="agenda-luego">
-                <h3 id="agenda-luego" className="agenda-later__title">
-                  Luego
-                </h3>
-                {/* Rejilla de tarjetas pequeñas (sin carrusel: en la columna
-                    caben dos por fila y no queda hueco bajo el título). */}
-                <div className="agenda-later__grid">
-                  {later.map((match, index) => (
-                    <MatchRow
-                      key={match.id}
-                      match={match}
-                      now={now}
-                      score={scores[match.id] ?? null}
-                      channels={channelInfo(match, lookup)}
-                      mine={isMine(match, preferences)}
-                      compact
-                      position={
-                        later.length === 1
-                          ? 'only'
-                          : index === 0
-                            ? 'first'
-                            : index === later.length - 1
-                              ? 'last'
-                              : 'middle'
-                      }
-                      interaction="select"
-                      onOpen={openMatch}
-                      onSelect={(chosen) => setAgendaSelected(chosen.id)}
-                    />
-                  ))}
-                </div>
-              </section>
-            ) : null}
-          </aside>
-        ) : null}
       </div>
       {foot}
       <p className="sr-only" role="status" aria-live="polite">

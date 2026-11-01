@@ -117,7 +117,10 @@ export function MyListRow({ kind, active }: { kind: VodKind; active: boolean }) 
 
 const TITLE_ID = 'cine-rejilla-titulo';
 
-/** «Ver todo» de «Mi lista»: toda la lista de ese tipo en la rejilla. */
+/**
+ * «Ver todo» de «Mi lista» (móvil): toda la lista de ese tipo en la rejilla.
+ * En escritorio no sale: allí Mi lista es la portada (Escaparate.tsx).
+ */
 export function MyListScreen({ kind, active }: { kind: VodKind; active: boolean }) {
   const list = useVodList(active);
   const data = list.data?.items;
@@ -133,7 +136,7 @@ export function MyListScreen({ kind, active }: { kind: VodKind; active: boolean 
           icon="chev-l"
           variant="quiet"
           label={CINE_TEXT.backHome}
-          onClick={closeCineGrid}
+          onClick={() => closeCineGrid()}
         />
         <div className="cine-browse__titles">
           <h2 id={TITLE_ID} className="cine-browse__title" tabIndex={-1}>
@@ -148,7 +151,7 @@ export function MyListScreen({ kind, active }: { kind: VodKind; active: boolean 
         <EmptyState
           title={kind === 'movie' ? CINE_TEXT.listEmptyMovies : CINE_TEXT.listEmptySeries}
           actions={
-            <Button variant="primary" icon="chev-l" onClick={closeCineGrid}>
+            <Button variant="primary" icon="chev-l" onClick={() => closeCineGrid()}>
               {CINE_TEXT.backHome}
             </Button>
           }

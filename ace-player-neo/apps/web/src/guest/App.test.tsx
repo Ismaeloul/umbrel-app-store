@@ -2,11 +2,21 @@
    de /s/<código>; sin código válido, el aviso; con él, la entrada de la sala. */
 
 import { render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import preview from '@fixtures/web/v1/partyPreview.json';
 import { resetMode, setMode } from '../api/mode.ts';
 import { json, mockFetch } from '../test/fetch.ts';
+import { saveCredential } from '../features/juntos/client.ts';
 import { codeFromPath, GuestApp } from './App.tsx';
+
+/* La sala de verdad abre el SSE y el vídeo: aquí solo importa con qué se monta. */
+const roomProps = vi.hoisted(() => [] as Record<string, unknown>[]);
+vi.mock('../features/juntos/Room.tsx', () => ({
+  Room: (props: Record<string, unknown>) => {
+    roomProps.push(props);
+    return null;
+  },
+}));
 
 let net: ReturnType<typeof mockFetch> | undefined;
 
@@ -44,5 +54,11 @@ describe('página de invitado', () => {
     expect(screen.queryByText('Volver a Películas y series')).toBeNull();
     /* Ninguna petición a la casa: solo la de la sala. */
     expect(net.calls.map((call) => call.url)).toEqual(['/api/v1/party/k3J9xQ2mZpL8wR4t']);
+  });
+
+  it('ya dentro, la sala del invitado pide las dos calidades (`guest`, docs/ver-juntos.md §17)', () => {
+    saveCredential('k3J9xQ2mZpL8wR4t', { id: 'm_AnaInvitada01', token: 'm_AnaInvitada01.secreto' });
+    render(<GuestApp pathname="/s/k3J9xQ2mZpL8wR4t" />);
+    expect(roomProps.at(-1)).toMatchObject({ code: 'k3J9xQ2mZpL8wR4t', guest: true });
   });
 });

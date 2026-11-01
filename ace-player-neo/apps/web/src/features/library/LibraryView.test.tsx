@@ -9,7 +9,6 @@ import { fixture, json, mockFetch } from '../../test/fetch.ts';
 import LibraryView from './LibraryView.tsx';
 import { resetPending } from './data.ts';
 import { madridClock } from './on-air.ts';
-import { selectionStore } from './selection.ts';
 import { makeItem, makeLibrary, renderWithApp, resetPlayback } from './test-utils.tsx';
 
 let net: ReturnType<typeof mockFetch>;
@@ -52,7 +51,6 @@ afterEach(() => {
   resetToasts();
   resetMode();
   resetPlayback();
-  selectionStore.set(null);
 });
 
 describe('pestañas (§13.1 y regla 32)', () => {
@@ -296,19 +294,10 @@ describe('tarjetas: reproducir, borrar con deshacer, favorito y renombrar', () =
     ).toBeInTheDocument();
   });
 
-  it('con la ficha a la vista, el primer clic elige y el segundo reproduce', async () => {
+  it('en escritorio ya no hay ficha lateral que elegir: el primer clic en la fila reproduce', async () => {
     const library = makeLibrary();
-    setup(library, { layout: { asideVisible: true, asideAvailable: true, kind: 'desktop' } });
-    const link = await screen.findByRole('link', { name: 'Eurosport 1' });
-    fireEvent.click(link);
-    await waitFor(() =>
-      expect(selectionStore.get()).toEqual({
-        collection: 'favorites',
-        id: library.favorites[1]!.id,
-      }),
-    );
-    expect(route()).toBe('biblioteca');
-    fireEvent.click(screen.getByRole('link', { name: 'Eurosport 1' }));
+    setup(library, { layout: { kind: 'desktop' } });
+    fireEvent.click(await screen.findByRole('link', { name: 'Eurosport 1' }));
     await waitFor(() => expect(route()).toBe(`partido/canal/${library.favorites[1]!.id}`));
   });
 });
@@ -328,7 +317,7 @@ describe('«Emitiendo ahora» (C1) y lo que da cada canal', () => {
       timezone: 'Europe/Madrid',
       country: 'Spain',
       source: 'futbolenlatv',
-      attribution: 'futbolenlatv.com',
+      attribution: 'futbolenlatv.es',
       demo: false,
       limited: false,
       partial: false,

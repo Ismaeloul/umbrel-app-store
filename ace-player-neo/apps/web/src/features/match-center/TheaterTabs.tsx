@@ -176,7 +176,7 @@ export function MatchTabs({
       value: 'fuentes',
       label: 'Fuentes',
       count,
-      content: <SourcesPanel variant={variant} className="mc-sources" />,
+      content: <SourcesPanel variant={variant} bare={variant === 'line'} className="mc-sources" />,
     },
   ];
   if (match)
@@ -187,6 +187,6 @@ export function MatchTabs({
         <MatchPanel match={match} score={score} now={now} channels={channels} today={today} />
       ),
     });
-  tabs.push({ value: 'datos', label: 'Datos técnicos', content: <NerdSection /> });
+  tabs.push({ value: 'datos', label: 'Datos', content: <NerdSection /> });
   return <TheaterTabs kind="match" tabs={tabs} extra={extra} className={className} />;
 }

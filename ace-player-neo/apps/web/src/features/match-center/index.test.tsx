@@ -7,7 +7,7 @@
 import type { LibraryView } from '@ace/shared';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { createQueryClient, queryClient, routeKey } from '../../api/query.ts';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { realtimeStore } from '../../api/realtime-store.ts';
@@ -15,9 +15,17 @@ import { LayoutContext } from '../../app/layout.tsx';
 import { RouterProvider } from '../../app/router.tsx';
 import { resetToasts } from '../../notices/toasts.ts';
 import { getPlayer, resetPlayerApi, setNerdOpen } from '../../player/api.ts';
+import { setSourcePanelOpen } from '../../player/source-panel.ts';
 import { fixture, json, mockFetch } from '../../test/fetch.ts';
 import { resetScoreRevealForTests } from '../agenda/score-reveal.ts';
-import { matchAt, renderWithApp, scheduleOf, TODAY } from '../agenda/test-utils.tsx';
+import {
+  liveScore,
+  matchAt,
+  NOW,
+  renderWithApp,
+  scheduleOf,
+  TODAY,
+} from '../agenda/test-utils.tsx';
 import { endSession, getSession } from '../sources/session.ts';
 import { hash, JOB, resolution, scanJob } from '../sources/test-utils.ts';
 import MatchCenter, { findMatch } from './index.tsx';
@@ -94,22 +102,19 @@ describe('centro de partido', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Fuentes del partido' })).toBeNull();
     expect(document.querySelectorAll('.src-poster').length).toBeGreaterThan(0);
-    expect(screen.getByRole('tab', { name: 'Datos técnicos' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Datos' })).toBeInTheDocument();
   });
 
   it('la tecla S (datos técnicos) abre su pestaña y otra S vuelve a la de antes', async () => {
     renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />);
     await screen.findByRole('heading', { level: 1, name: 'Atlético de Madrid vs Tottenham' });
     act(() => setNerdOpen(true));
-    expect(screen.getByRole('tab', { name: 'Datos técnicos' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    expect(screen.getByRole('tab', { name: 'Datos' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('heading', { name: 'Datos técnicos' })).toBeInTheDocument();
     act(() => setNerdOpen(false));
     expect(screen.getByRole('tab', { name: /^Fuentes/ })).toHaveAttribute('aria-selected', 'true');
     // Elegir la pestaña a mano también lo apunta en el reproductor.
-    fireEvent.click(screen.getByRole('tab', { name: 'Datos técnicos' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Datos' }));
     expect(getPlayer().nerdOpen).toBe(true);
   });
 
@@ -226,12 +231,90 @@ describe('centro de partido', () => {
     expect(
       within(panel).getByRole('button', { name: 'Plegar el panel lateral' }),
     ).toBeInTheDocument();
-    fireEvent.click(within(panel).getByRole('tab', { name: 'Datos técnicos' }));
+    fireEvent.click(within(panel).getByRole('tab', { name: 'Datos' }));
     expect(within(panel).getByRole('heading', { name: 'Datos técnicos' })).toBeInTheDocument();
     expect(within(view).queryByRole('group', { name: 'Acciones de la fuente' })).toBeNull();
     expect(within(view).queryByRole('tablist')).toBeNull();
     expect(
       within(view).getByRole('heading', { level: 1, name: 'Atlético de Madrid vs Tottenham' }),
+    ).toBeInTheDocument();
+  });
+
+  it('escritorio: titular con competición y estado, «Marcador» tapado y «Ver juntos»', async () => {
+    // El partido, en juego: el reloj en el «ahora» de la agenda de prueba.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    net.restore();
+    net = mockFetch({
+      'GET /api/v1/football': scheduleOf({ [TODAY]: [match] }),
+      'GET /api/v1/library': fixture('libraryGet'),
+      'GET /api/v1/scores': {
+        available: true,
+        generatedAt: null,
+        source: 'espn',
+        attribution: null,
+        leagues: 1,
+        scores: { 'mc-1': liveScore(2, 1, "30'") },
+      },
+      'GET /api/v1/football/resolve': () => json(resolution(3)),
+      [`GET /api/v1/football/scans/${JOB}`]: () => json(scanJob(['working', 'checking', 'queued'])),
+    });
+    renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />, {
+      kind: 'wide',
+    });
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Atlético de Madrid vs Tottenham' }),
+    ).toBeInTheDocument();
+    const head = document.querySelector<HTMLElement>('.mc-dhead');
+    expect(head).not.toBeNull();
+    expect(within(head!).getByText('Atlético de Madrid – Tottenham')).toBeInTheDocument();
+    expect(head!.querySelector('.mc-dhead__sub')).toHaveTextContent(/^Champions League · /);
+    // El marcador, tapado: nunca las cifras hasta tocarlo; el ojo tachado lo vuelve a tapar.
+    const cover = await within(head!).findByRole('button', { name: 'Ver marcador' });
+    expect(head!.textContent).not.toMatch(/2\s*–\s*1/);
+    fireEvent.click(cover);
+    expect(within(head!).getByLabelText(/Atlético de Madrid 2, Tottenham 1/)).toBeInTheDocument();
+    fireEvent.click(within(head!).getByRole('button', { name: /^Tapar el marcador/ }));
+    expect(within(head!).getByRole('button', { name: 'Ver marcador' })).toBeInTheDocument();
+    // «Ver juntos»: abre la hoja para crear la sala del partido (docs/ver-juntos.md §14).
+    fireEvent.click(within(head!).getByRole('button', { name: 'Ver juntos' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Ver el partido juntos' }),
+    ).toBeInTheDocument();
+    // Sin cápsula sobre el vídeo y la lista sin cabecera: «Rebuscar» junto a las pestañas.
+    expect(document.querySelector('.mc-scap')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /^Rebuscar fuentes|^Rebuscando/ }),
+    ).toBeInTheDocument();
+    expect(document.querySelector('.src__head')).toBeNull();
+    expect(screen.getByRole('list', { name: 'Fuentes del partido' })).toBeInTheDocument();
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent?.replace(/\d+$/, ''))).toEqual([
+      'Fuentes',
+      'Partido',
+      'Datos',
+    ]);
+    // El panel lateral de fuentes del reproductor sí lleva cabecera: es donde
+    // se rebusca sin salir del vídeo.
+    act(() => setSourcePanelOpen(true));
+    const panel = await screen.findByRole('dialog', { name: 'Fuentes' });
+    expect(
+      within(panel).getByRole('button', { name: /^Rebuscar fuentes|^Rebuscando/ }),
+    ).toBeInTheDocument();
+    act(() => setSourcePanelOpen(false));
+  });
+
+  it('tableta: las fuentes en filas, como en escritorio, con «Rebuscar» junto a las pestañas', async () => {
+    renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />, {
+      kind: 'tablet',
+    });
+    expect(await screen.findByRole('list', { name: 'Fuentes del partido' })).toBeInTheDocument();
+    expect(document.querySelector('.src--line')).not.toBeNull();
+    expect(document.querySelector('.src__head')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /^Rebuscar fuentes|^Rebuscando/ }),
     ).toBeInTheDocument();
   });
 });

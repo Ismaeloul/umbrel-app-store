@@ -6,7 +6,7 @@
    tubería. Aquí no hay nada del proveedor: solo la URL del relé en
    127.0.0.1. */
 
-import type { Readable } from 'node:stream';
+import type { Readable, Writable } from 'node:stream';
 import type { RemuxProcess } from '../types.js';
 
 /** Contenedores con índice en la v1 (§9.4). */
@@ -82,6 +82,18 @@ export interface VodProcess extends RemuxProcess {
 
 export interface VodProcessLauncher {
   spawn(args: readonly string[]): VodProcess;
+}
+
+/**
+ * El ffmpeg de un trabajo ligero (docs/ver-juntos.md §17): además se le escribe por `stdin`
+ * (`pipe:0`). Lo lanza `createSpawnLauncher({ stdout: 'pipe', stdin: 'pipe' })`.
+ */
+export interface LiteProcess extends VodProcess {
+  readonly stdin: Writable;
+}
+
+export interface LiteProcessLauncher {
+  spawn(args: readonly string[]): LiteProcess;
 }
 
 /** Lee bytes del fichero por Range. `size` se sabe tras la primera lectura. */

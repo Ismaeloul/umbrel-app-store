@@ -218,6 +218,20 @@ describe('guía de ejemplo (demo de la web)', () => {
     expect(page.offset).toBe(10);
   });
 
+  it('«type» deja solo los canales de ese tipo (los chips de la Guía de escritorio)', () => {
+    const sports = demoGuide({ scope: 'all', type: 'deportes', limit: 1000 }, NOW);
+    expect(IptvGuideResponseSchema.parse(sports)).toBeTruthy();
+    expect(sports.channels.map((row) => row.name)).toContain('DAZN 1');
+    expect(sports.channels.map((row) => row.name)).not.toContain('La 1');
+    expect(sports.total).toBe(sports.channels.length);
+    expect(sports.all).toBe(demoGuide({ scope: 'all', limit: 0 }, NOW).all);
+    const news = demoGuide({ scope: 'all', type: 'noticias', limit: 1000 }, NOW);
+    expect(news.channels.map((row) => row.name)).toEqual(['laSexta', '24 Horas', 'Euronews']);
+    /* En Favoritos, sin el favorito sin guía (no tiene tipo). */
+    const favorites = demoGuide({ type: 'deportes' }, NOW);
+    expect(favorites.channels.every((row) => row.guide !== null && row.favorite)).toBe(true);
+  });
+
   it('el sello cambia cada 8 h y la ventana va de 24 h antes a 80 h después', () => {
     const stamp = demoGuideStamp(NOW);
     expect(stamp.version).toMatch(/^[a-z0-9]{1,16}$/);
