@@ -75,7 +75,7 @@ import { AgendaRows, type RowSlot } from './AgendaList.tsx';
 import { useLibraryLookup, useNow, useSchedule, useScores } from './data.ts';
 import { useDaySwipe } from './day-swipe.ts';
 import { DayStrip } from './DayStrip.tsx';
-import { DeskList } from './DeskList.tsx';
+import { DeskList, deskView, FOR_YOU_CHIP } from './DeskList.tsx';
 import { AgendaDetail, AgendaDetailEmpty } from './Detail.tsx';
 import {
   asForYou,
@@ -103,7 +103,13 @@ import {
   useRevealedScores,
   useWatchedMatch,
 } from './score-reveal.ts';
-import { setAgendaDay, setAgendaMode, setAgendaSelected, useAgendaUi } from './state.ts';
+import {
+  setAgendaChip,
+  setAgendaDay,
+  setAgendaMode,
+  setAgendaSelected,
+  useAgendaUi,
+} from './state.ts';
 
 const PreferencesSheet = lazy(() => import('../preferences/PreferencesSheet.tsx'));
 
@@ -194,6 +200,16 @@ export default function Agenda({ active }: ViewProps) {
   /* El héroe (el destacado) es solo del móvil: en escritorio, al entrar no
      hay nada abierto y el detalle enseña SOLO el que elijas (de cualquier
      pestaña o liga de la lista, por eso se busca en todo el día). */
+  /* Lo mismo que enseña la lista de escritorio (pestaña, liga y estado): el
+     resumen para lectores de pantalla y el atajo T salen de aquí, no de
+     `mode`, que es del móvil. */
+  const desk = useMemo(
+    () =>
+      stageVisible
+        ? deskView(dayMatches, { chip: ui.chip, status: ui.status }, now, scores, preferences)
+        : null,
+    [stageVisible, dayMatches, ui.chip, ui.status, now, scores, preferences],
+  );
   const featured = stageVisible ? null : featuredMatch(matches, now, scores, preferences);
   const selected = stageVisible
     ? (dayMatches.find((match) => match.id === ui.selected) ?? null)
@@ -397,13 +413,22 @@ export default function Agenda({ active }: ViewProps) {
       if (days.some((item) => item.date === today)) changeDay(today);
     },
   });
+  /* En escritorio, T cambia de pestaña («Todo» / «Para ti»), que es lo que
+     filtra la lista; solo si hay pestaña «Para ti» (partidos tuyos ese día). */
   useShortcut({
     id: 'agenda.filtro',
     keys: ['t'],
-    label: 'Cambia entre «Para ti» y «Todos»',
+    label: desk ? 'Cambia entre «Para ti» y «Todo»' : 'Cambia entre «Para ti» y «Todos»',
     group: 'Agenda',
-    when: () => hasPrefs,
-    handler: () => changeMode(mode === 'forYou' ? 'all' : 'forYou'),
+    when: () => (desk ? desk.forYou > 0 : hasPrefs),
+    handler: () => {
+      if (desk) {
+        haptic('selection');
+        setAgendaChip(desk.chip === FOR_YOU_CHIP ? null : FOR_YOU_CHIP);
+        return;
+      }
+      changeMode(mode === 'forYou' ? 'all' : 'forYou');
+    },
   });
   useShortcut({
     id: 'agenda.actualizar',
@@ -649,15 +674,26 @@ export default function Agenda({ active }: ViewProps) {
   /* Resumen para lectores de pantalla (regla 36: `aria-live` en la agenda):
      una frase que solo cambia con el día, el filtro, la carga o los directos,
      en vez de anunciar las filas una a una. */
+  const deskLiveShown = desk ? countLive(desk.shown, now, scores) : 0;
   const announcement = schedule.isPending
     ? 'Cargando partidos'
     : schedule.isError && !data
       ? 'Error: la fuente de partidos no respondió'
-      : day
-        ? `${dayLabel(day, today).long}: ${matches.length} ${matches.length === 1 ? 'partido' : 'partidos'}${
-            liveCount > 0 ? `, ${liveCount} en directo` : ''
-          }${mode === 'forYou' ? ', solo los tuyos' : ''}`
-        : '';
+      : day && desk
+        ? `${dayLabel(day, today).long}: ${desk.shown.length} ${desk.shown.length === 1 ? 'partido' : 'partidos'}${
+            deskLiveShown > 0 ? `, ${deskLiveShown} en directo` : ''
+          }${
+            desk.chip === FOR_YOU_CHIP
+              ? ', solo los tuyos'
+              : desk.chip !== null
+                ? `, solo ${desk.chip}`
+                : ''
+          }`
+        : day
+          ? `${dayLabel(day, today).long}: ${matches.length} ${matches.length === 1 ? 'partido' : 'partidos'}${
+              liveCount > 0 ? `, ${liveCount} en directo` : ''
+            }${mode === 'forYou' ? ', solo los tuyos' : ''}`
+          : '';
 
   /* Escritorio (desde 768 px), al estilo SofaScore: dos tarjetas. A la
      izquierda la lista por competición (DeskList, la misma que acompaña al

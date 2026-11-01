@@ -25,7 +25,28 @@ abierto, salud, preferencias, ayuda de atajos y la página del sistema) en los
 **12 tamaños** (móvil 360×800, 390×844 y 430×932 en vertical y en horizontal,
 tableta 768×1024 y 1024×1366, portátil 1280×800 y 1440×900, escritorio
 1920×1080 y 2560×1440), en oscuro y, en 390×844 y 1440×900, también en claro
-(270 combinaciones), y sale con 1 si algo falla:
+(270 combinaciones), y sale con 1 si algo falla.
+
+Desde entonces la lista ha crecido (`VIEWS` en el script, 38 vistas en la
+demo): las 8 pestañas de Ajustes, «Enlace detectado» y «Pegar un Content ID»,
+la Guía TV, Canales con un canal sonando, Pelis y series (idiomas, portada,
+categoría, búsqueda, película, serie y la sala de una película) y **Ver
+juntos**:
+
+- `juntos`: la portada (el destino de la barra lateral);
+- `juntos-sala`: la sala desde casa (Theater, Panels y Chat) con la
+  credencial del anfitrión;
+- `invitado-entrada` e `invitado`: la página del invitado
+  (`invitado.html`, servida en `/s/<código>` como la sirve el proxy), antes y
+  después de dar el nombre;
+- `juntos-abiertas`: «Salas abiertas», solo con `--base` (la demo contesta
+  sin red y no tiene salas).
+
+La sala es de mentira: la foto la da un `EventSource` falso (solo para su
+código, el de `packages/shared/fixtures/v1/partyCreate.json`), la credencial
+se deja en `localStorage` antes de abrir la vista y lo que el invitado pide
+por red (vista previa, latido, vídeo) lo contesta `page.route`. No hay vídeo:
+la sala sale con su aviso («Reintentar»), que también se revisa.
 
 | Qué | Dónde | Cómo |
 |---|---|---|

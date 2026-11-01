@@ -18010,6 +18010,9 @@ paths:
         - code: party_forbidden
           status: 403
           message: Ya no estás en esta sala. Vuelve a entrar con el enlace.
+        - code: party_gone
+          status: 404
+          message: Eso ya no está en la sala.
         - code: vod_unavailable
           status: 503
           message: Tu IPTV no ofrece películas ni series, o no responde ahora mismo.

@@ -36,6 +36,7 @@ vi.mock('./player.ts', () => {
     bufferedS: 0,
     buffering: false,
     quality: null,
+    sounded: false,
   };
   return {
     RoomPlayer: class {

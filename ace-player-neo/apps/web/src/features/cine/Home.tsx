@@ -406,7 +406,9 @@ export function Home({ active }: HomeProps) {
       group: 'Películas y series',
       handler: () => void requestFocus('buscar-cine'),
     },
-    active,
+    /* En la portada de escritorio (Mi lista) no hay buscador propio: «/» sigue
+       siendo el de la barra (`app.buscar`) y la ayuda no promete este. */
+    active && (!desk || grid),
   );
 
   const first: VodBrowseResponse | undefined = pages.data?.pages[0];

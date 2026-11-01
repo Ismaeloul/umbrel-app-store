@@ -35,7 +35,11 @@ function flat(value: unknown): string {
 }
 
 /* Competición tal como la rotula futbolenlatv → código de liga en ESPN
-   (server.js:2111-2141). Todos comprobados uno por uno contra el endpoint. */
+   (server.js:2111-2141). Todos comprobados uno por uno contra el endpoint.
+   Con los rótulos de futbolenlatv.es de 2026-11: «2. Bundesliga» es la
+   segunda alemana y «2. Liga» la segunda AUSTRIACA (FC Liefering, Amstetten…),
+   que se queda sin código: aut.2 responde pero sin partidos y gastaría una de
+   las ligas por consulta. Las claves antiguas siguen como alias. */
 const ESPN_LEAGUES: Readonly<Record<string, readonly string[]>> = {
   'la liga ea sports': ['esp.1'],
   laliga: ['esp.1'],
@@ -47,12 +51,13 @@ const ESPN_LEAGUES: Readonly<Record<string, readonly string[]>> = {
   'serie a italiana': ['ita.1'],
   'serie b italiana': ['ita.2'],
   bundesliga: ['ger.1'],
-  '2. liga': ['ger.2'],
+  '2. bundesliga': ['ger.2'],
   'copa de alemania': ['ger.dfb_pokal'],
   'francia ligue 1': ['fra.1'],
   'ligue 1': ['fra.1'],
   eredivisie: ['ned.1'],
   'primeira liga': ['por.1'],
+  'liga portuguesa': ['por.1'],
   mls: ['usa.1'],
   'primera division argentina': ['arg.1'],
   'serie a brasil': ['bra.1'],
@@ -63,7 +68,10 @@ const ESPN_LEAGUES: Readonly<Record<string, readonly string[]>> = {
   'conference league': ['uefa.europa.conf'],
   'liga mx': ['mex.1'],
   'primera a colombia': ['col.1'],
+  'liga colombiana': ['col.1'],
   'primera division uruguay': ['uru.1'],
+  'liga auf uruguaya': ['uru.1'],
+  'uefa nations league': ['uefa.nations'],
   'premiership escocesa': ['sco.1'],
   'superliga turca': ['tur.1'],
 };

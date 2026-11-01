@@ -971,7 +971,15 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       say(room, 'El vídeo vuelve a estar listo.', null);
       changed = true;
     }
+    /* El directo no se pausa (`play` no vale en directo): tras un corte («Reanudar»), la sala
+       vuelve a ir sola. Sin esto, la foto y el latido dirían `playing: false` para siempre. */
+    const resumed = !room.playback.playing;
+    if (resumed) {
+      fix(room, 0);
+      room.playback.playing = true;
+    }
     if (changed) sendRoom(room);
+    if (resumed) sendPlayback(room, 'resume', null);
     return { ...grant, url };
   }
 
@@ -1172,9 +1180,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       if (room.live) return streamLive(room, member, query, viewer, signal);
       /* La calidad ligera (§17) solo para el invitado de fuera que sabe elegir (`abr=1`). */
       const wantsLite = partyLite && options.guest === true && query.abr === '1';
+      /* El título que se abre: si mientras tanto la sala pasa a otro, esta sesión ya no es suya. */
+      const titleId = room.title.id;
       const acquire = (hevc: '0' | '1') =>
         playback.acquireVod(
-          room.title.id,
+          titleId,
           {
             client: query.client,
             viewer: query.viewer,
@@ -1202,12 +1212,21 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
           !wantsLite ||
           query.hevc !== '0' ||
           !isHevcRefusal(error) ||
-          !(await remux.vodLiteCovers(room.title.id, roomSession))
+          !(await remux.vodLiteCovers(titleId, roomSession))
         ) {
           throw error;
         }
         refusal = error;
         grant = await acquire('1');
+      }
+      if (!room.closed && room.members.has(member.id) && room.title.id !== titleId) {
+        /* Mientras se abría, la sala pasó a otro título («Siguiente», la cuenta atrás): la sesión
+           es del de antes. Se suelta sin tocar la sala (ni su título, ni su duración, ni los
+           visores: un traspaso suyo no es de la sala) y se avisa para que se abra el nuevo. */
+        await playback
+          .release(grant.session.id, { viewer: viewer.viewerId, reason: 'user' }, viewer)
+          .catch(() => undefined);
+        throw new AppError('party_gone', { detail: 'party_title_changed' });
       }
       const offer = wantsLite ? remux.vodLiteOffer(grant.session.id, query.hevc === '1') : null;
       if (refusal !== null && offer?.kind !== 'lite') {

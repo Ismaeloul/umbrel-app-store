@@ -531,8 +531,13 @@ describe('vista Agenda', () => {
     });
     const premier = screen.getByRole('region', { name: 'Premier League' });
     expect(within(premier).getByText('Inglaterra')).toBeInTheDocument();
-    expect(await within(liveRow).findByLabelText('Marcador: 2 a 1')).toHaveClass(
-      'desk-row__score--live',
+    await waitFor(() => expect(liveRow.querySelector('.desk-row__score--live')).not.toBeNull());
+    // El lector de pantalla oye el minuto, el marcador, el canal y la señal
+    // (el nombre del botón son solo los equipos y el estado).
+    await waitFor(() =>
+      expect(liveRow).toHaveAccessibleDescription(
+        /^Minuto 54\. Marcador: 2 a 1\. En M\+ Liga de Campeones\. .+/,
+      ),
     );
   });
 
@@ -663,7 +668,8 @@ describe('vista Agenda', () => {
     expect(within(side).queryByLabelText('Marcador: 2 a 1')).toBeNull();
     // Destaparlo lo enseña también en la fila; otro toque lo vuelve a tapar.
     fireEvent.click(capsule);
-    await waitFor(() => expect(within(row).getByLabelText('Marcador: 2 a 1')).toBeInTheDocument());
+    await waitFor(() => expect(row.querySelector('.desk-row__score')).not.toBeNull());
+    expect(row).toHaveAccessibleDescription(/Marcador: 2 a 1\. .*Lo estás viendo$/);
     fireEvent.click(within(side).getByRole('button', { name: /^Tapar el marcador/ }));
     expect(await within(side).findByRole('button', { name })).toBeInTheDocument();
     expect(row.querySelector('.desk-row__score')).toBeNull();
@@ -676,6 +682,40 @@ describe('vista Agenda', () => {
     expect(live).toHaveClass('desk-row--mine');
     expect(screen.getByRole('button', { name: /^Arsenal contra Chelsea/ })).not.toHaveClass(
       'desk-row--mine',
+    );
+  });
+  it('escritorio: el resumen para lectores de pantalla cuenta lo que enseña la lista (pestaña y píldora)', async () => {
+    net = mockFetch(routes());
+    renderAgenda('desktop');
+    await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    const status = () =>
+      [...document.querySelectorAll('.agenda--desk [role="status"]')].pop()?.textContent ?? '';
+    // Abre en «Todo» (aunque en el móvil sería «Para ti»): 3 partidos, 1 en directo.
+    await waitFor(() => expect(status()).toMatch(/: 3 partidos, 1 en directo$/));
+    const tabs = screen.getByRole('group', { name: 'Qué partidos ver' });
+    fireEvent.click(within(tabs).getByRole('button', { name: /^Para ti/ }));
+    await waitFor(() => expect(status()).toMatch(/: 2 partidos, 1 en directo, solo los tuyos$/));
+    const pills = screen.getByRole('group', { name: 'Filtrar partidos' });
+    fireEvent.click(within(pills).getByRole('button', { name: 'Próximos' }));
+    await waitFor(() => expect(status()).toMatch(/: 1 partido, solo los tuyos$/));
+  });
+
+  it('escritorio: T cambia entre las pestañas «Todo» y «Para ti»', async () => {
+    net = mockFetch(routes());
+    renderAgenda('desktop');
+    await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
+    const tabs = screen.getByRole('group', { name: 'Qué partidos ver' });
+    const forYou = await within(tabs).findByRole('button', { name: /^Para ti/ });
+    const all = within(tabs).getByRole('button', { name: /^Todo/ });
+    expect(all).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.keyDown(window, { key: 't' });
+    await waitFor(() => expect(forYou).toHaveAttribute('aria-pressed', 'true'));
+    expect(document.querySelectorAll('.desk-row')).toHaveLength(2);
+    fireEvent.keyDown(window, { key: 't' });
+    await waitFor(() => expect(all).toHaveAttribute('aria-pressed', 'true'));
+    expect(document.querySelectorAll('.desk-row')).toHaveLength(3);
+    expect(shortcutStore.get().find((item) => item.id === 'agenda.filtro')?.label).toBe(
+      'Cambia entre «Para ti» y «Todo»',
     );
   });
 });

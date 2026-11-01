@@ -1,5 +1,8 @@
 /* Avisos («Te aviso», rediseño de escritorio): la lista de programas de los
-   que quieres un aviso 5 min antes de que empiecen.
+   que quieres un aviso antes de que empiecen. Cuánto antes lo dice el ajuste
+   «Avisos» de Ajustes (settings/local-prefs.ts, 5 min por defecto), el mismo
+   que el de los partidos de Mis equipos (settings/match-alerts.tsx); con
+   «Nunca» no sale ningún aviso.
 
    - Viven en ESTE navegador (localStorage con try/catch, lib/storage.ts):
      son una comodidad por visor, como el tema. Otra pestaña abierta se
@@ -8,21 +11,30 @@
      pide al pulsar «Te aviso», nunca solo); si no, con un toast, y solo con
      la página abierta: sin service worker no hay aviso con ella cerrada.
    - Un único temporizador para el próximo aviso, armado mientras haya alguien
-     mirando (la campana de la barra, `useAvisosClock`). Los ya empezados se
-     tiran solos.
+     mirando (`useAvisosClock`, que lo pone <AvisosClock/> en el armazón:
+     siempre montado, fuera de las vistas, así que también avisa viendo una
+     película o un partido sin barra de sección). Los ya empezados se tiran
+     solos.
    - Con varias pestañas abiertas, avisa solo la primera que llega: antes de
      avisar se relee lo guardado y se apunta como avisado (las demás ya lo ven
      así). Pulsar la notificación lleva a la ficha del partido o a la Guía
-     (`setAvisoOpener`, lo pone la campana, que tiene el router). */
+     (`setAvisoOpener`, lo pone también <AvisosClock/>, que tiene el router). */
 
 import { useEffect } from 'react';
 import { createStore, useStore } from '../../lib/store.ts';
 import { readJson, writeJson } from '../../lib/storage.ts';
 import { notify } from '../../notices/index.ts';
+import { localPrefs } from '../settings/local-prefs.ts';
 
 export const AVISOS_KEY = 'aceneo-avisos';
-/** Cuánto antes de empezar sale el aviso. */
+/** Cuánto antes de empezar sale el aviso si no se ha tocado el ajuste «Avisos». */
 export const AVISO_LEAD_MS = 5 * 60_000;
+
+/** Cuánto antes sale el aviso según el ajuste «Avisos»; `null` = «Nunca». */
+export function avisoLeadMs(): number | null {
+  const lead = localPrefs.get().alertLead;
+  return lead === null ? null : lead * 60_000;
+}
 /** Un aviso que se pasó con la página cerrada aún sale si el programa empezó hace menos de esto. */
 const LATE_MS = 60_000;
 /** El temporizador nunca espera más (se vuelve a mirar: relojes que se duermen, cambios de hora). */
@@ -108,6 +120,9 @@ export function resetAvisos(): void {
   window.clearTimeout(timer);
   timer = 0;
   watchers = 0;
+  window.removeEventListener('storage', onStorage);
+  stopPrefs();
+  stopPrefs = () => {};
   avisos.set(load());
 }
 
@@ -148,7 +163,7 @@ export function avisoWhen(start: number, now: number): string {
 
 let opener: ((aviso: Aviso) => void) | null = null;
 
-/** Qué hacer al pulsar la notificación (la campana: la ficha del partido o la Guía). */
+/** Qué hacer al pulsar la notificación (<AvisosClock/>: la ficha del partido o la Guía). */
 export function setAvisoOpener(next: ((aviso: Aviso) => void) | null): void {
   opener = next;
 }
@@ -173,10 +188,15 @@ function fire(aviso: Aviso, now: number): void {
   notify(`${aviso.title}: ${when}`, { icon: 'campana', ms: 10_000 });
 }
 
-/** Saca los avisos que tocan y quita los ya pasados (pura salvo el aviso). */
-export function dueAvisos(list: readonly Aviso[], now: number): Aviso[] {
+/** Los avisos que tocan ahora con esa antelación (`null` = «Nunca»: ninguno). */
+export function dueAvisos(
+  list: readonly Aviso[],
+  now: number,
+  lead: number | null = avisoLeadMs(),
+): Aviso[] {
+  if (lead === null) return [];
   return list.filter(
-    (aviso) => !aviso.fired && aviso.start - AVISO_LEAD_MS <= now && aviso.start > now - LATE_MS,
+    (aviso) => !aviso.fired && aviso.start - lead <= now && aviso.start > now - LATE_MS,
   );
 }
 
@@ -217,10 +237,12 @@ function arm(): void {
   window.clearTimeout(timer);
   timer = 0;
   if (watchers === 0) return;
+  const lead = avisoLeadMs();
+  if (lead === null) return;
   const now = Date.now();
   const pending = avisos.get().filter((aviso) => !aviso.fired);
   if (!pending.length) return;
-  const next = Math.min(...pending.map((aviso) => aviso.start - AVISO_LEAD_MS));
+  const next = Math.min(...pending.map((aviso) => aviso.start - lead));
   const wait = Math.max(0, Math.min(MAX_WAIT_MS, next - now));
   timer = window.setTimeout(tick, wait);
 }
@@ -231,16 +253,24 @@ function onStorage(event: StorageEvent): void {
   arm();
 }
 
-/** Mantiene el reloj de los avisos mientras el componente esté montado (la campana). */
+let stopPrefs: () => void = () => {};
+
+/** Mantiene el reloj de los avisos mientras el componente esté montado (<AvisosClock/>). */
 export function useAvisosClock(): void {
   useEffect(() => {
     watchers += 1;
-    if (watchers === 1) window.addEventListener('storage', onStorage);
+    if (watchers === 1) {
+      window.addEventListener('storage', onStorage);
+      // Cambiar «Avisos» en Ajustes vuelve a armar el reloj con la antelación nueva.
+      stopPrefs = localPrefs.subscribe(arm);
+    }
     tick();
     return () => {
       watchers -= 1;
       if (watchers === 0) {
         window.removeEventListener('storage', onStorage);
+        stopPrefs();
+        stopPrefs = () => {};
         window.clearTimeout(timer);
         timer = 0;
       }

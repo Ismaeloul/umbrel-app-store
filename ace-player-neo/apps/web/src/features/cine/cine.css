@@ -601,7 +601,10 @@
   .cine-browse {
     gap: var(--s-3);
   }
-  .cine-browse__cats {
+  /* Solo en el diseño de móvil: con el teléfono en horizontal (desde 768 de
+     ancho) va el de escritorio, sin botón «Categorías», y los chips son la
+     única forma de elegir una. */
+  .cine-browse:not(.cine-browse--desk) .cine-browse__cats {
     display: none;
   }
   .cine-filters {
@@ -1639,12 +1642,16 @@
 }
 
 /* La tarjeta a medias: el cartel con «T2 · E7» arriba y el título y la barra abajo, dentro. */
+/* El cartel es la capa de toque de la tarjeta (la cubre entera) y «Más
+   opciones» va encima, en su esquina: por eso la tarjeta lleva su medida. */
 .cine-half {
   position: relative;
   min-width: 0;
+  aspect-ratio: 2 / 3;
 }
 .cine-half__card {
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   border-radius: var(--r-m);
@@ -1726,6 +1733,31 @@
 }
 .cine-half__card:focus-visible {
   outline-offset: 3px;
+}
+/* «Más opciones»: arriba a la derecha (la cápsula va a la izquierda). Con
+   ratón sale al pasar por encima o al llegar con el teclado; sin ratón (una
+   tableta), siempre. */
+.cine-half__more {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  /* 44 px para el dedo; el círculo oscuro que se ve, de 32. */
+  padding: 6px;
+  background: rgb(0 0 0 / 0.55);
+  background-clip: content-box;
+  color: #fff;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cine-half__more {
+    opacity: 0;
+    transition: opacity var(--dur-rapido) var(--ease-rapido);
+  }
+  .cine-half:hover .cine-half__more,
+  .cine-half:focus-within .cine-half__more,
+  .cine-half__more[aria-expanded='true'] {
+    opacity: 1;
+  }
 }
 @media (hover: hover) and (pointer: fine) {
   .cine-half__card {

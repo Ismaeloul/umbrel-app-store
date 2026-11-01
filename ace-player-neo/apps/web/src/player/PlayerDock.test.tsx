@@ -277,8 +277,11 @@ describe('reproductor en grande', () => {
     await waitFor(() => expect(video).not.toHaveAttribute('controls'));
   });
 
-  it('pantalla completa que el navegador no contesta nunca: a los 1,5 s, el modo teatro', async () => {
-    const requestFullscreen = vi.fn(() => new Promise<void>(() => {}));
+  /** Escritorio con pantalla completa anunciada; `requestFullscreen` hace lo que diga la prueba. */
+  async function withDesktopFullscreen(
+    requestFullscreen: () => Promise<void>,
+    body: () => Promise<void> | void,
+  ) {
     Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
     Object.defineProperty(document.documentElement, 'requestFullscreen', {
       configurable: true,
@@ -293,22 +296,56 @@ describe('reproductor en grande', () => {
       addListener: () => {},
       removeListener: () => {},
     })) as unknown as typeof window.matchMedia;
-    renderDock();
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-      setPlayer(playing());
-      fireEvent.click(screen.getAllByRole('button', { name: 'Pantalla completa' })[0]!);
-      expect(requestFullscreen).toHaveBeenCalledTimes(1);
-      act(() => vi.advanceTimersByTime(1_400));
-      expect(playerPresence.get().immersive).toBe(false);
-      act(() => vi.advanceTimersByTime(200));
-      expect(playerPresence.get().immersive).toBe(true);
+      await body();
     } finally {
       vi.useRealTimers();
       window.matchMedia = realMatchMedia;
       Reflect.deleteProperty(document, 'fullscreenEnabled');
       Reflect.deleteProperty(document.documentElement, 'requestFullscreen');
     }
+  }
+
+  /** En el modo teatro de reserva, los botones «full» dicen cómo salir y Esc sale. */
+  function expectTheaterFallbackThenEscape() {
+    expect(playerPresence.get().immersive).toBe(true);
+    const exits = screen.getAllByRole('button', { name: 'Salir del modo teatro' });
+    expect(exits.length).toBeGreaterThan(0);
+    for (const button of exits) expect(button).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'Pantalla completa' })).toBeNull();
+    act(() => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+    expect(playerPresence.get().immersive).toBe(false);
+    for (const button of screen.getAllByRole('button', { name: 'Pantalla completa' }))
+      expect(button).toHaveAttribute('aria-pressed', 'false');
+  }
+
+  it('pantalla completa que el navegador no contesta nunca: a los 1,5 s, el modo teatro (y Esc sale)', async () => {
+    const requestFullscreen = vi.fn(() => new Promise<void>(() => {}));
+    await withDesktopFullscreen(requestFullscreen, () => {
+      renderDock();
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      setPlayer(playing());
+      fireEvent.click(screen.getAllByRole('button', { name: 'Pantalla completa' })[0]!);
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+      act(() => vi.advanceTimersByTime(1_400));
+      expect(playerPresence.get().immersive).toBe(false);
+      act(() => vi.advanceTimersByTime(200));
+      expectTheaterFallbackThenEscape();
+    });
+  });
+
+  it('pantalla completa que falla (iframe sin allowfullscreen): el modo teatro, que se deja con Esc', async () => {
+    const requestFullscreen = vi.fn(() => Promise.reject(new TypeError('no permitido')));
+    await withDesktopFullscreen(requestFullscreen, async () => {
+      renderDock();
+      setPlayer(playing());
+      fireEvent.click(screen.getAllByRole('button', { name: 'Pantalla completa' })[0]!);
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(playerPresence.get().immersive).toBe(true));
+      expectTheaterFallbackThenEscape();
+    });
   });
 
   it('controles: el foco que deja un clic no los retiene (pantalla completa), el del teclado sí', () => {

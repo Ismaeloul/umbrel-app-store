@@ -8,11 +8,13 @@
      buena. Por defecto, sí (es lo que ya hacía el reproductor). Lo lee
      sources/session.ts al caerse una fuente y en el salto de entrada.
    - «Avisos»: cuántos minutos antes de empezar avisar de un partido de tus
-     equipos. Lo lee match-alerts.tsx, con la pestaña abierta.
+     equipos (match-alerts.tsx) y de lo que apuntaste con «Te aviso» en la
+     Guía (avisos/store.ts), con la pestaña abierta. «Nunca» apaga los dos.
    - «Idioma preferido»: el idioma en el que quieres oír los partidos. Por
-     ahora solo se guarda: ni el servidor ni las fuentes saben aún de qué
-     idioma es cada emisión. (El de Películas y series es otro: lo guarda
-     el servidor, vodLanguages, y se elige en su cabecera.) */
+     ahora solo se guarda y su fila no sale en la portada (Overview.tsx): ni
+     el servidor ni las fuentes saben aún de qué idioma es cada emisión, y
+     un ajuste que no hace nada confunde. (El de Películas y series es otro:
+     lo guarda el servidor, vodLanguages, y se elige en su cabecera.) */
 
 import { readItem, STORAGE_KEYS, writeItem } from '../../lib/storage.ts';
 import { createStore, useStore } from '../../lib/store.ts';

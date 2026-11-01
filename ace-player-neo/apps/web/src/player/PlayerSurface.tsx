@@ -78,6 +78,13 @@ function publishStageSlot(node: HTMLDivElement | null) {
  * una cápsula sobre el vídeo, arriba y al centro, siempre visible aunque los
  * controles se escondan (notices/immersiveAction.ts).
  */
+/** Etiqueta del botón «full»: si la pantalla completa no contestó o falló y entró
+ *  el modo teatro de reserva, el botón dice cómo salir de él. */
+function fullscreenLabel(ctx: PlayerContextValue): string {
+  if (ctx.fullscreen) return 'Salir de pantalla completa';
+  return ctx.theater ? 'Salir del modo teatro' : 'Pantalla completa';
+}
+
 function ImmersivePill() {
   const action = useStore(immersiveActionStore);
   if (!action) return null;
@@ -706,9 +713,9 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
                 {ctx.canFullscreen ? (
                   <IconButton
                     icon="full"
-                    label={ctx.fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+                    label={fullscreenLabel(ctx)}
                     shortcut="F"
-                    pressed={ctx.fullscreen}
+                    pressed={ctx.fullscreen || ctx.theater}
                     variant="video"
                     onClick={actions.toggleFullscreen}
                   />
@@ -894,9 +901,9 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
                   {ctx.canFullscreen ? (
                     <IconButton
                       icon="full"
-                      label={ctx.fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+                      label={fullscreenLabel(ctx)}
                       shortcut="F"
-                      pressed={ctx.fullscreen}
+                      pressed={ctx.fullscreen || ctx.theater}
                       variant="video"
                       onClick={actions.toggleFullscreen}
                     />

@@ -281,7 +281,9 @@ describe('centro de partido', () => {
     expect(within(head!).getByRole('button', { name: 'Ver marcador' })).toBeInTheDocument();
     // «Ver juntos»: abre la hoja para crear la sala del partido (docs/ver-juntos.md §14).
     fireEvent.click(within(head!).getByRole('button', { name: 'Ver juntos' }));
-    expect(await screen.findByRole('dialog', { name: 'Ver el partido juntos' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('dialog', { name: 'Ver el partido juntos' }),
+    ).toBeInTheDocument();
     // Sin cápsula sobre el vídeo y la lista sin cabecera: «Rebuscar» junto a las pestañas.
     expect(document.querySelector('.mc-scap')).toBeNull();
     expect(

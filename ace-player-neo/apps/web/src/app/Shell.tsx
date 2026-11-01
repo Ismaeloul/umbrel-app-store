@@ -61,6 +61,7 @@ import { formatVista, type Route, type Vista } from './routes.ts';
 import { restoreScroll } from './scroll-memory.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
 import { QuickSearchHost } from '../features/search/QuickSearchHost.tsx';
+import { AvisosClock } from '../features/avisos/Clock.tsx';
 import {
   finishEntranceAnimations,
   playerSwapsByName,
@@ -347,6 +348,9 @@ export function Shell() {
           Saltar al contenido
         </a>
         <SideNav route={route} />
+        {/* El reloj de «Te aviso», fuera de las vistas: avisa también en la
+            sala y en el partido, que no tienen campana (features/avisos). */}
+        <AvisosClock />
         {/* La barra de la Agenda sobre la lista y el partido (rediseño,
             pantalla 1): abrir un partido no cambia de pantalla. */}
         {columnVisible ? (

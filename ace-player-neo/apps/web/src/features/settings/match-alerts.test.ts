@@ -43,6 +43,13 @@ describe('avisos de Mis equipos', () => {
     expect(dueAlerts(one, prefs(['Equipo que no juega']), 5, nowFor(0), new Set())).toEqual([]);
   });
 
+  it('un partido con aviso en la campana («Te aviso») no avisa otra vez aquí', () => {
+    expect(dueAlerts(one, mine, 5, nowFor(5), new Set(), new Set([match.id]))).toEqual([]);
+    expect(dueAlerts(one, mine, 5, nowFor(5), new Set(), new Set(['otro']))).toEqual([
+      { match, minutes: 5 },
+    ]);
+  });
+
   it('«Al empezar» avisa justo a la hora', () => {
     expect(dueAlerts(one, mine, 0, nowFor(1), new Set())).toEqual([]);
     expect(dueAlerts(one, mine, 0, nowFor(0), new Set())).toEqual([{ match, minutes: 0 }]);

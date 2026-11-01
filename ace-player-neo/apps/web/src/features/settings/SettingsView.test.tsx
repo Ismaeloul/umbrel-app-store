@@ -367,17 +367,14 @@ describe('Ajustes en escritorio', () => {
     );
   });
 
-  it('«Idioma preferido» es el de los partidos: Español por defecto, sin subtítulo, en el navegador', async () => {
+  it('«Idioma preferido» no sale: aún no cambia las fuentes (local-prefs.ts)', () => {
     desk();
     const play = screen.getByRole('region', { name: 'Reproducción' });
-    const row = within(play).getByRole('button', { name: /Idioma preferido/ });
-    expect(row).toHaveTextContent(/^Idioma preferidoEspañol$/);
-    fireEvent.click(row);
-    const menu = await screen.findByRole('menu', { name: 'Idioma preferido de los partidos' });
-    fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Inglés' }));
-    expect(localPrefs.get().lang).toBe('en');
-    expect(localStorage.getItem('aceneo-idioma')).toBe('en');
-    await waitFor(() => expect(row).toHaveTextContent('Inglés'));
+    expect(
+      within(play).getByRole('switch', { name: /Cambiar de fuente sola/ }),
+    ).toBeInTheDocument();
+    expect(within(play).queryByRole('button', { name: /Idioma preferido/ })).toBeNull();
+    expect(screen.queryByText('Idioma preferido')).toBeNull();
   });
 
   it('la tarjeta del Umbrel: por dónde llega la página, sin inventarse Tailscale', () => {

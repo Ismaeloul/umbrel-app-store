@@ -258,9 +258,8 @@ export class FootballServiceImpl implements FootballService {
       this.demoPayload = payload;
       return Promise.resolve(payload);
     }
-    if (this.agenda.payload && clock.now() < this.agenda.expiresAt) {
-      return Promise.resolve(this.agenda.payload);
-    }
+    const cached = this.cachedAgenda();
+    if (cached && clock.now() < this.agenda.expiresAt) return Promise.resolve(cached);
     if (this.agenda.pending) return this.agenda.pending;
     const pending = this.refreshAgenda().finally(() => {
       this.agenda.pending = null;
@@ -329,8 +328,20 @@ export class FootballServiceImpl implements FootballService {
    * canal o la hora de antes. Síncrono y barato (todo en caché).
    */
   private refreshHybrid(): void {
-    const raw = this.deps.config.football.demoOnly ? this.demoPayload : this.agenda.payload;
+    const raw = this.deps.config.football.demoOnly ? this.demoPayload : this.cachedAgenda();
     if (raw) this.withGuide(raw);
+  }
+
+  /**
+   * La agenda guardada tal y como se dio la última vez: si se sigue con la
+   * última completa (`stale`), la copia marcada, siempre el mismo objeto (el
+   * memo de la agenda híbrida y el catálogo de programación no se rehacen y la
+   * nota «Última copia disponible» no parpadea).
+   */
+  private cachedAgenda(): FootballSchedule | null {
+    const { payload, stale, stalePayload } = this.agenda;
+    if (!payload) return null;
+    return stale ? (stalePayload ?? payload) : payload;
   }
 
   private agendaContext(): AgendaContext {

@@ -126,6 +126,13 @@
   gap: 8px;
   box-shadow: inset 0 0 0 1px var(--line-soft);
 }
+/* El anillo de foco del campo (Field.css): la regla de arriba pesa más que
+   `.field__box:focus-within` y la lupa abierta se quedaba sin foco visible. */
+.ctab-bar .ctab-filter .field__box:focus-within {
+  box-shadow:
+    inset 0 0 0 1px var(--accent-edge),
+    0 0 0 3px color-mix(in oklab, var(--accent-edge) 30%, transparent);
+}
 
 /* ---- La tabla ------------------------------------------------------------- */
 .ctab {
@@ -144,11 +151,14 @@
   outline-offset: 4px;
   border-radius: var(--r-m);
 }
-/* Logo · canal · ahora · después · estrella (las mismas columnas en la cabecera). */
+/* Logo · canal · ahora · después · estrella (las mismas columnas en la cabecera).
+   El nombre crece con el ancho: con un tope fijo, «ES: DAZN LALIGA 1080p» se
+   cortaba aunque sobrase sitio en «Ahora». */
 .ctab-head,
-.ctab-row {
+.ctab-row,
+.ctab-loading {
   display: grid;
-  grid-template-columns: 72px minmax(120px, 200px) minmax(0, 1fr) minmax(0, 1fr) 76px;
+  grid-template-columns: 72px minmax(140px, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 76px;
   align-items: center;
   gap: 16px;
   padding: 10px 12px;
@@ -360,14 +370,9 @@
 .ctab-row__fav[aria-pressed='true'] {
   color: var(--accent-ink);
 }
-/* La fila de carga al pedir otra página de tu IPTV. */
+/* La fila de carga al pedir otra página de tu IPTV (las columnas, las de la tabla). */
 .ctab-loading {
-  display: grid;
-  grid-template-columns: 72px minmax(120px, 200px) minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
   min-height: 64px;
-  padding: 10px 12px;
 }
 /* Con ratón: la fila se ilumina y la estrella vacía y «Más» aparecen al pasar
    (con teclado, al enfocarlos; en táctil se ven siempre). */
@@ -391,8 +396,9 @@
    quedan y se desplazan de lado si no caben; el filtro abierto, más corto. */
 @media (max-width: 1023px) {
   .ctab-head,
-  .ctab-row {
-    grid-template-columns: 72px minmax(110px, 180px) minmax(0, 1fr) 76px;
+  .ctab-row,
+  .ctab-loading {
+    grid-template-columns: 72px minmax(150px, 1.2fr) minmax(0, 1fr) 76px;
   }
   .ctab-head > :nth-child(4),
   .ctab-row__next {

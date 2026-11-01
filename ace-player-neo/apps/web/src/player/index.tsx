@@ -782,9 +782,10 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
       group,
       when: () => stageRef.current && theater,
       handler: () => setTheaterWanted(false),
-      // Solo donde existe el modo teatro (escritorio sin pantalla completa).
+      /* En escritorio: el modo teatro del botón (sin pantalla completa) y el de
+         reserva, cuando la pantalla completa no contesta o falla. */
     },
-    !compact && !abilities.fullscreen,
+    !compact,
   );
   useShortcut({
     id: 'reproductor.pip',

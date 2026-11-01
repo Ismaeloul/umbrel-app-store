@@ -3,21 +3,21 @@
    número; al pulsarla, un popover con la lista («Te aviso» de la Guía), cada
    uno con «Ver ficha» si es un partido de la Agenda y «Quitar».
 
-   También mantiene el reloj de los avisos (useAvisosClock): la campana está en
-   la barra de todas las secciones, así que mientras la app está abierta hay
-   quien lo arme. */
+   Solo es la lista: el reloj que avisa va aparte (Clock.tsx, en el armazón),
+   porque hay vistas sin barra (la sala de una película, el partido por
+   debajo de 1024 px) y avisar no puede depender de que se vea la campana.
+   La nota del pie dice cuánto antes se avisa según el ajuste «Avisos». */
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from '../../app/router.tsx';
 import { Icon, IconButton, Popover } from '../../ui/index.ts';
+import { useLocalPrefs, type AlertLead } from '../settings/local-prefs.ts';
 import {
-  AVISO_LEAD_MS,
   noticePermission,
   removeAviso,
-  setAvisoOpener,
   useAvisos,
-  useAvisosClock,
   type Aviso,
+  type NoticePermission,
 } from './store.ts';
 import './avisos.css';
 
@@ -37,18 +37,18 @@ export function avisoDay(start: number, now: number): string {
   return `${DAY.format(start).replace(/\./g, '')} · ${time}`;
 }
 
+/** La nota del pie según el ajuste «Avisos» y el permiso de notificaciones. */
+export function avisosNote(lead: AlertLead, permission: NoticePermission): string {
+  if (lead === null) return 'Los avisos están apagados: en Ajustes, «Avisos» está en «Nunca».';
+  if (permission === 'denied')
+    return 'Las notificaciones están bloqueadas: te aviso aquí, con la app abierta.';
+  const when = lead === 0 ? 'al empezar' : `${lead} minutos antes`;
+  return permission === 'granted'
+    ? `Te avisamos ${when} con una notificación.`
+    : `Te avisamos ${when}, con la app abierta.`;
+}
+
 export function AvisosBell() {
-  useAvisosClock();
-  const navigate = useNavigate();
-  // Pulsar la notificación: la ficha del partido o, si no lo es, la Guía.
-  useEffect(() => {
-    setAvisoOpener((aviso) =>
-      navigate(
-        aviso.match ? { vista: 'partido', id: aviso.match, canal: null } : { vista: 'guia' },
-      ),
-    );
-    return () => setAvisoOpener(null);
-  }, [navigate]);
   const list = useAvisos();
   const pending = list.filter((aviso) => !aviso.fired);
   const [open, setOpen] = useState(false);
@@ -90,6 +90,7 @@ export function AvisosBell() {
 
 function AvisosList({ list, onDone }: { list: readonly Aviso[]; onDone(): void }) {
   const navigate = useNavigate();
+  const { alertLead } = useLocalPrefs();
   const now = Date.now();
   const permission = noticePermission();
   return (
@@ -136,13 +137,7 @@ function AvisosList({ list, onDone }: { list: readonly Aviso[]; onDone(): void }
           ))}
         </ul>
       )}
-      <p className="avisos__note">
-        {permission === 'granted'
-          ? `Te avisamos ${AVISO_LEAD_MS / 60_000} minutos antes con una notificación.`
-          : permission === 'denied'
-            ? 'Las notificaciones están bloqueadas: te aviso aquí, con la app abierta.'
-            : `Te avisamos ${AVISO_LEAD_MS / 60_000} minutos antes, con la app abierta.`}
-      </p>
+      <p className="avisos__note">{avisosNote(alertLead, permission)}</p>
     </div>
   );
 }

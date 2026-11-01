@@ -139,8 +139,14 @@ export function Theater({
   /* Teclado, mientras no se escribe en el chat. */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      /* Ya lo ha usado otro (las flechas de unas pestañas o de un Segmented): no es para la sala. */
+      if (event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="menu"]'))
+      if (
+        target?.closest(
+          'input, textarea, select, [contenteditable="true"], [role="menu"], [role="tablist"], [role="radiogroup"], [role="listbox"], [role="slider"]',
+        )
+      )
         return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const key = event.key.toLowerCase();

@@ -58,6 +58,7 @@ function setup() {
   const clock = core.clock as FakeClock;
   const calls: Call[] = [];
   const released: string[] = [];
+  const beats: { viewer: string; playing: boolean | undefined }[] = [];
   const party = createPartyService({
     ...core,
     playback: {
@@ -66,19 +67,22 @@ function setup() {
         return GRANT;
       },
       acquireVod: () => Promise.reject(new Error('vod')),
-      heartbeat: async () => ({
-        session: GRANT.session,
-        url: GRANT.url,
-        protocol: GRANT.protocol,
-        viewers: 1,
-      }),
+      heartbeat: async (_sid, body) => {
+        beats.push({ viewer: body.viewer, playing: body.playing });
+        return {
+          session: GRANT.session,
+          url: GRANT.url,
+          protocol: GRANT.protocol,
+          viewers: 1,
+        };
+      },
       release: async (_sid, body) => {
         released.push(body.viewer);
         return { released: true, sessionClosed: false };
       },
     },
   });
-  return { clock, calls, released, party };
+  return { core, clock, calls, released, beats, party };
 }
 
 const viewer = (viewerId: string): ViewerIdentity => ({
@@ -220,6 +224,47 @@ describe('«Ver juntos» en directo (§14)', () => {
     party.settings(room, { token: host.member.token, auto: false });
     const snapshot = party.join(room, 'Leo');
     expect(snapshot.room.live?.auto).toBe(false);
+  });
+
+  it('alguien de casa coge el canal y «Reanudar»: la sala vuelve a ir (playing: true) y el latido lo dice', async () => {
+    const { core, party, beats } = setup();
+    await party.start();
+    const host = party.create(BODY);
+    const room = host.room.code;
+    const events = listen(party, room, host.member.token);
+    const open = () =>
+      party.stream(
+        room,
+        query(host.member.token, 'v_isma'),
+        viewer('v_isma'),
+        new AbortController().signal,
+      );
+    await open();
+    core.bus.emit('playback.handoff', {
+      sessionId: GRANT.session.id,
+      viewerIds: ['v_isma'],
+      byDeviceId: 'pc-casa',
+      byClient: 'web',
+      hash: 'e'.repeat(40),
+      title: 'Otra cosa',
+      reason: 'other_channel',
+    });
+    const lastOf = <K extends PartyEvent['type']>(type: K) =>
+      events().findLast((event): event is Extract<PartyEvent, { type: K }> => event.type === type);
+    expect(lastOf('party.room')?.data.interrupted).toBe('taken');
+    expect(lastOf('party.playback')?.data.playback.playing).toBe(false);
+
+    /* «Reanudar»: abrir otra vez el canal. */
+    await open();
+    expect(lastOf('party.room')?.data.interrupted).toBeNull();
+    expect(lastOf('party.playback')?.data).toMatchObject({
+      action: 'resume',
+      playback: { playing: true },
+    });
+    expect(party.join(room, 'Leo').room.playback.playing).toBe(true);
+    await party.status(room, { token: host.member.token, positionS: 0, buffering: false });
+    expect(beats.at(-1)).toEqual({ viewer: 'v_isma', playing: true });
+    await party.stop();
   });
 
   it('en directo nadie espera al que carga', async () => {

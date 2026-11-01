@@ -2,14 +2,14 @@ import type { BootstrapResponse, LibraryView as LibraryData } from '@ace/shared'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
-import { routeKey } from '../../api/query.ts';
+import { routeKey, routePrefix } from '../../api/query.ts';
 import { resetToasts } from '../../notices/toasts.ts';
 import { play } from '../../player/api.ts';
 import { fixture, json, mockFetch } from '../../test/fetch.ts';
 import { resetPending } from './data.ts';
 import { genreOf } from './genres.ts';
 import { brandOf, plateLabel } from './ChannelPlate.tsx';
-import { chunkIds, demoFill } from './guide-now.ts';
+import { blockChunks, chunkIds, demoFill, guideBlocks } from './guide-now.ts';
 import LibraryView from './LibraryView.tsx';
 import { madridClock } from './on-air.ts';
 import { makeItem, makeLibrary, renderWithApp, resetPlayback } from './test-utils.tsx';
@@ -142,6 +142,20 @@ describe('pestañas y chips', () => {
     expect(screen.getByRole('link', { name: 'DAZN 1' })).toBeInTheDocument();
     fireEvent.click(within(group).getByRole('button', { name: 'Todo' }));
     expect(await screen.findByRole('link', { name: 'La 1' })).toBeInTheDocument();
+  });
+
+  it('un filtro de 1 letra sin coincidencias no dice «Aún no tienes favoritos»; «Ver todos» lo quita', async () => {
+    setup();
+    const field = await screen.findByRole('searchbox', { name: 'Filtrar canales' });
+    fireEvent.change(field, { target: { value: 'q' } });
+    expect(await screen.findByText('Nada en esta pestaña con «q».')).toBeInTheDocument();
+    expect(screen.queryByText('Aún no tienes favoritos')).toBeNull();
+    // Con 1 letra no se ofrece el motor (pide 2), sino quitar el filtro.
+    expect(screen.queryByRole('button', { name: /en el motor/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ver todos' }));
+    expect(field).toHaveValue('');
+    expect(await screen.findAllByRole('link', { name: /.+/ })).not.toHaveLength(0);
+    expect(screen.queryByText(/Nada en esta pestaña/)).toBeNull();
   });
 });
 
@@ -457,6 +471,52 @@ describe('tipos de canal (genres.ts)', () => {
     const ids = Array.from({ length: 230 }, (_, n) => `${n}`.padStart(40, 'a'));
     const chunks = chunkIds([...ids, ids[0]!]);
     expect(chunks.map((chunk) => chunk.length)).toEqual([100, 100, 30]);
+  });
+
+  it('la guía va en bloques fijos de 100 filas: solo los que tocan las pintadas más 50', () => {
+    expect(guideBlocks(0, 20)).toEqual({ first: 0, last: 0 });
+    expect(guideBlocks(160, 190)).toEqual({ first: 1, last: 2 });
+    expect(guideBlocks(-1, -1)).toEqual({ first: 0, last: 0 });
+    const rowIds = Array.from({ length: 250 }, (_, n) => (n === 5 ? null : `id${n % 120}`));
+    const chunks = blockChunks(rowIds, { first: 1, last: 3 });
+    // El bloque 1 (filas 100…199) y el 2 (200…249); el 3 no tiene filas.
+    expect(chunks.map((chunk) => chunk.length)).toEqual([100, 50]);
+    expect(chunks[0]![0]).toBe('id100');
+    // Sin repetir dentro del bloque y sin las filas sin guía.
+    expect(new Set(chunks[0]).size).toBe(100);
+    expect(blockChunks(rowIds, { first: 0, last: 0 })[0]).not.toContain(null);
+  });
+
+  it('con muchas filas solo pide la guía de los bloques de las filas pintadas (no de toda la lista)', async () => {
+    const favorites = Array.from({ length: 600 }, (_, n) =>
+      makeItem(`Canal ${n}`, 'fav', { category: 'IPTV' }),
+    );
+    const view = setup(makeLibrary({ favorites }), {
+      routes: {
+        'GET /api/v1/iptv/guide/now': { available: false, version: '', items: [] },
+      },
+    });
+    withIptv(view);
+    await waitFor(() =>
+      expect(net.calls.some((c) => c.url.startsWith('/api/v1/iptv/guide/now'))).toBe(true),
+    );
+    const painted = [...document.querySelectorAll('.ctab-list .vlist__row')].map((row) =>
+      Number(row.getAttribute('data-index')),
+    );
+    const { first, last } = guideBlocks(Math.min(...painted), Math.max(...painted));
+    const wanted = new Set(favorites.slice(first * 100, (last + 1) * 100).map((item) => item.id));
+    // Las consultas de la guía que siguen vivas (con observador): las que se
+    // vuelven a pedir cada minuto. Las de bloques que ya no se ven, no.
+    const live = view.client
+      .getQueryCache()
+      .findAll({ queryKey: routePrefix('iptvGuideNow') })
+      .filter((query) => query.getObserversCount() > 0);
+    const asked = new Set(
+      live.flatMap((query) => String((query.queryKey[3] as { ids: string }).ids).split(',')),
+    );
+    expect(asked.size).toBeGreaterThan(0);
+    expect([...asked].every((id) => wanted.has(id))).toBe(true);
+    expect(asked.size).toBeLessThan(favorites.length);
   });
 
   it('un favorito IPTV pide su guía por su id', async () => {

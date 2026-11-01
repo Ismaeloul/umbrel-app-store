@@ -33,6 +33,7 @@ import {
 } from '@ace/shared';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -71,10 +72,13 @@ import { goToEngineSearch } from '../search/navigation.ts';
 import { genreChips, genreCounts, genreOf, GENRE_LABEL, isGenre, type Genre } from './genres.ts';
 import { ChannelPlate } from './ChannelPlate.tsx';
 import {
+  blockChunks,
   clockText,
+  guideBlocks,
   programmeProgress,
   registerGuideNowDemo,
   useGuideNow,
+  type GuideBlocks,
   type GuideNow,
 } from './guide-now.ts';
 import { IPTV_TEXT_DELAY_MS, useSettled } from './iptv/data.ts';
@@ -305,17 +309,30 @@ export function DeskChannels({
     return out;
   }, [inTodos, withIptv, ownRows, iptvRows, iptvAll.isPending, iptvAll.isFetchingNextPage]);
 
-  /* La guía de las filas (de 100 en 100): los canales IPTV por su id y los
-     AceStream por el suyo, que el servidor casa por nombre con tu IPTV. */
-  const guideIds = useMemo(
-    () => rows.flatMap((row) => (row.type === 'channel' ? [row.iptvId ?? row.channel.id] : [])),
+  /* La guía de las filas A LA VISTA (más un margen), en bloques fijos de 100
+     filas: los canales IPTV por su id y los AceStream por el suyo, que el
+     servidor casa por nombre con tu IPTV (guide-now.ts). */
+  const [blocks, setBlocks] = useState<GuideBlocks>({ first: 0, last: 0 });
+  const onRange = useCallback((start: number, end: number) => {
+    const next = guideBlocks(start, end);
+    setBlocks((prev) => (prev.first === next.first && prev.last === next.last ? prev : next));
+  }, []);
+  const rowIds = useMemo(
+    () => rows.map((row) => (row.type === 'channel' ? (row.iptvId ?? row.channel.id) : null)),
     [rows],
   );
-  const guide = useGuideNow(guideIds, active && withIptv && guideIds.length > 0);
+  const guideChunks = useMemo(() => blockChunks(rowIds, blocks), [rowIds, blocks]);
+  const guide = useGuideNow(guideChunks, active && withIptv && guideChunks.length > 0);
 
   const pick = (next: Genre | null) => {
     haptic('selection');
     setGenre(next);
+  };
+  /* «Ver todos» del vacío: quita el chip y el filtro de texto. */
+  const showAll = () => {
+    pick(null);
+    setText('');
+    setQuery('');
   };
 
   const favoritesCount = library.favorites.length;
@@ -340,7 +357,9 @@ export function DeskChannels({
 
   const empty = (() => {
     if (channelCount > 0 || rows.some((row) => row.type === 'loading')) return null;
-    if (q.length >= ENGINE_SEARCH_MIN || shownGenre)
+    /* Con cualquier filtro (también de 1 letra, que ya filtra): no es que la
+       pestaña esté vacía, es que nada coincide. */
+    if (q || shownGenre)
       return (
         <EmptyState
           title={
@@ -354,7 +373,7 @@ export function DeskChannels({
                 {`Buscar «${q}» en el motor`}
               </Button>
             ) : (
-              <Button variant="primary" onClick={() => pick(null)}>
+              <Button variant="primary" onClick={showAll}>
                 Ver todos
               </Button>
             )
@@ -528,6 +547,7 @@ export function DeskChannels({
                 label={TAB_TEXT[tab]}
                 className="ctab-list"
                 rowClassName={(row) => `ctab-item ctab-item--${row.type}`}
+                onRangeChange={onRange}
                 onEndReached={
                   inTodos && iptvAll.hasNextPage && !iptvAll.isFetchingNextPage
                     ? () => void iptvAll.fetchNextPage()

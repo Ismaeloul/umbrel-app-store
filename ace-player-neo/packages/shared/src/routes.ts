@@ -1713,6 +1713,8 @@ export const V1_ROUTES = {
     sideEffects: true,
     errors: [
       ...PARTY_MEMBER_ERRORS,
+      /* La sala pasó a otro título mientras se abría este: hay que abrir el nuevo. */
+      'party_gone',
       ...VOD_STREAM_ERRORS,
       'engine_unavailable',
       'engine_timeout',

@@ -842,6 +842,10 @@
   align-items: center;
   gap: 12px;
 }
+.mc-schip-wrap {
+  display: inline-flex;
+  flex: none;
+}
 .mc-schip {
   display: inline-flex;
   align-items: center;

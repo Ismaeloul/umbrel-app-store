@@ -200,6 +200,8 @@ export class PartyClient {
   private source: EventSource | null = null;
   private statusTimer: unknown = null;
   private samples: OffsetSample[] = [];
+  /** Cuándo empezó la última sesión de vídeo (`resetStream`). */
+  private streamResetAt = Number.NEGATIVE_INFINITY;
   private stopped = false;
   /** Lo que el reproductor dice de sí mismo para el latido. */
   private local: { positionS: number; buffering: boolean; lobby: LobbyReport | null } = {
@@ -335,9 +337,19 @@ export class PartyClient {
     this.set({ offsetMs: serverNow - this.env.now() });
   }
 
-  private noteRoundTrip(sentAt: number, serverNow: number): void {
+  private noteRoundTrip(sentAt: number, serverNow: number, patch: Partial<PartyState> = {}): void {
     this.samples = addSample(this.samples, offsetSample(sentAt, this.env.now(), serverNow));
-    this.set({ offsetMs: bestOffset(this.samples) });
+    this.set({ ...patch, offsetMs: bestOffset(this.samples) });
+  }
+
+  /**
+   * Una sesión de vídeo nueva (el reproductor acaba de recibir la concesión): el «lost» que
+   * quedaba de la anterior ya no vale. Sin avisar a nadie; las respuestas de `status` que se
+   * enviaron antes de esto tampoco cuentan para `stream`.
+   */
+  resetStream(): void {
+    this.streamResetAt = this.env.now();
+    if (this.state.stream !== 'none') this.state = { ...this.state, stream: 'none' };
   }
 
   private handleFailure(error: unknown): void {
@@ -398,10 +410,13 @@ export class PartyClient {
             : {}),
         },
       });
-      this.noteRoundTrip(sentAt, response.serverNow);
-      if (response.stream && response.stream !== this.state.stream) {
-        this.set({ stream: response.stream });
-      }
+      /* La hora y la sesión en un solo cambio: nadie ve el «lost» viejo con la hora nueva. Una
+         respuesta a un envío de antes de la sesión nueva no dice nada de ella. */
+      const stream =
+        response.stream && response.stream !== this.state.stream && sentAt >= this.streamResetAt
+          ? { stream: response.stream }
+          : {};
+      this.noteRoundTrip(sentAt, response.serverNow, stream);
     } catch (error) {
       this.handleFailure(error);
       if (rethrow) throw error;

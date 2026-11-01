@@ -98,9 +98,8 @@ describe('columna de la agenda junto al vídeo (escritorio)', () => {
       { kind: 'wide', search: `?vista=partido/${OTHER.id}` },
     );
     const live = await screen.findByRole('button', { name: /^Real Madrid contra Girona/ });
-    expect(await within(live).findByLabelText('Marcador: 3 a 0')).toHaveClass(
-      'desk-row__score--live',
-    );
+    await waitFor(() => expect(live.querySelector('.desk-row__score--live')).not.toBeNull());
+    expect(live).toHaveAccessibleDescription(/^Minuto 40\. Marcador: 3 a 0\. En M\+ LaLiga/);
     act(() => hideScore(CURRENT.id));
     expect(live.querySelector('.desk-row__score')).toBeNull();
   });

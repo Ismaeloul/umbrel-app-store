@@ -15,6 +15,8 @@ import { createQueryClient, routeKey } from '../api/query.ts';
 import { resetMode, setMode } from '../api/mode.ts';
 import { readItem, STORAGE_KEYS } from '../lib/storage.ts';
 import { noticeFlags } from '../notices/notify.ts';
+import { toastStore } from '../notices/toasts.ts';
+import { addAviso, resetAvisos } from '../features/avisos/store.ts';
 import { fixture, mockFetch } from '../test/fetch.ts';
 import { App } from './App.tsx';
 // Solo tipos: se borran al compilar, así que sirven dentro de la fábrica de vi.mock.
@@ -35,7 +37,8 @@ vi.mock('./views.tsx', async () => {
     const layout = useLayout();
     return (
       <div>
-        <ViewHeader title={VISTA_TITLE[route.vista]} />
+        {/* Como la de verdad, la sala (película o episodio) no tiene barra ni campana. */}
+        {route.vista === 'sala' ? null : <ViewHeader title={VISTA_TITLE[route.vista]} />}
         <label>
           Nota de {route.vista}
           <input value={note} onChange={(event) => setNote(event.target.value)} />
@@ -361,6 +364,54 @@ describe('armazón', () => {
     expect(app()).toHaveAttribute('data-layout', 'tablet');
     expect(screen.queryByText('Contenido del panel')).toBeNull();
     expect(document.querySelector('.app-bar')).toBeNull();
+  });
+
+  it('«Te aviso» avisa también en la sala de una película, sin barra ni campana', async () => {
+    setViewport(1440, 900);
+    const realNotification = globalThis.Notification;
+    const shown: { title: string; onclick: (() => void) | null }[] = [];
+    class FakeNotification {
+      static permission = 'granted';
+      onclick: (() => void) | null = null;
+      title: string;
+      constructor(title: string) {
+        this.title = title;
+        shown.push(this);
+      }
+      close() {}
+    }
+    Object.defineProperty(globalThis, 'Notification', {
+      configurable: true,
+      writable: true,
+      value: FakeNotification,
+    });
+    try {
+      addAviso({
+        id: 'guia:prueba',
+        title: 'Programa de prueba',
+        channel: 'M+ LaLiga',
+        start: Date.now() + 4 * 60_000,
+        end: Date.now() + 120 * 60_000,
+      });
+      renderApp(`?vista=sala/${'a'.repeat(40)}`);
+      await screen.findByTestId('dock');
+      expect(document.querySelector('.avisos-bell')).toBeNull();
+      await waitFor(() => expect(shown.map((item) => item.title)).toEqual(['Programa de prueba']));
+      // Pulsar la notificación lleva a la Guía (no es un partido de la Agenda).
+      act(() => shown[0]?.onclick?.());
+      await waitFor(() => expect(location.search).toBe('?vista=guia'));
+    } finally {
+      Object.defineProperty(globalThis, 'Notification', {
+        configurable: true,
+        writable: true,
+        value: realNotification,
+      });
+      try {
+        localStorage.removeItem('aceneo-avisos');
+      } catch {}
+      resetAvisos();
+      toastStore.set([]);
+    }
   });
 
   it('?vista=sistema enseña la página de muestra en desarrollo', async () => {

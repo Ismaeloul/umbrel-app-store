@@ -80,7 +80,7 @@ type MobileTab = 'chat' | 'lista' | 'fuentes' | 'partidos' | 'personas' | 'ajust
  * del NAS caído, todas fallan igual y saltar no arregla nada (en local se
  * comía las siete fuentes en un minuto).
  */
-function LiveAutoSwitch({
+export function LiveAutoSwitch({
   room,
   client,
   player,
@@ -95,13 +95,16 @@ function LiveAutoSwitch({
   const tried = useRef(new Set<string>());
   /* Saltos seguidos sin que ninguna suene y cuándo fue el último. */
   const streak = useRef({ count: 0, at: Number.NEGATIVE_INFINITY });
+  /* Para volver a mirar cuando se cumple el hueco entre saltos. */
+  const [tick, setTick] = useState(0);
   const live = room.live;
   const selfId = client.credential.id;
   const leader = room.members.find((member) => member.id === room.leaderId);
   const decides = selfId === room.leaderId || (!leader?.online && canControl(room, selfId));
   if (live) tried.current.add(live.hash);
-  /* Una que suena: vuelve a valer todo. */
-  if (view.phase === 'ready' && streak.current.count > 0) {
+  /* Una que suena de verdad: vuelve a valer todo. 'ready' no basta: llega con la concesión,
+     antes de que suene nada, y con un fallo después de ella el freno no se aplicaba nunca. */
+  if (view.sounded && streak.current.count > 0) {
     streak.current = { count: 0, at: streak.current.at };
     tried.current = new Set(live ? [live.hash] : []);
   }
@@ -110,13 +113,18 @@ function LiveAutoSwitch({
     if (!live?.auto || !decides || !failed || room.interrupted === 'taken') return;
     const now = Date.now();
     if (streak.current.count >= AUTO_SWITCH_MAX) return;
-    if (now - streak.current.at < AUTO_SWITCH_GAP_MS) return;
+    const wait = AUTO_SWITCH_GAP_MS - (now - streak.current.at);
+    if (wait > 0) {
+      /* Demasiado pronto: se vuelve a mirar al cumplirse el hueco (nada más lo haría). */
+      const timer = setTimeout(() => setTick((n) => n + 1), wait);
+      return () => clearTimeout(timer);
+    }
     const next = nextSource(sources.data ?? [], live, tried.current);
     if (!next) return;
     tried.current.add(next.choice.hash);
     streak.current = { count: streak.current.count + 1, at: now };
     void client.control({ action: 'live', live: next.choice }).catch(() => undefined);
-  }, [live, decides, failed, room.interrupted, sources.data, client]);
+  }, [live, decides, failed, room.interrupted, sources.data, client, tick]);
   return null;
 }
 

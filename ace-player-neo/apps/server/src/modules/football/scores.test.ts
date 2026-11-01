@@ -34,6 +34,19 @@ describe('T-039 · las competiciones de la agenda se mapean a ligas de ESPN (B-1
     expect(espnLeaguesFor('MLS Next Pro')).toBeNull();
     expect(espnLeaguesFor('constructor')).toBeNull();
   });
+
+  it('con los rótulos actuales de futbolenlatv.es (2026-11)', () => {
+    expect(espnLeaguesFor('2. Bundesliga')).toEqual(['ger.2']);
+    /* «2. Liga» allí es la segunda austriaca: nunca la alemana. */
+    expect(espnLeaguesFor('2. Liga')).toBeNull();
+    expect(espnLeaguesFor('Liga Colombiana')).toEqual(['col.1']);
+    expect(espnLeaguesFor('Liga AUF Uruguaya')).toEqual(['uru.1']);
+    expect(espnLeaguesFor('Liga portuguesa')).toEqual(['por.1']);
+    expect(espnLeaguesFor('UEFA Nations League')).toEqual(['uefa.nations']);
+    /* Los rótulos de antes siguen valiendo. */
+    expect(espnLeaguesFor('Primeira Liga')).toEqual(['por.1']);
+    expect(espnLeaguesFor('Primera A Colombia')).toEqual(['col.1']);
+  });
 });
 
 describe('T-040 · los nombres de equipo casan pese a escribirse distinto (B-130)', () => {

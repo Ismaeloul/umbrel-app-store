@@ -4,10 +4,15 @@
    de tu biblioteca, por el canal de tu IPTV que es por su nombre (lo casa
    el servidor).
 
-   - Una consulta por trozo de 100 ids (`useQueries`): al desplazarse por
-     «Todos» solo se piden los trozos nuevos.
-   - Lo que se emite cambia con el reloj: se vuelve a pedir cada minuto
-     mientras la vista está a la vista (con Activity oculta, nada).
+   - Solo las filas a la vista (más `GUIDE_MARGIN_ROWS` por arriba y por
+     abajo): una lista M3U de 3.000 canales no pide 3.000 guías de golpe. Las
+     filas van en bloques FIJOS de 100 por su posición en la tabla (la fila
+     230 siempre está en el bloque 2), una consulta por bloque (`useQueries`):
+     al desplazarse solo se piden los bloques nuevos, y los que salen de la
+     vista dejan de pedirse (se quedan en la caché por si se vuelve).
+   - Lo que se emite cambia con el reloj: los bloques a la vista se vuelven a
+     pedir cada minuto mientras la vista está a la vista (con Activity
+     oculta, nada).
    - Sin guía (o sin IPTV activa) el servidor dice `available: false`: la
      fila enseña «Sin guía», no es un error. */
 
@@ -20,7 +25,6 @@ import {
   type IptvGuideProgramme,
 } from '@ace/shared';
 import { useQueries } from '@tanstack/react-query';
-import { useMemo } from 'react';
 import { api, apiQuery, isDemo, registerDemoHandler, routeUrl } from '../../api/index.ts';
 
 const REFRESH_MS = 60_000;
@@ -33,18 +37,57 @@ export function chunkIds(ids: readonly string[], size = IPTV_GUIDE_API.nowIdsMax
   return out;
 }
 
+/** Filas de más por arriba y por abajo de las pintadas cuyas guías se piden. */
+export const GUIDE_MARGIN_ROWS = 50;
+
+/** Los bloques de filas (de `size`, por su índice) cuya guía se pide. */
+export interface GuideBlocks {
+  first: number;
+  last: number;
+}
+
+/** Los bloques que tocan las filas pintadas `start…end` más el margen. */
+export function guideBlocks(
+  start: number,
+  end: number,
+  size = IPTV_GUIDE_API.nowIdsMax,
+  margin = GUIDE_MARGIN_ROWS,
+): GuideBlocks {
+  return {
+    first: Math.floor(Math.max(0, start - margin) / size),
+    last: Math.floor(Math.max(0, end + margin) / size),
+  };
+}
+
+/** Los ids de cada bloque `first…last` (`rowIds[i]` es el de la fila i; null
+    si la fila no tiene guía), sin repetir dentro del bloque y sin bloques vacíos. */
+export function blockChunks(
+  rowIds: readonly (string | null)[],
+  { first, last }: GuideBlocks,
+  size = IPTV_GUIDE_API.nowIdsMax,
+): string[][] {
+  const out: string[][] = [];
+  for (let block = first; block <= last; block += 1) {
+    const ids = rowIds
+      .slice(block * size, (block + 1) * size)
+      .filter((id): id is string => id !== null);
+    out.push(...chunkIds(ids, size));
+  }
+  return out;
+}
+
 /** Lo que dice la guía de un canal, con su logo (si la guía lo tiene). */
 export interface GuideNow extends IptvGuideNowItem {
   /** El logo por el proxy propio (`iptvGuideArt`); null sin logo o en la demo. */
   logoSrc: string | null;
 }
 
-/** Lo que dice la guía de cada id (los que no tienen guía no están). */
+/** Lo que dice la guía de cada id de los trozos (los que no tienen guía no
+    están). Un trozo por consulta, de `IPTV_GUIDE_API.nowIdsMax` ids como mucho. */
 export function useGuideNow(
-  ids: readonly string[],
+  chunks: readonly (readonly string[])[],
   enabled: boolean,
 ): ReadonlyMap<string, GuideNow> {
-  const chunks = useMemo(() => chunkIds(ids), [ids]);
   return useQueries({
     queries: chunks.map((chunk) => ({
       ...apiQuery('iptvGuideNow', { query: { ids: chunk.join(',') } }),

@@ -80,6 +80,30 @@ export function useGoalMoment(score: LiveScore | null, hidden: boolean): 'home' 
   return scorer;
 }
 
+/**
+ * Foco al tapar o destapar: el botón pulsado desaparece y en su lugar sale el
+ * otro («Ver marcador» ↔ «Tapar»), así que el foco iría a parar al <body>. Solo
+ * se mueve cuando el cambio lo provoca un toque aquí (`mark()` en el onClick):
+ * si cambia desde otra parte (score-reveal compartido, otra pestaña), no.
+ */
+function useCoverFocus(hidden: boolean) {
+  const cover = useRef<HTMLButtonElement>(null);
+  const hide = useRef<HTMLButtonElement>(null);
+  const pressed = useRef(false);
+  useEffect(() => {
+    if (!pressed.current) return;
+    pressed.current = false;
+    (hidden ? cover : hide).current?.focus();
+  }, [hidden]);
+  return {
+    cover,
+    hide,
+    mark: () => {
+      pressed.current = true;
+    },
+  };
+}
+
 /** El minuto (o «Descanso» / «En directo») con el punto que late. */
 function LiveWhen({ score }: { score: LiveScore | null }) {
   const minute = liveMinute(score);
@@ -149,6 +173,7 @@ export function Scoreboard({ match, score: rawScore, now }: ScoreboardProps) {
   const hidden = hiddenPref && score !== null;
   const [justRevealed, setJustRevealed] = useState(false);
   const scorer = useGoalMoment(score, hidden);
+  const focus = useCoverFocus(hidden);
   useEffect(() => {
     if (scorer) haptic('success');
   }, [scorer]);
@@ -157,12 +182,14 @@ export function Scoreboard({ match, score: rawScore, now }: ScoreboardProps) {
   if (hidden) {
     content = (
       <button
+        ref={focus.cover}
         type="button"
         className="mc-scap__cover press"
         aria-label="Ver marcador"
         title="Tu emisión va por detrás del directo"
         onClick={() => {
           haptic('light');
+          focus.mark();
           setJustRevealed(true);
           revealScore(match.id);
         }}
@@ -227,11 +254,13 @@ export function Scoreboard({ match, score: rawScore, now }: ScoreboardProps) {
       </span>
       {score && !hidden ? (
         <IconButton
+          ref={focus.hide}
           icon="eye-off"
           label="Tapar el marcador (tu emisión va por detrás)"
           variant="video"
           className="mc-scap__hide"
           onClick={() => {
+            focus.mark();
             setJustRevealed(false);
             resetScoreReveal();
           }}
@@ -262,43 +291,60 @@ export function ScoreChip({
   const hidden = useScoreHidden(match.id, true) && score !== null;
   const [justRevealed, setJustRevealed] = useState(false);
   const scorer = useGoalMoment(score, hidden || quiet);
+  const focus = useCoverFocus(hidden);
   useEffect(() => {
     if (scorer) haptic('success');
   }, [scorer]);
   if (!score) return null;
-  if (hidden)
-    return (
-      <button
-        type="button"
-        className="mc-schip press"
-        aria-label="Ver marcador"
-        title="Tu emisión va por detrás del directo"
-        onClick={() => {
-          haptic('light');
-          setJustRevealed(true);
-          revealScore(match.id);
-        }}
-      >
-        <Icon name="eye" size={16} />
-        Marcador
-      </button>
-    );
+  /* La región aria-live está siempre montada (los lectores de pantalla no leen
+     una región que nace con su contenido); dentro, el botón o las cifras. */
   return (
-    <span className={cx('mc-schip', 'is-open', scorer && 'is-goal')} aria-live="polite">
-      <span className="mc-schip__digits" aria-label={scoreLabel(match, score, done)}>
-        <FlipDigit value={score.home} spin={justRevealed} />
-        <span aria-hidden="true">–</span>
-        <FlipDigit value={score.away} spin={justRevealed} />
-      </span>
-      <IconButton
-        icon="eye-off"
-        label="Tapar el marcador (tu emisión va por detrás)"
-        className="mc-schip__hide"
-        onClick={() => {
-          setJustRevealed(false);
-          resetScoreReveal();
-        }}
-      />
+    <span className="mc-schip-wrap" aria-live="polite">
+      {hidden ? (
+        <button
+          ref={focus.cover}
+          type="button"
+          className="mc-schip press"
+          aria-label="Ver marcador"
+          title="Tu emisión va por detrás del directo"
+          onClick={() => {
+            haptic('light');
+            focus.mark();
+            setJustRevealed(true);
+            revealScore(match.id);
+          }}
+        >
+          <Icon name="eye" size={16} />
+          Marcador
+        </button>
+      ) : (
+        <span className={cx('mc-schip', 'is-open', scorer && 'is-goal')}>
+          <span className="mc-schip__digits" aria-label={scoreLabel(match, score, done)}>
+            <FlipDigit
+              value={score.home}
+              spin={justRevealed}
+              label={`${match.home} ${score.home}`}
+            />
+            <span aria-hidden="true">–</span>
+            <FlipDigit
+              value={score.away}
+              spin={justRevealed}
+              label={`${match.away || 'visitante'} ${score.away}${done ? ', final' : ''}`}
+            />
+          </span>
+          <IconButton
+            ref={focus.hide}
+            icon="eye-off"
+            label="Tapar el marcador (tu emisión va por detrás)"
+            className="mc-schip__hide"
+            onClick={() => {
+              focus.mark();
+              setJustRevealed(false);
+              resetScoreReveal();
+            }}
+          />
+        </span>
+      )}
     </span>
   );
 }

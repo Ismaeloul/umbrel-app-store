@@ -39,6 +39,20 @@ describe('VirtualList', () => {
     expect(items[2]).toHaveAttribute('aria-posinset', '3');
   });
 
+  it('onRangeChange dice qué filas están pintadas (y -1, -1 sin filas)', () => {
+    const onRange = vi.fn();
+    const props = {
+      rowKey: (row: string) => row,
+      estimate: () => 76,
+      renderRow: (row: string) => <span>{row}</span>,
+      onRangeChange: onRange,
+    };
+    const { rerender } = render(<VirtualList rows={rowsOf(3)} {...props} />);
+    expect(onRange).toHaveBeenLastCalledWith(0, 2);
+    rerender(<VirtualList rows={[]} {...props} />);
+    expect(onRange).toHaveBeenLastCalledWith(-1, -1);
+  });
+
   it('sin setSize no pone nada', () => {
     render(<List rows={rowsOf(2)} onEnd={() => {}} />);
     expect(screen.getAllByRole('listitem')[0]).not.toHaveAttribute('aria-setsize');

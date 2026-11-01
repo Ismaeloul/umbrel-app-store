@@ -172,6 +172,7 @@ function fakeClient(selfId: string, room: PartyRoom) {
     typing: [],
   } as unknown as PartyState;
   const control = vi.fn(async () => undefined);
+  const resetStream = vi.fn();
   const client = {
     code: room.code,
     credential: { id: selfId, token: `${selfId}.secreto0123456789abcdef` },
@@ -179,9 +180,10 @@ function fakeClient(selfId: string, room: PartyRoom) {
     subscribe: () => () => undefined,
     serverNow: () => now,
     report: () => undefined,
+    resetStream,
     control,
   } as unknown as PartyClient;
-  return { client, control };
+  return { client, control, resetStream };
 }
 
 /** La concesión de la sala: la de siempre, la maestra o solo la ligera. */
@@ -208,11 +210,11 @@ async function open(
 ) {
   api.mockResolvedValue(grant);
   const video = new FakeVideo();
-  const { client, control } = fakeClient(selfId, makeRoom());
+  const { client, control, resetStream } = fakeClient(selfId, makeRoom());
   const player = new RoomPlayer(video as unknown as HTMLVideoElement, client, { guest }, fakeEnv());
   player.start();
   await vi.waitFor(() => expect(['blocked', 'error']).toContain(player.getView().phase));
-  return { player, video, control, hls: FakeHls.last };
+  return { player, video, control, resetStream, hls: FakeHls.last };
 }
 
 /** Con hls.js, la lista maestra ya leída: la ligera es el nivel 0 (hls.js ordena por altura). */
@@ -482,5 +484,35 @@ describe('«Ver juntos», Safari con la maestra (§17)', () => {
     const { video, player } = await open(grantFor('index'), { guest: false, selfId: HOST });
     expect(video.src).toMatch(/\/index\.m3u8$/);
     expect(player.getView().quality).toBeNull();
+  });
+});
+
+describe('«Ver juntos», una sesión nueva', () => {
+  it('borra el «lost» de la anterior al recibir la concesión', async () => {
+    const { resetStream, player } = await open(grantFor('index'), { guest: false, selfId: HOST });
+    expect(resetStream).toHaveBeenCalledTimes(1);
+    player.destroy();
+  });
+
+  it('«sounded» solo cuando el vídeo ha avanzado de verdad, no con la concesión', async () => {
+    const { player, video } = await open(grantFor('index'), { guest: false, selfId: HOST });
+    video.ranges = [[0, 9360]];
+    video.currentTime = 600;
+    player.unlock();
+    await vi.waitFor(() => expect(video.paused).toBe(false));
+    expect(player.getView()).toMatchObject({ phase: 'ready', sounded: false });
+    tick();
+    expect(player.getView().sounded).toBe(false);
+    video.currentTime = 601.5;
+    tick();
+    expect(player.getView().sounded).toBe(false);
+    video.currentTime = 603.2;
+    tick();
+    expect(player.getView().sounded).toBe(true);
+    /* Otra sesión (reintento): vuelve a no haber sonado. */
+    api.mockResolvedValue(grantFor('index'));
+    player.retry();
+    expect(player.getView().sounded).toBe(false);
+    player.destroy();
   });
 });

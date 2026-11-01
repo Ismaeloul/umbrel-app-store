@@ -39,6 +39,9 @@ export interface VirtualListProps<T> {
   endThreshold?: number;
   /** Total de filas aunque no estén cargadas (aria-setsize); sin él, no se pone. */
   setSize?: number;
+  /** Las filas pintadas (índices de la primera y la última, con el `overscan`)
+      cada vez que cambian; -1, -1 sin filas. */
+  onRangeChange?(start: number, end: number): void;
 }
 
 export function VirtualList<T>({
@@ -54,6 +57,7 @@ export function VirtualList<T>({
   onEndReached,
   endThreshold = 10,
   setSize,
+  onRangeChange,
 }: VirtualListProps<T>) {
   const listRef = useRef<HTMLDivElement>(null);
   const [margin, setMargin] = useState(0);
@@ -83,7 +87,13 @@ export function VirtualList<T>({
   });
 
   const items = virtualizer.getVirtualItems();
+  const firstIndex = items[0]?.index ?? -1;
   const lastIndex = items.at(-1)?.index ?? -1;
+  const rangeChange = useRef(onRangeChange);
+  rangeChange.current = onRangeChange;
+  useEffect(() => {
+    rangeChange.current?.(firstIndex, lastIndex);
+  }, [firstIndex, lastIndex]);
   const reachedFor = useRef(-1);
   const endReached = useRef(onEndReached);
   endReached.current = onEndReached;

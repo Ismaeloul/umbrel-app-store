@@ -79,6 +79,8 @@ const USER_ACTION_MS = 1_500;
 const INTERACTION_EVENTS = ['pointerdown', 'keydown', 'touchstart'] as const;
 /** Safari: si la otra lista no da sus datos en esto, se vuelve a abrir el vídeo entero. */
 const NATIVE_SWAP_TIMEOUT_MS = 20_000;
+/** Lo que tiene que avanzar el vídeo reproduciendo para que la sesión «haya sonado» (`sounded`). */
+const SOUNDED_S = 3;
 /** «Calidad» (§17): lo último que eligió esta persona, en este navegador. */
 const QUALITY_KEY = 'aceneo-juntos-calidad';
 
@@ -127,6 +129,12 @@ export interface PlayerView {
   readonly buffering: boolean;
   /** «Calidad» (§17): null salvo con dos versiones que este navegador decodifica. */
   readonly quality: PlayerQuality | null;
+  /**
+   * El vídeo de esta sesión ha sonado de verdad (ha avanzado `SOUNDED_S` reproduciendo). 'ready'
+   * no basta: llega con la concesión, antes de que haya ningún fotograma. Vuelve a false al
+   * abrir otra sesión o quitar el vídeo.
+   */
+  readonly sounded: boolean;
 }
 
 export interface HlsInstance {
@@ -216,6 +224,7 @@ export class RoomPlayer {
     bufferedS: 0,
     buffering: false,
     quality: null,
+    sounded: false,
   };
   private readonly listeners = new Set<() => void>();
   private grant: PartyStreamGrant | null = null;
@@ -234,6 +243,8 @@ export class RoomPlayer {
   private wasStalled = false;
   /** Los atascos repetidos ya vistos (`StallDetector.escalations`). */
   private escalationsSeen = 0;
+  /** Dónde estaba el vídeo al verlo reproducir por primera vez en esta sesión (para `sounded`). */
+  private soundFrom: number | null = null;
   /** Safari en «Automática»: el título que ya bajó a la ligera (no vuelve a subir solo). */
   private nativeLiteTitle: string | null = null;
   private swapTimer: unknown = null;
@@ -446,6 +457,9 @@ export class RoomPlayer {
       return;
     }
     if (generation !== this.generation || this.destroyed) return;
+    /* Una sesión nueva: el «lost» que quedaba de la anterior ya no vale (si no, el siguiente
+       evento de la sala la volvería a tirar). */
+    this.client.resetStream();
     if (!('vod' in grant)) {
       await this.attachLive(grant, platform, generation);
       return;
@@ -682,6 +696,8 @@ export class RoomPlayer {
   private teardown(): void {
     this.grant = null;
     this.abr = null;
+    this.soundFrom = null;
+    if (this.view.sounded) this.set({ sounded: false });
     this.env.clearTimeout(this.swapTimer);
     if (this.view.quality) this.set({ quality: null });
     if (this.hls) {
@@ -731,7 +747,8 @@ export class RoomPlayer {
     if (ready) this.adaptQuality(stalled, now);
     /* Safari cambiando de lista (§17) vuelve a 'preparing' en este mismo tic. */
     const buffering = preparing || this.view.phase === 'preparing' || stalled;
-    this.set({ positionS: video.currentTime || 0, durationS, bufferedS, buffering });
+    const sounded = this.view.sounded || this.hasSounded(ready && !video.paused && !stalled);
+    this.set({ positionS: video.currentTime || 0, durationS, bufferedS, buffering, sounded });
     this.client.report(
       video.currentTime || 0,
       buffering,
@@ -773,6 +790,18 @@ export class RoomPlayer {
     } else if (fix.kind === 'rate' && video.playbackRate !== fix.rate) {
       video.playbackRate = fix.rate;
     }
+  }
+
+  /** ¿Ya ha avanzado `SOUNDED_S` reproduciendo desde que se le vio empezar en esta sesión? */
+  private hasSounded(playing: boolean): boolean {
+    if (!playing) return false;
+    const at = this.video.currentTime || 0;
+    /* La primera vez, o tras un salto atrás: se empieza a contar desde aquí. */
+    if (this.soundFrom === null || at < this.soundFrom) {
+      this.soundFrom = at;
+      return false;
+    }
+    return at - this.soundFrom >= SOUNDED_S;
   }
 
   /**

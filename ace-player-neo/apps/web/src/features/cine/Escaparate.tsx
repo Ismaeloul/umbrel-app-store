@@ -27,6 +27,7 @@ import {
   EmptyState,
   Kbd,
   Menu,
+  MenuButton,
   PosterRail,
   SkeletonRows,
   useContextMenu,
@@ -143,6 +144,16 @@ function HalfCard({ entry, posters }: { entry: VodContinue; posters: Posters }) 
           </span>
         </span>
       </button>
+      {/* El mismo menú que el clic derecho y la pulsación larga, a la vista:
+          con el teclado (Tab y Enter), el lector de pantalla y el dedo en una
+          tableta, que si no solo podían reproducir. */}
+      <MenuButton
+        className="cine-half__more"
+        variant="video"
+        label={`${CINE_TEXT.moreOptions}: ${entry.title}`}
+        menuLabel={entry.title}
+        items={items}
+      />
       <Menu {...context.menu} label={entry.title} items={items} />
     </div>
   );

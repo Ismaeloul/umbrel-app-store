@@ -812,7 +812,14 @@
       font-size: var(--fs-15, 15px);
     }
     .juntos-center .btn {
+      position: relative;
       min-height: 36px;
+    }
+    /* Se dibuja de 36 px, pero la zona táctil sigue siendo de 44 (como .btn--sm). */
+    .juntos-center .btn::before {
+      content: '';
+      position: absolute;
+      inset: -4px 0;
     }
     .juntos-chrome__top {
       padding: 10px 12px 20px;
@@ -2054,8 +2061,12 @@
     .juntos--house .juntos__body {
       height: calc(100dvh - var(--safe-top) - var(--topbar-h));
     }
+    /* Cada fila con su alto: si no cabe en alto, se hace scroll. Sin esto, la fila del vídeo
+       (aspect-ratio con overflow:hidden, mínimo 0) se encogía y el vídeo tapaba el título,
+       «Tú controlas» y los botones. */
     .juntos__main {
       overflow-y: auto;
+      grid-auto-rows: max-content;
     }
     .juntos__side {
       display: flex;

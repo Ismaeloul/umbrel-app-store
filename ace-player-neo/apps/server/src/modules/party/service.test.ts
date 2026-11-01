@@ -73,7 +73,11 @@ function setup(env: Record<string, string> = {}, grant: VodGrant = GRANT) {
   const calls: Call[] = [];
   const beats: { sid: string; viewer: string; playing: boolean | undefined }[] = [];
   const released: { sid: string; viewer: string }[] = [];
-  const control = { beatFails: false };
+  /* `vodGate`: si la hay, `acquireVod` espera a que se abra (un título que tarda en abrir). */
+  const control: { beatFails: boolean; vodGate: Promise<void> | null } = {
+    beatFails: false,
+    vodGate: null,
+  };
   const party = createPartyService({
     ...core,
     playback: {
@@ -81,6 +85,7 @@ function setup(env: Record<string, string> = {}, grant: VodGrant = GRANT) {
       acquire: () => Promise.reject(new Error('directo')),
       acquireVod: async (id, query, viewer, _signal, options) => {
         calls.push({ id, query, viewer, options });
+        if (control.vodGate) await control.vodGate;
         return grant;
       },
       heartbeat: async (sid, body) => {
@@ -880,6 +885,43 @@ describe('«Ver juntos»: líder, co-líderes y lista (§11 y §13)', () => {
       action: 'play',
       playback: { playing: true, lobby: false },
     });
+  });
+
+  it('si la sala pasa a otro título mientras se abría el vídeo, la sesión vieja se suelta y la sala no la aprende', async () => {
+    const { party, core, control, calls, released, host, ana, room } = room2();
+    await party.start();
+    const sse = listen(party, room, host.member.token);
+    let open = (): void => undefined;
+    control.vodGate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const late = party.stream(
+      room,
+      streamQuery(ana.member.token, 'v-ana'),
+      viewer('v-ana'),
+      live(),
+    );
+    await Promise.resolve();
+    expect(calls.at(-1)?.id).toBe(PELI);
+    party.queue(room, add(host.member.token));
+    party.queue(room, { token: host.member.token, action: 'next' });
+    expect(sse.of('party.room').at(-1)?.title).toMatchObject({ id: OTRA, durationS: null });
+
+    open();
+    await expect(late).rejects.toMatchObject({ code: 'party_gone' });
+    /* La sala sigue con el título nuevo, sin el nombre ni la duración del de antes. */
+    const now = sse.of('party.room').at(-1);
+    expect(now?.title).toMatchObject({ id: OTRA, title: 'Otra peli', durationS: null });
+    expect(now?.audio.tracks).toEqual([]);
+    expect(party.join(room, 'Leo').room.title).toMatchObject({ id: OTRA, durationS: null });
+    expect(released.at(-1)).toEqual({ sid: GRANT.session.id, viewer: 'v-ana' });
+    /* Su visor no es de la sala: un traspaso suyo no la interrumpe. */
+    core.bus.emit('playback.handoff', handoff(['v-ana'], OTRA));
+    expect(sse.of('party.room').at(-1)?.interrupted).toBeNull();
+    expect(sse.of('party.chat').map((m) => m.message.text)).not.toContain(
+      'Alguien ha puesto otra cosa en la IPTV de casa. La sala está en pausa.',
+    );
+    await party.stop();
   });
 
   it('en «votar» gana lo más votado; cancelar quita la cuenta atrás; en «se para», no sigue nada', async () => {

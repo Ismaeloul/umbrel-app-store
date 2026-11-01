@@ -95,6 +95,53 @@ function competitionsOf(matches: readonly FootballMatch[]): string[] {
   return [...new Set(matches.map((match) => match.competition).filter(Boolean))];
 }
 
+/** Lo que enseña la lista de escritorio de un día: la pestaña o liga que vale y las filas. */
+export interface DeskView {
+  /** Todos los partidos del día. */
+  all: FootballMatch[];
+  /** Las competiciones del día, en el orden de los grupos. */
+  competitions: string[];
+  /** Partidos de «Para ti» (0 sin gustos: entonces no hay pestaña). */
+  forYou: number;
+  /** La pestaña o liga en vigor: la guardada, o null («Todo») si ese día ya no existe. */
+  chip: string | null;
+  /** Lo de la pestaña o la liga, antes de la píldora de estado. */
+  scoped: FootballMatch[];
+  /** Lo que se ve: `scoped` con la píldora de estado aplicada. */
+  shown: FootballMatch[];
+}
+
+/**
+ * Lo que filtra la lista de escritorio: la pestaña (o la liga) primero y el
+ * estado sobre lo que queda. La vista lo usa también para su resumen de
+ * lectores de pantalla y el atajo T, para que digan lo mismo que la lista.
+ */
+export function deskView(
+  dayMatches: readonly FootballMatch[],
+  filter: { chip: string | null; status: AgendaStatus | null },
+  now: number,
+  scores: Readonly<Record<string, LiveScore>>,
+  preferences: ForYouPreferences | null | undefined,
+): DeskView {
+  const all = visibleMatches(dayMatches, 'all', preferences);
+  const competitions = competitionsOf(
+    groupByCompetition(all, now, scores, preferences).flatMap((group) => group.matches),
+  );
+  const forYou = hasFootballPreferences(asForYou(preferences))
+    ? visibleMatches(all, 'forYou', preferences).length
+    : 0;
+  const requested = filter.chip;
+  const chip =
+    requested === null ||
+    (requested === FOR_YOU_CHIP && forYou > 0) ||
+    competitions.includes(requested)
+      ? requested
+      : null;
+  const scoped = byChip(all, chip, preferences);
+  const shown = byPhase(scoped, filter.status, now, scores);
+  return { all, competitions, forYou, chip, scoped, shown };
+}
+
 /** Ligas con píldora propia; las demás van en «Más ligas». */
 export const LEAGUE_CHIPS = 3;
 
@@ -350,6 +397,20 @@ export function DeskRow({
   const shown = (live || done) && !covered && !hidden ? paintableScore(score) : null;
   const progress = live ? matchProgressAt(match, now, score) : 0;
   const channel = match.channels?.[0]?.name?.trim() || null;
+  /* El nombre del botón (aria-label) son los equipos y el estado general; lo
+     demás que se ve en la fila (minuto, resultado, canal, señal y si es el
+     que suena) va en su descripción, para que el lector de pantalla no se lo
+     pierda. */
+  const descId = useId();
+  const description = [
+    live && minute ? (minute.halftime ? 'Descanso' : `Minuto ${minute.minute}`) : null,
+    shown ? `${live ? 'Marcador' : 'Resultado'}: ${shown.home} a ${shown.away}` : null,
+    channel ? `En ${channel}` : null,
+    !done && !watching && signal ? signal.summary : null,
+    watching ? 'Lo estás viendo' : null,
+  ]
+    .filter(Boolean)
+    .join('. ');
   const onKeyDown = onSelect
     ? (event: KeyboardEvent<HTMLButtonElement>) => {
         // Intro abre el partido; el espacio (el clic) solo lo elige.
@@ -370,6 +431,7 @@ export function DeskRow({
         )}
         aria-current={selected ? 'true' : undefined}
         aria-label={`${home.name} contra ${away.name}, ${live ? 'en directo' : done ? 'terminado' : `a las ${match.time ?? ''}`}`}
+        aria-describedby={description ? descId : undefined}
         title={onSelect ? 'Doble clic o Intro para ver el partido' : undefined}
         onClick={() => (onSelect ? onSelect(match) : onOpen(match))}
         onDoubleClick={onSelect ? () => onOpen(match) : undefined}
@@ -429,13 +491,18 @@ export function DeskRow({
           {shown ? (
             <span
               className={cx('desk-row__score', live && 'desk-row__score--live')}
-              aria-label={`${live ? 'Marcador' : 'Resultado'}: ${shown.home} a ${shown.away}`}
+              aria-hidden="true"
             >
               <Num value={shown.home} />
               <Num value={shown.away} />
             </span>
           ) : null}
         </span>
+        {description ? (
+          <span id={descId} hidden>
+            {description}
+          </span>
+        ) : null}
       </button>
     </li>
   );
@@ -469,28 +536,12 @@ export function DeskList({ selectedId, active, onOpen, onSelect, className }: De
   const days = schedule.data?.days ?? [];
   const day = resolveDay(days, ui.day, today);
   const dayMatches = days.find((item) => item.date === day)?.matches ?? EMPTY;
-  const all = useMemo(
-    () => visibleMatches(dayMatches, 'all', preferences),
-    [dayMatches, preferences],
-  );
   const { scores } = useScores(dayMatches, now, active);
-  const competitions = useMemo(
-    () =>
-      competitionsOf(groupByCompetition(all, now, scores, preferences).flatMap((g) => g.matches)),
-    [all, now, scores, preferences],
-  );
-  const forYou = useMemo(
-    () =>
-      hasFootballPreferences(asForYou(preferences))
-        ? visibleMatches(all, 'forYou', preferences).length
-        : 0,
-    [all, preferences],
-  );
-  const chip =
-    ui.chip === null || (ui.chip === FOR_YOU_CHIP && forYou > 0) || competitions.includes(ui.chip)
-      ? ui.chip
-      : null;
   const status = ui.status;
+  const { all, competitions, forYou, chip, scoped, shown } = useMemo(
+    () => deskView(dayMatches, { chip: ui.chip, status }, now, scores, preferences),
+    [dayMatches, ui.chip, status, now, scores, preferences],
+  );
   const leagues = useMemo(() => {
     const mine = new Set(
       all.filter((match) => isMine(match, preferences)).map((match) => match.competition),
@@ -505,9 +556,6 @@ export function DeskList({ selectedId, active, onOpen, onSelect, className }: De
   }, [all]);
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
-  // La pestaña (o la liga) primero; el estado, sobre lo que queda.
-  const scoped = useMemo(() => byChip(all, chip, preferences), [all, chip, preferences]);
-  const shown = useMemo(() => byPhase(scoped, status, now, scores), [scoped, status, now, scores]);
   const groups = useMemo(
     () => groupByCompetition(shown, now, scores, preferences, 'clock'),
     [shown, now, scores, preferences],

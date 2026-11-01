@@ -9,6 +9,7 @@ import type { VodContinue } from '@ace/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
+import { shortcutStore } from '../../app/shortcuts.ts';
 import { resetToasts } from '../../notices/toasts.ts';
 import { json, mockFetch } from '../../test/fetch.ts';
 import {
@@ -222,6 +223,34 @@ describe('escritorio: pestañas y portada (Mi lista)', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('«Seguir viendo»: cada cartel lleva «Más opciones» con su menú (sin clic derecho)', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine(desk);
+    const continuing = await screen.findByRole('list', { name: 'Seguir viendo' });
+    const more = within(continuing).getByRole('button', { name: 'Más opciones: Dune' });
+    expect(more).toHaveAttribute('aria-haspopup', 'menu');
+    fireEvent.click(more);
+    const menu = await screen.findByRole('menu', { name: 'Dune' });
+    const names = within(menu)
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent);
+    expect(names).toEqual(
+      expect.arrayContaining(['Quitar de Seguir viendo', 'Marcar como visto', 'Ver ficha']),
+    );
+  });
+
+  it('«/» solo es el del buscador de pelis en la rejilla: en Mi lista, el de la barra', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine(desk);
+    const tabs = await screen.findByRole('group', { name: 'Secciones de Pelis y series' });
+    await screen.findByRole('list', { name: 'Seguir viendo' });
+    const ids = () => shortcutStore.get().map((entry) => entry.id);
+    expect(ids()).not.toContain('cine.buscar');
+    fireEvent.click(within(tabs).getByRole('button', { name: 'Películas' }));
+    await screen.findByRole('searchbox', { name: 'Buscar películas' });
+    await waitFor(() => expect(ids()).toContain('cine.buscar'));
   });
 });
 

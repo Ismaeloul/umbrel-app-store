@@ -517,6 +517,33 @@ describe('Cadena de la agenda del servicio (B-123, B-124, B-125; arquitectura §
     expect((await football.schedule()).source).toBe('thesportsdb');
   });
 
+  it('la última de futbolenlatv sigue marcada `stale` mientras dura su caché de 2 min', async () => {
+    let up = true;
+    const { football, core, net } = createFootball({
+      net: {
+        ...sportsDbRoutes(),
+        [FLTV_URL]: () => {
+          if (!up) throw new Error('fetch_timeout');
+          return fixture('futbolenlatv.html');
+        },
+      },
+    });
+    await football.schedule();
+    up = false;
+    core.clock.advance(FOOTBALL_CACHE_MS);
+    const stale = await football.schedule();
+    expect(stale.stale).toBe(true);
+    const calls = net.fetchText.mock.calls.length;
+    core.clock.advance(1000);
+    const again = await football.schedule();
+    /* Sin descargar de nuevo, la misma copia marcada (la nota no parpadea). */
+    expect(again.stale).toBe(true);
+    expect(again).toBe(stale);
+    core.clock.advance(FOOTBALL_FALLBACK_CACHE_MS - 1001);
+    expect(await football.schedule()).toBe(stale);
+    expect(net.fetchText).toHaveBeenCalledTimes(calls);
+  });
+
   it('plazo global de 60 s: si la cadena se cuelga, football_unavailable sin esperar más', async () => {
     const { football, core, net } = createFootball({
       net: { [FLTV_URL]: () => new Promise<string>(() => {}) },

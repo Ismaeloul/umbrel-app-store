@@ -135,14 +135,16 @@ test("limites intactos respecto a la 0.6.59: memoria, procesos y endurecimiento"
   assert.deepEqual(Object.keys(COMPOSE_SERVICES).sort(), [...Object.keys(LEGACY_SERVICES), "sala"].sort());
   for (const name of Object.keys(LEGACY_SERVICES)) {
     for (const field of ["mem_limit", "pids_limit", "read_only", "init", "restart"]) {
+      /* storage subio a 1280m y 192 procesos con la calidad ligera de "Ver juntos" (§17): se fija abajo. */
+      if (name === "storage" && (field === "mem_limit" || field === "pids_limit")) continue;
       assert.equal(key(COMPOSE_SERVICES[name], field), key(LEGACY_SERVICES[name], field), `${name}.${field}`);
     }
     const hardened = (lines) => lines.some((line) => line.trim() === "- no-new-privileges:true");
     assert.equal(hardened(COMPOSE_SERVICES[name]), hardened(LEGACY_SERVICES[name]), `${name}: no-new-privileges`);
   }
   assert.equal(key(COMPOSE_SERVICES.acestream, "mem_limit"), "4g");
-  assert.equal(key(COMPOSE_SERVICES.storage, "mem_limit"), "768m");
-  assert.equal(key(COMPOSE_SERVICES.storage, "pids_limit"), "128");
+  assert.equal(key(COMPOSE_SERVICES.storage, "mem_limit"), "1280m");
+  assert.equal(key(COMPOSE_SERVICES.storage, "pids_limit"), "192");
   /* El proxy de la sala: acotado, de solo lectura y sin escalar privilegios. */
   assert.equal(key(COMPOSE_SERVICES.sala, "mem_limit"), "256m");
   assert.equal(key(COMPOSE_SERVICES.sala, "pids_limit"), "64");

@@ -40,6 +40,7 @@ function setup(
     bufferedS: 30,
     buffering: false,
     quality,
+    sounded: true,
   };
   const setQuality = vi.fn();
   const player = {
@@ -111,6 +112,34 @@ describe('«Ver juntos»: el reproductor', () => {
     expect(screen.getAllByRole('button', { name: 'Pausar' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Avanzar 10 segundos' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Retroceder 10 segundos' })).toBeTruthy();
+  });
+
+  it('las flechas de unas pestañas o de un Segmented no mueven a toda la sala', () => {
+    const { control } = setup(HOST);
+    control.mockResolvedValue(undefined);
+    /* Unas pestañas que ya usan la flecha (useRovingKeys llama a preventDefault). */
+    const tabs = document.createElement('div');
+    tabs.setAttribute('role', 'tablist');
+    const tab = document.createElement('button');
+    tab.setAttribute('role', 'tab');
+    tabs.append(tab);
+    document.body.append(tabs);
+    tab.addEventListener('keydown', (event) => event.preventDefault());
+    fireEvent.keyDown(tab, { key: 'ArrowRight' });
+    expect(control).not.toHaveBeenCalled();
+    /* Aunque nadie la haya usado: dentro de un grupo de opciones, tampoco. */
+    const group = document.createElement('div');
+    group.setAttribute('role', 'radiogroup');
+    const option = document.createElement('button');
+    group.append(option);
+    document.body.append(group);
+    fireEvent.keyDown(option, { key: 'ArrowLeft' });
+    expect(control).not.toHaveBeenCalled();
+    /* Fuera de ellos, la flecha sí avanza 10 s. */
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+    expect(control).toHaveBeenCalledWith({ action: 'seek', positionS: 610 });
+    tabs.remove();
+    group.remove();
   });
 
   it('en escritorio, como la maqueta: sin volumen (la M silencia)', () => {

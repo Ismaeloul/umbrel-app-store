@@ -8,11 +8,12 @@
      si Tailscale está encendido, y no se inventa. En el modo demo, la línea
      de la maqueta.
    - Agenda: Mis equipos (abre la hoja de gustos), Marcador oculto (la regla
-     de agenda/score-reveal.ts) y Avisos (match-alerts.tsx).
-   - Reproducción: Cambiar de fuente sola (sources/session.ts) e Idioma
-     preferido de los partidos (local-prefs.ts; el de Películas y series es
-     otro y se elige en su cabecera). Las descargas son solo del móvil: en
-     la web no salen.
+     de agenda/score-reveal.ts) y Avisos (match-alerts.tsx y la campana de
+     «Te aviso», features/avisos: los dos usan este ajuste).
+   - Reproducción: Cambiar de fuente sola (sources/session.ts). El «Idioma
+     preferido» de la maqueta no sale hasta que algo lo use: ni el servidor
+     ni las fuentes saben aún de qué idioma es cada emisión (local-prefs.ts).
+     Las descargas son solo del móvil: en la web no salen.
    - Apariencia: tema Claro / Oscuro / Auto (app/theme.ts).
    - Fuentes y sistema: Listas IPTV, Motor AceStream y Dispositivos, que
      abren su sección de siempre, y Desemparejar: un menú con los aparatos
@@ -26,8 +27,8 @@
    Las filas que abren algo son enlaces de verdad (`?vista=ajustes/<sección>`):
    cada sección tiene su dirección, se puede abrir en otra pestaña y «atrás»
    vuelve aquí (con el foco en la fila de la que se salió, returnRow).
-   «Cambiar de fuente sola», «Avisos» e «Idioma preferido» aún no los guarda
-   el servidor: van en este navegador (local-prefs.ts). */
+   «Cambiar de fuente sola» y «Avisos» aún no los guarda el servidor: van en
+   este navegador (local-prefs.ts). */
 
 import type { Device } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -55,10 +56,8 @@ import { originKind, PLATFORM_ICON, splitDevices } from '../devices/model.ts';
 import {
   ALERT_LEADS,
   alertLeadLabel,
-  PLAYBACK_LANGS,
   setAlertLead,
   setAutoSwitch,
-  setPlaybackLang,
   useLocalPrefs,
 } from './local-prefs.ts';
 import { useSecondTap } from './second-tap.ts';
@@ -636,14 +635,7 @@ export function Overview({ go, hasDevices, hasHealth }: OverviewProps) {
           checked={prefs.autoSwitch}
           onChange={setAutoSwitch}
         />
-        <ChoiceRow
-          icon="idioma"
-          title="Idioma preferido"
-          label="Idioma preferido de los partidos"
-          value={prefs.lang}
-          options={PLAYBACK_LANGS}
-          onSelect={setPlaybackLang}
-        />
+        {/* «Idioma preferido» (maqueta): fuera hasta que las fuentes sepan su idioma. */}
       </Group>
 
       <Group id="apariencia" title="Apariencia">
