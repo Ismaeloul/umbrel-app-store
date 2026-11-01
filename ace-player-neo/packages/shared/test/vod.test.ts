@@ -435,8 +435,9 @@ describe('calidad ligera para invitados (docs/ver-juntos.md §17)', () => {
     expect(VodGrantSchema.safeParse({ ...grant, variants: { hd: null } }).success).toBe(false);
   });
 
-  it('LITE_VOD: la cola por debajo del reinicio del productor, y 404 a la segunda', () => {
-    expect(LITE_VOD.aheadMaxS).toBeLessThan(VOD_PLAY.restartAheadS);
+  it('LITE_VOD: la cola dentro de lo que el productor deja hecho por delante, y 404 a la segunda', () => {
+    /* La ligera lee del productor sin moverle el cursor (readySegment): adelantarse no le pide reinicio. */
+    expect(LITE_VOD.aheadMaxS).toBeLessThan(VOD_PLAY.aheadMaxS);
     expect(LITE_VOD.waitMs).toBeLessThan(VOD_PLAY.segmentWaitMs);
     expect(LITE_VOD.repositionWaitMs).toBeLessThan(VOD_PLAY.segmentWaitMs);
     expect(LITE_VOD.missesBeforeGone).toBe(2);
