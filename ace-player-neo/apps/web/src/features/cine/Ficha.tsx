@@ -27,7 +27,6 @@
 import type { VodMovie, VodSeries, VodTitle } from '@ace/shared';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { ApiError, describeFailure, isDemo } from '../../api/index.ts';
-import { useLayout } from '../../app/layout.tsx';
 import { useBack, useNavigate } from '../../app/router.tsx';
 import { useShortcut } from '../../app/shortcuts.ts';
 import { notify } from '../../notices/index.ts';
@@ -73,7 +72,7 @@ import {
   type PlayBlock,
 } from './model.ts';
 import { canPlayHevc, playVod } from './play.ts';
-import { ListButton, RemoveGoneButton, useInList } from './MyList.tsx';
+import { RemoveGoneButton, useInList } from './MyList.tsx';
 import { Seasons } from './Seasons.tsx';
 import { Synopsis } from './Synopsis.tsx';
 import {
@@ -84,7 +83,6 @@ import {
   detectedSubtitlesText,
   episodeRunText,
   formatBlocked,
-  resumeFromText,
   seasonsText,
   shortCode,
   TAG_LABEL,
@@ -139,8 +137,7 @@ function realSeasons(series: VodSeries): number {
 
 /** «2021 · 2 h 36 min · ★ 8,0 · +12»: cada dato en su sitio, con su nombre para el lector. */
 function MetaLine({ title }: { title: VodTitle }) {
-  /* En escritorio las temporadas ya van arriba («SERIE · 5 TEMPORADAS»). */
-  const desk = useDesk();
+  /* Las temporadas ya van arriba («SERIE · 5 TEMPORADAS»). */
   const rating = ratingText(title.rating);
   const age = ageText(title.ageRating);
   const items: Array<{ key: string; node: ReactNode }> = [];
@@ -149,9 +146,6 @@ function MetaLine({ title }: { title: VodTitle }) {
   if (title.kind === 'movie') {
     const duration = durationText(title.durationS);
     if (duration) items.push({ key: 'dur', node: duration });
-  } else if (!desk) {
-    const n = realSeasons(title);
-    if (n > 0) items.push({ key: 'seasons', node: seasonsText(n) });
   }
   if (rating)
     items.push({
@@ -188,33 +182,7 @@ function MetaLine({ title }: { title: VodTitle }) {
   );
 }
 
-function TrailerButton({ id, title }: { id: string | null | undefined; title: string }) {
-  if (!id) return null;
-  return (
-    <a
-      className="btn btn--quiet btn--sm press cine-trailer"
-      href={trailerUrl(id)}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`${CINE_TEXT.trailer} de ${title} (${CINE_TEXT.newTab})`}
-      onClick={(event) => {
-        if (!isDemo()) return;
-        event.preventDefault();
-        notify(CINE_TEXT.trailerDemo, { tone: 'info', icon: 'info' });
-      }}
-    >
-      <Icon name="externo" size={18} />
-      <span className="btn__label">{CINE_TEXT.trailer}</span>
-    </a>
-  );
-}
-
 // ---- Acciones -----------------------------------------------------------------------
-
-/** ¿Rediseño de escritorio? (desde 768; el móvil sigue como estaba). */
-function useDesk(): boolean {
-  return useLayout().kind !== 'mobile';
-}
 
 /** Copia el enlace de la ficha (también por http en la LAN) y lo dice. */
 async function shareTitle(): Promise<void> {
@@ -248,7 +216,7 @@ function DeskListButton({ target }: { target: ListTarget }) {
 }
 
 /**
- * Escritorio (maqueta «Ficha de un título»): bajo el botón grande, Mi lista,
+ * Maqueta «Ficha de un título» (escritorio y móvil): bajo el botón grande, Mi lista,
  * Ver juntos, Tráiler (la claqueta) y Compartir, cada uno con su icono
  * encima del nombre. Sin tráiler, el botón se queda apagado y lo dice.
  */
@@ -316,7 +284,6 @@ function DeskIcons({
 
 function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
   const navigate = useNavigate();
-  const desk = useDesk();
   const mark = useProgressMark();
   const [busy, setBusy] = useState(false);
   const block = playBlock(movie.playable, canPlayHevc(), movie.tech.container);
@@ -368,13 +335,8 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
             aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
             onClick={() => play()}
           >
-            {resuming
-              ? desk
-                ? followText(clockText(progress.posS))
-                : resumeFromText(clockText(progress.posS))
-              : CINE_TEXT.play}
+            {resuming ? followText(clockText(progress.posS)) : CINE_TEXT.play}
           </Button>
-          {desk ? null : <ListButton target={movie} className="cine-list" />}
         </div>
         {ratio !== null || line ? (
           <div className="cine-actions__progress">
@@ -394,15 +356,13 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
           </div>
         ) : null}
       </div>
-      {desk ? (
-        <DeskIcons
-          list={movie}
-          juntos={juntos}
-          juntosDisabled={block !== null}
-          trailer={movie.trailer}
-          title={movie.title}
-        />
-      ) : null}
+      <DeskIcons
+        list={movie}
+        juntos={juntos}
+        juntosDisabled={block !== null}
+        trailer={movie.trailer}
+        title={movie.title}
+      />
       <div className="cine-actions__more">
         {resuming && !block ? (
           <Button variant="quiet" size="sm" icon="back" onClick={() => play(0)}>
@@ -418,12 +378,6 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
         >
           {watched ? CINE_TEXT.markMovieUnwatched : CINE_TEXT.markMovieWatched}
         </Button>
-        {desk ? null : (
-          <>
-            <JuntosButton disabled={block !== null} target={juntos} />
-            <TrailerButton id={movie.trailer} title={movie.title} />
-          </>
-        )}
       </div>
       {reason ? (
         <p id="cine-play-reason" className="cine-actions__reason">
@@ -436,7 +390,6 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
 
 function SeriesActions({ series }: { series: VodSeries }) {
   const navigate = useNavigate();
-  const desk = useDesk();
   const main = series.main;
   const entry = main
     ? series.seasons
@@ -463,9 +416,9 @@ function SeriesActions({ series }: { series: VodSeries }) {
         subtitle,
       }
     : null;
-  /* En escritorio, «Seguir · T3 E4» si se va por ese episodio (a medias o el siguiente). */
+  /* «Seguir · T3 E4» si se va por ese episodio (a medias o el siguiente). */
   const label = entry
-    ? desk && (main?.action === 'resume' || main?.action === 'next')
+    ? main?.action === 'resume' || main?.action === 'next'
       ? followText(shortCode(entry.season, entry.item.n))
       : seriesPlayLabel(main?.action ?? 'start', entry.season, entry.item.n)
     : (main?.label ?? '');
@@ -496,7 +449,6 @@ function SeriesActions({ series }: { series: VodSeries }) {
             >
               {label}
             </Button>
-            {desk ? null : <ListButton target={series} className="cine-list" />}
           </div>
           {ratio !== null || line ? (
             <div className="cine-actions__progress">
@@ -517,26 +469,13 @@ function SeriesActions({ series }: { series: VodSeries }) {
           ) : null}
         </div>
       ) : null}
-      {desk ? (
-        <DeskIcons
-          list={series}
-          juntos={juntos}
-          juntosDisabled={block !== null}
-          trailer={series.trailer}
-          title={series.title}
-        />
-      ) : null}
-      {main || desk ? null : (
-        <div className="cine-actions__buttons">
-          <ListButton target={series} className="cine-list" />
-        </div>
-      )}
-      {!desk && (series.trailer || juntos) ? (
-        <div className="cine-actions__more">
-          {juntos ? <JuntosButton disabled={block !== null} target={juntos} /> : null}
-          {series.trailer ? <TrailerButton id={series.trailer} title={series.title} /> : null}
-        </div>
-      ) : null}
+      <DeskIcons
+        list={series}
+        juntos={juntos}
+        juntosDisabled={block !== null}
+        trailer={series.trailer}
+        title={series.title}
+      />
       {reason ? (
         <p id="cine-play-reason" className="cine-actions__reason">
           {reason}
@@ -625,9 +564,8 @@ function Hero({ title, onBack, now }: { title: VodTitle; onBack(): void; now: nu
     detectedSubtitlesText(title.detectedAudio?.subtitles),
   ].filter((text): text is string => text !== null);
   const background = title.backdrop ? 'backdrop' : title.poster ? 'blur' : 'tone';
-  /* Escritorio (maqueta): «SERIE · 5 TEMPORADAS»; la categoría sigue en los detalles. */
-  const desk = useDesk();
-  const seasons = desk && title.kind === 'series' ? realSeasons(title) : 0;
+  /* «SERIE · 5 TEMPORADAS» (maqueta); la categoría sigue en los detalles. */
+  const seasons = title.kind === 'series' ? realSeasons(title) : 0;
   const kickerExtra =
     seasons > 0 ? seasonsText(seasons) : title.category ? categoryLabel(title.category.name) : null;
   const style = { '--hero-fill': artFill(title.title) } as CSSProperties;

@@ -1,6 +1,6 @@
-/* Portada de Ajustes en escritorio (rediseño, sección 7: «Lo tuyo arriba, lo
-   técnico abajo»). Desde 768 px, `?vista=ajustes` sin sección enseña esto en
-   vez de la primera sección; en el móvil no cambia nada (SettingsView).
+/* Portada de Ajustes (rediseño, sección 7: «Lo tuyo arriba, lo técnico
+   abajo»; maqueta buscar-ajustes.html). `?vista=ajustes` sin sección enseña
+   esto, en escritorio y en el móvil (SettingsView).
 
    - Arriba, a qué Umbrel estás conectado y por dónde (casa, Tailscale o este
      ordenador, según la dirección de la página) con la versión. «Tailscale

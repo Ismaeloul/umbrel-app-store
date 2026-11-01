@@ -1,6 +1,7 @@
 /* La vista Guía TV con un servidor simulado que contesta con la guía de
-   ejemplo (@ace/shared, la misma de la demo): estados, «Favoritos | Todos»,
-   la parrilla, el teclado y la hoja «Más info». jsdom no maqueta: la lista
+   ejemplo (@ace/shared, la misma de la demo): estados, la estrella de
+   «Solo favoritos», los días, la parrilla, el teclado y la hoja del programa
+   (móvil, guia-tv.html A y guia-detalles.html). jsdom no maqueta: la lista
    virtual pinta con su tamaño inicial y `matchMedia` no casa (móvil), salvo
    en «escritorio», que simula 1280 px (días, chips de tipo, popover y
    «Te aviso»). */
@@ -119,14 +120,23 @@ afterEach(() => {
 
 describe('Guía TV', () => {
   it('abre en Favoritos con sus canales, el favorito sin guía y la parrilla', async () => {
+    scrollable();
     serve();
     renderGuia();
-    expect(screen.getByRole('heading', { level: 1, name: 'Guía TV' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Guía' })).toBeInTheDocument();
     const grid = await screen.findByRole('grid', { name: 'Guía TV' });
-    expect(screen.getByRole('radio', { name: /Favoritos/ })).toHaveAttribute(
-      'aria-checked',
+    // Como la maqueta: sin «Favoritos | Todos» arriba; la estrella de la cabecera.
+    expect(screen.queryByRole('radio', { name: /Favoritos/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Solo favoritos/ })).toHaveAttribute(
+      'aria-pressed',
       'true',
     );
+    // Los días en píldoras, con «Hoy» elegido.
+    expect(
+      within(screen.getByRole('group', { name: 'Día' })).getByRole('button', { name: 'Hoy' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    // La columna de canales con el logo (o su ficha) y el nombre para los lectores.
+    expect(grid.querySelector('.guia-chan__badge, .guia-chan__logo')).not.toBeNull();
     expect(within(grid).getByRole('rowheader', { name: /La 1/ })).toBeInTheDocument();
     expect(within(grid).getByRole('rowheader', { name: /LaLiga\+ PPV 1/ })).toBeInTheDocument();
     // Llegan los programas por teselas: con el sello y como mucho 60 canales.
@@ -143,15 +153,19 @@ describe('Guía TV', () => {
     ).toBeGreaterThan(0);
   });
 
-  it('«Todos» va en la URL y se recuerda', async () => {
+  it('quitar la estrella pasa a «Todos», que va en la URL y se recuerda', async () => {
     serve();
     renderGuia();
-    fireEvent.click(await screen.findByRole('radio', { name: /Todos/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Solo favoritos/ }));
     await waitFor(() => expect(location.search).toContain('ambito=todos'));
     await waitFor(() =>
       expect(screen.getByRole('grid', { name: 'Guía TV' })).toHaveAttribute('aria-rowcount', '56'),
     );
     expect(localStorage.getItem('aceneo-guia-ambito')).toBe('todos');
+    expect(screen.getByRole('button', { name: /^Solo favoritos/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 
   it('el teclado: ↓ baja de canal a la misma hora', async () => {
@@ -165,18 +179,53 @@ describe('Guía TV', () => {
     expect(active).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('tocar un programa en el móvil abre «Más info»', async () => {
+  it('tocar un programa en emisión abre la hoja con «Ver ahora» y la casilla resaltada', async () => {
+    scrollable();
     serve();
-    renderGuia('?vista=guia&ambito=todos');
+    const { container } = renderGuia('?vista=guia&ambito=todos');
     const grid = await screen.findByRole('grid', { name: 'Guía TV' });
     const cell = await waitFor(() => {
-      const found = within(grid).getAllByRole('gridcell', { name: /, de \d\d:\d\d a / })[0];
-      if (!found) throw new Error('sin programas');
+      const found = within(grid)
+        .getAllByRole('gridcell', { name: /, de \d\d:\d\d a / })
+        .find((node) => node.classList.contains('guia-block--live'));
+      if (!found) throw new Error('sin programas en emisión');
       return found;
     });
     fireEvent.click(cell);
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('button', { name: /^Ver/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Ver ahora' })).toBeInTheDocument();
+    // La hoja se llama como el programa (el título se ve dentro, debajo del canal).
+    expect(dialog).toHaveAccessibleName(cell.getAttribute('aria-label')?.split(',')[0] ?? '');
+    expect(container.querySelector('.guia')).toHaveClass('guia--picking');
+    await waitFor(() => expect(cell).toHaveAttribute('aria-selected', 'true'));
+    // La sinopsis de la guía.
+    expect(await within(dialog).findByText(/./, { selector: '.guia-pop__text' })).toBeVisible();
+  });
+
+  it('un programa que aún no ha empezado: «Te aviso», el canal igual y la nota del aviso', async () => {
+    scrollable();
+    serve();
+    renderGuia('?vista=guia&ambito=todos');
+    const grid = await screen.findByRole('grid', { name: 'Guía TV' });
+    const cell = await waitFor(() => {
+      const found = within(grid)
+        .getAllByRole('gridcell', { name: /, de \d\d:\d\d a \d\d:\d\d$/ })
+        .find((node) => node.classList.contains('guia-block--future'));
+      if (!found) throw new Error('sin programas futuros');
+      return found;
+    });
+    fireEvent.click(cell);
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Te aviso' }));
+    expect(within(dialog).getByRole('button', { name: 'Te avisaré' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(getAvisos()).toHaveLength(1);
+    expect(
+      within(dialog).getByRole('button', { name: /^Ver (el canal|ficha)$/ }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/^Te avisamos 5 minutos antes/)).toBeInTheDocument();
   });
 
   it('sin IPTV, conectarla; sin guía del proveedor, decirlo', async () => {

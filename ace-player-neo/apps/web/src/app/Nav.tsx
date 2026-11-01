@@ -1,11 +1,12 @@
-/* Navegación principal con cuatro destinos (Agenda · Canales · Buscar ·
-   Ajustes) o cinco con «Pelis y series» entre Canales y Buscar (docs/vod.md
-   §12.1: solo si el servidor tiene películas y series), en la forma de «Palco» (plan de la fase 2, decisión W3):
+/* Navegación principal.
 
-   - Móvil (< 768 px): barra inferior FLOTANTE de cristal (márgenes de 12,
-     radio 24, sombra Palco) con una píldora que se desliza hasta el destino
-     activo (solo transform) y un velo debajo que funde la lista antes de la
-     barra (corrección 4: que no asome texto alrededor).
+   - Móvil (< 768 px; rediseño móvil, maqueta movil-barra-isla): la «isla»,
+     una barra flotante opaca abajo con cuatro pestañas de solo icono
+     (Agenda · Canales · Guía · Pelis y series; tres sin películas en el
+     servidor, docs/vod.md §12.1) y una rayita amarilla bajo la activa. El
+     mini-reproductor se acopla dentro de la misma isla. Buscar y Ajustes
+     suben a la cabecera de cada vista (lupa y engranaje, ViewHeader.tsx) y
+     se abren encima de cualquier pestaña, sin la isla.
    - Desde 768 px: MENÚ LATERAL fijo de 232 px (rediseño de escritorio),
      con la Guía y «Ver juntos» como destinos propios; Buscar pasa a la barra
      de cada sección (Ctrl K).
@@ -15,8 +16,8 @@
    de la vista. Los nombres accesibles que usan las e2e (`navigation
    'Principal'`, `link 'Agenda'`) no cambian.
 
-   El número de destinos cambia: `--n` y el índice de la píldora (`--i`) salen
-   SIEMPRE de la lista que se pinta (T17), nunca de un 4 fijo. */
+   El número de pestañas cambia: `--n` sale SIEMPRE de la lista que se pinta
+   (T17), nunca de un 4 fijo. */
 
 import { type CSSProperties, type MouseEvent } from 'react';
 import { useAppMode, useEngineSummary, useVodActive } from '../api/index.ts';
@@ -28,63 +29,45 @@ import type { IconName } from '../ui/icons.ts';
 import { EngineIndicator } from './EngineIndicator.tsx';
 import { rememberedViewParams, useNavigate } from './router.tsx';
 import {
-  navLabel,
-  navParent,
-  navVistas,
+  islaParent,
+  islaVistas,
   searchFor,
   sideParent,
   sideVistas,
   VISTA_TITLE,
-  type NavVista,
+  type IslaVista,
   type Route,
   type SideVista,
 } from './routes.ts';
 import { preloadView } from './views.tsx';
 
-const NAV_ICON: Record<NavVista, IconName> = {
+const ISLA_ICON: Record<IslaVista, IconName> = {
   agenda: 'agenda',
   biblioteca: 'biblioteca',
+  guia: 'guia',
   cine: 'cine',
-  buscar: 'buscar',
-  ajustes: 'ajustes',
 };
 
-function navRoute(vista: NavVista): Route {
-  if (vista === 'ajustes') return { vista: 'ajustes', seccion: null };
+function islaRoute(vista: IslaVista): Route {
   if (vista === 'cine') return { vista: 'cine', id: null };
   return { vista };
 }
 
-/** Los destinos que se pintan ahora mismo (`cine` según `features.vod`). */
-function useNavVistas(): readonly NavVista[] {
-  const vod = useVodActive();
-  return navVistas({ vod });
-}
-
-/**
- * Lo que se ve y lo que se lee de un destino: «Pelis y series» a la vista y
- * «Películas y series» como nombre y `title` (docs/vod.md §12.1).
- */
-function labelProps(vista: NavVista) {
-  const label = navLabel(vista);
-  const title = VISTA_TITLE[vista];
-  return label === title ? { label } : { label, 'aria-label': title, title };
-}
-
-function useNavLink(current: Route) {
+function useIslaLink(current: Route) {
   const navigate = useNavigate();
-  return (vista: NavVista) => ({
+  const parent = islaParent(current.vista);
+  return (vista: IslaVista) => ({
     // El mismo destino que el clic (abrir en otra pestaña lleva lo mismo).
     href: searchFor(
-      navRoute(vista),
+      islaRoute(vista),
       globalThis.location?.search ?? '',
       rememberedViewParams(vista),
     ),
-    // En una vista hija (la Guía TV), su madre se marca como «estás dentro».
+    // En una vista hija (la sala de una película), su madre se marca como «estás dentro».
     'aria-current':
       current.vista === vista
         ? ('page' as const)
-        : navParent(current.vista) === vista
+        : parent === vista
           ? ('true' as const)
           : undefined,
     onClick: (event: MouseEvent<HTMLAnchorElement>) => {
@@ -98,40 +81,47 @@ function useNavLink(current: Route) {
       )
         return;
       event.preventDefault();
-      navigate(navRoute(vista));
+      navigate(islaRoute(vista));
     },
     onPointerEnter: () => preloadView(vista),
     onFocus: () => preloadView(vista),
   });
 }
 
-/** Índice del destino activo en la lista que se pinta (−1 fuera de ella: partido, sistema). */
-function activeIndex(route: Route, vistas: readonly NavVista[]): number {
-  const parent = navParent(route.vista);
-  return parent ? vistas.indexOf(parent) : -1;
-}
-
+/**
+ * La «isla» del móvil (por debajo de 768 px; maqueta movil-barra-isla): una
+ * barra flotante opaca con solo los iconos (siluetas distintas) y una rayita
+ * amarilla bajo el de la pestaña activa. Con algo sonando, el
+ * mini-reproductor se acopla encima, dentro de la misma isla (lo coloca
+ * shell.css: el reproductor no se mueve de sitio en el árbol). Sin rótulos a
+ * la vista: el nombre de cada pestaña va en `aria-label` y en `title`.
+ */
 export function TabBar({ route, hidden }: { route: Route; hidden?: boolean }) {
-  const link = useNavLink(route);
-  const vistas = useNavVistas();
-  const index = activeIndex(route, vistas);
+  const link = useIslaLink(route);
+  const vod = useVodActive();
+  const vistas = islaVistas({ vod });
   return (
     <nav
-      className={cx('tabbar', 'glass', 'glass--dense', index < 0 && 'tabbar--none')}
+      className="tabbar"
       aria-label="Principal"
       hidden={hidden}
       data-n={vistas.length}
-      style={{ '--i': Math.max(0, index), '--n': vistas.length } as CSSProperties}
+      style={{ '--n': vistas.length } as CSSProperties}
     >
-      {vistas.map((vista) => {
-        const { label, ...named } = labelProps(vista);
-        return (
-          <a key={vista} className="tabbar__item" {...link(vista)} {...named}>
-            <Icon name={NAV_ICON[vista]} size={24} />
-            <span>{label}</span>
-          </a>
-        );
-      })}
+      {vistas.map((vista) => (
+        <a
+          key={vista}
+          className="tabbar__item"
+          {...link(vista)}
+          aria-label={VISTA_TITLE[vista]}
+          title={VISTA_TITLE[vista]}
+        >
+          <span className="tabbar__tile">
+            <Icon name={ISLA_ICON[vista]} size={24} />
+            <i className="tabbar__bar" aria-hidden="true" />
+          </span>
+        </a>
+      ))}
     </nav>
   );
 }

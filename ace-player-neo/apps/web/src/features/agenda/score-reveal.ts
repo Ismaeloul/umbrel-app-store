@@ -195,6 +195,18 @@ export function useScoreHidden(matchId: string, alsoWatched = false): boolean {
   return (alsoWatched || watched === matchId) && !(mobile ? always : now);
 }
 
+/**
+ * ¿Se pueden enseñar las cifras de este partido en una fila fuera de la
+ * agenda (Buscar en el móvil)? Con la regla de la agenda: tapado si es el que
+ * ves (regla 29) y, además, tapado si «Marcador oculto» lo tapa (en el móvil,
+ * siempre, salvo lo destapado a mano).
+ */
+export function useScoreShownInRow(matchId: string, onScreen = false): boolean {
+  const hidden = useScoreHidden(matchId, onScreen);
+  const revealed = useScoreRevealed(matchId);
+  return !hidden && revealed;
+}
+
 /** Solo para los tests. */
 export function resetScoreRevealForTests(): void {
   store.set({

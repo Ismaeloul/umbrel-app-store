@@ -612,6 +612,9 @@ export class PlayerRuntime {
       case 'mode':
         this.changeMode(command.mode);
         break;
+      case 'mute':
+        this.setMuted(command.muted);
+        break;
     }
   }
 

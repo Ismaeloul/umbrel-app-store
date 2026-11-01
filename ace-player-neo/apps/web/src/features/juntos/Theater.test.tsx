@@ -17,7 +17,6 @@ const NOW = 1_000_000;
 function setup(
   selfId: string,
   over: Partial<PartyRoom> = {},
-  desk = true,
   quality: PlayerQuality | null = null,
 ) {
   const env: PartyEnv = {
@@ -65,7 +64,6 @@ function setup(
       video={document.createElement('video')}
       fullscreen={false}
       onFullscreen={() => undefined}
-      desk={desk}
     />,
   );
   return { setQuality, control };
@@ -149,23 +147,13 @@ describe('«Ver juntos»: el reproductor', () => {
   });
 });
 
-describe('«Ver juntos»: el reproductor en el móvil (como siempre)', () => {
-  it('arriba el título y quién manda; abajo, el volumen; sin reacciones ni chat', () => {
-    setup(ANA, {}, false);
-    expect(screen.getByText((joined.room as PartyRoom).title.title)).toBeTruthy();
-    expect(screen.getByText('Controla Isma (líder)')).toBeTruthy();
-    expect(screen.queryByText('Sala de Isma · 2')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Silenciar' })).toBeTruthy();
-    expect(screen.getByRole('progressbar', { name: 'Posición' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Reaccionar' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Chat' })).toBeNull();
-  });
-
-  it('el líder: el botón grande y, abajo, reproducir y ±10 s', () => {
-    setup(HOST, {}, false);
-    expect(screen.getAllByRole('button', { name: 'Pausar' })).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Avanzar 10 segundos' })).toBeTruthy();
-    expect(document.querySelector('.juntos-center__controls')).toBeNull();
+describe('«Ver juntos»: el reproductor en el móvil (ver-juntos-pelis.html)', () => {
+  it('el mismo que en escritorio: «Sala de Isma · 2» arriba y −10 s, pausa y +10 s en el centro', () => {
+    setup(HOST);
+    expect(screen.getByText('Sala de Isma · 2')).toBeTruthy();
+    expect(document.querySelector('.juntos-center__controls')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Pausar' })).toHaveLength(1);
+    expect(screen.queryByText('Controla Isma (líder)')).toBeNull();
   });
 });
 
@@ -178,7 +166,7 @@ describe('«Ver juntos»: «Calidad» del invitado (§17)', () => {
   });
 
   it('con las dos: Automática (lo que suena), Alta y Ligera; elegir es de este aparato, sin orden a la sala', () => {
-    const { setQuality, control } = setup(ANA, {}, true, both);
+    const { setQuality, control } = setup(ANA, {}, both);
     fireEvent.click(screen.getByRole('button', { name: 'Calidad' }));
     expect(
       screen.getByRole('menuitemcheckbox', { name: 'Automática (ahora 720p)' }),
@@ -190,7 +178,7 @@ describe('«Ver juntos»: «Calidad» del invitado (§17)', () => {
   });
 
   it('también para quien no controla y en el móvil; nunca en directo', () => {
-    const { setQuality } = setup(ANA, {}, false, { choice: 'hd', current: 'hd' });
+    const { setQuality } = setup(ANA, {}, { choice: 'hd', current: 'hd' });
     fireEvent.click(screen.getByRole('button', { name: 'Calidad' }));
     expect(screen.getByRole('menuitemcheckbox', { name: 'Alta (original)' })).toHaveAttribute(
       'aria-checked',
@@ -213,7 +201,6 @@ describe('«Ver juntos»: «Calidad» del invitado (§17)', () => {
           auto: false,
         },
       },
-      true,
       both,
     );
     expect(screen.queryByRole('button', { name: 'Calidad' })).toBeNull();

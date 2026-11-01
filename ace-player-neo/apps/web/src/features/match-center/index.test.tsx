@@ -85,8 +85,16 @@ describe('centro de partido', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Atlético de Madrid vs Tottenham' }),
     ).toBeInTheDocument();
-    // Sin reproductor (test), la cápsula del marcador va arriba de la vista.
-    expect(document.querySelector('.mc-scap-inline .mc-scap')).not.toBeNull();
+    // Móvil (dirección B): el vídeo va limpio; equipos, minuto y competición
+    // debajo, en la cabecera, sin la cápsula del marcador sobre el vídeo.
+    expect(document.querySelector('.mc-scap')).toBeNull();
+    const head = document.querySelector('.mc-bhead') as HTMLElement;
+    expect(head).not.toBeNull();
+    expect(head).toHaveTextContent('Atlético de Madrid');
+    expect(head).toHaveTextContent('Tottenham');
+    expect(head.querySelector('.mc-bhead__when')).not.toBeNull();
+    // «Ver juntos» al final de la ficha.
+    expect(document.querySelector('.mc-together button')).not.toBeNull();
     await waitFor(() => expect(getPlayer().channel?.hash).toBe(hash(1)));
     expect(getSession().key).toBe('m:mc-1');
     // Pestaña «Fuentes» por defecto: los carteles y sus acciones.
@@ -101,8 +109,43 @@ describe('centro de partido', () => {
       screen.getByText('M+ Liga de Campeones', { selector: '.mc-where .chip__label' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Fuentes del partido' })).toBeNull();
-    expect(document.querySelectorAll('.src-poster').length).toBeGreaterThan(0);
+    // Las fuentes van en filas (también en el móvil) y siguen montadas.
+    expect(document.querySelectorAll('.src-line').length).toBeGreaterThan(0);
     expect(screen.getByRole('tab', { name: 'Datos' })).toBeInTheDocument();
+  });
+
+  it('móvil: las píldoras de fuente marcan la que suena y tocar otra la pone', async () => {
+    renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />);
+    await waitFor(() => expect(getPlayer().channel?.hash).toBe(hash(1)));
+    const chips = await screen.findByRole('group', { name: 'Cambiar de fuente' });
+    const buttons = within(chips).getAllByRole('button');
+    expect(buttons.length).toBeGreaterThan(1);
+    expect(buttons[0]).toHaveTextContent(/^F1/);
+    const other = buttons.find((button) => button.getAttribute('aria-pressed') === 'false');
+    expect(other).toBeDefined();
+    fireEvent.click(other as HTMLElement);
+    await waitFor(() => expect(getPlayer().channel?.hash).not.toBe(hash(1)));
+  });
+
+  it('móvil: la ficha entra en vista previa (AceStream en silencio); desde 768, no', async () => {
+    const mobile = renderWithApp(
+      <MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />,
+    );
+    await waitFor(() => expect(getPlayer().channel?.hash).toBe(hash(1)));
+    expect(getSession().preview).toBe(true);
+    expect(getPlayer().muted).toBe(true);
+    mobile.unmount();
+    endSession();
+    // La AceStream sigue en el escenario: en silencio hasta que cambie lo que suena o se pare.
+    expect(getPlayer().muted).toBe(true);
+    resetPlayerApi();
+    expect(getPlayer().muted).toBe(false);
+    renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />, {
+      kind: 'tablet',
+    });
+    await waitFor(() => expect(getPlayer().channel?.hash).toBe(hash(1)));
+    expect(getSession().preview).toBe(false);
+    expect(getPlayer().muted).toBe(false);
   });
 
   it('la tecla S (datos técnicos) abre su pestaña y otra S vuelve a la de antes', async () => {

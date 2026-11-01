@@ -103,11 +103,6 @@ export const JUNTOS_TEXT = {
   /* Sin dar por hecho el género y con los co-líderes: «Sala de Ismael · controlan Ismael y Yassin». */
   guestOf: (host: string, names: string, many: boolean) =>
     `Sala de ${host} · ${many ? 'controlan' : 'controla'} ${names}`,
-  /* El móvil (la sala de siempre): las pestañas Lista y Ajustes y «Controla Ana (líder)». */
-  tabQueue: 'Lista',
-  tabSettings: 'Ajustes',
-  chatPlaceholderMobile: 'Escribe un mensaje',
-  leaderControls: (name: string) => `Controla ${name} (líder)`,
 
   // --- En directo (docs/ver-juntos.md §14) ---
   tabSources: 'Fuentes',
@@ -139,16 +134,6 @@ export const JUNTOS_TEXT = {
   liveCreateHint:
     'Todos ven lo mismo que tú, en directo. El NAS abre una sola conexión y la reparte.',
   liveCreateNoSource: 'No hay ninguna fuente para este partido todavía.',
-  listEmpty: 'La lista está vacía.',
-  listEmptyHint:
-    'En casa, abre una película o un episodio en «Pelis y series» y pulsa «Ver juntos» → «Proponer en la sala».',
-  queueBy: (name: string) => `Lo ha añadido ${name}`,
-  settingsQueue: 'Al acabar',
-  queueAutoplay: 'Seguir con la lista',
-  queueVote: 'Votar lo siguiente',
-  queueLeader: 'Elige el líder',
-  queueOnce: 'Parar',
-  settingsHint: 'Sin nada en la lista, en una serie sigue el siguiente episodio.',
   memberActions: (name: string) => `Opciones de ${name}`,
   makeColeader: 'Hacer co-líder',
   removeColeader: 'Quitar co-líder',
@@ -202,8 +187,9 @@ export const JUNTOS_TEXT = {
   itemActions: (title: string) => `Opciones de ${title}`,
   itemMenuHint: 'Más opciones con clic derecho o pulsación larga',
   remove: 'Quitar',
-  next: 'Siguiente',
   nextEpisode: 'Siguiente episodio',
+  /* «Pasar al siguiente» en la pestaña Siguiente del móvil (quien controla). */
+  skipNext: 'Pasar al siguiente',
   upNextTitle: 'A continuación',
   upNextIn: (seconds: number) => `Empieza en ${seconds} s`,
   watchNow: 'Ver ya',

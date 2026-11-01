@@ -35,13 +35,35 @@
    una línea con «Reintentar» dentro de «En el motor AceStream», sin aviso
    (docs/diagnostico-iptv-0.8.2.md, E3): lo que sí cargó no queda junto a
    una tarjeta roja.
-   Sin IPTV activa, ni una llamada a `iptvChannels` y los textos de siempre. */
+   Sin IPTV activa, ni una llamada a `iptvChannels` y los textos de siempre.
 
-import { IPTV_SEARCH, type Item, type SearchResult } from '@ace/shared';
+   En el móvil (por debajo de 768; maqueta buscar-ajustes.html) Buscar se abre
+   encima de cualquier pestaña, sin la isla (el armazón): la flecha de volver
+   y el campo en una sola fila, sin titular a la vista.
+   - Sin texto: Recientes, Atajos y «Pegar un enlace» (MobileParts.tsx). Pegar
+     lee el portapapeles; si no hay un enlace (o no deja leerlo), abre la
+     hoja de pegar de siempre.
+   - Con texto: busca A LA VEZ en la agenda y en Películas y series
+     (wide-results.ts, los datos de la ventana rápida de escritorio) además de
+     tu biblioteca, tu IPTV y el motor, y lo agrupa: Partidos (el directo
+     primero, con su play), tus canales, Pelis y series y, al final, el
+     motor. Chips «Todo · N», «Partidos · N»… y «Ver los N» en cada grupo.
+   - Abrir algo (un partido, un canal, un título) o dar a Intro lo apunta en
+     Recientes (las mismas que la ventana rápida, quick-model.ts).
+   Desde 768 no cambia nada. */
+
+import {
+  IPTV_SEARCH,
+  type FootballMatch,
+  type Item,
+  type SearchResult,
+  type VodCard,
+} from '@ace/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { isAbortError, useApiQuery, useIptvActive } from '../../api/index.ts';
 import type { ViewProps } from '../../app/contracts.ts';
 import { requestFocus } from '../../app/focus.ts';
+import { useLayout } from '../../app/layout.tsx';
 import { useNavigate, useSearchParam } from '../../app/router.tsx';
 import { searchFor } from '../../app/routes.ts';
 import { useShortcut } from '../../app/shortcuts.ts';
@@ -53,6 +75,7 @@ import {
   Button,
   Capsule,
   ChannelMark,
+  Chip,
   EmptyState,
   IconButton,
   SkeletonRows,
@@ -67,6 +90,19 @@ import { VirtualList } from '../library/VirtualList.tsx';
 import '../library/library.css';
 import { PasteHashSheet, pastedTitle } from '../paste-hash/index.ts';
 import { registerSearchDemo } from './demo.ts';
+import { MatchGroup, SearchStart, TitleGroup } from './MobileParts.tsx';
+import {
+  addRecent,
+  GROUP_TITLE,
+  readRecents,
+  removeRecent,
+  saveRecents,
+  visibleCount,
+  type QuickFilter,
+  type QuickGroup,
+} from './quick-model.ts';
+import { runShortcut, type ShortcutKey } from './quick-rows.tsx';
+import { useWideResults } from './wide-results.ts';
 import {
   aceChannelName,
   emptyTitle,
@@ -93,6 +129,7 @@ import {
   searchPhase,
 } from './model.ts';
 import { SEARCH_PARAM } from './navigation.ts';
+import './quick-search.css';
 import './search.css';
 
 registerSearchDemo();
@@ -114,6 +151,10 @@ export default function SearchView({ active }: ViewProps) {
   const actions = useChannelActions();
   const onAir = useOnAir(active);
   const onScreen = useOnScreenHash();
+  // Móvil: la cabecera con el campo, el arranque vacío y los grupos (maqueta buscar-ajustes).
+  const mobile = useLayout().kind === 'mobile';
+  const [filter, setFilter] = useState<QuickFilter>('todo');
+  const [recents, setRecents] = useState(readRecents);
 
   // «/» en general abre la biblioteca y enfoca SU buscador (Shell.tsx). Aquí
   // ya hay un buscador a la vista: gana este atajo, registrado después, y
@@ -157,6 +198,10 @@ export default function SearchView({ active }: ViewProps) {
   const known = detected ? findKnownItem(actions.library, detected) : null;
 
   const query = cleanQuery(committed);
+  // Móvil: la agenda y el catálogo, con el mismo texto confirmado.
+  const wide = useWideResults(query, mobile && detected === null);
+  // Cada búsqueda nueva empieza con «Todo».
+  useEffect(() => setFilter('todo'), [query]);
   const search = useApiQuery(
     'search',
     { query: { q: query } },
@@ -224,7 +269,12 @@ export default function SearchView({ active }: ViewProps) {
     iptvData !== undefined &&
     iptvData.channels.length === 0;
   // Si arriba ya hay filas, «Sin resultados» sería falso: el vacío del motor queda en una línea.
-  const shownAbove = merged.local.length > 0 || merged.iptv.length > 0;
+  // En el móvil también cuentan los partidos y los títulos.
+  const shownAbove =
+    merged.local.length > 0 ||
+    merged.iptv.length > 0 ||
+    wide.matches.length > 0 ||
+    wide.titles.length > 0;
   // Con tu IPTV en error tampoco se sabe si hay resultados: una línea, solo del motor.
   const iptvUnknown = iptvFailed && !iptvData;
   // Tu IPTV aún buscando: el aviso del motor espera a saber si hay filas arriba.
@@ -244,6 +294,77 @@ export default function SearchView({ active }: ViewProps) {
   }, [failedAt, shownAbove, iptvPending]);
   const iptvRows = visibleIptv(merged.iptv, iptvExpanded, IPTV_SEARCH.shownInSearch);
   const iptvHidden = merged.iptv.length - iptvRows.length;
+
+  // ---- Móvil: grupos y chips (quick-model.ts, como la ventana rápida) ----------------
+  const counts: Record<QuickGroup, number> = {
+    partidos: wide.matches.length,
+    canales:
+      merged.local.length +
+      merged.iptv.length +
+      (phase.kind === 'results' && !engineAllShown ? engineRows.length : 0),
+    titulos: wide.titles.length,
+  };
+  const total = counts.partidos + counts.canales + counts.titulos;
+  const shownFilter: QuickFilter = filter !== 'todo' && counts[filter] === 0 ? 'todo' : filter;
+  const showGroup = (group: QuickGroup) =>
+    !mobile || shownFilter === 'todo' || shownFilter === group;
+  // Sin 2 letras (ni un enlace): Recientes, Atajos y «Pegar un enlace».
+  const mobileStart = mobile && !detected && !canSearch(text);
+  const matchRows = wide.matches.slice(0, visibleCount('partidos', counts.partidos, shownFilter));
+  const titleRows = wide.titles.slice(0, visibleCount('titulos', counts.titulos, shownFilter));
+
+  const remember = (value = text) => {
+    const next = addRecent(recents, value);
+    setRecents(next);
+    saveRecents(next);
+  };
+  const forget = (value: string) => {
+    const next = removeRecent(recents, value);
+    setRecents(next);
+    saveRecents(next);
+  };
+  const searchRecent = (value: string) => {
+    haptic('selection');
+    setText(value);
+    commit(value);
+  };
+  const goShortcut = (key: ShortcutKey) => {
+    haptic('selection');
+    runShortcut(navigate, key);
+  };
+  // «Pegar un enlace»: lo copiado al campo si es un enlace (sale «Enlace detectado»);
+  // si no lo es, o el navegador no deja leerlo, la hoja de pegar de siempre.
+  const pasteLink = async () => {
+    try {
+      const clip = (await navigator.clipboard.readText()).trim();
+      if (clip && isHashOrLink(clip)) {
+        setText(clip.slice(0, FIELD_MAX));
+        return;
+      }
+    } catch {
+      // Sin permiso para leer el portapapeles: la hoja.
+    }
+    setPasteOpen(true);
+  };
+  const openMatch = (match: FootballMatch) => {
+    if (!match.channels?.length) {
+      notify('El canal todavía no está anunciado', { tone: 'info' });
+      return;
+    }
+    haptic('light');
+    remember();
+    navigate({ vista: 'partido', id: match.id, canal: null });
+  };
+  const openTitle = (card: VodCard) => {
+    haptic('light');
+    remember();
+    navigate({ vista: 'cine', id: card.id });
+  };
+  /** Reproducir una fila de canal: en el móvil, además, lo escrito va a Recientes. */
+  const played = (play: () => void) => () => {
+    if (mobile) remember();
+    play();
+  };
 
   // Aparición escalonada solo al llegar resultados nuevos, no al desplazarse.
   const enter = useRef({ key: '', until: 0 });
@@ -278,59 +399,118 @@ export default function SearchView({ active }: ViewProps) {
     });
   };
 
+  const field = (
+    <TextField
+      className="lib-search search-field"
+      variant="search"
+      type="search"
+      label={
+        mobile
+          ? wide.withVod
+            ? 'Buscar partidos, canales, pelis y series'
+            : 'Buscar partidos y canales'
+          : withIptv
+            ? IPTV_TEXT.fieldLabel
+            : 'Buscar en el motor AceStream'
+      }
+      hideLabel
+      icon={mobile ? undefined : 'buscar'}
+      placeholder={
+        mobile
+          ? wide.withVod
+            ? 'Partidos, canales, pelis…'
+            : 'Partidos, canales…'
+          : 'Nombre de un canal, o pega un enlace de AceStream…'
+      }
+      focusTarget="buscar-motor"
+      autoComplete="off"
+      enterKeyHint="search"
+      maxLength={FIELD_MAX}
+      value={text}
+      onChange={(event) => setText(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          if (detected) playDetected();
+          else {
+            commit(text);
+            if (mobile) remember();
+          }
+        }
+        if (event.key === 'Escape' && text) {
+          event.preventDefault();
+          event.stopPropagation();
+          clear();
+        }
+      }}
+      trailing={
+        text ? (
+          <IconButton
+            icon="x"
+            label="Borrar lo escrito"
+            className="search-field__clear"
+            onClick={clear}
+          />
+        ) : null
+      }
+    />
+  );
+
   return (
-    <div className="lib search">
+    <div className={cx('lib search', mobile && 'search--movil')}>
       {/* Sin subtítulo: el campo («Buscar en el motor AceStream…») y la
           sección ya lo dicen, y en el móvil una línea más empujaba las
-          acciones a otra fila y dejaba un hueco grande sobre el buscador. */}
+          acciones a otra fila y dejaba un hueco grande sobre el buscador.
+          En el móvil el campo va EN la cabecera, junto a la flecha de volver
+          (el titular queda para los lectores de pantalla). */}
       <ViewHeader
         title="Buscar"
+        className={mobile ? 'search-head' : undefined}
         actions={
-          <IconButton
-            icon="paste"
-            label="Pegar un Content ID o enlace acestream://"
-            title="Pegar hash"
-            onClick={() => setPasteOpen(true)}
-          />
-        }
-      />
-      <TextField
-        className="lib-search search-field"
-        variant="search"
-        type="search"
-        label={withIptv ? IPTV_TEXT.fieldLabel : 'Buscar en el motor AceStream'}
-        hideLabel
-        icon="buscar"
-        placeholder="Nombre de un canal, o pega un enlace de AceStream…"
-        focusTarget="buscar-motor"
-        autoComplete="off"
-        enterKeyHint="search"
-        maxLength={FIELD_MAX}
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            if (detected) playDetected();
-            else commit(text);
-          }
-          if (event.key === 'Escape' && text) {
-            event.preventDefault();
-            event.stopPropagation();
-            clear();
-          }
-        }}
-        trailing={
-          text ? (
+          mobile ? (
+            field
+          ) : (
             <IconButton
-              icon="x"
-              label="Borrar lo escrito"
-              className="search-field__clear"
-              onClick={clear}
+              icon="paste"
+              label="Pegar un Content ID o enlace acestream://"
+              title="Pegar hash"
+              onClick={() => setPasteOpen(true)}
             />
-          ) : null
+          )
         }
       />
+      {mobile ? null : field}
+
+      {mobile && !detected && canSearch(query) && total > 0 ? (
+        <div className="search-chips" role="group" aria-label="Qué enseñar">
+          {(['todo', 'partidos', 'canales', 'titulos'] as const).map((value) => {
+            const count = value === 'todo' ? total : counts[value];
+            if (value !== 'todo' && count === 0) return null;
+            return (
+              <Chip
+                key={value}
+                pressed={shownFilter === value}
+                onClick={() => {
+                  haptic('selection');
+                  setFilter(value);
+                }}
+              >
+                {`${value === 'todo' ? 'Todo' : GROUP_TITLE[value]} · ${count}`}
+              </Chip>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {mobileStart ? (
+        <SearchStart
+          recents={recents}
+          onRecent={searchRecent}
+          onRemoveRecent={forget}
+          onShortcut={goShortcut}
+          onPaste={() => void pasteLink()}
+        />
+      ) : null}
 
       <p className="sr-only" aria-live="polite">
         {detected
@@ -390,7 +570,19 @@ export default function SearchView({ active }: ViewProps) {
         </section>
       ) : null}
 
-      {!detected && merged.local.length > 0 ? (
+      {mobile && !detected && matchRows.length > 0 && showGroup('partidos') ? (
+        <MatchGroup
+          items={matchRows}
+          total={counts.partidos}
+          query={query}
+          today={wide.today}
+          scores={wide.scores}
+          onOpen={openMatch}
+          onSeeAll={setFilter}
+        />
+      ) : null}
+
+      {!detected && merged.local.length > 0 && showGroup('canales') ? (
         <section className="search-sec" aria-labelledby="buscar-local">
           <h2 id="buscar-local" className="search-sec__title">
             En tu biblioteca
@@ -417,12 +609,13 @@ export default function SearchView({ active }: ViewProps) {
                     isFavorite={actions.favoriteIds.has(item.id)}
                     onScreen={onScreen === item.id}
                     onAir={onAir(item)}
+                    agendaScoreRule={mobile}
                     iptv={iptv !== null}
                     ace={aceCount}
                     highlight={query}
                     subtitle={idState ? IPTV_ID_SUBTITLE[idState] : undefined}
                     tags={iptvChannel ? iptvTags(iptvChannel) : undefined}
-                    onPlay={() => actions.play(channel, 'buscar')}
+                    onPlay={played(() => actions.play(channel, 'buscar'))}
                     onToggleFavorite={() => actions.toggleFavorite(channel)}
                     menuItems={actions.menuFor(
                       channel,
@@ -436,7 +629,11 @@ export default function SearchView({ active }: ViewProps) {
         </section>
       ) : null}
 
-      {!detected && withIptv && canSearch(query) && (merged.iptv.length > 0 || iptvFailed) ? (
+      {!detected &&
+      withIptv &&
+      canSearch(query) &&
+      (merged.iptv.length > 0 || iptvFailed) &&
+      showGroup('canales') ? (
         <section className="search-sec search-iptv" aria-labelledby="buscar-iptv-titulo">
           <h2 id="buscar-iptv-titulo" className="search-sec__title">
             {IPTV_TEXT.section}
@@ -477,13 +674,14 @@ export default function SearchView({ active }: ViewProps) {
                       isFavorite={actions.favoriteIds.has(channel.id)}
                       onScreen={onScreen === channel.id}
                       onAir={onAir(row)}
+                      agendaScoreRule={mobile}
                       iptv
                       ace={ace}
                       highlight={query}
                       subtitle={iptvSubtitle(channel)}
                       tags={iptvTags(channel)}
                       /* IPTV primero y, de respaldo, sus AceStream de tu biblioteca (§19). */
-                      onPlay={() => actions.play(row, 'buscar', { ace: library })}
+                      onPlay={played(() => actions.play(row, 'buscar', { ace: library }))}
                       onToggleFavorite={() => actions.toggleFavorite(row)}
                       menuItems={actions.menuFor(row, 'search')}
                     />
@@ -509,7 +707,18 @@ export default function SearchView({ active }: ViewProps) {
         </section>
       ) : null}
 
-      {!detected && !engineAllShown ? (
+      {mobile && !detected && titleRows.length > 0 && showGroup('titulos') ? (
+        <TitleGroup
+          items={titleRows}
+          total={counts.titulos}
+          query={query}
+          onOpen={openTitle}
+          onSeeAll={setFilter}
+        />
+      ) : null}
+
+      {/* En el móvil, sin 2 letras no hay sección del motor: el arranque ocupa su sitio. */}
+      {!detected && !engineAllShown && !mobileStart && showGroup('canales') ? (
         <section className="search-sec" aria-labelledby="buscar-motor-titulo">
           {/* Sin nada escrito y con IPTV, la pista habla de las dos fuentes: el
               titular «En el motor AceStream» encima no cuadraba (queda para
@@ -612,10 +821,11 @@ export default function SearchView({ active }: ViewProps) {
                     isFavorite={actions.favoriteIds.has(result.id)}
                     onScreen={onScreen === result.id}
                     onAir={onAir(result)}
+                    agendaScoreRule={mobile}
                     iptv={iptv !== null}
                     ace={iptv ? ace : 0}
                     highlight={query}
-                    onPlay={() => actions.play(channel, 'buscar')}
+                    onPlay={played(() => actions.play(channel, 'buscar'))}
                     onToggleFavorite={() => actions.toggleFavorite(result)}
                     menuItems={actions.menuFor(result, 'search')}
                     enterIndex={entering ? Math.min(index, 12) : null}

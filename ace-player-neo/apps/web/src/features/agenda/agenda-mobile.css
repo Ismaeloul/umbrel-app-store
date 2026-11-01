@@ -1,0 +1,388 @@
+/* ==========================================================================
+   Agenda del MÓVIL (por debajo de 768 px; maqueta movil-agenda-direcciones,
+   dirección B «Por competición»): la semana arriba, una fila de píldoras y
+   una tarjeta por competición con filas compactas. Solo lo pinta la vista
+   con `kind === 'mobile'` (MobileAgenda.tsx y DayStrip `week`): desde 768 px
+   no se usa ninguna de estas clases. Todo con tokens, en los dos temas.
+   ========================================================================== */
+
+.agenda--m {
+  row-gap: var(--s-4);
+}
+.agm-bar {
+  gap: 14px;
+}
+
+/* ---- La semana (DayStrip `week`) --------------------------------------------------- */
+/* Llena el ancho como en la maqueta (seis o siete días); con más días, la
+   pista se desliza sola. El hueco entre días se estrecha a 360 px para que
+   siete quepan sin desplazarse. */
+.agenda-days--week .agenda-days__track {
+  gap: clamp(2px, calc((100vw - 344px) / 6), 6px);
+  padding-block: 2px;
+  scroll-snap-type: none;
+}
+.agenda-days--week .agenda-day {
+  flex: 1 0 44px;
+  gap: 2px;
+  min-width: 44px;
+  min-height: 58px;
+  padding: 8px 0 6px;
+  border-radius: var(--r-m);
+  color: var(--text-2);
+}
+.agenda-days--week .agenda-day::before {
+  background: var(--accent);
+  box-shadow: none;
+}
+.agenda-days--week .agenda-day__label {
+  color: var(--text-2);
+  font-size: var(--fs-11);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+.agenda-days--week .agenda-day__num {
+  color: var(--text);
+  font-size: 1.0625rem;
+  font-weight: var(--wght-head);
+  font-stretch: 110%;
+  letter-spacing: 0;
+}
+.agenda-days--week .agenda-day.is-today .agenda-day__label {
+  color: var(--accent-ink);
+}
+.agenda-days--week .agenda-day.is-past .agenda-day__num,
+.agenda-days--week .agenda-day.is-empty .agenda-day__num {
+  color: var(--text-3);
+}
+/* El elegido, en amarillo: rótulo, número y punto en --on-accent. */
+.agenda-days--week .agenda-day[aria-selected='true'] .agenda-day__label,
+.agenda-days--week .agenda-day[aria-selected='true'] .agenda-day__num {
+  color: var(--on-accent);
+}
+/* Un punto bajo el número si ese día juega uno de tus equipos (el hueco, siempre:
+   así los números no bailan de un día a otro). */
+.agenda-day__mine {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+.agenda-day__mine.is-on {
+  background: var(--accent-edge);
+}
+.agenda-days--week .agenda-day[aria-selected='true'] .agenda-day__mine.is-on {
+  background: var(--on-accent);
+}
+.agenda-days--week .agenda-day--pending {
+  width: auto;
+  border-radius: var(--r-m);
+}
+
+/* ---- Píldoras: Todo, Para ti, Directo, ligas y «Mis gustos» ------------------------ */
+/* Una fila a sangre que se desliza (como la de la maqueta), con aire arriba
+   y abajo para el anillo del foco y la zona táctil de 44. */
+.agm-chips {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
+    calc(-1 * (var(--gutter) + var(--safe-right)));
+  padding: 6px calc(var(--gutter) + var(--safe-right)) 6px calc(var(--gutter) + var(--safe-left));
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.agm-chips::-webkit-scrollbar {
+  display: none;
+}
+.agm-chips .agm-chip {
+  flex: none;
+  max-width: none;
+  min-height: 32px;
+  padding-inline: 12px;
+  font-size: var(--fs-12);
+}
+/* «Todo · 9»: el punto con su aire a los dos lados. */
+.agm-chips .chip__count::before {
+  content: '·';
+  margin-right: 4px;
+  font-family: var(--font);
+}
+/* «Directo · 3» en rojo: --live-ink mezclado con --text, que pasa de 4,5:1
+   sobre su fondo rojizo en los dos temas (como «En directo» en escritorio). */
+.agm-chip--live.chip--button,
+.agm-chip--live.chip--button[aria-pressed='true'] {
+  color: color-mix(in oklab, var(--live-ink) 72%, var(--text));
+  background: color-mix(in oklab, var(--live) 13%, transparent);
+}
+.agm-chip--live.chip--button[aria-pressed='true'] {
+  background: color-mix(in oklab, var(--live) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--live) 60%, transparent);
+}
+.agm-chip--live .chip__count {
+  color: inherit;
+}
+.agm-chip__dot {
+  display: inline-block;
+  vertical-align: 1px;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--live);
+}
+.agm-chip--tool.chip--button {
+  color: var(--text-2);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+/* «Más ligas» en la hoja: la lista de escritorio, a todo el ancho. */
+.agm-leagues {
+  margin: 0;
+  padding: 0;
+}
+
+/* ---- Tarjetas por competición ------------------------------------------------------ */
+.agm-groups {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.agm-comp {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
+}
+.agm-comp__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px 14px 10px;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  line-height: 1.25;
+}
+.agm-comp__head .desk-comp__logo,
+.agm-comp__head .desk-comp__badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+.agm-comp__head .desk-comp__badge {
+  font-size: var(--fs-11);
+}
+.agm-comp__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.agm-comp__count {
+  flex: none;
+  color: var(--text-3);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+.agm-comp__count.is-live {
+  color: var(--live-ink);
+}
+.agm-comp__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---- Filas -------------------------------------------------------------------------- */
+.agm-row {
+  position: relative;
+  border-top: 1px solid var(--line);
+}
+.agm-row__hit {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  color: var(--text);
+  text-align: left;
+}
+.agm-row__hit:active {
+  background: var(--line-soft);
+}
+.agm-row__hit:focus-visible {
+  outline-offset: -3px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .agm-row__hit:hover {
+    background: var(--line-soft);
+  }
+}
+/* «Tu equipo»: una raya amarilla a la izquierda y los nombres más gruesos. */
+.agm-row.is-mine .agm-row__hit {
+  box-shadow: inset 3px 0 0 var(--accent-edge);
+}
+.agm-row.is-mine .agm-row__name {
+  font-weight: 720;
+}
+
+/* La hora o, en directo, el minuto en rojo con su barra de progreso. */
+.agm-row__when {
+  display: grid;
+  gap: 5px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.agm-row__when--live {
+  color: var(--live-ink);
+  font-weight: 700;
+}
+.agm-row__bar {
+  width: 100%;
+  max-width: 40px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line-soft);
+}
+.agm-row__bar i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--live);
+  clip-path: inset(0 calc(100% - var(--v)) 0 0);
+}
+
+.agm-row__teams {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.agm-row__team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-15);
+  font-weight: 560;
+  line-height: 20px;
+}
+.agm-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* El marcador destapado (o un punto por equipo mientras va tapado). */
+.agm-row__score {
+  flex: none;
+  min-width: 12px;
+  font-size: 1rem;
+  font-weight: 780;
+  font-stretch: 75%;
+  text-align: right;
+}
+.agm-row.is-live .agm-row__score {
+  color: var(--live-ink);
+}
+.agm-row__score--hidden,
+.agm-row.is-live .agm-row__score--hidden {
+  color: var(--text-2);
+}
+/* El canal donde lo echan, bajo los equipos: pequeño y en gris. */
+.agm-row__channel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-3);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  line-height: 16px;
+}
+.agm-row__channel .icon {
+  flex: none;
+}
+.agm-row__channel-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Terminado: se apagan los escudos y los nombres bajan a --text-2 (con
+   opacidad, el canal se quedaba por debajo de 4,5:1). */
+.agm-row.is-done .agm-row__team .team {
+  opacity: 0.6;
+}
+.agm-row.is-done .agm-row__name {
+  color: var(--text-2);
+}
+
+.agm-row__end {
+  display: grid;
+  justify-items: end;
+  min-width: 24px;
+}
+/* En directo con señal: el play (la fila entera es el botón). */
+.agm-row__play {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+/* Antes del partido: «● 4», las fuentes verificadas. */
+.agm-row__ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ok-ink);
+  font-size: var(--fs-12);
+  font-weight: var(--wght-strong);
+}
+.agm-row__ok i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.agm-row__final {
+  color: var(--text-3);
+  font-size: var(--fs-12);
+  font-weight: var(--wght-strong);
+}
+/* Las barras de «sonando», en amarillo. */
+.agm-row__end .player-eq {
+  gap: 2px;
+  width: 13px;
+  height: 12px;
+  color: var(--accent-ink);
+}
+.agm-row__end .player-eq i {
+  width: 3px;
+}
+
+/* ---- Cargando ----------------------------------------------------------------------- */
+.agm-loading {
+  display: grid;
+  gap: var(--s-4);
+}
+.agm-comp--pending {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}

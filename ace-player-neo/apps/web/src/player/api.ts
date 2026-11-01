@@ -248,8 +248,24 @@ export interface PlayerState {
    * ningún sitio, docs/iptv.md §14.5). El panel dice «Sin señal», no «Buscando señal».
    */
   waitingFinal: boolean;
+  /**
+   * Lo que se puede tocar junto a `waiting`: el botón grande de play de la
+   * vista previa del móvil («Toca para ver · IPTV»). null si no hay nada.
+   */
+  waitingAction: WaitingAction | null;
   /** Panel «Datos técnicos» (tecla S) abierto. */
   nerdOpen: boolean;
+}
+
+/** El botón que acompaña a la frase de espera del centro de partido. */
+export interface WaitingAction {
+  label: string;
+  onAction(): void;
+  /**
+   * Se pinta encima de lo que ya hay en el escenario (un canal ajeno al
+   * partido que sigue en el mini): la ficha ofrece lo suyo aunque algo suene.
+   */
+  cover?: boolean;
 }
 
 export const IDLE_LIVE: LiveInfo = { available: false, atLive: true, behindS: 0, delayS: null };
@@ -283,6 +299,7 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   ttffMs: null,
   waiting: null,
   waitingFinal: false,
+  waitingAction: null,
   nerdOpen: false,
 };
 
@@ -312,7 +329,8 @@ export type PlayerCommand =
   | { type: 'play'; channel: PlayChannel & { hash: string }; options: PlayOptions }
   | { type: 'play-vod'; item: VodItem; startS?: number; audio?: number; route: Route }
   | { type: 'stop' }
-  | { type: 'mode'; mode: PlaybackMode };
+  | { type: 'mode'; mode: PlaybackMode }
+  | { type: 'mute'; muted: boolean };
 
 export interface RuntimeHandle {
   handle(command: PlayerCommand): void;
@@ -320,6 +338,8 @@ export interface RuntimeHandle {
 
 let runtime: RuntimeHandle | null = null;
 let pending: PlayerCommand | null = null;
+/** Silencio pedido antes de que el reproductor esté montado (se aplica antes de la orden guardada). */
+let pendingMuted: boolean | null = null;
 
 /** Ruta por defecto del mini-reproductor: el propio canal. */
 export function channelRoute(hash: string): Route {
@@ -441,8 +461,30 @@ export function stop(): void {
     volume: state.volume,
     waiting: state.waiting,
     waitingFinal: state.waitingFinal,
+    waitingAction: state.waitingAction,
   }));
   setPlayerPresence({ active: false, immersive: false });
+}
+
+/**
+ * Silencia o devuelve el sonido al vídeo sin que lo toque la persona (la
+ * vista previa del partido en el móvil arranca en silencio, que además es
+ * lo único que deja arrancar solo a iOS Safari). No se guarda en ningún
+ * sitio: es el `muted` del <video>.
+ */
+export function setPlayerMuted(muted: boolean): void {
+  if (runtime) runtime.handle({ type: 'mute', muted });
+  else pendingMuted = muted;
+  playerStore.set((state) => (state.muted === muted ? state : { ...state, muted }));
+}
+
+/**
+ * Solo para el reproductor (index.tsx): el silencio pendiente, para ponerlo en
+ * el <video> ANTES de crear el runtime (su estado inicial lee `video.muted` y,
+ * si no, publicaría un «sin silencio» que nadie ha pedido).
+ */
+export function peekPendingMuted(): boolean | null {
+  return pendingMuted;
 }
 
 /** Solo para el reproductor (index.tsx): conecta el motor de órdenes. */
@@ -450,6 +492,10 @@ export function connectRuntime(handle: RuntimeHandle): () => void {
   runtime = handle;
   const queued = pending;
   pending = null;
+  const muted = pendingMuted;
+  pendingMuted = null;
+  // El silencio antes del play: así el navegador deja arrancar solo.
+  if (muted !== null) handle.handle({ type: 'mute', muted });
   if (queued) handle.handle(queued);
   return () => {
     if (runtime === handle) runtime = null;
@@ -535,13 +581,47 @@ export function notifySourceFailed(failure: SourceFailure): {
  * La frase del centro de partido mientras espera una fuente. Con `final`, ya
  * no espera nada: es lo que queda (el panel dice «Sin señal», sin pulso).
  */
-export function setWaitingMessage(text: string | null, options: { final?: boolean } = {}): void {
+export function setWaitingMessage(
+  text: string | null,
+  options: { final?: boolean; action?: WaitingAction } = {},
+): void {
   const waitingFinal = text !== null && options.final === true;
+  const waitingAction = text !== null ? (options.action ?? null) : null;
   playerStore.set((state) =>
-    state.waiting === text && state.waitingFinal === waitingFinal
+    state.waiting === text &&
+    state.waitingFinal === waitingFinal &&
+    state.waitingAction?.label === waitingAction?.label &&
+    state.waitingAction?.onAction === waitingAction?.onAction &&
+    state.waitingAction?.cover === waitingAction?.cover
       ? state
-      : { ...state, waiting: text, waitingFinal },
+      : { ...state, waiting: text, waitingFinal, waitingAction },
   );
+}
+
+// ---- Gestos de la persona sobre el vídeo ------------------------------------------
+
+/**
+ * `play`: tocó reproducir (el botón, la capa «Toca para reproducir», la tecla).
+ * `unmute`: quitó el silencio (el botón, la tecla M o el volumen).
+ */
+export type PlayerGesture = 'play' | 'unmute';
+const gestureHandlers = new Set<(gesture: PlayerGesture) => void>();
+
+/** Lo escucha el centro de partido (la vista previa del móvil termina al tocar play). */
+export function onPlayerGesture(handler: (gesture: PlayerGesture) => void): () => void {
+  gestureHandlers.add(handler);
+  return () => gestureHandlers.delete(handler);
+}
+
+/** Solo para el reproductor: la persona acaba de pedir algo con un gesto. */
+export function notePlayerGesture(gesture: PlayerGesture): void {
+  for (const handler of [...gestureHandlers]) {
+    try {
+      handler(gesture);
+    } catch (error) {
+      console.error('[reproductor] Un oyente de onPlayerGesture ha fallado', error);
+    }
+  }
 }
 
 export function setNerdOpen(open: boolean): void {
@@ -648,7 +728,9 @@ export async function confirmChannel(channelName?: string): Promise<boolean> {
 export function resetPlayerApi(): void {
   runtime = null;
   pending = null;
+  pendingMuted = null;
   failureHandlers.length = 0;
+  gestureHandlers.clear();
   nerdHostStore.set(0);
   playerStore.set(INITIAL_PLAYER_STATE);
 }

@@ -42,7 +42,7 @@ import {
   useContextMenu,
   type MenuItem,
 } from '../../ui/index.ts';
-import { useScoreHidden } from '../agenda/score-reveal.ts';
+import { useScoreHidden, useScoreShownInRow } from '../agenda/score-reveal.ts';
 import { aceTagText } from '../search/iptv.ts';
 import { subtitleFor } from './model.ts';
 import { isHalftime, liveMinute, type ChannelOnAir } from './on-air.ts';
@@ -86,6 +86,9 @@ export interface ChannelRowProps {
   tags?: readonly string[] | undefined;
   /** Lo escrito en el buscador o el filtro: lo que casa del nombre se resalta. */
   highlight?: string | undefined;
+  /** Las cifras del partido que echan siguen también «Marcador oculto», como
+      en la agenda (Buscar en el móvil), no solo la regla 29. */
+  agendaScoreRule?: boolean;
 }
 
 function scoreText(home: number, away: number): string {
@@ -214,11 +217,14 @@ export function ChannelRow({
   subtitle: ownSubtitle,
   tags,
   highlight,
+  agendaScoreRule = false,
 }: ChannelRowProps) {
   const { bind, menu } = useContextMenu();
   // El marcador del partido que ves va tapado (regla 29). El «destapado» es
   // el mismo en toda la app: el almacén de la agenda (agenda/score-reveal.ts).
-  const scoreHidden = useScoreHidden(onAir.live?.match.id ?? '', onScreen);
+  const watchHidden = useScoreHidden(onAir.live?.match.id ?? '', onScreen);
+  const shownByAgenda = useScoreShownInRow(onAir.live?.match.id ?? '', onScreen);
+  const scoreHidden = agendaScoreRule ? !shownByAgenda : watchHidden;
   const lastMenuAt = useRef(0);
   const id = useId();
   const lineId = `${id}-ahora`;

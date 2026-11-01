@@ -4,11 +4,14 @@
      controles (Theater), debajo el título con quién controla e «Invitar», y
      la tarjeta «Cuando acabe»; a la derecha, las caras de la gente y las
      pestañas Chat, Siguiente y Gente. Entre 768 y 1024, lo mismo apilado.
-   - Móvil (menos de 768): la sala de siempre, sin tocar su aspecto: la
-     cabecera con el título, «Invitar» y «Salir», el vídeo y las pestañas
-     Chat, Lista, Gente y Ajustes (el líder) debajo (Mobile.tsx). Lo que sí
-     cambia es el funcionamiento: sin reacciones, los co-líderes y «Esperando
-     a todos».
+   - Móvil (menos de 768), como las maquetas ver-juntos.html (fútbol) y
+     ver-juntos-pelis.html: el mismo marcado apilado. Arriba el vídeo de
+     lado a lado, debajo el título con quién controla e «Invitar» o «Salir»,
+     las caras y las mismas pestañas. Lo propio del móvil (Mobile.tsx): en
+     directo, las caras apiladas con los nombres al lado; en Siguiente,
+     «Pasar al siguiente» para quien controla; y sin la tarjeta «Cuando
+     acabe» bajo el vídeo (va en Siguiente). Quién controla y la regla de
+     «Al acabar» están donde en escritorio: Gente y Siguiente.
    - Antes de empezar, «Esperando a todos» (Lobby) encima del vídeo, que ya
      va cargando por debajo.
    - Pantalla completa: solo el vídeo (sin chat). En el iPhone no hay
@@ -33,7 +36,7 @@ import { describeFailure } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
 import { copyText } from '../../player/clipboard.ts';
-import { Button } from '../../ui/Button.tsx';
+import { Button, IconButton } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
 import { Tabs, tabPanelProps } from '../../ui/Segmented.tsx';
 import { Art } from '../cine/Art.tsx';
@@ -42,7 +45,7 @@ import { Chat } from './Chat.tsx';
 import { canControl, controllers, inviteUrl, PartyClient, rememberRoom, roleOf } from './client.ts';
 import { Icon } from '../../ui/Icon.tsx';
 import { MEDIA, useMediaQuery } from '../../lib/media.ts';
-import { MobilePeople, MobileQueue, MobileSettings } from './Mobile.tsx';
+import { MobileFaces, MobileSkip } from './Mobile.tsx';
 import { Faces, joinNames, Lobby, NextCard, NextPanel, People } from './Panels.tsx';
 import { LiveMatches, LiveSources, useRoomMatch } from './LivePanels.tsx';
 import { nextSource, useLiveSources } from './live.ts';
@@ -67,8 +70,6 @@ const AUTO_SWITCH_MAX = 3;
 const CLOSE_CONFIRM_MS = 5_000;
 
 type SideTab = 'chat' | 'siguiente' | 'fuentes' | 'partidos' | 'gente';
-/* Las del móvil, las de siempre (y las del directo). */
-type MobileTab = 'chat' | 'lista' | 'fuentes' | 'partidos' | 'personas' | 'ajustes';
 
 /**
  * «Cambio automático si se cae» (§14): si el vídeo de la sala falla y quien lo
@@ -169,8 +170,7 @@ export function Room({
   const stage = useRef<HTMLDivElement>(null);
   const [player, setPlayer] = useState<RoomPlayer | null>(null);
   const [tab, setTab] = useState<SideTab>('chat');
-  const [mobileTab, setMobileTab] = useState<MobileTab>('chat');
-  /* Desde 768, el rediseño; en el móvil, la sala de siempre. */
+  /* Desde 768, el escritorio; en el móvil, lo mismo apilado con sus retoques (Mobile.tsx). */
   const desk = useMediaQuery(MEDIA.tablet);
   /* `native`: la del navegador; `page`: el vídeo a toda pantalla con CSS (iPhone). */
   const [fullscreen, setFullscreen] = useState<'native' | 'page' | null>(null);
@@ -255,7 +255,6 @@ export function Room({
   const room = state.room;
   const selfId = credential.id;
   const isHost = room?.hostId === selfId;
-  const isLeader = room?.leaderId === selfId;
   const control = canControl(room, selfId);
   const role = roleOf(room, selfId);
   const leaderName = room?.members.find((member) => member.id === room.leaderId)?.name ?? '';
@@ -344,7 +343,6 @@ export function Room({
           video={video.current}
           fullscreen={fullscreen !== null}
           onFullscreen={toggleFullscreen}
-          desk={desk}
         />
       ) : null}
       {room?.playback.lobby && !fullscreen ? (
@@ -360,96 +358,6 @@ export function Room({
       ) : null}
     </div>
   );
-
-  if (!desk) {
-    /* Móvil: la sala de siempre. */
-    const mobileTabs: { value: MobileTab; label: string; count?: number }[] = live
-      ? [
-          { value: 'chat', label: JUNTOS_TEXT.tabChat },
-          ...(liveTabs
-            ? [
-                { value: 'fuentes' as const, label: JUNTOS_TEXT.tabSources },
-                { value: 'partidos' as const, label: JUNTOS_TEXT.tabMatches },
-              ]
-            : []),
-          { value: 'personas', label: JUNTOS_TEXT.tabPeople, count: room?.members.length ?? 0 },
-        ]
-      : [
-          { value: 'chat', label: JUNTOS_TEXT.tabChat },
-          { value: 'lista', label: JUNTOS_TEXT.tabQueue, count: room?.queue.length ?? 0 },
-          { value: 'personas', label: JUNTOS_TEXT.tabPeople, count: room?.members.length ?? 0 },
-          ...(isLeader ? [{ value: 'ajustes' as const, label: JUNTOS_TEXT.tabSettings }] : []),
-        ];
-    const shownTab: MobileTab = mobileTabs.some((item) => item.value === mobileTab)
-      ? mobileTab
-      : 'chat';
-    return (
-      <div className={cx('juntos', fullscreen === 'page' && 'juntos--page-fs')}>
-        {header}
-        {liveSide}
-        <header className="juntos__head">
-          <div className="juntos__heading">
-            <h1 className="juntos__title">{room?.title.title ?? JUNTOS_TEXT.connecting}</h1>
-            {room?.title.subtitle ? <p className="juntos__sub">{room.title.subtitle}</p> : null}
-          </div>
-          <div className="juntos__actions">
-            <Button size="sm" variant="primary" icon="link" onClick={() => void copyLink()}>
-              {JUNTOS_TEXT.invite}
-            </Button>
-            <Button
-              size="sm"
-              variant={isHost ? 'danger' : 'quiet'}
-              icon={isHost && closeArmed ? 'aviso' : 'x'}
-              className={cx('juntos__close', isHost && closeArmed && 'juntos__close--armed')}
-              busy={isHost && closing}
-              aria-label={isHost && closeArmed ? JUNTOS_TEXT.closeArmed : undefined}
-              onClick={() => void leave()}
-            >
-              {isHost
-                ? closeArmed
-                  ? JUNTOS_TEXT.closeArmedShort
-                  : JUNTOS_TEXT.closeRoom
-                : JUNTOS_TEXT.leave}
-            </Button>
-          </div>
-        </header>
-        <div className="juntos__body" data-fullscreen={fullscreen ? 'true' : 'false'}>
-          {stageContent}
-          <aside className="juntos__side">
-            <div className="juntos__side-head">
-              <Tabs
-                label={JUNTOS_TEXT.people}
-                idPrefix="juntos"
-                block
-                items={mobileTabs}
-                value={shownTab}
-                onChange={setMobileTab}
-              />
-            </div>
-            <div className="juntos__panel" {...tabPanelProps('juntos', shownTab)}>
-              {shownTab === 'chat' ? (
-                <Chat
-                  messages={state.chat}
-                  room={room}
-                  selfId={selfId}
-                  onSend={(text) => client.chat(text)}
-                  onTyping={() => client.typing()}
-                />
-              ) : !room ? null : shownTab === 'fuentes' || shownTab === 'partidos' ? (
-                livePanel(shownTab)
-              ) : shownTab === 'lista' ? (
-                <MobileQueue room={room} client={client} selfId={selfId} />
-              ) : shownTab === 'personas' ? (
-                <MobilePeople room={room} client={client} selfId={selfId} />
-              ) : (
-                <MobileSettings room={room} client={client} />
-              )}
-            </div>
-          </aside>
-        </div>
-      </div>
-    );
-  }
 
   const tabs: { value: SideTab; label: string; count?: number }[] = live
     ? [
@@ -469,13 +377,24 @@ export function Room({
       ];
   const shownSide: SideTab = tabs.some((item) => item.value === tab) ? tab : 'chat';
   /* Como la maqueta: quien creó la sala, solo «Invitar» («Cerrar sala» va al
-     final de Gente); los demás, «Salir» (e «Invitar» si controlan). */
+     final de Gente); los demás, «Salir» (e «Invitar» si controlan). En el
+     móvil, con los dos, «Invitar» se queda en el icono: no caben junto al título. */
+  const inviteOnlyIcon = !desk && !isHost && control;
   const deskActions = (
     <>
       {control || isHost ? (
-        <Button variant="primary" icon="link" onClick={() => void copyLink()}>
-          {JUNTOS_TEXT.invite}
-        </Button>
+        inviteOnlyIcon ? (
+          <IconButton
+            variant="primary"
+            icon="link"
+            label={JUNTOS_TEXT.invite}
+            onClick={() => void copyLink()}
+          />
+        ) : (
+          <Button variant="primary" icon="link" onClick={() => void copyLink()}>
+            {JUNTOS_TEXT.invite}
+          </Button>
+        )
       ) : null}
       {isHost ? null : (
         <Button variant="quiet" icon="salir" onClick={() => void leave()}>
@@ -527,10 +446,20 @@ export function Room({
           ) : (
             <h1 className="juntos-info__title">{JUNTOS_TEXT.connecting}</h1>
           )}
-          {room && !live ? <NextCard room={room} onSeeList={() => setTab('siguiente')} /> : null}
+          {/* En el móvil, «Cuando acabe» va solo en la pestaña Siguiente (como la maqueta). */}
+          {room && !live && desk ? (
+            <NextCard room={room} onSeeList={() => setTab('siguiente')} />
+          ) : null}
         </div>
         <aside className="juntos__side">
-          {room ? <Faces room={room} selfId={selfId} /> : null}
+          {/* En directo, en el móvil, las caras apiladas con los nombres al lado (ver-juntos.html). */}
+          {room ? (
+            live && !desk ? (
+              <MobileFaces room={room} selfId={selfId} />
+            ) : (
+              <Faces room={room} selfId={selfId} />
+            )
+          ) : null}
           <div className="juntos__side-head">
             <Tabs
               label={JUNTOS_TEXT.people}
@@ -547,7 +476,6 @@ export function Room({
                 messages={state.chat}
                 room={room}
                 selfId={selfId}
-                desk
                 typing={state.typing}
                 onSend={(text) => client.chat(text)}
                 onTyping={() => client.typing()}
@@ -556,7 +484,10 @@ export function Room({
             ) : !room ? null : shownSide === 'fuentes' || shownSide === 'partidos' ? (
               livePanel(shownSide)
             ) : shownSide === 'siguiente' ? (
-              <NextPanel room={room} client={client} selfId={selfId} onPropose={onPropose} />
+              <>
+                <NextPanel room={room} client={client} selfId={selfId} onPropose={onPropose} />
+                {desk ? null : <MobileSkip room={room} client={client} selfId={selfId} />}
+              </>
             ) : (
               <People
                 room={room}

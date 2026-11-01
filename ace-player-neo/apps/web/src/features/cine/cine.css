@@ -1853,3 +1853,270 @@
     -webkit-line-clamp: 1;
   }
 }
+
+/* ==========================================================================
+   Rediseño del móvil (por debajo de 768 px; maqueta pelis-y-series-escaparate.html).
+   Las pestañas, Mi lista como portada, la rejilla con sus filtros y la ficha
+   son las del escritorio (lo de arriba); aquí, solo lo que cambia en el móvil:
+   el destacado de «Seguir viendo», Mi lista en 3 columnas, la fila de iconos
+   de la ficha a lo ancho y «Volver» redondo. Desde 768 no cambia nada.
+   ========================================================================== */
+
+/* ---- El destacado: lo último a medias en grande, se desliza a lo ancho ---- */
+.cine-dest {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.cine-dest__track {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.cine-dest__track::-webkit-scrollbar {
+  display: none;
+}
+.cine-dest__item {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+.cine-dest__card {
+  position: relative;
+  isolation: isolate;
+  height: 300px;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--hero-fill) 70%, #000) 0%,
+    color-mix(in oklab, var(--hero-fill) 22%, #000) 75%
+  );
+  box-shadow: var(--shadow-2);
+}
+.cine-dest__bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+.cine-dest__bg > .cine-art {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+.cine-dest__bg > .cine-art[data-state='fill'] {
+  background: transparent;
+}
+.cine-dest__blur {
+  opacity: 0.7;
+}
+.cine-dest__blur .cine-art__img {
+  filter: blur(30px) saturate(1.3);
+  transform: scale(1.35);
+}
+/* Abajo, oscuro: el texto blanco se lee sobre cualquier imagen (en claro también). */
+.cine-dest__card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(rgb(0 0 0 / 0) 30%, rgb(0 0 0 / 0.82));
+  pointer-events: none;
+}
+.cine-dest__in {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.cine-dest__kicker {
+  margin: 0;
+  color: rgb(255 255 255 / 0.75);
+  font-size: var(--fs-11);
+  font-weight: var(--wght-strong);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.cine-dest__title {
+  margin: 0;
+  font-size: clamp(26px, 8.4vw, 34px);
+  font-weight: var(--wght-head);
+  font-stretch: 120%;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+/* El enlace mide al menos 44 px (para el dedo) y el recorte a dos líneas va
+   en el texto de dentro (si lo hiciera el h2, el enlace quedaría recortado). */
+.cine-dest__link {
+  display: flex;
+  align-items: flex-end;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: none;
+}
+.cine-dest__name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.cine-dest__link:focus-visible {
+  outline-offset: 2px;
+}
+.cine-dest__meta {
+  overflow: hidden;
+  margin: 0;
+  color: rgb(255 255 255 / 0.78);
+  font-size: var(--fs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Sobre la imagen siempre oscura: pista blanca y relleno amarillo de verdad (en claro también). */
+.cine-dest__bar.progress {
+  --fill: var(--accent);
+  background: rgb(255 255 255 / 0.25);
+  box-shadow: none;
+}
+.cine-dest__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  min-width: 0;
+}
+.cine-dest__actions .cine-dest__play {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 48px;
+}
+/* Mi lista y Ver juntos: redondos de 48, solo el icono (el nombre queda para el lector). */
+.cine-dest__actions .cine-dest__round.btn {
+  flex: none;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.16);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.15);
+  color: #fff;
+}
+.cine-dest__actions .cine-dest__round.btn[aria-pressed='true'] {
+  background: rgb(255 255 255 / 0.24);
+  color: var(--accent);
+}
+.cine-dest__round .btn__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.cine-dest__dots {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+.cine-dest__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line-strong);
+}
+.cine-dest__dot[data-on] {
+  width: 18px;
+  background: var(--accent-edge);
+}
+
+@media (max-width: 767.98px) {
+  /* Las pestañas bajo el título, pegadas a él, y lo de debajo, cerca. */
+  .view-head.cine-deskhead {
+    padding-bottom: 0;
+  }
+  .cine-deskhead > .cine-tabs {
+    margin-top: var(--s-1);
+  }
+  .cine:has(> .cine-deskhead > .cine-tabs) {
+    gap: var(--s-3);
+  }
+  .cine-esc--mobile {
+    padding-top: 0;
+  }
+  /* La portada: más junta que en escritorio, como la maqueta. */
+  .cine-esc--mobile {
+    gap: var(--s-6);
+  }
+  .cine-esc--mobile .cine-esc-row__title {
+    font-size: var(--fs-17);
+  }
+  .cine-esc--mobile .cine-esc-grid {
+    gap: 14px 10px;
+  }
+  /* «También a medias»: carteles de 112 px que llegan hasta el borde de la pantalla. */
+  .cine-esc--mobile .prail.cine-esc-rail {
+    --prail-item-w: 112px;
+    --prail-gap: 10px;
+    margin-right: calc(-1 * (var(--gutter) + var(--safe-right)));
+  }
+  .cine-esc--mobile .cine-half__title {
+    font-size: var(--fs-13);
+  }
+  /* La rejilla: el buscador a todo lo ancho y los idiomas debajo (juntos no
+     caben: la caja del campo no encoge de 250 px). */
+  .cine-browse--desk .cine-desk-tools .cine-head__search {
+    flex: 1 1 100%;
+  }
+
+  /* ---- Ficha ---- */
+  /* «Volver» redondo de 44, solo la flecha (maqueta .tf__bar). */
+  .cine-hero__back.btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .cine-hero__back .btn__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* Mi lista / Ver juntos / Tráiler / Compartir: los cuatro en una fila. */
+  .cine-icons {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 0;
+  }
+  .cine-icons .cine-icons__btn.btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 4px;
+  }
+  .cine-icons .cine-icons__btn .btn__label {
+    overflow: hidden;
+    max-width: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

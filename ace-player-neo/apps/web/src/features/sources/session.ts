@@ -63,7 +63,15 @@
        · en un canal solo de la IPTV, el puente espera a la búsqueda inversa
          o dice que no está en AceStream;
        · en Recientes entra el canal TOCADO, una vez por sesión, al arrancar
-         la primera fuente (sea la IPTV o una AceStream). */
+         la primera fuente (sea la IPTV o una AceStream).
+   - Vista previa del móvil (maqueta movil-ficha-partido.html, dirección B):
+     al abrir la ficha de un PARTIDO con la maquetación móvil (por debajo de
+     768 px; se decide al entrar), lo automático solo arranca AceStream y en
+     silencio. La IPTV no arranca sola (no se gasta la plaza de la cuenta
+     por mirar un partido): sale un botón grande de play en el vídeo. Acaba
+     al tocar play, activar el sonido o elegir una fuente a mano; entonces
+     no cambia lo que suena, vuelve el sonido como estaba y rigen las
+     reglas de siempre (el puente incluido). */
 
 import type {
   FootballMatch,
@@ -115,10 +123,13 @@ import type { NoticeTone } from '../../ui/Toast.tsx';
 import {
   getPlayer,
   kindFromIh,
+  onPlayerGesture,
   onSourceFailed,
   play,
   playerStore,
+  setPlayerMuted,
   setWaitingMessage,
+  type PlayerGesture,
   type PlayerState,
   type PlayOrigin,
   type SourceFailedReply,
@@ -255,6 +266,12 @@ export interface SessionState {
    * IPTV nunca va directo al motor (docs/iptv.md §14.4).
    */
   waitingLibrary: boolean;
+  /**
+   * Vista previa del móvil: lo automático solo arranca AceStream, en
+   * silencio, hasta que la persona actúe (toca play, activa el sonido o
+   * elige una fuente).
+   */
+  preview: boolean;
 }
 
 const EMPTY: SessionState = {
@@ -283,6 +300,7 @@ const EMPTY: SessionState = {
   reverse: 'none',
   recorded: false,
   waitingLibrary: false,
+  preview: false,
 };
 
 export const sessionStore = createStore<SessionState>(EMPTY);
@@ -457,6 +475,21 @@ let offHouse: (() => void) | null = null;
  */
 let laneWait = false;
 let lastPlayer: PlayerState = getPlayer();
+/** La persona toca play en el vídeo: termina la vista previa. */
+let offGesture: (() => void) | null = null;
+/**
+ * La vista previa silenció el vídeo: cómo estaba antes, para devolverlo al
+ * terminar (el silencio de la vista previa nunca se queda para siempre), y la
+ * fuente que silenció (`hash`), la que sigue sonando en silencio si se deja
+ * la ficha con ella en el mini.
+ */
+let previewMute: { before: boolean; hash: string } | null = null;
+/**
+ * Se dejó la sesión con la AceStream de la vista previa sonando en silencio
+ * (el mini): espera a que cambie lo que suena, o a que pare, para devolver el
+ * sonido. Quitarle el silencio a mitad nunca: nadie lo ha pedido.
+ */
+let offOrphanMute: (() => void) | null = null;
 /** El toast «Volver a la IPTV» (atado a esta sesión: se quita al acabarla). */
 let backToastId: number | null = null;
 /** Su gemela en inmersivo: la cápsula tocable sobre el vídeo. */
@@ -479,6 +512,7 @@ function attach(): void {
     lastPlayer = getPlayer();
     offPlayer = playerStore.subscribe(onPlayerChange);
   }
+  if (!offGesture) offGesture = onPlayerGesture(onGesture);
 }
 
 function detach(): void {
@@ -489,6 +523,8 @@ function detach(): void {
   laneWait = false;
   offPlayer?.();
   offPlayer = null;
+  offGesture?.();
+  offGesture = null;
 }
 
 function stopWatchers(): void {
@@ -510,6 +546,7 @@ export function endSession(): void {
   stopWatchers();
   detach();
   dismissBackToast();
+  releasePreviewSound();
   if (sessionStore.get().key) setWaitingMessage(null);
   sessionStore.set(EMPTY);
 }
@@ -534,9 +571,13 @@ export function leaveSession(): void {
   stopScanWatch?.();
   stopScanWatch = null;
   setWaitingMessage(null);
+  // Nada de este partido suena: el sonido vuelve (o, si sigue en silencio la de un partido
+  // anterior en el mini, cuando cambie lo que suena).
+  releasePreviewSound();
   patch({
     autoVerified: false,
     switchArmed: false,
+    preview: false,
     phase: state.phase === 'resolving' ? 'idle' : state.phase,
   });
 }
@@ -551,12 +592,183 @@ function belongsOnScreen(state: SessionState, screen: OnScreen): boolean {
 
 // ---- Entrar a un partido --------------------------------------------------------------
 
+// ---- Vista previa del móvil -----------------------------------------------------------
+
+/** El botón grande de play de la vista previa cuando tu IPTV tiene el partido. */
+export const PREVIEW_IPTV_LABEL = 'Toca para ver · IPTV';
+/*
+ * Los textos del panel de la vista previa son cortos a propósito: en un móvil
+ * en vertical el vídeo mide ~210 px y el panel corta a pocas líneas (player.css).
+ * Que la IPTV espera al toque ya lo dice el botón.
+ */
+/** Lo que dice el vídeo cuando solo está tu IPTV. */
+export const PREVIEW_IPTV_ONLY_TEXT = 'Tu IPTV no arranca sola, para no ocupar tu conexión.';
+/** Mientras se comprueban las AceStream. */
+export const PREVIEW_CHECKING_TEXT = 'Arranca en silencio la primera AceStream que funcione.';
+
+function stopOrphanMute(): void {
+  offOrphanMute?.();
+  offOrphanMute = null;
+}
+
+/** Devuelve el sonido como estaba antes de la vista previa (si llegó a silenciarlo). */
+function restorePreviewSound(): void {
+  stopOrphanMute();
+  const mute = previewMute;
+  previewMute = null;
+  if (mute) setPlayerMuted(mute.before);
+}
+
+/** La persona ha quitado el silencio: el de la vista previa ya no se devuelve. */
+function dropPreviewMute(): void {
+  stopOrphanMute();
+  previewMute = null;
+}
+
+/**
+ * Se deja la sesión (otro partido, otro canal, salir). Si sigue sonando en
+ * silencio la AceStream que silenció la vista previa (el mini), NO se le
+ * quita: el sonido vuelve cuando suene otra cosa o se pare (o lo hereda la
+ * vista previa del partido siguiente). Si no, vuelve ya.
+ */
+function releasePreviewSound(): void {
+  const mute = previewMute;
+  if (!mute) return;
+  if (!getPlayer().muted) {
+    dropPreviewMute();
+    return;
+  }
+  if (screenNow().hash !== mute.hash) {
+    restorePreviewSound();
+    return;
+  }
+  stopOrphanMute();
+  offOrphanMute = playerStore.subscribe(() => {
+    if (previewMute !== mute) {
+      stopOrphanMute();
+      return;
+    }
+    // Alguien le quitó el silencio (los controles): ya está como quiere.
+    if (!getPlayer().muted) dropPreviewMute();
+    else if (screenNow().hash !== mute.hash) restorePreviewSound();
+  });
+}
+
+/**
+ * Un gesto de la persona sobre el vídeo. Quitar el silencio siempre deja el
+ * silencio de la vista previa sin devolver. Terminar la vista previa, solo si
+ * el gesto es sobre ESTE partido: con el partido aún resolviéndose, o con un
+ * canal ajeno en el escenario (el mini de antes), reanudar o quitar el
+ * silencio a eso no es «quiero ver este partido».
+ */
+function onGesture(gesture: PlayerGesture): void {
+  if (gesture === 'unmute') dropPreviewMute();
+  const state = sessionStore.get();
+  if (!state.preview || state.phase !== 'ready') return;
+  const screen = screenNow();
+  if (screen.hash !== null && !state.entries.some((entry) => entry.id === screen.hash)) return;
+  if (gesture === 'unmute') endPreview('drop');
+  else playFromPreview();
+}
+
+/**
+ * Termina la vista previa. Lo que suena sigue sonando. El sonido: `restore`
+ * vuelve a como estaba; `drop` lo deja (la persona acaba de activarlo);
+ * `keep` lo devuelve la fuente que arranque ahora (playEntry), sin quitarle
+ * antes el silencio a lo que hay en pantalla.
+ */
+function endPreview(sound: 'restore' | 'drop' | 'keep' = 'restore'): void {
+  const state = sessionStore.get();
+  if (!state.preview) return;
+  if (sound === 'restore') restorePreviewSound();
+  else if (sound === 'drop') dropPreviewMute();
+  // El botón grande de play ya no pinta nada.
+  if (getPlayer().waitingAction) setWaitingMessage(null);
+  patch({ preview: false });
+}
+
+/**
+ * Silencia el vídeo antes de que arranque sola una AceStream de la vista
+ * previa. Si sigue en silencio la de un partido anterior, hereda cómo estaba
+ * el sonido antes de aquella.
+ */
+function mutePreview(hash: string): void {
+  stopOrphanMute();
+  previewMute = { before: previewMute ? previewMute.before : getPlayer().muted, hash };
+  setPlayerMuted(true);
+}
+
+/** En la vista previa, la IPTV que arrancaría al tocar play (null si no hay). */
+function previewIptv(
+  entries: readonly SourceEntry[],
+  effective: ReadonlyMap<string, Effective>,
+  finished: boolean,
+): SourceEntry | null {
+  const pick = pickAutoSource(entries, effective, finished);
+  return pick && isIptv(pick) ? pick : null;
+}
+
+/** La frase de espera de la vista previa, con el botón grande de play si la IPTV está a un toque. */
+function previewWait(text: string, withIptv: boolean): void {
+  if (!withIptv) {
+    setWaitingMessage(text);
+    return;
+  }
+  const gen = generation;
+  const state = sessionStore.get();
+  const screen = screenNow();
+  setWaitingMessage(text, {
+    action: {
+      label: PREVIEW_IPTV_LABEL,
+      onAction: () => {
+        if (gen === generation) playFromPreview();
+      },
+      // Suena otra cosa (el mini de antes): el botón va encima, que se vea qué ofrece la ficha.
+      cover: screen.hash !== null && !belongsOnScreen(state, screen),
+    },
+  });
+}
+
+/**
+ * Tocar play en la vista previa (el botón grande o el del vídeo): termina y,
+ * si nada de este partido suena, arranca como siempre (la IPTV primero, §7.1),
+ * con sonido.
+ */
+export function playFromPreview(): void {
+  const state = sessionStore.get();
+  if (!state.preview) return;
+  // Ya suena algo de este partido (se reanuda): sigue eso, ahora con sonido.
+  const resume =
+    state.kind !== 'match' || state.phase !== 'ready' || belongsOnScreen(state, screenNow());
+  // Si arranca otra cosa, el sonido vuelve con ella: lo de antes no se oye ni un instante.
+  endPreview(resume ? 'restore' : 'keep');
+  if (resume) return;
+  setWaitingMessage(null);
+  // Tocar play es elegir ver: vale aunque lo automático se hubiera apagado tras un fallo.
+  patch({ stopped: false, failureText: null, manualChosen: false });
+  if (state.scan) {
+    patch({ autoVerified: true });
+    tryAutoStart();
+    return;
+  }
+  // Sin comprobador: la mejor colocada, como al entrar (index.html:4150-4151).
+  const now = clock();
+  const free = state.entries.filter((entry) => !isReported(entry, now));
+  const best = free.find((entry) => entry.id === state.resolution?.candidate?.id) ?? free[0];
+  if (best) playEntry(best, 'user');
+}
+
 /**
  * Entrada al centro de partido (`resolveFootballMatch`, index.html:4136-4157).
  * Idempotente: volver al mismo partido mientras suena (desde el
- * mini-reproductor) no vuelve a resolver nada.
+ * mini-reproductor) no vuelve a resolver nada. `preview`: la ficha se abre
+ * con la maquetación móvil (vista previa: solo AceStream y en silencio); se
+ * decide al entrar y no cambia si luego se gira el móvil.
  */
-export function enterMatch(match: FootballMatch): void {
+export function enterMatch(
+  match: FootballMatch,
+  { preview = false }: { preview?: boolean } = {},
+): void {
   const info = matchInfoOf(match);
   const key = `m:${info.id}`;
   const current = sessionStore.get();
@@ -572,7 +784,7 @@ export function enterMatch(match: FootballMatch): void {
       return;
     }
   }
-  begin({ key, kind: 'match', match: info });
+  begin({ key, kind: 'match', match: info, preview });
   if (!info.channels.length) {
     // Con IPTV activa, la guía puede saber qué canal lo echa (§4.5 y §8.4).
     if (iptvActive()) {
@@ -694,19 +906,35 @@ function applyEntryResolution(data: Resolution): void {
   });
   if (data.scan) configureScan(data.scan);
   if (playingOne) {
-    // Ya suena una fuente de este partido (se recargó la vista): nada que arrancar.
+    // Ya suena una fuente de este partido (se recargó la vista): nada que arrancar, ni vista previa.
     setWaitingMessage(null);
+    endPreview();
     return;
   }
+  const preview = sessionStore.get().preview;
   if (data.scan) {
     patch({ autoVerified: true });
-    setWaitingMessage(`Comprobando ${entries.length} fuentes: arranca la primera que funcione…`);
+    setWaitingMessage(
+      preview
+        ? PREVIEW_CHECKING_TEXT
+        : `Comprobando ${entries.length} fuentes: arranca la primera que funcione…`,
+    );
     tryAutoStart();
     return;
   }
   // Sin comprobador: la mejor colocada, como antes (index.html:4150-4151).
   setWaitingMessage(null);
   const best = entries.find((entry) => entry.id === data.candidate?.id) ?? entries[0];
+  if (preview) {
+    // Vista previa: la mejor AceStream, en silencio; si solo está tu IPTV, a un toque.
+    const ace =
+      best && !isIptv(best)
+        ? best
+        : entries.find((entry) => !isIptv(entry) && !isReported(entry, now));
+    if (ace) playEntry(ace, 'user');
+    else if (entries.some(isIptv)) previewWait(PREVIEW_IPTV_ONLY_TEXT, true);
+    return;
+  }
   if (best) playEntry(best, 'user');
 }
 
@@ -1373,9 +1601,14 @@ function onMainScanError(): void {
     !after.stopped &&
     !belongsOnScreen(after, screenNow())
   ) {
-    const best = after.entries.find((entry) => !isReported(entry, clock()));
+    const now = clock();
+    // En la vista previa, nunca la IPTV sola: la primera AceStream o, si no hay, el botón de play.
+    const best = after.entries.find(
+      (entry) => !isReported(entry, now) && !(after.preview && isIptv(entry)),
+    );
     setWaitingMessage(null);
     if (best) playEntry(best, 'user');
+    else if (after.preview && after.entries.some(isIptv)) previewWait(PREVIEW_IPTV_ONLY_TEXT, true);
   }
 }
 
@@ -1424,9 +1657,11 @@ function tryAutoStart(): boolean {
   const finished = scanFinished(state.scan);
   const lanes = lanesNow();
   laneWait = false;
-  const chosen = pickAutoSource(state.entries, effective, finished, { lanes });
+  // Vista previa del móvil: solo AceStream (la IPTV espera a que se toque play).
+  const iptv = !state.preview;
+  const chosen = pickAutoSource(state.entries, effective, finished, { lanes, iptv });
   /* La que se habría elegido sin mirar a los demás (D35): si es otra, se dice por qué. */
-  const preferred = pickAutoSource(state.entries, effective, finished);
+  const preferred = pickAutoSource(state.entries, effective, finished, { iptv });
   const busy = preferred && preferred.id !== chosen?.id ? takesFromOther(preferred, lanes) : null;
   const total = state.entries.length;
   if (chosen) {
@@ -1442,7 +1677,7 @@ function tryAutoStart(): boolean {
     else
       notify(
         verified
-          ? `Fuente ${number} verificada: arrancando`
+          ? `Fuente ${number} verificada: arrancando${state.preview ? ' en silencio' : ''}`
           : `Ninguna verificada del todo; probamos la fuente ${number}, que da señal floja`,
         { kind: 'signal', icon: 'tv', signal: verified ? 'ok' : 'weak' },
       );
@@ -1453,6 +1688,10 @@ function tryAutoStart(): boolean {
   }
   if (busy && preferred) {
     waitForFreeLane(preferred, busy, finished);
+    return false;
+  }
+  if (state.preview) {
+    previewWaitText(state, effective, finished);
     return false;
   }
   if (finished) {
@@ -1492,6 +1731,52 @@ function tryAutoStart(): boolean {
   return false;
 }
 
+/**
+ * Lo que dice el vídeo en la vista previa mientras no arranca nada: la
+ * verdad (nunca «Arrancando tu IPTV») y, si tu IPTV tiene el partido, el
+ * botón grande de play. Sin IPTV y sin nada que probar, lo de siempre.
+ */
+function previewWaitText(
+  state: SessionState,
+  effective: ReadonlyMap<string, Effective>,
+  finished: boolean,
+): void {
+  const withIptv = previewIptv(state.entries, effective, finished) !== null;
+  const ace = aceCount(state.entries);
+  if (!ace && withIptv) {
+    previewWait(PREVIEW_IPTV_ONLY_TEXT, true);
+    return;
+  }
+  if (finished) {
+    if (state.scan?.status === 'waiting' && ace) {
+      const hour = madridHour(state.scan.retryAt);
+      previewWait(
+        `Sin señal en AceStream. ${hour ? `Reintento a las ${hour}.` : 'Reintento en unos minutos.'}`,
+        withIptv,
+      );
+      return;
+    }
+    if (withIptv) {
+      previewWait('Ninguna AceStream da señal ahora mismo.', true);
+      return;
+    }
+    const text = ace
+      ? `Ninguna de las ${ace} fuentes da señal ahora mismo. Prueba "Rebuscar" o pega un Content ID.`
+      : 'Este partido no tiene fuentes ahora mismo.';
+    patch({ autoVerified: false, failureText: text });
+    setWaitingMessage(null);
+    notify(text, { kind: 'signal', tone: 'err', signal: 'fail' });
+    return;
+  }
+  const checked = state.scan?.checked ?? 0;
+  previewWait(
+    checked > 0
+      ? `Comprobando AceStream… ${checked}/${state.scan?.total ?? state.entries.length}`
+      : PREVIEW_CHECKING_TEXT,
+    withIptv,
+  );
+}
+
 function markAutoTried(hash: string): void {
   sessionStore.set((state) => ({
     ...state,
@@ -1505,7 +1790,8 @@ function maybeInitialSwitch(): void {
   const state = sessionStore.get();
   if (!state.switchArmed || state.stopped || !autoSwitchAllowed()) return;
   const next = pickInitialSwitch(state.entries, state.activeHash, screenNow(), clock());
-  if (!next) return;
+  // La vista previa nunca abre la IPTV sola.
+  if (!next || (state.preview && isIptv(next))) return;
   patch({ switchArmed: false });
   haptic('warning');
   notify(
@@ -1556,6 +1842,12 @@ export function channelTitleFor(state: SessionState, entry: SourceEntry): string
 
 function playEntry(entry: SourceEntry, origin: PlayOrigin): void {
   const state = sessionStore.get();
+  // Vista previa: arranca en silencio (antes del play: es lo que deja arrancar solo a iOS Safari).
+  // Fuera de ella, lo que siga en silencio de una vista previa anterior recupera el sonido.
+  if (state.preview) mutePreview(entry.id);
+  else restorePreviewSound();
+  // El botón grande de play de la vista previa ya no pinta nada: algo arranca.
+  if (getPlayer().waitingAction) setWaitingMessage(null);
   const number = numberOf(state, entry.id);
   const presentation = presentationOf(entry, webSources());
   const effective = effectiveOf(entry, screenNow(), clock());
@@ -1630,7 +1922,9 @@ function onPlayerChange(): void {
   ) {
     stopWatchers();
     setWaitingMessage(null);
-    patch({ stopped: true, autoVerified: false, switchArmed: false });
+    // La vista previa no se queda colgada: lo siguiente, con el sonido de siempre.
+    restorePreviewSound();
+    patch({ stopped: true, autoVerified: false, switchArmed: false, preview: false });
     return;
   }
 
@@ -1709,7 +2003,9 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
   // prueba una vez. Un fallo de cuenta, o la IPTV en pausa, vale para todas.
   const iptvDown =
     accountDown || failure.code === 'iptv_disabled' || failure.code === 'iptv_removed';
-  if (autoSwitch && isIptv(failed) && !iptvDown && !state.stopped && drives(state)) {
+  // Vista previa del móvil: nada de lo automático abre la IPTV (ni variantes ni puente).
+  const preview = state.preview;
+  if (autoSwitch && !preview && isIptv(failed) && !iptvDown && !state.stopped && drives(state)) {
     const next = pickNextIptvVariant(entries, effective, failed, now);
     if (next) {
       const number = entries.findIndex((entry) => entry.id === next.id) + 1;
@@ -1725,6 +2021,7 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
   if (
     autoSwitch &&
     hasIptv &&
+    !preview &&
     !state.stopped &&
     drives(state) &&
     bridgeAllowed(state.bridgeJumps, now)
@@ -1733,13 +2030,19 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
     if (reply) return reply;
   }
   // Motor caído y ninguna IPTV a la que pasar: otra AceStream tampoco abriría;
-  // el reproductor espera al motor como siempre.
-  if (engineDown) return undefined;
+  // el reproductor espera al motor como siempre (en la vista previa, la IPTV a un toque).
+  if (engineDown) {
+    if (preview) offerPreviewIptv(entries, effective, finished);
+    return undefined;
+  }
 
   if (autoSwitch && state.autoVerified && !state.stopped && drives(state)) {
     // Entre AceStream (P16.2): el puente, o su tope, ya decidió sobre la IPTV.
     const lanes = lanesNow();
-    const next = pickAutoSource(entries, effective, finished, { iptv: !hasIptv, lanes });
+    const next = pickAutoSource(entries, effective, finished, {
+      iptv: !hasIptv && !preview,
+      lanes,
+    });
     if (next) {
       // Cambio automático de fuente: un aviso háptico (HAPTIC_MAP), nunca la única señal.
       haptic('warning');
@@ -1755,7 +2058,9 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
       return { next: true };
     }
     // Las que quedan las está viendo otro dispositivo (D35): se dice y se espera a que quede libre.
-    const blocked = pickAutoSource(entries, effective, finished, { iptv: !hasIptv });
+    const blocked = pickAutoSource(entries, effective, finished, {
+      iptv: !hasIptv && !preview,
+    });
     const busy = blocked ? takesFromOther(blocked, lanes) : null;
     if (blocked && busy) {
       laneWait = true;
@@ -1763,6 +2068,13 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
         message: `Esta fuente no responde y ${laneBusyText(blocked, busy)}. Toca una fuente si quieres verla aquí (se la quitarás) o espera: arranca sola cuando quede libre.`,
       };
     }
+    // Vista previa: no se salta a la IPTV; queda a un toque.
+    if (preview && offerPreviewIptv(entries, effective, finished))
+      return {
+        message: finished
+          ? 'Esta fuente no responde y ninguna otra AceStream da señal.'
+          : 'Esta fuente no responde. Sigo comprobando las AceStream.',
+      };
     if (!finished)
       return {
         message:
@@ -1778,6 +2090,7 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
 
   // Manual: se dice cuántas quedan y se deja elegir (regla 19).
   haptic('error');
+  if (preview) offerPreviewIptv(entries, effective, finished);
   const others = entries.filter(
     (entry, i) =>
       i !== index &&
@@ -1794,6 +2107,20 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
       ? `Esta señal no responde. Tienes ${others} ${others === 1 ? 'fuente más' : 'fuentes más'} para este ${what}: prueba otra en el selector.`
       : `Esta señal no responde y no quedan más fuentes para este ${what}. Prueba «Rebuscar» o pega un Content ID.`,
   };
+}
+
+/**
+ * Cae una AceStream de la vista previa: no se salta a la IPTV, se deja a un
+ * toque con el botón de play. Devuelve true si la ofrece.
+ */
+function offerPreviewIptv(
+  entries: readonly SourceEntry[],
+  effective: ReadonlyMap<string, Effective>,
+  finished: boolean,
+): boolean {
+  if (!previewIptv(entries, effective, finished)) return false;
+  previewWait('Esta AceStream no responde.', true);
+  return true;
 }
 
 // ---- El puente IPTV ↔ AceStream (P16.6, docs/iptv.md §7.2) -----------------------------------
@@ -2022,6 +2349,8 @@ export function selectSource(hash: string): void {
   const state = sessionStore.get();
   const entry = state.entries.find((item) => item.id === hash);
   if (!entry) return;
+  // Elegir una fuente a mano termina la vista previa (también la que ya suena: ahora con sonido).
+  endPreview();
   const screen = screenNow();
   // Pulsar la activa mientras suena no hace nada.
   if (screen.hash === hash && (screen.playing || screen.connecting)) return;
@@ -2061,6 +2390,7 @@ export function stepSource(direction: 1 | -1, visible: readonly string[]): void 
 export function addManualSource(raw: string): boolean {
   const hash = normalizeHash(raw);
   if (!hash) return false;
+  endPreview();
   const state = sessionStore.get();
   const title =
     state.match?.channels[0] ||
@@ -2419,6 +2749,7 @@ export async function chooseCandidate(choice: Choice, remember: boolean): Promis
     }
   }
   if (gen !== generation) return;
+  endPreview();
   const resolution = sessionStore.get().resolution;
   const now = clock();
   const candidates = resolution?.candidates ?? [];
@@ -2478,6 +2809,7 @@ export function openPaste(open = true): void {
 
 /** Solo para los tests. */
 export function resetSessionForTests(): void {
+  dropPreviewMute();
   endSession();
   clock = () => Date.now();
 }

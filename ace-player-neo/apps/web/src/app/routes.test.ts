@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { scrollKey } from './scroll-memory.ts';
 import {
   formatVista,
+  islaParent,
+  islaVistas,
   navLabel,
   navParent,
   navVistas,
+  isJuntosRoom,
+  opensOverTabs,
   parseRoute,
   parseVista,
   routeDepth,
@@ -244,5 +248,38 @@ describe('menú lateral (escritorio)', () => {
     expect(sideParent('guia')).toBe('guia');
     expect(sideParent('juntos')).toBe('juntos');
     expect(sideParent('buscar')).toBeNull();
+  });
+});
+
+describe('isla del móvil (rediseño móvil, maqueta movil-barra-isla)', () => {
+  it('Agenda, Canales, Guía y, con VOD, Pelis y series; Buscar y Ajustes no son pestañas', () => {
+    expect(islaVistas({ vod: true })).toEqual(['agenda', 'biblioteca', 'guia', 'cine']);
+    expect(islaVistas({ vod: false })).toEqual(['agenda', 'biblioteca', 'guia']);
+    expect(islaVistas(undefined)).toEqual(['agenda', 'biblioteca', 'guia']);
+  });
+
+  it('la pestaña que se marca: la suya o la de su madre', () => {
+    expect(islaParent('guia')).toBe('guia');
+    expect(islaParent('biblioteca')).toBe('biblioteca');
+    expect(islaParent('partido')).toBe('agenda');
+    expect(islaParent('sala')).toBe('cine');
+    expect(islaParent('juntos')).toBe('cine');
+    expect(islaParent('buscar')).toBeNull();
+    expect(islaParent('ajustes')).toBeNull();
+    expect(islaParent('sistema')).toBeNull();
+  });
+
+  it('Buscar y Ajustes se abren encima de cualquier pestaña', () => {
+    expect(opensOverTabs('buscar')).toBe(true);
+    expect(opensOverTabs('ajustes')).toBe(true);
+    expect(opensOverTabs('agenda')).toBe(false);
+    expect(opensOverTabs('guia')).toBe(false);
+    expect(opensOverTabs('partido')).toBe(false);
+  });
+
+  it('la sala de Ver juntos (con código) va sin la isla; la portada, con ella', () => {
+    expect(isJuntosRoom({ vista: 'juntos', code: 'k3J9xQ2mZpL8wR4t' })).toBe(true);
+    expect(isJuntosRoom({ vista: 'juntos', code: null })).toBe(false);
+    expect(isJuntosRoom({ vista: 'agenda' })).toBe(false);
   });
 });

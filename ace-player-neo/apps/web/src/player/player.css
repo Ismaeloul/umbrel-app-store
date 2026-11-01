@@ -225,6 +225,24 @@
   justify-content: center;
   gap: var(--s-2);
 }
+/* Vista previa del partido en el móvil: el botón grande de play («Toca para ver · IPTV»). */
+.player-msg__play {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-2);
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-l);
+  color: var(--on-video);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.7);
+}
+.player-msg__play:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 /* Reposo: motor, canales y partidos de hoy (inventario §8.1), en píldoras discretas. */
 .player-facts {
   display: flex;
@@ -303,6 +321,27 @@
   }
   .player-msg .btn {
     margin-top: 2px;
+  }
+  /* La vista previa: botón y una frase corta enteros entre las dos filas de controles
+     (el círculo, la etiqueta y hasta tres líneas caben en los ~120 px que quedan). */
+  .player-msg--play {
+    padding: 44px var(--s-4) 48px;
+  }
+  .player-msg--play .player-msg__play {
+    gap: 4px;
+    padding: 2px var(--s-3);
+    font-size: var(--fs-13);
+  }
+  .player-msg--play .player-tap__icon {
+    width: 40px;
+    height: 40px;
+  }
+  .player-msg--play .player-tap__icon .icon {
+    width: 22px;
+    height: 22px;
+  }
+  .player-msg--play .player-msg__text {
+    -webkit-line-clamp: 3;
   }
 }
 
@@ -1149,6 +1188,107 @@
     display: none;
   }
 }
+/* Móvil (< 768; rediseño móvil, maqueta movil-barra-isla): el mini va
+   acoplado DENTRO de la isla, encima de las pestañas. Sin cristal propio (el
+   fondo es el de la isla, o el del .dock cuando va solo: shell.css), más bajo
+   (56), la imagen viva a 64×36, el partido y «67' · DAZN 1» en rojo (lo
+   mismo que la tarjeta del menú lateral) y abajo el progreso como una línea
+   fina. Si algo va mal («Conectando…», «Sin señal») o no hay segunda línea,
+   la frase de estado ocupa su sitio. */
+@media (max-width: 767px) {
+  .player.glass.glass--dense[data-presentation='mini'] {
+    position: relative;
+    gap: 10px;
+    height: 100%;
+    min-height: 0;
+    padding: 0 4px 0 14px;
+    border-radius: inherit;
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  .player[data-presentation='mini'] .player-frame {
+    width: 64px;
+    border-radius: 8px;
+  }
+  .player-mini__info {
+    gap: 2px;
+    padding: 2px 4px;
+  }
+  .player-mini__title,
+  .player-mini__sub,
+  .player-mini__progress,
+  .player-mini__kicker {
+    display: none;
+  }
+  .player-mini__side {
+    display: contents;
+  }
+  .player-mini__side-title,
+  .player-mini__side-sub {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .player-mini__side-title {
+    font-size: var(--fs-13);
+    font-weight: 650;
+  }
+  .player-mini__side-sub {
+    order: 1;
+    color: var(--live-ink);
+    font-size: var(--fs-12);
+    font-weight: 650;
+  }
+  .player-mini__side-sub[data-tone='vod'] {
+    color: var(--text-2);
+  }
+  .player:is(
+      [data-phase='cargando'],
+      [data-phase='reconectando'],
+      [data-phase='error'],
+      [data-phase='bloqueado']
+    )
+    .player-mini__side-sub {
+    display: none;
+  }
+  .player:is(
+      [data-phase='cargando'],
+      [data-phase='reconectando'],
+      [data-phase='error'],
+      [data-phase='bloqueado']
+    )
+    .player-mini__kicker,
+  .player-mini__info:not(:has(.player-mini__side-sub)) .player-mini__kicker {
+    display: flex;
+    order: 1;
+  }
+  .player[data-phase='error'] .player-mini__kicker {
+    color: var(--fail-ink);
+  }
+  .player-mini__line {
+    display: block;
+    position: absolute;
+    left: var(--mini-line-inset, 0px);
+    right: var(--mini-line-inset, 0px);
+    bottom: 0;
+    height: 1.5px;
+    background: var(--line);
+    pointer-events: none;
+  }
+  .player-mini__line i {
+    display: block;
+    height: 100%;
+    background: var(--live);
+    transform: scaleX(var(--v, 1));
+    transform-origin: left;
+    transition: transform var(--dur-estandar) var(--ease-out);
+  }
+  .player-mini__line[data-tone='vod'] i {
+    background: var(--accent);
+  }
+}
 
 /* ---- Corte a negro al cambiar de fuente (W14) ------------------------------------ */
 .player-cut {
@@ -1265,6 +1405,10 @@ body:has(.app[data-immersive='true']) .menu {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* «Fuentes»: solo en el móvil girado, cuando la píldora no repite el canal. */
+.player-1b__source-alt {
+  display: none;
 }
 .player-1b__dot {
   flex: none;
@@ -1489,5 +1633,138 @@ body:has(.app[data-immersive='true']) .menu {
   }
   .player-1b__live::before {
     inset: -7px 0;
+  }
+}
+
+/* ---- Móvil en vertical: la ficha B «Vídeo arriba» (movil-ficha-partido.html) ----
+   Arriba minimizar, «Directo» y la píldora de la fuente; en medio la pausa;
+   abajo el silencio («Silenciado» si lo está) y, a la derecha, PiP, pantalla
+   completa y «Más opciones». Botones redondos de 38 (44 con su zona
+   invisible) y cápsulas oscuras, sin el cristal de las de antes. */
+.player-b__top .player-chrome__lead {
+  gap: 8px;
+}
+.player-b__btn.icon-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgb(9 12 17 / 0.62);
+  color: var(--on-video);
+}
+.player-b__btn.icon-btn[aria-pressed='true'] {
+  color: var(--accent);
+}
+.player-b__end {
+  gap: 8px;
+}
+.player-b__top .player-1b__live[data-mode='live'] {
+  min-height: 30px;
+  background: rgb(9 12 17 / 0.62);
+}
+.player-b__top .player-1b__live[data-mode='live'] .live-dot {
+  --live: #ff3b30;
+}
+.player-b__source.player-1b__source {
+  position: relative;
+  flex: 0 1 auto;
+  max-width: 60%;
+  min-height: 30px;
+  border: 0;
+  background: rgb(9 12 17 / 0.62);
+  box-shadow: none;
+  font-size: var(--fs-12);
+  font-weight: 700;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.player-b__mute {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: rgb(9 12 17 / 0.62);
+  box-shadow: none;
+  color: var(--on-video);
+  font-size: var(--fs-12);
+  font-weight: 700;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.player-b__mute[data-muted='false'] {
+  justify-content: center;
+  padding: 0;
+}
+.player-b__top .player-1b__live::before,
+.player-b__source::before,
+.player-b__mute::before,
+.player-b__btn.icon-btn::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: var(--r-pill);
+}
+.player-b__top .player-1b__live,
+.player-b__source {
+  position: relative;
+}
+.player-b__top .player-1b__live::before,
+.player-b__source::before {
+  inset: -7px 0;
+}
+/* La pausa, centrada en lo que queda encima de la fila de abajo: así la
+   cápsula de estado (que sube justo encima de esa fila) no la pisa. */
+.player:has(.player-b__top) .player-1b__center {
+  bottom: 44px;
+}
+.player:has(.player-b__top) .player-1b__play {
+  width: 52px;
+  height: 52px;
+}
+/* La cápsula de estado del armazón sube lo justo: la fila de abajo de la
+   ficha B mide 38 (antes, 52 de la pausa grande). */
+.stage:has(.player-chrome[data-visible='true'] .player-chrome__bottom.player-b__bottom)
+  .stage__status {
+  --status-lift: -44px;
+}
+
+/* El móvil en horizontal (1B a pantalla completa, movil-reproductor.html):
+   sin el volumen, que para eso están los botones del móvil; solo si está
+   silenciado se queda, para poder devolver el sonido. */
+@media (pointer: coarse) and (max-height: 540px) and (orientation: landscape) {
+  .player[data-immersive='true'] .player-1b__vol[data-muted='false'] {
+    display: none;
+  }
+  .player[data-immersive='true'] .player-1b__top .player-cap .icon-btn,
+  .player[data-immersive='true'] .player-1b__source,
+  .player[data-immersive='true'] .player-1b__live {
+    position: relative;
+  }
+  .player[data-immersive='true'] .player-1b__top .player-cap .icon-btn::before,
+  .player[data-immersive='true'] .player-1b__source::before,
+  .player[data-immersive='true'] .player-1b__live::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: var(--r-pill);
+  }
+  .player[data-immersive='true'] .player-1b__source::before {
+    inset: -5px 0;
+  }
+  .player[data-immersive='true'] .player-1b__live::before {
+    inset: -7px 0;
+  }
+  /* Sin partido, el titular ya dice el canal: la píldora se queda en «F2»
+     (o en «Fuentes» si no hay número). */
+  .player[data-immersive='true'] .player-1b__source[data-dup='true'] .player-1b__source-name {
+    display: none;
+  }
+  .player[data-immersive='true'] .player-1b__source[data-dup='true'] .player-1b__source-alt {
+    display: inline;
   }
 }

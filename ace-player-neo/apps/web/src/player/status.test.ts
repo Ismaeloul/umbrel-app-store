@@ -175,6 +175,9 @@ describe('mini-reproductor y datos técnicos', () => {
     expect(miniKicker(playing())).toBe('Sonando');
     expect(miniKicker(playing({ phase: 'pausado' }))).toBe('En pausa');
     expect(miniKicker(playing({ phase: 'cargando' }))).toBe('Conectando…');
+    // La vista previa del móvil arranca en silencio: no «suena».
+    expect(miniKicker(playing({ muted: true }))).toBe('En silencio');
+    expect(miniKicker(playing({ volume: 0 }))).toBe('En silencio');
   });
   it('velocidades como la 0.6.59 y filas del panel', () => {
     expect(formatSpeed(214)).toBe('214 KB/s');

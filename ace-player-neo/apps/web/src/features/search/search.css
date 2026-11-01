@@ -195,3 +195,264 @@
   color: var(--text-2);
   font-size: var(--fs-13);
 }
+
+/* ---- Móvil (por debajo de 768; maqueta buscar-ajustes.html) ------------------------
+   `.search--movil` solo lo pone la vista con useLayout().kind === 'mobile', así
+   que desde 768 no cambia nada. Cabecera: la flecha de volver y el campo en
+   una fila (el titular, solo para lectores de pantalla). Debajo, rótulos en
+   mayúsculas grises y tarjetas con filas de 60 px, como en la maqueta. */
+.search--movil {
+  gap: var(--s-4);
+}
+.search-head .view-head__row {
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+/* El titular sigue ahí (el armazón le pasa el foco al llegar), pero no se ve. */
+.search-head .view-head__titles {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.search-head .view-head__actions {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin-left: 0;
+}
+/* La pastilla «Modo demo» no cabe junto al campo: aquí sobra (el resto de vistas la llevan). */
+.search-head .view-head__demo {
+  display: none;
+}
+.search-head .search-field {
+  flex: 1 1 auto;
+  order: -1;
+  min-width: 0;
+}
+.search--movil .search-field .field__box {
+  min-height: 52px;
+  padding: 0 6px 0 18px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.search--movil .search-field .field__box:focus-within {
+  box-shadow: inset 0 0 0 2px var(--accent-edge);
+}
+.search--movil .search-field .field__input {
+  height: 50px;
+  font-size: 1rem;
+  font-weight: var(--wght-medium);
+  caret-color: var(--accent-edge);
+}
+.search--movil .search-field__clear {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 50%;
+  background: var(--line-soft);
+  color: var(--text-2);
+}
+/* Táctil: la ✕ mide 40, su zona llega a 44 sin mover el campo. */
+.search--movil .search-field__clear::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+}
+
+/* Chips «Todo · N», «Partidos · N»…: a sangre, con desplazamiento lateral. */
+.search-chips {
+  display: flex;
+  gap: 8px;
+  margin-top: calc(-1 * var(--s-1));
+  margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
+    calc(-1 * (var(--gutter) + var(--safe-right)));
+  padding-inline: calc(var(--gutter) + var(--safe-left)) calc(var(--gutter) + var(--safe-right));
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.search-chips::-webkit-scrollbar {
+  display: none;
+}
+.search-chips > * {
+  flex: none;
+}
+
+/* Rótulos: «PARTIDOS», «EN TU BIBLIOTECA»… en versalitas grises. */
+.search--movil .search-sec {
+  gap: var(--s-2);
+}
+.search-sec__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.search--movil .search-sec__title,
+.search-block__title {
+  padding-inline: 4px;
+  color: var(--text-3);
+  font-size: var(--fs-12);
+  font-weight: 650;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.search--movil .search-sec__count {
+  letter-spacing: 0;
+}
+.search-sec__more {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  margin-block: -12px;
+  padding: 0 4px;
+  color: var(--accent-ink);
+  font-size: var(--fs-13);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* Tarjetas de resultados (Partidos, Pelis y series), como `.lib-list`. */
+.search-card {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
+  overflow: hidden;
+}
+.search-card > li + li {
+  border-top: 1px solid var(--line);
+}
+.search-res {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+.search-res:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent-edge);
+}
+.search-res:active {
+  background: var(--surface-2);
+}
+
+/* ---- Móvil sin texto: Recientes, Atajos y «Pegar un enlace» -------------------------- */
+.search-start {
+  display: grid;
+  gap: var(--s-5);
+  min-width: 0;
+}
+.search-block {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.search-lines {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.search-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+}
+.search-line__main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 48px;
+  padding-inline: 4px;
+  color: var(--text);
+  font-size: var(--fs-15);
+  text-align: left;
+}
+.search-line__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.search-line__lead,
+.search-line__trail {
+  flex: none;
+  color: var(--text-3);
+}
+.search-line__x {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  margin-right: -10px;
+  border-radius: 50%;
+  color: var(--text-3);
+}
+.search-line__main:focus-visible,
+.search-line__x:focus-visible,
+.search-quick__item:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--r-m);
+}
+.search-line__x:focus-visible {
+  border-radius: 50%;
+}
+.search-quick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 6px;
+}
+.search-quick__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 6px 14px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: var(--lh-snug);
+  text-align: left;
+}
+.search-quick__icon {
+  flex: none;
+  color: var(--accent-ink);
+}
+@media (hover: hover) and (pointer: fine) {
+  .search-line__main:hover,
+  .search-line__x:hover {
+    color: var(--text);
+  }
+  .search-quick__item:hover,
+  .search-res:hover {
+    background: var(--surface-2);
+  }
+}

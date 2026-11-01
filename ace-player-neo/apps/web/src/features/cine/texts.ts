@@ -401,7 +401,7 @@ export function listFailedText(title: string, adding: boolean): string {
     : `No se ha podido quitar «${title}» de Mi lista.`;
 }
 
-// ---- Rediseño de escritorio (≥ 768 px): pestañas, portada (Mi lista) y ficha -------------
+// ---- Rediseño (escritorio desde 768 px y, después, el móvil): pestañas, Mi lista y ficha ---
 
 export const DESK_TEXT = {
   /** El titular de la barra, como en el menú lateral. */
@@ -416,6 +416,8 @@ export const DESK_TEXT = {
   shareFailed: 'No se ha podido copiar el enlace.',
   noTrailer: 'Este título no tiene tráiler',
   moreActions: 'Más acciones',
+  /** Móvil: la fila de lo demás a medias, bajo el destacado. */
+  alsoHalf: 'También a medias',
   emptyTitle: 'Tu lista está vacía',
   emptyText:
     'Añade películas y series desde su ficha con «Añadir a mi lista» y saldrán aquí, separadas en Series y Películas.',

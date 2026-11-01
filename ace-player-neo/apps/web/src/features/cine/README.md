@@ -15,7 +15,17 @@ barra lleva las pestañas Inicio / Películas / Series / Mi lista · N; Inicio e
 el escaparate (`Escaparate.tsx`: «Seguir viendo» en grande, «También a
 medias» y «Mi lista», sin novedades), Películas y Series abren la rejilla con
 su buscador, chips y orden, y la ficha lleva «Seguir · T3 E4» y Mi lista / Ver
-juntos / Tráiler / Compartir. El móvil sigue con la portada en filas.
+juntos / Tráiler / Compartir.
+
+Desde el rediseño del móvil (< 768 px; maqueta pelis-y-series-escaparate.html)
+el móvil va igual: pestañas Mi lista · Películas · Series (sin «Inicio»), Mi
+lista como portada y la misma ficha. Lo propio del móvil: arriba de Mi lista,
+el destacado (`Destacado` en `Escaparate.tsx`: lo último a medias en grande,
+«Seguir · T3 E4», Mi lista y Ver juntos redondos, se desliza, con puntos),
+debajo «También a medias» y Series y Películas en 3 columnas; en la ficha,
+«Volver» redondo y la fila de iconos a lo ancho. La portada en filas
+(`Rows.tsx`, `ContinueRail`, `MyListRow`/`MyListScreen`, la hoja
+`CategorySheet`) ya no se pinta en ningún tamaño.
 
 | Fichero                                    | Qué                                                                                                                                                                                                           |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

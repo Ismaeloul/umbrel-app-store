@@ -49,7 +49,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { api, describeFailure, useApiQuery, useIptvActive, useVodActive } from '../../api/index.ts';
-import { rememberViewParam, useNavigate } from '../../app/router.tsx';
+import { useNavigate } from '../../app/router.tsx';
 import { channelTone, oklchCss } from '../../lib/color.ts';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -59,16 +59,11 @@ import { Button } from '../../ui/Button.tsx';
 import { ChannelMark } from '../../ui/ChannelMark.tsx';
 import { Chip } from '../../ui/Chip.tsx';
 import { Icon } from '../../ui/Icon.tsx';
-import type { IconName } from '../../ui/icons.ts';
 import { isTopOverlay, overlayRoot, popOverlay, pushOverlay, trapTab } from '../../ui/overlay.ts';
-import { TeamMark } from '../../ui/TeamMark.tsx';
-import { versusSide } from '../agenda/cards.ts';
 import { useLibraryQuery, useNow, useSchedule, useScores } from '../agenda/data.ts';
-import { dayLabel, liveMinute, madridClock, matchTitle } from '../agenda/domain.ts';
-import { setAgendaChip, setAgendaDay, setAgendaMode } from '../agenda/state.ts';
+import { madridClock, matchTitle } from '../agenda/domain.ts';
 import { Art } from '../cine/Art.tsx';
 import { useSettled } from '../cine/data.ts';
-import { MY_LIST_CAT } from '../cine/model.ts';
 import { saveCredential, saveName, savedName } from '../juntos/client.ts';
 import { filterItems, findKnownItem, foldText } from '../library/model.ts';
 import { useOnAir } from '../library/on-air.ts';
@@ -78,10 +73,16 @@ import { registerGuideNowDemo, registerIptvChannelsDemo } from './demo-register.
 import { isHashOrLink } from './model.ts';
 import { goToEngineSearch } from './navigation.ts';
 import {
+  MatchSummary,
+  Marked,
+  runShortcut as goShortcut,
+  SHORTCUTS,
+  type ShortcutKey,
+} from './quick-rows.tsx';
+import {
   addRecent,
   channelBrand,
   GROUP_TITLE,
-  highlightParts,
   logoText,
   QUICK_MIN,
   readRecents,
@@ -106,15 +107,6 @@ const SETTLE_MS = 160;
 /** Canales y títulos que se piden como mucho (por tipo). */
 const CHANNELS_MAX = 8;
 const TITLES_MAX = 6;
-
-type ShortcutKey = 'directo' | 'equipos' | 'milista' | 'avisos';
-
-const SHORTCUTS: ReadonlyArray<{ key: ShortcutKey; label: string; icon: IconName }> = [
-  { key: 'directo', label: 'En directo ahora', icon: 'directo' },
-  { key: 'equipos', label: 'Mis equipos', icon: 'camiseta' },
-  { key: 'milista', label: 'Mi lista', icon: 'marcado' },
-  { key: 'avisos', label: 'Mis avisos', icon: 'campana' },
-];
 
 interface QuickChannel {
   id: string;
@@ -429,20 +421,7 @@ function Palette({ nonce, onClose }: { nonce: number; onClose(): void }) {
   const runShortcut = (key: ShortcutKey) => {
     haptic('selection');
     onClose();
-    if (key === 'directo') {
-      setAgendaDay(null);
-      setAgendaChip('live');
-      navigate({ vista: 'agenda' });
-    } else if (key === 'equipos') {
-      setAgendaMode('forYou');
-      navigate({ vista: 'agenda' });
-    } else if (key === 'milista') {
-      rememberViewParam('cine', 'cinecat', MY_LIST_CAT);
-      navigate({ vista: 'cine', id: null });
-    } else {
-      // Los avisos de partidos se eligen con tus equipos y ligas (Ajustes → Tu fútbol).
-      navigate({ vista: 'ajustes', seccion: 'futbol' });
-    }
+    goShortcut(navigate, key);
   };
 
   const pasteLink = async () => {
@@ -882,17 +861,6 @@ function Section({
   );
 }
 
-function Marked({ text, query }: { text: string; query: string }) {
-  const [before, hit, after] = highlightParts(text, query);
-  return (
-    <>
-      {before}
-      {hit ? <mark>{hit}</mark> : null}
-      {after}
-    </>
-  );
-}
-
 function EmptyStart({
   options,
   recents,
@@ -986,66 +954,9 @@ function MatchOption({
   today: string;
   score: LiveScore | null;
 }) {
-  const { match, phase } = item;
-  const live = phase === 'live';
-  const home = versusSide(match, 'home');
-  const away = versusSide(match, 'away');
-  const title = match.away ? `${home.name} – ${away.name}` : matchTitle(match);
-  // Las fuentes del partido en directo: las del precalentado del servidor (si ya las sabe).
-  const preheat = useApiQuery(
-    'footballPreheat',
-    { params: { matchId: match.id } },
-    { enabled: live && (match.channels?.length ?? 0) > 0, staleTime: 30_000, retry: false },
-  );
-  const found = preheat.data?.preheat;
-  const sources = found ? found.total || found.candidateCount : 0;
-  const minute = liveMinute(score);
-  const when = minute ? (minute.halftime ? 'Descanso' : `${minute.minute}'`) : 'Directo';
-  const day = dayLabel(match.date, today);
-  const dayText =
-    day.primary === 'Hoy' || day.primary === 'Mañana'
-      ? day.primary
-      : `${day.primary} ${day.number}`;
-  const rest = live
-    ? [match.competition, sources ? `${sources} ${sources === 1 ? 'fuente' : 'fuentes'}` : null]
-    : phase === 'done'
-      ? ['Terminado', match.competition]
-      : [dayText, match.time, match.competition];
   return (
     <div {...props}>
-      <span className="qs-crests" aria-hidden="true">
-        {[home, away].map((team, index) => (
-          <TeamMark
-            key={index}
-            name={team.name}
-            short={team.short}
-            colors={team.colors}
-            crest={team.crest}
-            size={24}
-            lit={live}
-          />
-        ))}
-      </span>
-      <span className="qs-opt__text">
-        <b>
-          <Marked text={title} query={query} />
-        </b>
-        <small>
-          {live ? (
-            <>
-              <span className="qs-live-dot" aria-hidden="true" />
-              <span className="qs-live">{when}</span>
-              {' · '}
-            </>
-          ) : null}
-          {rest.filter(Boolean).join(' · ')}
-        </small>
-      </span>
-      {live ? (
-        <span className="qs-go" aria-hidden="true">
-          <Icon name="play" size={16} />
-        </span>
-      ) : null}
+      <MatchSummary item={item} query={query} today={today} score={score} />
     </div>
   );
 }

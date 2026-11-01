@@ -9,8 +9,8 @@
 .stage[data-presentation='stage'] ~ .views .view-head {
   padding-top: var(--s-3);
 }
-/* Si las acciones no caben junto al titular (móvil estrecho, títulos largos),
-   bajan a la línea siguiente: nunca ensanchan la página. */
+/* Las acciones nunca ensanchan la página: en el móvil el título cede y se
+   corta (ver la regla de max-width: 767px más abajo). */
 .view-head__row {
   display: flex;
   flex-wrap: wrap;
@@ -66,6 +66,46 @@
   font-stretch: var(--w-tight);
   white-space: nowrap;
 }
+/* Móvil: el título y los botones van siempre en una sola fila (maqueta
+   pelis-y-series-escaparate). El título cede: baja un poco de tamaño en
+   pantallas estrechas y, si aun así no cabe, se corta con puntos suspensivos;
+   los botones no encogen nunca. */
+@media (max-width: 767px) {
+  .view-head__row,
+  .view-head__actions {
+    flex-wrap: nowrap;
+  }
+  .view-head__titles {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .view-head__title {
+    font-size: clamp(1.375rem, 6.2vw, var(--fs-30));
+  }
+  .view-head__actions > * {
+    flex: none;
+  }
+}
+/* Móvil estrecho: «Modo demo» se queda en «Demo» para dejar sitio al título. */
+@media (max-width: 400px) {
+  .view-head__demo {
+    padding: 0 8px;
+  }
+  .view-head__demo-pre {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .view-head__demo-word {
+    display: inline-block;
+  }
+  .view-head__demo-word::first-letter {
+    text-transform: uppercase;
+  }
+}
 /* Móvil estrecho: el motor se queda en el rayo (como la 0.6.59, que dejaba el punto). */
 @media (max-width: 380px) {
   .view-head__engine .engine__text {
@@ -76,7 +116,20 @@
     clip-path: inset(50%);
   }
 }
-/* El buscador de la barra (Ctrl K): solo desde 768; en el móvil, Buscar es una pestaña. */
+/* Móvil (maqueta buscar-ajustes): la lupa y el engranaje, círculos de 44 a la
+   derecha; dentro de Buscar o Ajustes, la flecha para volver delante del título. */
+.view-head__tab .icon {
+  width: 20px;
+  height: 20px;
+}
+.view-head__engine--quiet {
+  display: none;
+}
+.view-head__back {
+  margin-left: -10px;
+  color: var(--text);
+}
+/* El buscador de la barra (Ctrl K): solo desde 768; en el móvil, la lupa de la cabecera. */
 .view-head__search {
   display: none;
 }

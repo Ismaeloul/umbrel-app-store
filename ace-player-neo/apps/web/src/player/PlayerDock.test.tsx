@@ -23,9 +23,12 @@ import { fixture, mockFetch } from '../test/fetch.ts';
 import {
   hostNerdPanel,
   INITIAL_PLAYER_STATE,
+  onPlayerGesture,
   play,
   playerStore,
   resetPlayerApi,
+  setPlayerMuted,
+  setWaitingMessage,
   type PlayerState,
 } from './api.ts';
 import PlayerDock, { sharedRuntimeForTests } from './index.tsx';
@@ -130,6 +133,77 @@ describe('reproductor en grande', () => {
     expect(video).not.toHaveAttribute('controls');
   });
 
+  it('vista previa del móvil: un botón grande de play con su texto, sin «Buscando señal»', () => {
+    const onAction = vi.fn();
+    renderDock();
+    act(() => {
+      setWaitingMessage('Tu IPTV tiene este partido.', {
+        action: { label: 'Toca para ver · IPTV', onAction },
+      });
+    });
+    expect(screen.queryByText('Buscando señal')).toBeNull();
+    expect(
+      screen.getByText('Tu IPTV tiene este partido.', { selector: '.player-msg__text' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Toca para ver · IPTV' }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    act(() => setWaitingMessage(null));
+    expect(screen.queryByRole('button', { name: 'Toca para ver · IPTV' })).toBeNull();
+  });
+
+  it('vista previa con otro canal aún en el escenario (el mini): el botón grande va encima solo si lo pide', () => {
+    const onAction = vi.fn();
+    renderDock();
+    setPlayer(playing());
+    act(() => {
+      setWaitingMessage('Tu IPTV no arranca sola.', {
+        action: { label: 'Toca para ver · IPTV', onAction },
+      });
+    });
+    // Sin `cover`, lo que suena manda (el panel de espera no tapa un vídeo propio).
+    expect(screen.queryByRole('button', { name: 'Toca para ver · IPTV' })).toBeNull();
+    act(() => {
+      setWaitingMessage('Tu IPTV no arranca sola.', {
+        action: { label: 'Toca para ver · IPTV', onAction, cover: true },
+      });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Toca para ver · IPTV' }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('el silencio pedido antes de montar llega al <video> antes del runtime: nadie publica «sin silencio»', () => {
+    setPlayerMuted(true);
+    const seen: boolean[] = [];
+    const off = playerStore.subscribe(() => seen.push(playerStore.get().muted));
+    try {
+      const { container } = renderDock();
+      const video = container.querySelector('video') as HTMLVideoElement;
+      expect(video.muted).toBe(true);
+      expect(playerStore.get().muted).toBe(true);
+      expect(seen).not.toContain(false);
+    } finally {
+      off();
+    }
+  });
+
+  it('quitar el silencio con los controles avisa del gesto (la vista previa termina ahí); silenciar, no', async () => {
+    const gestures: string[] = [];
+    const off = onPlayerGesture((gesture) => gestures.push(gesture));
+    try {
+      const { container } = renderDock();
+      setPlayer(playing());
+      fireEvent.click(screen.getByRole('button', { name: 'Silenciar' }));
+      expect(gestures).toEqual([]);
+      const video = container.querySelector('video') as HTMLVideoElement;
+      expect(video.muted).toBe(true);
+      fireEvent.click(await screen.findByRole('button', { name: 'Activar sonido' }));
+      expect(video.muted).toBe(false);
+      expect(gestures).toEqual(['unmute']);
+    } finally {
+      off();
+    }
+  });
+
   it('en reposo, los tres datos del panel (§8.1): motor, canales y partidos de HOY (en Madrid)', async () => {
     const schedule = fixture<{ days: Array<{ date: string; matches: unknown[] }> }>(
       'footballSchedule',
@@ -157,19 +231,19 @@ describe('reproductor en grande', () => {
     expect(net.calls.some((call) => call.url.includes('/api/v1/football'))).toBe(false);
   });
 
-  it('botón de directo: relleno en el borde, «Ir al directo · −34 s» por detrás y «Reanudar» en pausa', () => {
+  it('móvil en vertical (ficha B): una sola píldora DIRECTO, gris con la flecha si vas por detrás y «Reanudar» en pausa', () => {
     renderDock();
     setPlayer(playing());
-    expect(screen.getByRole('button', { name: 'Ya en directo' })).toHaveAttribute(
-      'data-mode',
-      'live',
-    );
+    const live = screen.getByRole('button', { name: 'En directo' });
+    expect(live).toHaveAttribute('data-mode', 'live');
+    expect(live.textContent).not.toMatch(/\d/);
     setPlayer({ live: { available: true, atLive: false, behindS: 34, delayS: 40 } });
     const behind = screen.getByRole('button', {
       name: 'Ir al directo (vas 34 segundos por detrás)',
     });
-    expect(behind).toHaveTextContent('Ir al directo · −34 s');
     expect(behind).toHaveAttribute('data-mode', 'behind');
+    // Sin contador: la píldora solo dice «Directo».
+    expect(behind.textContent).not.toMatch(/\d/);
     setPlayer({
       phase: 'pausado',
       desiredPlaying: false,
@@ -177,6 +251,32 @@ describe('reproductor en grande', () => {
     });
     expect(screen.getByRole('button', { name: 'Reanudar en directo' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reproducir' })).toBeInTheDocument();
+  });
+
+  it('móvil en horizontal por debajo de 768 (inmersivo): los controles mínimos «1B», como a 844', () => {
+    const realMatchMedia = window.matchMedia;
+    // 667×375 (iPhone SE girado): sin min-width de 768, pero en horizontal y bajo.
+    window.matchMedia = ((query: string) => ({
+      matches: /orientation: landscape/.test(query),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const { container } = renderDock();
+      setPlayer(playing());
+      expect(container.querySelector('.player')).toHaveAttribute('data-immersive', 'true');
+      expect(container.querySelector('.player-1b__bottom')).not.toBeNull();
+      expect(container.querySelector('.player-b__top')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Volver' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Ver todas las fuentes/ })).toBeInTheDocument();
+    } finally {
+      window.matchMedia = realMatchMedia;
+    }
   });
 
   it('escritorio (1B): silencio y barra de volumen junto a la barra del directo', () => {
@@ -208,20 +308,32 @@ describe('reproductor en grande', () => {
     }
   });
 
-  it('controles: pausa, −30 s, silencio y minimizar; y la línea de estado bajo el vídeo', () => {
+  it('controles del móvil en vertical (ficha B): pausa, silencio, minimizar y la fuente; −30 s en el menú; y la línea de estado', async () => {
     // Sin matchMedia (jsdom) cuenta como móvil: detener va en «Más opciones», como en la maqueta.
-    const { handlers } = renderDock();
+    const { handlers, container } = renderDock();
     setPlayer(playing());
-    expect(screen.getByRole('button', { name: 'Pausar' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Detener' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Minimizar el reproductor' }));
-    expect(handlers.onMinimize).toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Retroceder 30 segundos' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Silenciar' })).toBeInTheDocument();
     expect(statusStore.get().base).toEqual({
       text: 'Fuente 1 verificada. Vas en directo.',
       signal: 'ok',
     });
+    expect(screen.getByRole('button', { name: 'Pausar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Detener' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Minimizar el reproductor' }));
+    expect(handlers.onMinimize).toHaveBeenCalled();
+    // La píldora de la fuente abre el panel de fuentes.
+    expect(screen.getByRole('button', { name: /Ver todas las fuentes/ })).toBeInTheDocument();
+    // −30 s ya no va sobre el vídeo: está en «Más opciones».
+    expect(screen.queryByRole('button', { name: 'Retroceder 30 segundos' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Más opciones' }));
+    const menu = await screen.findByRole('menu', { name: 'Opciones del reproductor' });
+    expect(within(menu).getByRole('menuitem', { name: /Retroceder 30 s/ })).toBeEnabled();
+    fireEvent.keyDown(menu, { key: 'Escape' });
+    // Silencio: solo el altavoz; silenciado, «Silenciado» con su palabra.
+    fireEvent.click(screen.getByRole('button', { name: 'Silenciar' }));
+    const video = container.querySelector('video') as HTMLVideoElement;
+    expect(video.muted).toBe(true);
+    const muted = await screen.findByRole('button', { name: 'Activar sonido' });
+    expect(muted).toHaveTextContent('Silenciado');
   });
 
   it('ratón: controles que se esconden a los 2,5 s solo si suena, clic que pausa a los 190 ms y doble clic a pantalla completa (B-102, B-088)', async () => {
@@ -532,13 +644,15 @@ describe('reproductor en grande', () => {
     expect(await screen.findByRole('dialog', { name: 'Datos técnicos' })).toBeInTheDocument();
   });
 
-  it('la estrella sabe si el canal está en favoritos', async () => {
+  it('la estrella sabe si el canal está en favoritos (en el móvil, en «Más opciones»)', async () => {
     renderDock();
     setPlayer(playing());
-    expect(await screen.findByRole('button', { name: 'Quitar de favoritos' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Más opciones' }));
+    const menu = await screen.findByRole('menu', { name: 'Opciones del reproductor' });
+    // La biblioteca llega por la red: el menú se rehace al tenerla.
+    expect(
+      await within(menu).findByRole('menuitem', { name: /Quitar de favoritos/ }),
+    ).toBeInTheDocument();
   });
 
   it('atajos en el registro central (salen en la ayuda «?»): espacio/K, M, J, F, P, S, G y ← →', () => {
@@ -783,6 +897,15 @@ describe('reproductor en grande', () => {
 });
 
 describe('mini-reproductor «Sonando»', () => {
+  it('en silencio (la vista previa del partido) dice «En silencio» y no anima el ecualizador', () => {
+    renderDock('mini');
+    setPlayer(playing({ muted: true }));
+    expect(screen.queryByText('Sonando')).toBeNull();
+    const kicker = document.querySelector('.player-mini__kicker')!;
+    expect(kicker).toHaveTextContent('En silencio');
+    expect(kicker.querySelector('.player-eq')).toHaveAttribute('data-playing', 'false');
+  });
+
   it('canal, segunda línea sin marcador, pausa y detener; tocarlo vuelve al vídeo', () => {
     const { handlers } = renderDock('mini');
     setPlayer(playing());
@@ -828,6 +951,82 @@ describe('mini-reproductor «Sonando»', () => {
     act(() => revealScore('m-1'));
     expect(document.querySelector('.player-mini__sub')).toHaveTextContent("72'");
     expect(screen.queryByText(/2.1/)).toBeNull();
+  });
+
+  it('el nombre del botón sale de lo que se ve: el partido y la segunda línea o el estado (WCAG 2.5.3)', () => {
+    renderDock('mini');
+    const event = { hash: HASH, title: 'DAZN', event: 'FC Barcelona – Juventus' };
+    setPlayer(playing({ channel: event, phase: 'cargando' }));
+    expect(
+      screen.getByRole('button', { name: 'Volver al vídeo: FC Barcelona – Juventus, Conectando…' }),
+    ).toBeInTheDocument();
+    setPlayer(playing({ channel: event }));
+    expect(
+      screen.getByRole('button', { name: 'Volver al vídeo: FC Barcelona – Juventus, DAZN' }),
+    ).toBeInTheDocument();
+  });
+
+  it('abierto por el hash con el nombre provisional: con la biblioteca, el mini y la píldora dicen «DAZN 1»', () => {
+    const client = createQueryClient();
+    // La biblioteca (ya en la caché) tiene el hash como «DAZN 1».
+    const library = fixture<{ web: Array<{ id: string; title: string }> }>('libraryGet');
+    expect(library.web.find((item) => item.id === HASH)?.title).toBe('DAZN 1');
+    client.setQueryData(routeKey('libraryGet'), library);
+    renderDock('mini', undefined, client);
+    // El reproductor arrancó con el nombre provisional (player/api.ts) y no lo cambia.
+    setPlayer(playing({ channel: { hash: HASH, title: `Canal ${HASH.slice(0, 8)}` } }));
+    expect(playerStore.get().channel?.title).toBe('Canal a1b2c3d4');
+    expect(document.querySelector('.player-mini__title')).toHaveTextContent('DAZN 1');
+    expect(document.querySelector('.player-mini__side-title')).toHaveTextContent('DAZN 1');
+    expect(screen.getByRole('button', { name: /^Volver al vídeo: DAZN 1/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Canal a1b2c3d4/)).toBeNull();
+  });
+
+  it('en grande, la píldora de la fuente también dice «DAZN 1» y, girado sin partido, no repite el canal', () => {
+    const client = createQueryClient();
+    client.setQueryData(routeKey('libraryGet'), fixture('libraryGet'));
+    const channel = {
+      hash: HASH,
+      title: `Canal ${HASH.slice(0, 8)}`,
+      subtitle: 'Fuente 2, Elcano',
+    };
+    const first = renderDock('stage', undefined, client);
+    setPlayer(playing({ channel }));
+    const pill = screen.getByRole('button', { name: /^Suena DAZN 1, fuente 2/ });
+    expect(pill).toHaveTextContent('DAZN 1 · F2');
+    // En vertical (ficha B) no hay titular al lado: la píldora lo dice todo.
+    expect(pill).not.toHaveAttribute('data-dup');
+    first.unmount();
+
+    // Girado (inmersivo): al lado va el titular «DAZN 1»; player.css deja «F2».
+    const realMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: /orientation: landscape/.test(query),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const { container } = renderDock('stage', undefined, client);
+      setPlayer(playing({ channel }));
+      expect(container.querySelector('.player')).toHaveAttribute('data-immersive', 'true');
+      const turned = screen.getByRole('button', { name: /^Suena DAZN 1, fuente 2/ });
+      expect(turned).toHaveAttribute('data-dup', 'true');
+      expect(container.querySelector('.player-1b__title')).toHaveTextContent('DAZN 1');
+    } finally {
+      window.matchMedia = realMatchMedia;
+    }
+  });
+
+  it('sin nombre en la biblioteca, se queda el del hash', () => {
+    renderDock('mini');
+    const other = 'f'.repeat(40);
+    setPlayer(playing({ channel: { hash: other, title: `Canal ${other.slice(0, 8)}` } }));
+    expect(document.querySelector('.player-mini__title')).toHaveTextContent('Canal ffffffff');
   });
 
   it('lleva a «Dónde se está reproduciendo» y avisa si otro dispositivo ve lo mismo', async () => {

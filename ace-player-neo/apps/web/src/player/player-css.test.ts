@@ -35,4 +35,10 @@ describe('player.css', () => {
   it('sin rayas ni texturas encima del vídeo (B-257)', () => {
     expect(CSS).not.toMatch(/repeating-(linear|radial)-gradient/);
   });
+
+  it('el móvil en horizontal no lleva el volumen (salvo silenciado: para devolver el sonido)', () => {
+    expect(CSS).toMatch(
+      /@media \(pointer: coarse\) and \(max-height: 540px\) and \(orientation: landscape\) \{\s*\.player\[data-immersive='true'\] \.player-1b__vol\[data-muted='false'\] \{\s*display: none;/,
+    );
+  });
 });

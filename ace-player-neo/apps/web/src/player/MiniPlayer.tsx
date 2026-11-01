@@ -39,6 +39,7 @@ import { ProgressBar } from '../ui/ProgressBar.tsx';
 import { play, playVod, stop, usePlayer, type PlayerState, type VodPlayback } from './api.ts';
 import { usePlayerContext, type PlayerContextValue } from './context.ts';
 import { Equalizer } from './PlayerSurface.tsx';
+import { useChannelTitle } from './channel-title.ts';
 import { liveButton } from './status.ts';
 import { clockText, durationWords } from './vod/timeline.ts';
 
@@ -56,7 +57,8 @@ export function miniKicker(state: PlayerState): string {
     case 'reproduciendo':
     case 'buffer':
     case 'buscando':
-      return 'Sonando';
+      // En silencio no «suena» (la vista previa del partido en el móvil arranca así).
+      return state.muted || state.volume === 0 ? 'En silencio' : 'Sonando';
     case 'cargando':
       return 'Conectando…';
     case 'reconectando':
@@ -71,6 +73,14 @@ export function miniKicker(state: PlayerState): string {
       return 'Detenido';
   }
 }
+
+/** Fases en las que el estado sustituye a la segunda línea en el nombre accesible. */
+const MINI_STATUS_PHASES: ReadonlySet<PlayerState['phase']> = new Set([
+  'cargando',
+  'reconectando',
+  'error',
+  'bloqueado',
+]);
 
 /** Distancia a un lado a partir de la que soltar el mini lo detiene. */
 const DISMISS_PX = 72;
@@ -142,7 +152,9 @@ function Mini({
   const playback = useApiQuery('playbackStatus', undefined, { enabled: false });
   const others = otherDevicesWatching(playback.data?.sessions, getViewerId(), getDeviceId());
   const wantsPlay = state.desiredPlaying || state.phase === 'buffer';
-  const title = state.channel?.title ?? 'Ace Player Neo';
+  // El nombre que se pinta: el de la biblioteca si el reproductor solo tiene el del hash.
+  const channelTitle = useChannelTitle(state.channel);
+  const title = channelTitle ?? 'Ace Player Neo';
   const matchId = state.route?.vista === 'partido' ? (state.route.id ?? null) : null;
   const vod = state.kind === 'vod' ? state.vod : null;
   // Una película: «T1 · E3 · quedan 12 min» y una barra fina (docs/vod.md §12.7).
@@ -154,7 +166,12 @@ function Mini({
   const sideTitle = state.channel?.event ?? title;
   const sideSub = vod
     ? vodMiniLine(vod)
-    : [clock.text, state.channel?.event ? state.channel.title : null].filter(Boolean).join(' · ');
+    : [clock.text, state.channel?.event ? channelTitle : null].filter(Boolean).join(' · ');
+  // El nombre accesible sale de lo que se ve (WCAG 2.5.3): el partido (o el
+  // canal) y, si algo pasa, el estado («Conectando…», «Sin señal»); si no, la
+  // segunda línea («60' · DAZN»). Nunca lleva el marcador (regla 29).
+  const status = MINI_STATUS_PHASES.has(state.phase) ? miniKicker(state) : null;
+  const infoLabel = `Volver al vídeo: ${sideTitle}${status ? `, ${status}` : sideSub ? `, ${sideSub}` : ''}`;
   const sideProgress = vod
     ? vod.durationS > 0
       ? vod.positionS / vod.durationS
@@ -260,10 +277,12 @@ function Mini({
         type="button"
         className="player-mini__info"
         onClick={actions.expand}
-        aria-label={`Volver al vídeo: ${title}`}
+        aria-label={infoLabel}
       >
         <span className="player-mini__kicker">
-          <Equalizer playing={state.phase === 'reproduciendo'} />
+          <Equalizer
+            playing={state.phase === 'reproduciendo' && !state.muted && state.volume > 0}
+          />
           {miniKicker(state)}
         </span>
         <span className="player-mini__title">{title}</span>

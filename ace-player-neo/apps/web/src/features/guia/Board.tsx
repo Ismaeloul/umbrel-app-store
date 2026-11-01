@@ -1,9 +1,10 @@
 /* La parrilla de la Guía TV (investigación §2-§3.3), estilo Movistar+:
    canales fijos a la izquierda, regla de horas pegada arriba y raya de
-   «ahora». Desde 768 es la parrilla del rediseño de escritorio (`desk`):
-   logo y nombre del canal, horas en mono, raya amarilla, los directos de
-   verdad teñidos de rojo y, al pulsar un programa, un popover (`onOpen`); en
-   el móvil, una hoja al tocar.
+   «ahora». La del rediseño (01-escritorio.html §2 y, en el móvil,
+   guia-tv.html A): logo del canal, horas en mono, raya amarilla, los
+   directos de verdad teñidos de rojo y «‹ Ahora 19:42» flotante si «ahora»
+   queda fuera. Al pulsar un programa, desde 768 un popover (`onOpen`); en
+   el móvil, una hoja al tocar (`touchSheet`). Las medidas, de `scale`.
 
    - UN contenedor con scroll en los dos ejes. Las filas se virtualizan con
      TanStack Virtual; el eje del tiempo no: cada fila pinta solo los tramos
@@ -35,7 +36,7 @@ import {
 import { channelTone, oklchCss } from '../../lib/color.ts';
 import { cx } from '../../lib/cx.ts';
 import { prefersReducedMotion } from '../../lib/media.ts';
-import { Button, ChannelMark, Icon, Num, Skeleton } from '../../ui/index.ts';
+import { Button, Icon, Num, Skeleton } from '../../ui/index.ts';
 import {
   logoSrc,
   retryFailedTiles,
@@ -64,6 +65,7 @@ import {
   visibleSegments,
   xOf,
   buildSegments,
+  dayChipLabel,
   dayLabel,
   dayStart,
   formatSpan,
@@ -101,8 +103,6 @@ export interface BoardProps {
   active: boolean;
   /** true en el móvil: tocar abre la hoja. */
   touchSheet: boolean;
-  /** Parrilla de escritorio (desde 768): otra piel, el «Ahora» flotante y el popover. */
-  desk: boolean;
   /** Escritorio: pulsar (o Intro) abre el popover del programa, anclado a su casilla. */
   onOpen?(picked: Picked, anchor: HTMLElement): void;
   selection: Selection;
@@ -129,7 +129,6 @@ export function Board({
   now,
   active,
   touchSheet,
-  desk,
   onOpen,
   selection,
   onSelection,
@@ -306,12 +305,12 @@ export function Board({
       const node = scrollRef.current;
       if (!node) return;
       const width = Math.max(1, node.clientWidth - scale.colW);
-      /* «Ahora» a un cuarto del ancho; en escritorio, empezando en una media
-         hora en punto (como la maqueta: 19:00 a la izquierda con las 19:42). */
+      /* «Ahora» a un cuarto del ancho, empezando en una media hora en punto
+         (como las maquetas: 19:00 a la izquierda con las 19:42). */
       const quarter = xOf(t, timeline, scale) - width / 4;
       const left = Math.max(
         0,
-        desk ? xOf(floorTo(timeAt(quarter, timeline, scale), SLOT_MS), timeline, scale) : quarter,
+        xOf(floorTo(timeAt(quarter, timeline, scale), SLOT_MS), timeline, scale),
       );
       const behavior = smooth && !prefersReducedMotion() ? 'smooth' : 'instant';
       try {
@@ -321,7 +320,7 @@ export function Board({
       }
       readView();
     },
-    [scale, timeline, readView, desk],
+    [scale, timeline, readView],
   );
 
   const ensureVisible = useCallback(
@@ -469,6 +468,7 @@ export function Board({
   const nowInRange = now >= timeline.start && now < timeline.end;
   const nowVisible = nowInRange && nowX >= view.left + scale.colW && nowX <= view.left + view.width;
   const marks = rulerMarks(timeline);
+  const compactDay = scale.ppm * 30 < 120;
   const today = dayStart(now);
   const leftDay = dayStart(Math.max(timeline.start, leftTime));
   /* Una hora de la regla a medias no se pinta (nada de un «1» o un «:30»
@@ -547,7 +547,12 @@ export function Board({
                       que empezó antes de lo visible se ve entera junto a la
                       columna de canales («21:00», no «00»). */}
                   <span className="guia-ruler__label">
-                    {t === dayStart(t) && t !== timeline.start ? formatShortDay(t) : formatTime(t)}
+                    {t === dayStart(t) && t !== timeline.start
+                      ? // En el móvil (78 px por media hora) «lun, 2 nov» pisaría la hora de al lado: «Lun 2».
+                        compactDay
+                        ? dayChipLabel(t, today)
+                        : formatShortDay(t)
+                      : formatTime(t)}
                   </span>
                 </span>
               );
@@ -562,8 +567,8 @@ export function Board({
             <div
               className="guia-now"
               aria-hidden="true"
-              // En escritorio llega hasta abajo de la parrilla aunque haya pocos canales (CSS).
-              style={desk ? { left: nowX } : { left: nowX, height: contentH }}
+              // Llega hasta abajo de la parrilla aunque haya pocos canales (CSS).
+              style={{ left: nowX }}
             />
           ) : null}
           {timeline.endsEarly ? (
@@ -590,7 +595,7 @@ export function Board({
                 aria-rowindex={item.index + 2}
                 style={{ top: item.start, width: contentW }}
               >
-                <ChannelCell channel={channel} version={head.version} desk={desk} />
+                <ChannelCell channel={channel} version={head.version} />
                 {segments ? (
                   visibleSegments(segments, qFrom, qTo).map((segment) => (
                     <Block
@@ -602,7 +607,8 @@ export function Board({
                         xOf(segment.end, timeline, scale) - xOf(segment.start, timeline, scale)
                       }
                       now={now}
-                      desk={desk}
+                      // La hora cabe en un programa de media hora (móvil: 78 px); en escritorio, desde 96.
+                      timeMinW={Math.min(96, scale.ppm * 30 - 6)}
                       selected={selection.row === item.index && segment === selectedSegment}
                       onClick={(cell) => {
                         select(
@@ -641,7 +647,7 @@ export function Board({
           })}
         </div>
       </div>
-      {nowInRange && !nowVisible && desk ? (
+      {nowInRange && !nowVisible ? (
         <>
           {/* El brillo del borde dice hacia dónde queda «ahora» (guia-detalles.html §2). */}
           <span
@@ -663,16 +669,6 @@ export function Board({
             Ahora <span className="guia-nowfloat__time">{formatTime(now)}</span>
           </Button>
         </>
-      ) : nowInRange && !nowVisible ? (
-        <Button
-          className="guia-nowpill"
-          variant="primary"
-          size="sm"
-          icon={nowX < view.left + scale.colW ? 'chev-l' : 'chev-r'}
-          onClick={() => controls.current?.goNow()}
-        >
-          Ahora
-        </Button>
       ) : null}
       {failed ? (
         <div className="guia-failed" role="status">
@@ -699,11 +695,9 @@ function cellId(row: number, segment: Segment): string {
 function ChannelCell({
   channel,
   version,
-  desk,
 }: {
   channel: IptvGuideChannel | undefined;
   version: string;
-  desk: boolean;
 }) {
   if (!channel)
     return (
@@ -711,32 +705,15 @@ function ChannelCell({
         <Skeleton width="70%" height={12} />
       </div>
     );
-  if (desk)
-    return (
-      <div className="guia-chan" role="rowheader" title={channel.name}>
-        <ChannelBadge channel={channel} version={version} />
-        <span className="sr-only">{channel.name}</span>
-      </div>
-    );
   return (
     <div className="guia-chan" role="rowheader" title={channel.name}>
-      <span className="guia-chan__num">
-        {channel.number !== null ? (
-          <Num value={channel.number} />
-        ) : (
-          <span aria-hidden="true">·</span>
-        )}
-      </span>
-      <span className="guia-chan__name">
-        {channel.name}
-        {channel.country ? <small className="guia-chan__country">{channel.country}</small> : null}
-      </span>
-      {channel.favorite ? <Icon name="star-f" size={16} className="guia-chan__fav" /> : null}
+      <ChannelBadge channel={channel} version={version} />
+      <span className="sr-only">{channel.name}</span>
     </div>
   );
 }
 
-/* Escritorio (la maqueta: columna de 120 con el logo): el logo del proveedor
+/* La columna de canales (escritorio: 120 con el logo; móvil: 72): el logo del proveedor
    o, si no hay, el nombre en una ficha del tono del canal (el de su dorsal,
    oscurecido para que el blanco pase de 4,5:1). `small`: la del popover
    (48 × 32 en la maqueta). */
@@ -776,41 +753,13 @@ export function ChannelBadge({
   );
 }
 
-/** Logo del proveedor por el proxy propio; si no hay o falla, la marca de siempre. */
-export function ChannelLogo({
-  channel,
-  version,
-  size,
-}: {
-  channel: IptvGuideChannel;
-  version: string;
-  size: number;
-}) {
-  const src = logoSrc(channel, version);
-  const [broken, setBroken] = useState(false);
-  if (src && !broken)
-    return (
-      <img
-        className="guia-logo"
-        src={src}
-        alt=""
-        width={size}
-        height={size}
-        loading="lazy"
-        decoding="async"
-        onError={() => setBroken(true)}
-      />
-    );
-  return <ChannelMark name={channel.name} size={size} />;
-}
-
 function Block({
   id,
   segment,
   left,
   width,
   now,
-  desk,
+  timeMinW,
   selected,
   onClick,
   onDoubleClick,
@@ -820,7 +769,7 @@ function Block({
   left: number;
   width: number;
   now: number;
-  desk: boolean;
+  timeMinW: number;
   selected: boolean;
   onClick(cell: HTMLElement): void;
   onDoubleClick(): void;
@@ -852,9 +801,7 @@ function Block({
         narrow && 'guia-block--narrow',
         selected && 'guia-block--selected',
       )}
-      style={
-        { left, width: Math.max(1, width - (desk ? 6 : 2)), '--bx': `${left}px` } as CSSProperties
-      }
+      style={{ left, width: Math.max(1, width - 6), '--bx': `${left}px` } as CSSProperties}
       onClick={(event) => onClick(event.currentTarget)}
       onDoubleClick={onDoubleClick}
     >
@@ -863,15 +810,13 @@ function Block({
       ) : narrow ? null : (
         <span className="guia-block__label">
           <span className="guia-block__title">
-            {onAir && desk ? <span className="guia-block__dot" aria-hidden="true" /> : null}
+            {onAir ? <span className="guia-block__dot" aria-hidden="true" /> : null}
             {/* En su propio trozo: con el punto, el título es flex y los «…» van aquí. */}
             <span className="guia-block__text">{text}</span>
           </span>
-          {segment.kind === 'prog' && width >= (desk ? 96 : 140) ? (
+          {segment.kind === 'prog' && width >= timeMinW ? (
             <span className="guia-block__time">
-              {desk
-                ? formatSpan(segment.programme.start, segment.programme.end)
-                : `${formatTime(segment.programme.start)}-${formatTime(segment.programme.end)}`}
+              {formatSpan(segment.programme.start, segment.programme.end)}
             </span>
           ) : null}
         </span>

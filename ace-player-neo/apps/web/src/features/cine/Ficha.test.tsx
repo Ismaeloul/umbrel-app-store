@@ -57,7 +57,7 @@ function serveTitle(
 }
 
 describe('película', () => {
-  it('cabecera con el cartel, datos, «Seguir viendo desde 43:12», lo que queda y los detalles', async () => {
+  it('cabecera con el cartel, datos, «Seguir · 43:12», lo que queda y los detalles', async () => {
     serveTitle(MOVIE);
     expect(await screen.findByRole('heading', { level: 1, name: 'Dune' })).toBeInTheDocument();
     // El cartel también en el móvil (antes se escondía por debajo de 1024 px).
@@ -75,7 +75,7 @@ describe('película', () => {
     expect(meta?.textContent).toContain('+12');
     expect(screen.getByText('Castellano')).toBeInTheDocument();
     expect(screen.getByText('Ciencia ficción')).toBeInTheDocument();
-    const play = screen.getByRole('button', { name: 'Seguir viendo desde 43:12' });
+    const play = screen.getByRole('button', { name: 'Seguir · 43:12' });
     expect(play).toBeEnabled();
     expect(play).toHaveAccessibleDescription(/^Quedan 1 h 53 min · Termina a las \d{2}:\d{2}$/);
     expect(screen.getByRole('progressbar', { name: 'Visto: 28 %' })).toBeInTheDocument();
@@ -183,10 +183,10 @@ describe('película', () => {
     );
   });
 
-  it('«Seguir viendo desde…» pide la posición guardada (sin `startS`: la decide el servidor)', async () => {
+  it('«Seguir · 43:12» pide la posición guardada (sin `startS`: la decide el servidor)', async () => {
     resetPlayerApi();
     serveTitle(MOVIE);
-    fireEvent.click(await screen.findByRole('button', { name: /Seguir viendo desde/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Seguir · / }));
     expect(playerStore.get()).toMatchObject({
       kind: 'vod',
       route: { vista: 'sala', id: MOVIE.id },
@@ -267,8 +267,9 @@ describe('serie', () => {
   // El episodio del botón principal del ejemplo es T2 · E6 («La pelea»).
   it.each([
     ['Ver T2 · E6', 'start', 'Empieza aquí'],
-    ['Continuar T2 · E6', 'resume', 'Continuar'],
-    ['Siguiente capítulo: T2 · E6', 'next', 'Siguiente'],
+    /* A medias o el siguiente: «Seguir · T2 E6» (maqueta de la ficha, escritorio y móvil). */
+    ['Seguir · T2 E6', 'resume', 'Continuar'],
+    ['Seguir · T2 E6', 'next', 'Siguiente'],
     ['Volver a ver T2 · E6', 'rewatch', null],
   ] as const)('botón principal «%s» (%s) y su episodio resaltado', async (label, action, badge) => {
     serveTitle({ ...SERIES, main: { ...SERIES.main!, action, label: 'del servidor' } });
@@ -283,7 +284,8 @@ describe('serie', () => {
   it('datos de la serie: temporadas, nota, «Episodios de unos 22 min» y estreno', async () => {
     serveTitle(SERIES);
     await screen.findByRole('heading', { level: 1, name: 'The Office' });
-    expect(document.querySelector('.cine-hero__meta')?.textContent).toContain('2 temporadas');
+    // Las temporadas, arriba: «SERIE · 2 TEMPORADAS».
+    expect(document.querySelector('.cine-hero__kicker')?.textContent).toContain('2 temporadas');
     const details = screen.getByRole('heading', { name: 'Detalles' }).closest('section')!;
     expect(within(details).getByText('Episodios de unos 22 min')).toBeInTheDocument();
     expect(within(details).getByText('24 de marzo de 2005')).toBeInTheDocument();
@@ -456,9 +458,7 @@ describe('serie', () => {
     const more = screen.getAllByRole('button', { name: /^Más opciones: 3\. / })[0]!;
     fireEvent.click(more);
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Marcar hasta aquí como visto' }));
-    expect(
-      await screen.findByRole('button', { name: 'Siguiente capítulo: T1 · E4' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Seguir · T1 E4' })).toBeInTheDocument();
     expect(screen.getAllByText('Visto')).toHaveLength(3);
   });
 });
@@ -483,16 +483,16 @@ describe('«Mi lista» (0.9.1)', () => {
     expect(button).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(button);
     // Optimista: cambia antes de que conteste el servidor.
-    const add = await screen.findByRole('button', { name: 'Añadir a mi lista' });
+    const add = await screen.findByRole('button', { name: 'Mi lista' });
     expect(add).toHaveAttribute('aria-pressed', 'false');
     expect(net.calls.some((call) => call.method === 'DELETE')).toBe(true);
     answer(json(without(SERIES.id)));
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Añadir a mi lista' })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: 'Mi lista' })).toBeInTheDocument(),
     );
   });
 
-  it('una película que no está: «Añadir a mi lista» (PUT); si falla, vuelve y lo dice', async () => {
+  it('una película que no está: «Mi lista» (PUT); si falla, vuelve y lo dice', async () => {
     serveTitle(MOVIE, {
       'GET /api/v1/vod/list': () => json(without(MOVIE.id)),
       [`PUT /api/v1/vod/list/${MOVIE.id}`]: () =>
@@ -507,12 +507,12 @@ describe('«Mi lista» (0.9.1)', () => {
           409,
         ),
     });
-    const button = await screen.findByRole('button', { name: 'Añadir a mi lista' });
+    const button = await screen.findByRole('button', { name: 'Mi lista' });
     fireEvent.click(button);
     expect(
       await screen.findByText(/No se ha podido añadir «Dune» a Mi lista\. Mi lista está llena/),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Añadir a mi lista' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mi lista' })).toBeInTheDocument();
     expect(net.calls.filter((call) => call.method === 'PUT')).toHaveLength(1);
   });
 

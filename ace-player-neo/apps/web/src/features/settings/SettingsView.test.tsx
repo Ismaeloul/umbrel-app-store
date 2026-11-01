@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
 import type { LayoutValue } from '../../app/layout.tsx';
@@ -77,87 +77,62 @@ afterEach(() => {
 });
 
 describe('Ajustes', () => {
-  it('secciones con su índice; sin Salud ni Dispositivos si nadie los aporta', async () => {
+  // Móvil (maqueta buscar-ajustes.html): la portada y cada sección sola, como en escritorio,
+  // sin la fila de chips de antes y sin «‹ Ajustes» (vuelve la flecha de la cabecera).
+  it('en el móvil, sin sección, la portada: el Umbrel arriba, los grupos y nada de índice', () => {
     setup();
-    const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
-    const names = within(index)
-      .getAllByRole('link')
-      .map((a) => a.textContent);
-    expect(names).toEqual([
-      'Listas',
-      'IPTV',
-      'Tu fútbol',
-      'Reproducción',
-      'Dónde se está reproduciendo',
-      'Apariencia',
-      'Copia de seguridad',
-      'Registro',
-      'Motor AceStream',
-      'Acerca de',
-    ]);
-    expect(within(index).getByRole('link', { name: 'IPTV' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Umbrel de casa/ })).toBeInTheDocument();
+    for (const group of ['Agenda', 'Reproducción', 'Apariencia', 'Fuentes y sistema']) {
+      expect(screen.getByRole('region', { name: group })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole('navigation', { name: 'Secciones de Ajustes' })).toBeNull();
+    // Sin Salud ni Dispositivos si nadie los aporta.
+    fireEvent.click(screen.getByRole('button', { name: /Más ajustes/ }));
+    expect(screen.queryByRole('link', { name: /^Salud/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /^Dispositivos/ })).toBeNull();
+    expect(screen.getByRole('link', { name: /^Copia de seguridad/ })).toHaveAttribute(
       'href',
-      '?vista=ajustes/iptv',
+      '?vista=ajustes/copia',
     );
+    // «Más ajustes» recuerda si está abierto (dura lo que la pestaña): se pliega otra vez.
+    fireEvent.click(screen.getByRole('button', { name: /Más ajustes/ }));
   });
 
-  it('una sección cada vez: sin sección, la primera; el índice cambia cuál se ve', async () => {
+  it('en el móvil una fila abre su sección sola, sin «‹ Ajustes»; atrás vuelve a la portada', async () => {
     setup();
-    const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
-    expect(within(index).getByRole('link', { name: 'Listas' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-    expect(screen.getByRole('region', { name: 'Listas' })).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
-    expect(screen.queryByRole('region', { name: 'Motor AceStream' })).not.toBeInTheDocument();
-
-    fireEvent.click(within(index).getByRole('link', { name: 'Motor AceStream' }));
+    fireEvent.click(screen.getByRole('link', { name: /Motor AceStream/ }));
     await waitFor(() => expect(screen.getByTestId('ruta')).toHaveTextContent('ajustes/motor'));
     expect(await screen.findByRole('region', { name: 'Motor AceStream' })).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'Listas' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Agenda' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
-    expect(within(index).getByRole('link', { name: 'Motor AceStream' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-    expect(within(index).getByRole('link', { name: 'Listas' })).not.toHaveAttribute('aria-current');
+    expect(screen.queryByRole('link', { name: 'Ajustes' })).toBeNull();
     // El foco va al título de la sección nueva (tras el del armazón).
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Motor AceStream', level: 2 })).toHaveFocus(),
     );
-  });
-
-  it('cada sección es una entrada del historial: atrás vuelve a la anterior', async () => {
-    setup('?vista=ajustes/apariencia');
-    const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
-    fireEvent.click(within(index).getByRole('link', { name: 'Acerca de' }));
-    expect(await screen.findByRole('region', { name: 'Acerca de' })).toBeInTheDocument();
     act(() => history.back());
-    expect(await screen.findByRole('region', { name: 'Apariencia' })).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'Acerca de' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Agenda' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Motor AceStream' })).not.toBeInTheDocument();
+    // El foco vuelve a la fila de la que se vino.
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /Motor AceStream/ })).toHaveFocus(),
+    );
   });
 
   it('con Ctrl o Cmd el enlace se deja al navegador (otra pestaña)', () => {
     setup();
-    const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
-    fireEvent.click(within(index).getByRole('link', { name: 'IPTV' }), { ctrlKey: true });
+    fireEvent.click(screen.getByRole('link', { name: /Listas IPTV/ }), { ctrlKey: true });
     expect(screen.getByTestId('ruta')).toHaveTextContent('ajustes');
     expect(screen.getByTestId('ruta')).not.toHaveTextContent('ajustes/iptv');
   });
 
-  it('una sección desconocida enseña la primera', () => {
+  it('una sección desconocida enseña la portada', () => {
     setup('?vista=ajustes/nada');
-    expect(screen.getByRole('region', { name: 'Listas' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Agenda' })).toBeInTheDocument();
   });
 
-  it('«ajustes/salud» sin panel de salud lleva a la sección del motor', async () => {
+  it('«ajustes/salud» sin panel de salud lleva a la sección del motor', () => {
     setup('?vista=ajustes/salud');
-    const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
-    expect(within(index).getByRole('link', { name: 'Motor AceStream' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
     expect(screen.getByRole('region', { name: 'Motor AceStream' })).toBeInTheDocument();
   });
 
@@ -255,7 +230,9 @@ describe('Ajustes', () => {
   it('«Acerca de» con la versión y «Tu fútbol» con el resumen', async () => {
     setup('?vista=ajustes/acerca');
     expect(await screen.findByText('0.7.0')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('link', { name: 'Tu fútbol' }));
+    cleanup();
+    net.restore();
+    setup('?vista=ajustes/futbol');
     expect(
       await screen.findByText(/^Tu agenda prioriza 2 ligas, 1 equipo y 1 nacionalidad\.$/),
     ).toBeInTheDocument();

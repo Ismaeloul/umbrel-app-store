@@ -1,10 +1,10 @@
-/* La sala en el móvil (docs/ver-juntos.md §13): se ve como siempre (Lista,
-   Ajustes, el chat en lista), pero con lo que cambia el funcionamiento: los
-   co-líderes y «Quién controla» con tres opciones. Y en escritorio, «Cerrar
-   sala» al final de Gente y la línea de quién controla sin dar por hecho el
-   género. */
+/* La sala en el móvil (ver-juntos.html y ver-juntos-pelis.html): el mismo
+   marcado que el escritorio (Gente, Siguiente y el chat en burbujas, que se
+   prueban aquí y en Panels.test.tsx) y lo propio del móvil (Mobile.tsx): las
+   caras apiladas del directo. Y en escritorio, «Cerrar sala» al final de
+   Gente y la línea de quién controla sin dar por hecho el género. */
 
-import type { PartyChatMessage, PartyMember, PartyRoom } from '@ace/shared';
+import type { PartyMember, PartyRoom } from '@ace/shared';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import joined from '@fixtures/web/v1/partyJoin.json';
@@ -12,7 +12,7 @@ import { resetMode, setMode } from '../../api/mode.ts';
 import { json, mockFetch } from '../../test/fetch.ts';
 import { Chat } from './Chat.tsx';
 import { PartyClient, type PartyEnv } from './client.ts';
-import { MobilePeople, MobileSettings } from './Mobile.tsx';
+import { MobileFaces } from './Mobile.tsx';
 import { People } from './Panels.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
 
@@ -50,85 +50,46 @@ function client(selfId: string) {
 }
 
 describe('«Ver juntos» en el móvil', () => {
-  it('Gente (móvil): «Echar» pide un segundo toque en la fila, sin confirm() nativo', async () => {
-    const confirmSpy = vi.fn(() => false);
-    vi.stubGlobal('confirm', confirmSpy);
-    try {
-      net = mockFetch({ 'POST /api/v1/party/:code/member': () => json({ ok: true }) });
-      render(<MobilePeople room={room} client={client(HOST)} selfId={HOST} />);
-      const anaRow = screen.getByText('Ana').closest('li') as HTMLElement;
-      fireEvent.click(within(anaRow).getByRole('button', { name: 'Opciones de Ana' }));
-      fireEvent.click(await screen.findByRole('menuitem', { name: /Echar de la sala/ }));
-      expect(net?.calls).toHaveLength(0);
-      const armed = within(anaRow).getByRole('button', { name: JUNTOS_TEXT.kickArmed('Ana') });
-      expect(armed).toHaveTextContent(JUNTOS_TEXT.kickArmedShort);
-      fireEvent.click(armed);
-      await waitFor(() =>
-        expect(net?.calls.at(-1)?.body).toMatchObject({ memberId: ANA, action: 'kick' }),
-      );
-      expect(net?.calls).toHaveLength(1);
-      expect(confirmSpy).not.toHaveBeenCalled();
-      expect(
-        within(anaRow).queryByRole('button', { name: JUNTOS_TEXT.kickArmed('Ana') }),
-      ).toBeNull();
-    } finally {
-      vi.unstubAllGlobals();
-    }
+  it('en directo, las caras apiladas (con corona y escudo) y los nombres en una línea', () => {
+    render(<MobileFaces room={room} selfId={HOST} />);
+    const faces = screen.getByRole('list', { name: JUNTOS_TEXT.people });
+    expect(within(faces).getAllByRole('listitem')).toHaveLength(3);
+    expect(faces.querySelector('.juntos-av__crown')).toBeTruthy();
+    expect(faces.querySelector('.juntos-av__shield')).toBeTruthy();
+    /* El lector de pantalla oye quién es cada uno; los nombres de al lado son para la vista. */
+    expect(within(faces).getByText(/Isma \(tú\) · Líder/)).toBeTruthy();
+    expect(document.querySelector('.juntos-stack__names')).toHaveTextContent('Isma, Ana y Bea');
   });
 
-  it('Ajustes: «Quién controla» con las tres opciones manda los dos campos compatibles', async () => {
-    net = mockFetch({ 'POST /api/v1/party/:code/settings': () => json({ ok: true }) });
-    render(<MobileSettings room={room} client={client(HOST)} />);
-    expect(screen.getByRole('radio', { name: 'Yo y co-líderes' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
-    fireEvent.click(screen.getByRole('radio', { name: 'Solo yo' }));
-    await waitFor(() =>
-      expect(net?.calls.at(-1)?.body).toMatchObject({ control: 'leader', coleaders: false }),
-    );
-    expect(screen.getByRole('radio', { name: 'Votar lo siguiente' })).toBeTruthy();
+  it('quien está desconectado lo dice también al lector, no solo el gris', () => {
+    const away: PartyRoom = {
+      ...room,
+      members: room.members.map((m) => (m.id === ANA ? { ...m, online: false } : m)),
+    };
+    render(<MobileFaces room={away} selfId={HOST} />);
+    const faces = screen.getByRole('list', { name: JUNTOS_TEXT.people });
+    expect(within(faces).getByText(`Ana · ${JUNTOS_TEXT.offline}`)).toBeTruthy();
+    expect(within(faces).queryByText(/Isma.*desconectado/)).toBeNull();
   });
 
-  it('Gente: el líder hace co-líder; el co-líder lleva su escudo y no tiene menú', async () => {
-    net = mockFetch({ 'POST /api/v1/party/:code/member': () => json({ ok: true }) });
-    const { unmount } = render(<MobilePeople room={room} client={client(HOST)} selfId={HOST} />);
-    const anaRow = screen.getByText('Ana').closest('li') as HTMLElement;
-    fireEvent.click(within(anaRow).getByRole('button', { name: 'Opciones de Ana' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Hacer co-líder/ }));
-    await waitFor(() =>
-      expect(net?.calls.at(-1)?.body).toMatchObject({ memberId: ANA, action: 'coleader' }),
+  it('con más de cinco, se apilan cinco y los nombres dicen todos', () => {
+    const many: PartyRoom = {
+      ...room,
+      members: [
+        ...room.members,
+        ...['Carla', 'Dani', 'Eva'].map((name, i) => ({ ...ana, id: `m_Otra0000000${i}`, name })),
+      ],
+    };
+    render(<MobileFaces room={many} selfId={HOST} />);
+    expect(screen.getAllByRole('listitem')).toHaveLength(5);
+    expect(document.querySelector('.juntos-stack__names')).toHaveTextContent(
+      'Isma, Ana, Bea, Carla, Dani y Eva',
     );
-    expect(
-      within(screen.getByText('Bea').closest('li') as HTMLElement).getByText('Co-líder'),
-    ).toBeTruthy();
-    unmount();
-    render(<MobilePeople room={room} client={client(BEA)} selfId={BEA} />);
-    expect(screen.queryByRole('button', { name: /Opciones de/ })).toBeNull();
-  });
-
-  it('el chat de siempre: nombre y hora, sin burbujas ni «está escribiendo»', () => {
-    const messages: PartyChatMessage[] = [
-      { id: 1, at: 0, kind: 'chat', memberId: ANA, name: 'Ana', text: 'hola' },
-    ];
-    render(
-      <Chat
-        messages={messages}
-        room={room}
-        selfId={HOST}
-        typing={[{ memberId: BEA, name: 'Bea', until: 9e15 }]}
-        onSend={async () => undefined}
-      />,
-    );
-    expect(document.querySelector('.juntos-chat__time')).toBeTruthy();
-    expect(document.querySelector('.juntos-chat__bubble')).toBeNull();
-    expect(screen.queryByText(/está escribiendo/)).toBeNull();
-    expect(screen.getByPlaceholderText(JUNTOS_TEXT.chatPlaceholderMobile)).toBeTruthy();
   });
 });
 
-describe('«Ver juntos» en escritorio', () => {
-  it('Gente (escritorio): «Echar» pide un segundo toque en la fila, sin confirm() nativo', async () => {
+describe('«Ver juntos»: Gente, chat y quién controla', () => {
+  it('Gente: «Echar» pide un segundo toque en la fila, sin confirm() nativo', async () => {
     const confirmSpy = vi.fn(() => false);
     vi.stubGlobal('confirm', confirmSpy);
     try {
@@ -154,13 +115,12 @@ describe('«Ver juntos» en escritorio', () => {
     }
   });
 
-  it('el chat en burbujas con «está escribiendo»', () => {
+  it('el chat en burbujas con «está escribiendo» (también en el móvil)', () => {
     render(
       <Chat
         messages={[{ id: 1, at: 0, kind: 'chat', memberId: ANA, name: 'Ana', text: 'hola' }]}
         room={room}
         selfId={HOST}
-        desk
         typing={[{ memberId: BEA, name: 'Bea', until: 9e15 }]}
         onSend={async () => undefined}
       />,

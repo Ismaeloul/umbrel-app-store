@@ -172,7 +172,8 @@ describe('listas por categorías', () => {
   it('acordeones plegados que se abren con un toque; con texto, todos abiertos', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     setup(makeLibrary(), { search: '?vista=biblioteca&pestana=listas' });
-    const deportes = await screen.findByRole('button', { name: /Deportes/ });
+    // «Deportes» también es un chip por tipo (móvil): la cabecera es la que cuenta canales.
+    const deportes = await screen.findByRole('button', { name: /Deportes\s*\d+ canal/ });
     expect(deportes).toHaveAttribute('aria-expanded', 'false');
     // El recuento se lee en singular o plural («1 canal», no «1 canales»).
     expect(deportes).toHaveAccessibleName(/Deportes\s*2 canales/);
@@ -302,8 +303,67 @@ describe('tarjetas: reproducir, borrar con deshacer, favorito y renombrar', () =
   });
 });
 
-describe('«Emitiendo ahora» (C1) y lo que da cada canal', () => {
-  it('tus canales con partido en juego, con el minuto; los demás con su hora', async () => {
+describe('móvil, dirección B «Lista con ahora»: chips, cabecera y buscador', () => {
+  it('los chips por tipo filtran la pestaña y vuelven a «Todo» al cambiar de pestaña', async () => {
+    setup(makeLibrary(), { search: '?vista=biblioteca&pestana=listas' });
+    const chips = await screen.findByRole('group', { name: 'Filtrar por tipo de canal' });
+    const todo = within(chips).getByRole('button', { name: 'Todo' });
+    expect(todo).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Generalistas/ })).toBeInTheDocument();
+    fireEvent.click(within(chips).getByRole('button', { name: 'Deportes' }));
+    expect(within(chips).getByRole('button', { name: 'Deportes' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    // «La 1» (Generalistas) no es de deportes: su categoría desaparece.
+    expect(screen.queryByRole('button', { name: /Generalistas/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Deportes\s*2 canales/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Favoritos/ }));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('group', { name: 'Filtrar por tipo de canal' })).getByRole(
+          'button',
+          { name: 'Todo' },
+        ),
+      ).toHaveAttribute('aria-pressed', 'true'),
+    );
+    expect(rowNames()).toEqual(['DAZN 1', 'Eurosport 1']);
+  });
+
+  it('sin «Guía TV» en la cabecera (es una pestaña de la isla) y «Pegar hash» al lado del buscador', async () => {
+    setup(makeLibrary(), {
+      routes: {},
+    });
+    const paste = await screen.findByRole('button', {
+      name: 'Pegar un Content ID o enlace acestream://',
+    });
+    expect(paste.closest('.lib-searchbar')).not.toBeNull();
+    expect(paste.closest('header')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Guía TV' })).toBeNull();
+  });
+
+  it('cada fila dice de dónde sale: «IPTV» un canal de tu IPTV, «AceStream» los demás', async () => {
+    const id = 'f'.repeat(40);
+    setup(
+      makeLibrary({
+        favorites: [
+          makeItem('DAZN 1', 'fav', { category: 'Deportes' }),
+          makeItem('Antena 3', 'fav', { id, category: 'IPTV' }),
+        ],
+        iptvIds: { [id]: 'ok' },
+      }),
+    );
+    const ace = (await screen.findByRole('link', { name: 'DAZN 1' })).closest('article')!;
+    expect(within(ace).getByText('AceStream')).toBeInTheDocument();
+    expect(within(ace).queryByText('IPTV')).toBeNull();
+    const iptv = screen.getByRole('link', { name: 'Antena 3' }).closest('article')!;
+    expect(within(iptv).getByText('IPTV')).toBeInTheDocument();
+    expect(within(iptv).getByText('Tu IPTV')).toBeInTheDocument();
+  });
+});
+
+describe('lo que da cada canal AHORA (móvil, dirección B «Lista con ahora»)', () => {
+  it('el partido en juego con su punto rojo y el minuto, sin marcador; los demás con su hora', async () => {
     // Reloj fijo (21:00 en Madrid) para que el test no dependa de la hora a la que corre.
     vi.useFakeTimers({ now: new Date('2026-09-23T19:00:00Z'), shouldAdvanceTime: true });
     const clock = madridClock(Date.now());
@@ -365,33 +425,85 @@ describe('«Emitiendo ahora» (C1) y lo que da cada canal', () => {
     setup(makeLibrary(), {
       routes: { 'GET /api/v1/football': schedule, 'GET /api/v1/scores': scores },
     });
-    const strip = await screen.findByRole('region', { name: /Emitiendo ahora/ });
-    expect(within(strip).getByText('DAZN 1')).toBeInTheDocument();
-    expect(within(strip).getByText('En directo')).toBeInTheDocument();
-    await waitFor(() => expect(within(strip).getByText('1 a 1')).toBeInTheDocument());
-    // La tarjeta de Eurosport 1 dice a qué hora da su partido.
-    const line = await screen.findByText((_, el) =>
-      Boolean(el?.classList.contains('ch__txt') && el.textContent?.includes('Betis')),
+    const row = (name: string | RegExp) =>
+      screen.getByRole('link', { name }).closest('article') as HTMLElement;
+    await screen.findByRole('link', { name: 'DAZN 1' });
+    // Ya no hay carrusel «Emitiendo ahora»: lo dice cada fila.
+    expect(screen.queryByRole('region', { name: /Emitiendo ahora/ })).toBeNull();
+    await waitFor(() =>
+      expect(within(row('DAZN 1')).getByText('Girona – Real Sociedad')).toBeInTheDocument(),
     );
-    expect(line).toHaveTextContent('A las 23:00, Betis – Valencia');
-    // Sin escudo de imagen, las siglas en placas pequeñas (0.9.0), no dos círculos de color.
-    const posterMarks = [...strip.querySelectorAll('.chp__crests .team')];
-    expect(posterMarks.map((mark) => mark.textContent)).toEqual(['GIR', 'RS']);
-    for (const mark of posterMarks) expect(mark).toHaveClass('team--tag');
-    const rowMarks = [...(line.parentElement?.querySelectorAll('.ch__crests .team') ?? [])];
-    expect(rowMarks.map((mark) => mark.textContent)).toEqual(['BET', 'VAL']);
+    const dazn = row('DAZN 1');
+    expect(dazn.querySelector('.mch__now--live .live-dot')).not.toBeNull();
+    await waitFor(() => expect(within(row('DAZN 1')).getByText("58'")).toBeInTheDocument());
+    // El marcador nunca sale en la fila (regla 29 sin tener que taparlo).
+    expect(within(dazn).queryByText(/1\s*[–-]\s*1|1 a 1/)).toBeNull();
+    // La de Eurosport 1 dice a qué hora da su partido.
+    const euro = row('Eurosport 1');
+    expect(within(euro).getByText('23:00')).toHaveClass('mch__time');
+    expect(within(euro).getByText('Betis – Valencia')).toBeInTheDocument();
+    expect(euro.querySelector('.live-dot')).toBeNull();
+    // De dónde sale: AceStream (no es un canal de tu IPTV).
+    expect(within(euro).getByText('AceStream')).toBeInTheDocument();
 
-    // Al ver DAZN 1, su marcador se tapa en todas partes (regla 29) hasta pedirlo.
-    const dazn = makeLibrary().favorites[0]!;
+    // El que suena: la fila resaltada, con las barritas y «En pantalla» para el lector.
+    const item = makeLibrary().favorites[0]!;
     act(() => {
-      play({ hash: dazn.id, title: 'DAZN 1' });
+      play({ hash: item.id, title: 'DAZN 1' });
     });
-    await waitFor(() => expect(within(strip).queryByText('1 a 1')).toBeNull());
-    expect(within(strip).getByText('En pantalla')).toBeInTheDocument();
-    expect(screen.getByText('Marcador oculto')).toBeInTheDocument();
-    fireEvent.click(within(strip).getByRole('button', { name: 'Ver marcador' }));
-    await waitFor(() => expect(within(strip).getByText('1 a 1')).toBeInTheDocument());
-    expect(screen.queryByText('Marcador oculto')).toBeNull();
+    const playing = await screen.findByRole('link', { name: 'DAZN 1, en pantalla' });
+    const card = playing.closest('article')!;
+    expect(card).toHaveAttribute('data-playing', 'true');
+    expect(card.querySelector('.player-eq')).not.toBeNull();
+    expect(within(card).getByText('En pantalla')).toBeInTheDocument();
+    expect(within(card).queryByText(/1\s*[–-]\s*1|1 a 1/)).toBeNull();
+  });
+
+  it('con la guía de tu IPTV: el programa de ahora, su barra y cuánto le queda', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-23T19:00:00Z'), shouldAdvanceTime: true });
+    const library = makeLibrary();
+    const dazn = library.favorites[0]!;
+    const start = Date.now() - 30 * 60_000;
+    const view = setup(library, {
+      routes: {
+        'GET /api/v1/iptv/guide/now': {
+          available: true,
+          version: 'v1',
+          items: [
+            {
+              id: dazn.id,
+              guide: 5,
+              now: {
+                id: '5.1',
+                start,
+                end: start + 55 * 60_000,
+                title: 'Noche de Champions',
+                flags: 0,
+              },
+              next: null,
+            },
+          ],
+        },
+      },
+    });
+    const boot = fixture<BootstrapResponse>('bootstrap');
+    act(() => {
+      view.client.setQueryData(routeKey('bootstrap'), {
+        ...boot,
+        features: { ...boot.features, iptv: true },
+      });
+    });
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('link', { name: 'DAZN 1' }).closest('article')!).getByText(
+          'Noche de Champions',
+        ),
+      ).toBeInTheDocument(),
+    );
+    const card = screen.getByRole('link', { name: 'DAZN 1' }).closest('article')!;
+    expect(within(card).getByText('quedan 25 min')).toBeInTheDocument();
+    const bar = card.querySelector<HTMLElement>('.mch__bar');
+    expect(bar?.style.getPropertyValue('--p')).toBe('0.545');
   });
 });
 

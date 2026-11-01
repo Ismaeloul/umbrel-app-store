@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "1.0.0"
+version: "1.1.0"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,16 +13,13 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Version 1.0.0. Agenda nueva al estilo SofaScore: al entrar ves las ligas
-  y los partidos, sin ninguno abierto; al tocar uno se abre a la derecha su
-  ficha con el marcador, Ver partido y donde se emite. Ver juntos tambien para
-  los partidos en directo: el NAS abre una sola conexion y la reparte a todos.
-  Salas abiertas: vuelve a una sala o cierrala aunque te hayas salido. Los
-  invitados de fuera ya no ven a tirones en el iPhone y reciben una calidad
-  ligera (720p) que sube sola a la original si su conexion aguanta. Pelis y
-  series empieza en Mi lista, cada canal dice si es IPTV o AceStream, la
-  agenda vuelve a sacar todos los partidos (futbolenlatv se ha mudado a .es) y
-  un barrido de agentes ha corregido 31 fallos.
+  Version 1.1.0. La web del movil, rediseñada: barra flotante abajo con el
+  mini reproductor dentro, lupa y ajustes arriba, Agenda por competicion,
+  ficha del partido con el video arriba y las fuentes debajo, Canales con lo
+  que echan ahora, Guia con detalles al tocar un programa y Pelis y series
+  desde Mi lista. Al abrir un partido en el movil solo arranca sola una
+  AceStream, y en silencio; la IPTV espera a que toques para no ocupar tu
+  conexion. En el ordenador no cambia nada.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []
