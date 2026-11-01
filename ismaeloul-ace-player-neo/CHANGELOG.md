@@ -2,6 +2,14 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 1.1.1 (2026-11-01)
+
+Version 1.1.1. Ver juntos ya no se queda parado en el iPhone: la sala se
+para donde se atasco quien carga y Safari deja de saltar una y otra vez al
+mismo trozo. La calidad ligera para los de fuera la hace ahora la grafica
+Intel del NAS (si no esta disponible, vuelve sola al procesador). En el
+ordenador, el reproductor y la sala tienen control de volumen.
+
 ## 1.1.0 (2026-11-01)
 
 Version 1.1.0. La web del movil, rediseñada: barra flotante abajo con el
