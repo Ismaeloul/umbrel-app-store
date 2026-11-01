@@ -356,20 +356,42 @@ directo y a la vez. Sigue la maqueta `ver-juntos.html` (sala de fútbol).
   sala comparten la sesión sin traspaso aunque la política sea `handoff` (`liveParty` en `playback/service.ts`). Si
   alguien de casa abre ese canal con `handoff`, la sala queda «interrumpida» (`taken`), como en pelis y series. La
   concesión dice si es IPTV y corrige `live.source`.
-- **Cambiar de canal**: `partyControl` con `{ action: 'live', live }` (quien controla). Se sueltan los visores de
-  todos, `party.room` trae el canal nuevo y `party.playback` la acción `title`: cada reproductor vuelve a abrir. El
-  chat dice «Isma ha cambiado a M+ LaLiga».
+- **Quién cambia la fuente** (permiso propio del directo, `canSwitchLive`): el líder, cualquier co-líder (aunque
+  «Yo y co-líderes» esté apagado: si se cae el partido, tiene que poder arreglarlo), el anfitrión y, con «Controlan
+  todos», todos. Desde cualquier aparato: también por el enlace de invitado. Vale para «Poner», para el cambio
+  automático (`partySettings` con `auto`) y para Fuentes.
+- **Cambiar de canal**: `partyControl` con `{ action: 'live', live, from? }`. Se sueltan los visores de todos,
+  `party.room` trae el canal nuevo y `party.playback` la acción `title`: cada reproductor vuelve a abrir. El chat dice
+  «Isma ha cambiado a M+ LaLiga». Con `from` (lo que sonaba según quien cambia), si la sala ya va por otro el cambio
+  se ignora: con dos que controlan, gana el primero. Si el partido nuevo va por el MISMO hash, solo cambia el partido
+  de la sala (sin soltar a nadie: antes el reproductor no reabría y la imagen se congelaba).
+- **Fuentes de la sala** (`partyLiveSources`, `GET /api/v1/party/:code/sources?t=`): la misma resolución que la ficha
+  del partido (`football.resolve` con los canales de la agenda; con un canal suelto, `scope: 'channel'`), con la
+  clave del comprobador `party-<código>` (con la del navegador, abrir Fuentes cancelaba la comprobación de la ficha)
+  y 3 min de caché por sala (`party/live-sources.ts`). Con `job`, solo el estado del trabajo del comprobador; con
+  `research=1`, otra pasada. Está en la lista de `@sala` del Caddyfile.
+- **La corona en directo**: el líder sin conexión la conserva 3 min (`LIVE_LEADER_GRACE_MS`). Si el anfitrión la
+  pierde por no estar, al volver la recupera solo («Isma vuelve a ser el líder») y el líder provisional pasa a
+  co-líder. «Recuperar el mando» (junto a quién controla) hace lo mismo a mano.
 - **Web**: sin barra de tiempo, pausa ni ±10 s; abajo la píldora roja DIRECTO, el canal y el volumen; arriba «● En
-  directo». Quien controla tiene Chat, Fuentes, Partidos y Gente; los demás, Chat y Gente. Fuentes y Partidos usan la
-  agenda y las fuentes de casa, así que solo salen en casa (`liveTools`), no en la página del invitado.
-  - **Fuentes**: «Cambio automático si se cae» (`partySettings` con `auto`) y las conexiones del partido por canal,
-    con la calidad, IPTV o AceStream y «Poner» o «En la sala».
+  directo». Quien puede cambiar la fuente tiene Chat, Fuentes, Partidos y Gente; los demás, Chat y Gente (con la nota
+  de quién puede cambiarla). Fuentes va también en la página del invitado; Partidos usa la agenda de casa, así que
+  solo sale en casa (`liveTools`). La pestaña Chat cuenta los mensajes sin leer.
+  - **Fuentes** (`juntos/liveSources.ts`, con `buildSourceRows` de la ficha): «Cambio automático si se cae» arriba
+    (fijo en escritorio, con la lista con scroll) y, por canal con la IPTV primero, todas las IPTV, la que suena y las
+    AceStream verificadas, con su número estable, calidad, Mb/s o pares y su señal. Plegadas: «Ver n flojas», «n sin
+    señal · n comprobándose» y los gemelos de otro país de la IPTV. Las reportadas y las de cuarentena, fuera. Al final,
+    «Buscar más fuentes».
   - **Partidos**: los de hoy en directo y los de más tarde con «Poner» (su mejor fuente) y «Poner un canal» (tus
     favoritos).
-  - **Cambio automático**: lo hace el navegador del líder (o de quien controle si el líder no está) cuando el vídeo
-    falla: la siguiente fuente no probada, sin repetir la IPTV si la caída fue de la IPTV. Con freno: un salto cada
-    30 s y 3 seguidos sin que suene ninguna (con el motor caído, en local se comía las siete fuentes en un minuto).
-- **Pruebas**: `modules/party/live.test.ts` y, a mano en el PC contra el motor del NAS, crear desde la ficha, ver el
+  - **Cambio automático**: lo decide el servidor (`party/live-auto.ts`) cuando la sala se corta (`failed`), con las
+    fuentes de la sala y los veredictos del comprobador: si cae una IPTV, otra variante del mismo canal y país; si no,
+    la mejor AceStream verificada (luego una floja); si cae una AceStream, la IPTV (no el gemelo de otro país) y luego
+    la verificada. Nunca una «Sin señal», en cuarentena o ya probada en la racha. Con freno: un salto cada 30 s, 3
+    seguidos y 45 s de margen tras un «Poner» a mano. El chat dice «Se ha caído la fuente: ahora, X» o, sin otra,
+    «No queda otra fuente buena». La caída se apunta como veredicto del reproductor: la ficha aprende de la sala.
+- **Pruebas**: `modules/party/live.test.ts`, `live-sources.test.ts`, `live-auto.test.ts`,
+  `juntos/liveSources.test.tsx` y, a mano en el PC contra el motor del NAS, crear desde la ficha, ver el
   partido en la sala, Fuentes y «Poner», y cerrar la sala.
 - **Salir o cerrar** una sala en directo lleva a la Agenda (una de pelis y series, a Pelis y series).
 - **Pendiente**: las apps de iPhone y Android no entienden una sala en directo (esperan una `VodGrant`).

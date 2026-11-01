@@ -170,6 +170,8 @@ import {
   PartyJoinBodySchema,
   PartyJoinResponseSchema,
   PartyListSchema,
+  PartyLiveSourcesQuerySchema,
+  PartyLiveSourcesResponseSchema,
   PartyMemberBodySchema,
   PartyOkSchema,
   PartyParamsSchema,
@@ -1884,6 +1886,26 @@ export const V1_ROUTES = {
     content: 'json',
     sideEffects: true,
     errors: [...PARTY_MEMBER_ERRORS, 'party_leader_only', 'party_gone', 'party_queue_full'],
+    legacyTwin: null,
+  }),
+  partyLiveSources: defineRoute({
+    method: 'GET',
+    path: '/api/v1/party/:code/sources',
+    access: 'any',
+    credential: 'party',
+    module: 'party',
+    summary: 'Las fuentes del directo de la sala (el líder, los co-líderes y el anfitrión)',
+    description:
+      'La misma resolución que la ficha del partido (`footballResolve`), con un trabajo del comprobador por sala ' +
+      '(clave `party-<código>`: no cancela el de la ficha) y unos minutos de caché. Con `job`, solo el estado de ' +
+      'ese trabajo; con `research=1`, una pasada nueva. También por el proxy de la sala (docs/ver-juntos.md §14).',
+    params: PartyParamsSchema,
+    query: PartyLiveSourcesQuerySchema,
+    response: PartyLiveSourcesResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [...PARTY_MEMBER_ERRORS, 'party_leader_only', 'channel_required'],
     legacyTwin: null,
   }),
   partyLeave: defineRoute({

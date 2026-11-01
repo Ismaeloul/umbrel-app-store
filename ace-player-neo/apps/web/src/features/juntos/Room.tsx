@@ -17,11 +17,12 @@
    - Pantalla completa: solo el vídeo (sin chat). En el iPhone no hay
      pantalla completa para un trozo de página: allí el vídeo ocupa toda la
      pantalla con CSS. En Android, además, se gira a horizontal.
-   - En directo (§14): sin «Cuando acabe» ni Siguiente. Quien controla tiene
-     Chat, Fuentes, Partidos y Gente; los demás, Chat y Gente. Fuentes y
-     Partidos tiran de la agenda y las fuentes de casa: solo en casa
-     (`liveTools`), no en la página del invitado, que ni se baja ese código
-     (LiveTools.tsx va aparte, con React.lazy).
+   - En directo (§14): sin «Cuando acabe» ni Siguiente. Quien puede cambiar
+     la fuente (el líder, los co-líderes y el anfitrión) tiene Chat, Fuentes,
+     Partidos y Gente; los demás, Chat y Gente. Fuentes es una ruta de la
+     sala: también en la página del invitado. Partidos tira de la agenda de
+     casa: solo en casa (`liveTools`). El «Cambio automático si se cae» lo
+     decide el servidor (party/live-auto.ts).
    - Los carteles van por la ruta de la sala (`partyArt`, PartyArt): el
      invitado de fuera no tiene `vodArt` (§9).
    - Un toque en «Esperando a todos» deja sonar el vídeo luego: si el
@@ -30,10 +31,8 @@
    - Si la sala no contesta en `CONNECT_SLOW_MS`, «Reintentar» (otro cliente
      y otro reproductor desde cero). */
 
-import type { PartyCloseReason, PartyCredential } from '@ace/shared';
+import type { PartyCloseReason, PartyCredential, PartyRoom } from '@ace/shared';
 import {
-  lazy,
-  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -58,17 +57,13 @@ import { MEDIA, useMediaQuery } from '../../lib/media.ts';
 import { MobileFaces, MobileSkip } from './Mobile.tsx';
 import { Faces, joinNames, Lobby, NextCard, NextPanel, People } from './Panels.tsx';
 import { PartyArt } from './Join.tsx';
+import { LiveMatches, LiveReclaim, LiveSources } from './LivePanels.tsx';
+import { canSwitchLive } from './liveSources.ts';
+import { LIVE_TEXT } from './liveTexts.ts';
 import { RoomPlayer } from './player.ts';
+import { useUnread } from './useUnread.ts';
 import { Theater } from './Theater.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
-
-/* Solo en casa (`liveTools`): la agenda, los partidos y las listas van en otro trozo. */
-const LiveAutoSwitch = lazy(() =>
-  import('./LiveTools.tsx').then((module) => ({ default: module.LiveAutoSwitch })),
-);
-const LivePanel = lazy(() =>
-  import('./LiveTools.tsx').then((module) => ({ default: module.LivePanel })),
-);
 
 const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
   host: JUNTOS_TEXT.closedByHost,
@@ -86,6 +81,28 @@ const CLOSE_CONFIRM_MS = 5_000;
 export const CONNECT_SLOW_MS = 10_000;
 
 type SideTab = 'chat' | 'siguiente' | 'fuentes' | 'partidos' | 'gente';
+
+/* directo §14 */
+/**
+ * La pestaña que se ve de verdad: la elegida o, si ya no está (a un co-líder le quitan el
+ * co-liderazgo con Fuentes abierta), el Chat. Con la misma regla que la lista de pestañas.
+ */
+function visibleTab(
+  tab: SideTab,
+  room: PartyRoom | null,
+  selfId: string,
+  liveTools: boolean,
+): SideTab {
+  const live = !!room?.live;
+  const switcher = live && canSwitchLive(room, selfId);
+  const ok =
+    tab === 'chat' ||
+    tab === 'gente' ||
+    (tab === 'siguiente' && !live) ||
+    (tab === 'fuentes' && switcher) ||
+    (tab === 'partidos' && switcher && liveTools);
+  return ok ? tab : 'chat';
+}
 
 /** ¿Este navegador sabe poner un elemento cualquiera en pantalla completa? (el iPhone, no). */
 function nativeFullscreen(element: HTMLElement | null): boolean {
@@ -117,7 +134,7 @@ export function Room({
   header?: ReactNode;
   /** El botón para irse cuando la sala ya no existe (null en la página del invitado). */
   exitAction: ReactNode;
-  /** En casa: Fuentes y Partidos de la sala en directo (la agenda y las fuentes son de casa). */
+  /** En casa: Partidos de la sala en directo (la agenda es de casa; Fuentes va en todas partes). */
   liveTools?: boolean;
   /** La página del invitado: el reproductor pide las dos calidades (`abr=1`, docs/ver-juntos.md §17). */
   guest?: boolean;
@@ -143,6 +160,13 @@ export function Room({
   /* «Cerrar sala» pide un segundo toque (regla 31, sin confirm() nativo). */
   const closeTap = useSecondTap(CLOSE_CONFIRM_MS);
   const [closing, setClosing] = useState(false);
+  /* directo §14 */
+  /* Lo que se pinta (`shownSide`), no lo último que se tocó: si Fuentes desaparece, el Chat se lee. */
+  const unread = useUnread(
+    state.chat,
+    credential.id,
+    visibleTab(tab, state.room, credential.id, liveTools) === 'chat',
+  );
 
   useEffect(() => {
     rememberRoom(code);
@@ -249,17 +273,20 @@ export function Room({
   const hostName = room?.members.find((member) => member.id === room.hostId)?.name ?? leaderName;
   const lobby = !!room?.playback.lobby;
   const live = room?.live ?? null;
-  /* Fuentes y Partidos: quien controla, en casa. */
-  const liveTabs = !!live && control && liveTools;
+  /* directo §14: Fuentes, quien puede cambiar la fuente (también por el enlace); Partidos, en casa. */
+  const liveTabs = !!live && canSwitchLive(room, selfId);
   const names = room ? (controllers(room) ?? []) : [];
   const whoControls = !room
     ? ''
     : live
-      ? role === 'leader' || (control && room.settings.control === 'everyone')
+      ? role === 'leader' || (liveTabs && room.settings.control === 'everyone')
         ? JUNTOS_TEXT.liveYouControl(live.channel)
-        : role === 'coleader' && control
+        : role === 'coleader'
           ? JUNTOS_TEXT.liveColeader(leaderName)
-          : JUNTOS_TEXT.liveGuestOf(hostName, names.length > 1)
+          : isHost
+            ? /* La corona pasó a otro (o la cedió): no es co-líder. */
+              LIVE_TEXT.hostNotLeader(leaderName)
+            : JUNTOS_TEXT.liveGuestOf(hostName, names.length > 1)
       : room.settings.control === 'everyone'
         ? JUNTOS_TEXT.everyoneControls(lobby)
         : role === 'leader'
@@ -304,17 +331,13 @@ export function Room({
   };
   const closeArmed = closeTap.armed === 'close';
 
-  const liveSide =
-    room && live && liveTools && player && control ? (
-      <Suspense fallback={null}>
-        <LiveAutoSwitch room={room} client={client} player={player} />
-      </Suspense>
-    ) : null;
   const livePanel = (which: 'fuentes' | 'partidos') =>
     room ? (
-      <Suspense fallback={<span className="juntos-spinner" aria-hidden="true" />}>
-        <LivePanel which={which} room={room} client={client} />
-      </Suspense>
+      which === 'fuentes' ? (
+        <LiveSources room={room} client={client} />
+      ) : (
+        <LiveMatches room={room} client={client} />
+      )
     ) : null;
 
   const stageContent = (
@@ -345,12 +368,11 @@ export function Room({
 
   const tabs: { value: SideTab; label: string; count?: number }[] = live
     ? [
-        { value: 'chat', label: JUNTOS_TEXT.tabChat },
-        ...(liveTabs
-          ? [
-              { value: 'fuentes' as const, label: JUNTOS_TEXT.tabSources },
-              { value: 'partidos' as const, label: JUNTOS_TEXT.tabMatches },
-            ]
+        /* directo §14: los mensajes sin leer mientras se miran Fuentes, Partidos o Gente. */
+        { value: 'chat', label: JUNTOS_TEXT.tabChat, ...(unread ? { count: unread } : {}) },
+        ...(liveTabs ? [{ value: 'fuentes' as const, label: JUNTOS_TEXT.tabSources }] : []),
+        ...(liveTabs && liveTools
+          ? [{ value: 'partidos' as const, label: JUNTOS_TEXT.tabMatches }]
           : []),
         { value: 'gente', label: JUNTOS_TEXT.tabPeople },
       ]
@@ -359,7 +381,7 @@ export function Room({
         { value: 'siguiente', label: JUNTOS_TEXT.tabNext, count: room?.queue.length ?? 0 },
         { value: 'gente', label: JUNTOS_TEXT.tabPeople },
       ];
-  const shownSide: SideTab = tabs.some((item) => item.value === tab) ? tab : 'chat';
+  const shownSide: SideTab = visibleTab(tab, room, selfId, liveTools);
   /* Como la maqueta: quien creó la sala, solo «Invitar» («Cerrar sala» va al
      final de Gente); los demás, «Salir» (e «Invitar» si controlan). En el
      móvil, con los dos, «Invitar» se queda en el icono: no caben junto al título. */
@@ -398,7 +420,6 @@ export function Room({
         )}
       >
         {header}
-        {liveSide}
         <div className="juntos__body" data-fullscreen={fullscreen ? 'true' : 'false'}>
           <div className="juntos__main">
             {stageContent}
@@ -425,6 +446,8 @@ export function Room({
                     ) : null}
                   </h1>
                   <p className="juntos-info__who">{whoControls}</p>
+                  {/* directo §14 */}
+                  <LiveReclaim room={room} client={client} selfId={selfId} />
                 </div>
                 <div className="juntos-info__actions">{deskActions}</div>
               </div>

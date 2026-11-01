@@ -1,0 +1,98 @@
+/* La sala en directo (directo §14): lo nuevo de Fuentes y Partidos. Va aparte
+   de juntos.css (que cambia a la vez la sala en general); lo importa
+   LivePanels.tsx. */
+
+.juntos-live__group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.juntos-live__count {
+  flex: none;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.juntos-live__sig {
+  flex: none;
+}
+.juntos-live__fold {
+  display: grid;
+  gap: 6px;
+}
+/* 44 px: el toque mínimo del resto de la sala (juntos.css), también en el iPhone. */
+.juntos-live__fold > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+.juntos-live__fold > summary::-webkit-details-marker {
+  display: none;
+}
+.juntos-live__fold > summary::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-right: 10px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-rapido) var(--ease-estandar);
+}
+.juntos-live__fold[open] > summary::before {
+  transform: rotate(45deg);
+}
+.juntos-live__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13.5px;
+}
+.juntos-live__reclaim {
+  justify-self: start;
+}
+
+/* Móvil: cada canal es una tarjeta (juntos.css). Su cabecera ya no es el título suelto
+   (`.juntos-live__group > .juntos-kicker`), así que el relleno va en ella. */
+@media (max-width: 767px) {
+  .juntos-live__group-head {
+    padding: 12px 14px 8px;
+  }
+  .juntos-live__group-head > .juntos-kicker {
+    padding: 0;
+  }
+}
+
+/* Escritorio: la lista hace scroll dentro del panel y el interruptor del
+   cambio automático se queda arriba (antes, sin scroll, no se llegaba a las
+   últimas fuentes). */
+@media (min-width: 1024px) {
+  .juntos-live {
+    flex: 1;
+    align-content: start;
+    min-height: 0;
+    padding: 2px 14px 14px;
+    overflow-y: auto;
+  }
+  .juntos-live__auto {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding-block: 8px;
+    background: var(--bg-sunk, var(--bg));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .juntos-live__fold > summary::before {
+    transition: none;
+  }
+}

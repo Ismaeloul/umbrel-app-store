@@ -63,6 +63,9 @@ import {
   type PartySettings,
   type PartyTitle,
   type PartyUpNext,
+  type ResolutionCandidate,
+  type ScanJob,
+  type VerdictState,
 } from '@ace/shared';
 import type { FastifyReply } from 'fastify';
 import type { TimerHandle } from '../../core/clock.js';
@@ -71,6 +74,29 @@ import type { Unsubscribe } from '../../core/bus.js';
 import type { ViewerIdentity } from '../playback/types.js';
 import type { PartyConnectOptions, PartyDeps, PartyService, PartySink } from './types.js';
 import type { RemuxLiteOffer } from '../remux/types.js';
+/* directo §14 */
+import {
+  AUTO_IPTV_BUSY_TEXT,
+  AUTO_NONE_TEXT,
+  AUTO_SCAN_RETRY_MS,
+  decide,
+  heardSound,
+  jumpedInStreak,
+  manualSwitch,
+  newStreak,
+  refreshStreak,
+  soundLost,
+  waitForScan,
+  type AutoHouse,
+  type AutoStreak,
+} from './live-auto.js';
+import { createLiveSources } from './live-sources.js';
+
+/**
+ * En directo, el líder que se queda sin conexión conserva la corona este rato (directo §14): un
+ * iPhone que se bloquea o un cambio de wifi no le quita el mando a media parte.
+ */
+export const LIVE_LEADER_GRACE_MS = 3 * 60_000;
 
 /** Tras dejar de esperar a alguien, no se le vuelve a esperar durante esto. */
 const HOLD_COOLDOWN_MS = 30_000;
@@ -195,6 +221,13 @@ interface Room {
   audioSwitchUntil: number;
   /** Sala en directo (§14): el canal que suena para todos; null en pelis y series. */
   live: PartyLive | null;
+  /* directo §14 */
+  /** El anfitrión perdió la corona por no estar (no porque la pasara): al volver, la recupera. */
+  leaderLostBy: 'absence' | null;
+  /** La racha del cambio automático del servidor. */
+  readonly autoStreak: AutoStreak;
+  /** El reintento pendiente del automático (hueco entre saltos o margen tras un «Poner»). */
+  autoTimer: TimerHandle | null;
   closed: boolean;
 }
 
@@ -282,7 +315,11 @@ export function formatPosition(seconds: number): string {
 }
 
 export function createPartyRuntime(deps: PartyDeps): PartyService {
-  const { clock, logger, bus, playback, config, remux, art } = deps;
+  const { clock, logger, bus, playback, config, remux, art, scanner } = deps;
+  /* directo §14: las fuentes de cada sala en directo, con su propia clave del comprobador. */
+  const liveSources = deps.football
+    ? createLiveSources({ clock, football: deps.football, ...(scanner ? { scanner } : {}) })
+    : null;
   const publicUrl = config.party.publicUrl;
   /** «Calidad ligera para invitados» (§17): `ACE_PARTY_LITE=1` y el remux que la hace. */
   const partyLite = config.party.lite && remux !== undefined;
@@ -552,6 +589,24 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     if (!manages(room, member)) throw new AppError('party_leader_only');
   }
 
+  /**
+   * Cambiar la fuente o el partido en directo (directo §14): el líder, cualquier co-líder (aunque
+   * los co-líderes no controlen el vídeo: si se cae el partido, tienen que poder arreglarlo), el
+   * anfitrión y, con «Controlan todos», todos.
+   */
+  function canSwitchLive(room: Room, member: Member): boolean {
+    return (
+      member.id === room.leaderId ||
+      room.coleaders.has(member.id) ||
+      member.host ||
+      room.settings.control === 'everyone'
+    );
+  }
+
+  function requireLiveSwitch(room: Room, member: Member): void {
+    if (!canSwitchLive(room, member)) throw new AppError('party_leader_only');
+  }
+
   function requireLeader(room: Room, member: Member): void {
     if (member.id !== room.leaderId) throw new AppError('party_leader_only');
   }
@@ -566,19 +621,48 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   function setLeader(room: Room, member: Member, text: string): void {
     room.coleaders.delete(member.id);
     room.leaderId = member.id;
+    room.leaderLostBy = null;
     say(room, text, null);
     sendRoom(room);
   }
 
-  /** Si el líder se ha ido, lo es quien lleva más tiempo en la sala y sigue conectado. */
-  function handOver(room: Room, now: number): void {
+  /**
+   * Si el líder se ha ido, lo es quien lleva más tiempo en la sala y sigue conectado. Con
+   * `absence` (el barrido: solo ha perdido la conexión), en directo espera `LIVE_LEADER_GRACE_MS`
+   * y, si era el anfitrión, la corona le vuelve al reconectarse (directo §14).
+   */
+  function handOver(room: Room, now: number, why: 'absence' | 'gone' = 'gone'): void {
     const leader = room.members.get(room.leaderId);
     if (leader && online(leader, now)) return;
-    for (const member of room.members.values()) {
-      if (member.id === room.leaderId || !online(member, now)) continue;
-      setLeader(room, member, `${member.name} es ahora el líder.`);
+    /* directo §14 */
+    if (why === 'absence' && room.live && leader && now - leader.lastSeen < LIVE_LEADER_GRACE_MS) {
       return;
     }
+    for (const member of room.members.values()) {
+      if (member.id === room.leaderId || !online(member, now)) continue;
+      /* Si el anfitrión ya la había perdido por no estar, sigue fuera: aunque ahora se vaya el
+         líder provisional, la corona le tiene que volver a él al reconectarse. */
+      const hostAway =
+        room.live !== null &&
+        ((why === 'absence' && leader?.host === true) || room.leaderLostBy === 'absence');
+      setLeader(room, member, `${member.name} es ahora el líder.`);
+      room.leaderLostBy = hostAway ? 'absence' : null;
+      return;
+    }
+  }
+
+  /* directo §14 */
+  /** El anfitrión que perdió la corona por no estar ha vuelto: vuelve a ser el líder. */
+  function giveBack(room: Room, now: number): void {
+    if (room.leaderLostBy !== 'absence') return;
+    const host = room.members.get(room.hostId);
+    if (!host || !online(host, now)) return;
+    room.leaderLostBy = null;
+    if (room.leaderId === host.id) return;
+    const provisional = room.leaderId;
+    /* El líder provisional sigue pudiendo arreglar el directo: pasa a co-líder. */
+    if (room.members.has(provisional)) room.coleaders.add(provisional);
+    setLeader(room, host, `${host.name} vuelve a ser el líder.`);
   }
 
   function uniqueName(room: Room, name: string): string {
@@ -657,6 +741,10 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     if (room.closed) return;
     broadcast(room, { type: 'party.closed', data: { reason } });
     room.closed = true;
+    /* directo §14 */
+    clock.clearTimeout(room.autoTimer);
+    room.autoTimer = null;
+    liveSources?.forget(room.code);
     rooms.delete(room.code);
     for (const member of room.members.values()) releaseViewer(member);
     for (const connection of [...room.connections]) closeConnection(room, connection);
@@ -746,6 +834,25 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     const live = room.live;
     if (!live) return;
     const otherMatch = choice.matchId !== live.matchId;
+    /* directo §14: el otro partido va por el mismo canal (el mismo hash). Soltar a todos sin que
+       cambie `title.id` dejaba la imagen congelada (el reproductor no reabre): solo cambia el
+       partido de la sala, y el vídeo sigue como iba. */
+    if (choice.hash === live.hash) {
+      if (choice.matchId === live.matchId && choice.match === live.match) return;
+      room.live = {
+        ...live,
+        matchId: choice.matchId,
+        match: choice.match,
+        channel: choice.channel,
+      };
+      room.title = liveTitle(choice);
+      sendRoom(room);
+      const what = choice.match ? `${choice.match} (${choice.channel})` : choice.channel;
+      say(room, by ? `${by.name} ha cambiado a ${what}.` : `Ahora, ${what}.`, null);
+      return;
+    }
+    clock.clearTimeout(room.autoTimer);
+    room.autoTimer = null;
     room.live = { ...choice, auto: live.auto };
     room.title = liveTitle(choice);
     room.interrupted = null;
@@ -929,7 +1036,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         stopWaiting(room, memberId, now);
       }
       for (const member of room.members.values()) maybeWait(room, member, now);
-      handOver(room, now);
+      giveBack(room, now);
+      handOver(room, now, 'absence');
       maybeStart(room, now);
       const duration = room.title.durationS;
       if (
@@ -1141,7 +1249,135 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         { room: room.code, kind, wasPlaying },
         'Ver juntos: la sala se ha quedado sin vídeo',
       );
+      /* directo §14: la ficha aprende de la sala, y el automático lo decide el servidor. */
+      soundLost(room.autoStreak);
+      if (kind === 'failed' && room.live) {
+        /* No se apunta «Sin señal» si el corte no es de la fuente: con el motor caído (o
+           reiniciándose) todas fallan igual, y las que pone el propio automático en la misma
+           racha caen por lo mismo que la primera. Si no, cuatro fuentes buenas quedaban
+           marcadas para siempre en la ficha y en Fuentes. */
+        const engineDown = room.live.source === 'engine' && engineUnwell();
+        if (!engineDown && !jumpedInStreak(room.autoStreak, room.live.hash)) {
+          try {
+            scanner?.recordVerdict(room.live.hash, {
+              state: 'failed',
+              reason: 'party_failed',
+              by: 'player',
+            });
+          } catch {
+            /* Sin comprobador: no pasa nada. */
+          }
+        }
+        liveAuto(room);
+      }
     }
+  }
+
+  /* directo §14 */
+  /**
+   * «Cambio automático si se cae» (live-auto.ts): con la sala parada por un corte, salta a la
+   * siguiente fuente buena con las de la sala (la caché de Fuentes) y los veredictos del
+   * comprobador. Sin `football` (tests viejos), no hace nada.
+   */
+  function liveAuto(room: Room): void {
+    const live = room.live;
+    if (!live?.auto || !liveSources) return;
+    const sources = liveSources;
+    const failed = live.hash;
+    refreshStreak(room.autoStreak, clock.now());
+    const verdictOf = (hash: string): VerdictState | null => {
+      try {
+        return scanner?.verdict(hash)?.state ?? null;
+      } catch {
+        return null;
+      }
+    };
+    const run = (candidates: readonly ResolutionCandidate[], scan: ScanJob | null): void => {
+      const current = room.live;
+      if (room.closed || !current?.auto || current.hash !== failed) return;
+      if (room.interrupted !== 'failed') return;
+      const now = clock.now();
+      const decision = decide(room.autoStreak, candidates, current, verdictOf, now, houseOf(room));
+      if (decision.kind === 'switch') {
+        switchLive(room, decision.choice, null);
+        return;
+      }
+      /* Sin otra buena todavía, pero el comprobador de la sala sigue: se le espera un rato
+         (una sala creada sin pasar por la ficha aún no tiene veredictos). */
+      const scanning =
+        decision.kind === 'none' &&
+        decision.reason === 'no_source' &&
+        waitForScan(
+          room.autoStreak,
+          scan !== null && (scan.status === 'queued' || scan.status === 'running'),
+          now,
+        );
+      const later =
+        decision.kind === 'wait'
+          ? decision.ms
+          : decision.reason === 'grace'
+            ? room.autoStreak.graceUntil - now
+            : scanning
+              ? AUTO_SCAN_RETRY_MS
+              : null;
+      if (later !== null) {
+        clock.clearTimeout(room.autoTimer);
+        room.autoTimer = clock.setTimeout(
+          () => {
+            room.autoTimer = null;
+            liveAuto(room);
+          },
+          Math.max(1_000, later),
+          { unref: true },
+        );
+        return;
+      }
+      const busy = decision.kind === 'none' && decision.reason === 'iptv_busy';
+      say(room, busy ? AUTO_IPTV_BUSY_TEXT : AUTO_NONE_TEXT, null);
+      logger.info(
+        { room: room.code, reason: decision.kind === 'none' ? decision.reason : 'wait' },
+        'Ver juntos: sin otra fuente',
+      );
+    };
+    sources
+      .get(room.code, live)
+      .then((result) => run(result.candidates, result.scan))
+      .catch(() => run(sources.cached(room.code)?.candidates ?? [], null));
+  }
+
+  /** ¿El motor está caído o reiniciándose? Sin vigilante (tests viejos), se da por sano. */
+  function engineUnwell(): boolean {
+    try {
+      const state = deps.engine?.status().status;
+      return state === 'offline' || state === 'restarting';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * El canal que OTRO aparato de casa ve por la IPTV (la única plaza), de «Dónde se está
+   * reproduciendo»: lo de esta sala no cuenta (como `houseLanes` en la ficha).
+   */
+  function houseOf(room: Room): AutoHouse {
+    let status: ReturnType<NonNullable<typeof playback.status>> | undefined;
+    try {
+      status = playback.status?.();
+    } catch {
+      status = undefined;
+    }
+    if (!status) return { busyIptv: null };
+    const own = new Set(room.viewers);
+    for (const member of room.members.values()) {
+      if (member.viewer) own.add(member.viewer.identity.viewerId);
+    }
+    for (const session of status.sessions) {
+      if (session.source !== 'iptv') continue;
+      if (session.viewers.some((viewer) => !own.has(viewer.viewerId))) {
+        return { busyIptv: session.hash.toLowerCase() };
+      }
+    }
+    return { busyIptv: null };
   }
 
   function subscribe(): void {
@@ -1260,6 +1496,9 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         viewers: new Set(),
         audioSwitchUntil: 0,
         live: live ? { ...live, auto: true } : null,
+        leaderLostBy: null,
+        autoStreak: newStreak(),
+        autoTimer: null,
         closed: false,
       };
       rooms.set(code, room);
@@ -1459,7 +1698,6 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       const receivedAt = clock.now();
       const room = find(code);
       const member = authenticate(room, body.token);
-      requireControl(room, member);
       const now = receivedAt;
       const answer = (): PartyStatusResponse => ({
         serverNow: clock.now(),
@@ -1468,12 +1706,19 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       });
       /* En directo (§14) solo se cambia de canal: ni pausa, ni saltos, ni idioma. */
       if (room.live || body.action === 'live') {
+        /* directo §14: el permiso propio del directo (el co-líder también, y el anfitrión). */
+        if (room.live) requireLiveSwitch(room, member);
+        else requireControl(room, member);
         if (body.action !== 'live' || !room.live) {
           throw new AppError('validation_error', { detail: 'party_live' });
         }
+        /* Dos que controlan a la vez: gana el primero (el segundo cambiaba lo ya cambiado). */
+        if (body.from && body.from !== room.live.hash) return answer();
+        if (body.live.hash !== room.live.hash) manualSwitch(room.autoStreak, now);
         switchLive(room, body.live, member);
         return answer();
       }
+      requireControl(room, member);
       const source = 'source' in body ? (body.source ?? null) : null;
       const log = (noop: boolean, positionS: number): void => {
         logger.info(
@@ -1566,6 +1811,20 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       return answer();
     },
 
+    /* directo §14 */
+    async liveSources(code, query) {
+      const room = find(code);
+      const member = authenticate(room, query.t);
+      requireLiveSwitch(room, member);
+      const live = room.live;
+      if (!live) throw new AppError('validation_error', { detail: 'party_live' });
+      if (!liveSources) return { candidates: [], scan: null };
+      return liveSources.get(code, live, {
+        research: query.research === '1',
+        ...(query.job ? { job: query.job } : {}),
+      });
+    },
+
     async status(code, body) {
       /* La hora de llegada (C2); `serverNow` se toma al responder, después del latido del vídeo. */
       const receivedAt = clock.now();
@@ -1611,6 +1870,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
             viewer.identity,
           );
           stream = 'ok';
+          /* directo §14: la fuente que puso el automático suena; seguida un rato, la racha acaba. */
+          if (room.live && !room.interrupted) {
+            if (body.buffering) soundLost(room.autoStreak);
+            else heardSound(room.autoStreak, now);
+          }
         } catch {
           if (member.viewer === viewer) {
             member.viewer = null;
@@ -1650,7 +1914,9 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       if (control !== undefined || coleaders !== undefined) requireLeader(room, member);
       if (queueMode !== undefined) requireManager(room, member);
       if (auto !== undefined) {
-        requireControl(room, member);
+        /* directo §14 */
+        if (room.live) requireLiveSwitch(room, member);
+        else requireControl(room, member);
         if (room.live && room.live.auto !== auto) {
           room.live = { ...room.live, auto };
           say(

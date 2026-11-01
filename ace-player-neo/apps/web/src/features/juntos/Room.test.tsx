@@ -7,6 +7,7 @@
    reciben `party.closed` y también la olvidan. */
 
 import type { PartyRoom } from '@ace/shared';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import joined from '@fixtures/web/v1/partyJoin.json';
@@ -445,5 +446,69 @@ describe('la sala que no contesta', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/* directo §14: lo que ve cada uno en una sala en directo. */
+describe('sala en directo', () => {
+  const LIVE_ROOM: PartyRoom = {
+    ...ROOM,
+    live: {
+      hash: 'a'.repeat(40),
+      channel: 'DAZN 1 · 1080p',
+      source: 'engine',
+      matchId: 'fltv-1',
+      match: 'Real Madrid – Barcelona',
+      auto: true,
+    },
+  };
+  const withRole = (role: 'coleader' | 'guest'): PartyRoom => ({
+    ...LIVE_ROOM,
+    members: LIVE_ROOM.members.map((member) => (member.id === ANA ? { ...member, role } : member)),
+  });
+
+  function mountLive(selfId: string, room: PartyRoom) {
+    saveCredential(CODE, credential(selfId));
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Room
+          code={CODE}
+          credential={credential(selfId)}
+          onForbidden={() => undefined}
+          onLeft={() => undefined}
+          exitAction={null}
+        />
+      </QueryClientProvider>,
+    );
+    act(() => FakeSource.last?.emit('party.snapshot', { room, chat: [], serverNow: 1 }));
+  }
+
+  it('al co-líder le quitan el co-liderazgo con Fuentes abierta: se ve el Chat y sus mensajes no cuentan como sin leer', () => {
+    setViewport(1280);
+    net = mockFetch({
+      [`GET /api/v1/party/${CODE}/sources`]: () => json({ candidates: [], scan: null }),
+    });
+    mountLive(ANA, withRole('coleader'));
+    fireEvent.click(screen.getByRole('tab', { name: JUNTOS_TEXT.tabSources }));
+    act(() =>
+      FakeSource.last?.emit('party.snapshot', { room: withRole('guest'), chat: [], serverNow: 2 }),
+    );
+    expect(screen.queryByRole('tab', { name: JUNTOS_TEXT.tabSources })).toBeNull();
+    act(() =>
+      FakeSource.last?.emit('party.chat', {
+        message: { id: 7, at: 3, kind: 'chat', memberId: HOST, name: 'Isma', text: 'Gol' },
+      }),
+    );
+    expect(screen.getByRole('tab', { selected: true }).textContent).toBe(JUNTOS_TEXT.tabChat);
+  });
+
+  it('el anfitrión al que se le ha ido la corona no es «Co-líder»', () => {
+    setViewport(1280);
+    net = mockFetch({
+      [`GET /api/v1/party/${CODE}/sources`]: () => json({ candidates: [], scan: null }),
+    });
+    mountLive(HOST, { ...LIVE_ROOM, leaderId: ANA });
+    expect(screen.getByText('Has creado la sala · ahora manda Ana')).toBeTruthy();
+    expect(screen.queryByText(/Co-líder/)).toBeNull();
   });
 });

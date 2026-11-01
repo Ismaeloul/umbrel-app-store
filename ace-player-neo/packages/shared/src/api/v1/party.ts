@@ -9,7 +9,8 @@
 
 import { z } from 'zod';
 import { PARTY } from '../../constants/party.js';
-import { HashSchema } from '../../primitives.js';
+import { HashSchema, ScanJobIdSchema } from '../../primitives.js';
+import { ResolutionCandidateSchema, ScanJobSchema } from '../common.js';
 import { ChannelStreamQuerySchema, StreamGrantSchema } from './playback.js';
 import { VodArtStampSchema, VodGrantSchema } from './vod.js';
 
@@ -355,6 +356,11 @@ export const PartyControlBodySchema = z.discriminatedUnion('action', [
     token: PartyTokenSchema,
     action: z.literal('live'),
     live: PartyLiveChoiceSchema,
+    /**
+     * El hash que suena según quien cambia (directo §14): si la sala ya va por otro, el cambio se
+     * ignora. Así, con dos que controlan, gana el primero y no hay dos saltos seguidos.
+     */
+    from: HashSchema.optional(),
   }),
 ]);
 export type PartyControlBody = z.infer<typeof PartyControlBodySchema>;
@@ -598,3 +604,27 @@ export const PartyEventSchema = z.discriminatedUnion('type', [
 ]);
 export type PartyEvent = z.infer<typeof PartyEventSchema>;
 export type PartyEventType = PartyEvent['type'];
+
+// --- Fuentes de una sala en directo (directo §14) ---
+
+/**
+ * GET /api/v1/party/:code/sources: las fuentes del partido o canal que suena, con la misma
+ * resolución que la ficha del partido y su trabajo del comprobador (uno por sala). Solo quien
+ * puede cambiar de fuente (el líder, los co-líderes y el anfitrión), también por el enlace.
+ */
+export const PartyLiveSourcesQuerySchema = z.strictObject({
+  t: PartyTokenSchema,
+  /** Solo el estado de este trabajo del comprobador (el sondeo barato mientras comprueba). */
+  job: ScanJobIdSchema.optional(),
+  /** `1`: «Buscar más fuentes» (una pasada nueva, sin la caché de la sala). */
+  research: z.enum(['0', '1']).optional(),
+});
+export type PartyLiveSourcesQuery = z.infer<typeof PartyLiveSourcesQuerySchema>;
+
+export const PartyLiveSourcesResponseSchema = z.strictObject({
+  /** En el orden del servidor (IPTV primero, la mejor arriba), como `footballResolve`. */
+  candidates: z.array(ResolutionCandidateSchema),
+  /** El trabajo del comprobador de la sala, o null si no hay (comprobador apagado o ya olvidado). */
+  scan: ScanJobSchema.nullable(),
+});
+export type PartyLiveSourcesResponse = z.infer<typeof PartyLiveSourcesResponseSchema>;

@@ -10,7 +10,9 @@
      conoce). Con la sala cerrada o sin contestar, «Volver a la entrada». */
 
 import type { PartyCredential } from '@ace/shared';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
+import { createQueryClient } from '../api/query.ts';
 import { cx } from '../lib/cx.ts';
 import { forgetCredential, savedCredential } from '../features/juntos/client.ts';
 import { Join } from '../features/juntos/Join.tsx';
@@ -69,22 +71,26 @@ export function GuestApp({ pathname }: { pathname: string }) {
   const [credential, setCredential] = useState<PartyCredential | null>(() =>
     code ? savedCredential(code) : null,
   );
+  /* Fuentes del directo (useRoomSources) usa TanStack Query: sin esto, abrirla tiraba la sala. */
+  const [queryClient] = useState(createQueryClient);
   return (
-    <div className={cx('guest', !!code && !!credential && 'guest--room')}>
-      <header className="guest__bar">
-        <img src="/icon.svg" alt="" width={24} height={24} />
-        <span>{GUEST_TEXT.brand}</span>
-      </header>
-      <main className="guest__main">
-        {code ? (
-          <GuestRoom code={code} credential={credential} onCredential={setCredential} />
-        ) : (
-          <EmptyState tone="error" title={GUEST_TEXT.badLink} actions={null}>
-            {GUEST_TEXT.badLinkHint}
-          </EmptyState>
-        )}
-      </main>
-      <Toaster />
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <div className={cx('guest', !!code && !!credential && 'guest--room')}>
+        <header className="guest__bar">
+          <img src="/icon.svg" alt="" width={24} height={24} />
+          <span>{GUEST_TEXT.brand}</span>
+        </header>
+        <main className="guest__main">
+          {code ? (
+            <GuestRoom code={code} credential={credential} onCredential={setCredential} />
+          ) : (
+            <EmptyState tone="error" title={GUEST_TEXT.badLink} actions={null}>
+              {GUEST_TEXT.badLinkHint}
+            </EmptyState>
+          )}
+        </main>
+        <Toaster />
+      </div>
+    </QueryClientProvider>
   );
 }

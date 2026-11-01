@@ -24,6 +24,7 @@ import { Art } from '../cine/Art.tsx';
 import { clock, targetPosition } from './sync.ts';
 import { useSecondTap } from '../settings/second-tap.ts';
 import { JUNTOS_TEXT } from './texts.ts';
+import { canSwitchLive, liveSwitchers } from './liveSources.ts';
 
 /** Una orden de la sala: si falla, se dice por qué (p. ej. «Solo el líder…»). */
 function attempt(run: () => Promise<void>): void {
@@ -178,7 +179,9 @@ export function People({
           <Person key={member.id} member={member} room={room} client={client} selfId={selfId} />
         ))}
       </ul>
-      {!control && names && names.length ? (
+      {/* directo §14: en directo, quién puede cambiar la fuente (también los co-líderes). */}
+      {room.live ? <LiveGuestNote room={room} selfId={selfId} /> : null}
+      {!room.live && !control && names && names.length ? (
         <p className="juntos-note">
           <Icon name="info" size={18} />
           <span>
@@ -830,5 +833,18 @@ export function Lobby({
         ) : null}
       </div>
     </section>
+  );
+}
+
+/* directo §14 */
+/** La nota de Gente en directo: solo quien puede cambiar la fuente, y tú chateas. */
+function LiveGuestNote({ room, selfId }: { room: PartyRoom; selfId: string }) {
+  const names = liveSwitchers(room);
+  if (canSwitchLive(room, selfId) || !names?.length) return null;
+  return (
+    <p className="juntos-note">
+      <Icon name="info" size={18} />
+      <span>{JUNTOS_TEXT.liveGuestNote(joinNames(names), names.length > 1)}</span>
+    </p>
   );
 }

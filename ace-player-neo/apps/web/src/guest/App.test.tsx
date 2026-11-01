@@ -4,6 +4,7 @@
    pase por @sala, @pagina o @estaticos le da 404 al invitado de fuera (el
    cartel de la 1.1.1, que iba por el catálogo). */
 
+import { useQueryClient } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -17,14 +18,17 @@ import { json, mockFetch } from '../test/fetch.ts';
 import { saveCredential } from '../features/juntos/client.ts';
 import { codeFromPath, GuestApp } from './App.tsx';
 
-/* La sala de verdad abre el SSE y el vídeo: casi siempre solo importa con qué se monta. */
+/* La sala de verdad abre el SSE y el vídeo: casi siempre solo importa con qué se monta y
+   que tenga el QueryClient que usa la pestaña Fuentes del directo (useRoomSources). */
 const roomProps = vi.hoisted(() => [] as Record<string, unknown>[]);
 const realRoom = vi.hoisted(() => ({ on: false }));
+const roomQuery = vi.hoisted(() => ({ ok: false }));
 vi.mock('../features/juntos/Room.tsx', async (importOriginal) => {
   const actual = await importOriginal<{ Room: ComponentType<Record<string, unknown>> }>();
   return {
     Room: (props: Record<string, unknown>) => {
       roomProps.push(props);
+      roomQuery.ok = useQueryClient() !== undefined;
       return realRoom.on ? <actual.Room {...props} /> : null;
     },
   };
@@ -163,6 +167,8 @@ describe('página de invitado', () => {
     expect(roomProps.at(-1)).toMatchObject({ code: 'k3J9xQ2mZpL8wR4t', guest: true });
     /* Ya dentro: en el móvil, la sala a la altura de lo que se ve (guest.css). */
     expect(document.querySelector('.guest.guest--room')).toBeTruthy();
+    /* Fuentes (react-query) no tira la sala del enlace: hay QueryClient. */
+    expect(roomQuery.ok).toBe(true);
   });
 
   it('main.tsx instala el vigilante de la zona visible (--vvh para la sala en el iPhone)', async () => {
