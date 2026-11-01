@@ -29,6 +29,15 @@ export const PARTY = {
   holdMaxMs: 20_000,
   /** Un aviso de «cargando» tiene que durar esto antes de parar a los demás. */
   bufferingGraceMs: 800,
+  /**
+   * La sala sigue cuando quien cargaba lleva esto diciendo «ya no cargo» (§16).
+   * Antes seguía con el primer aviso y, en el iPhone, se paraba otra vez enseguida.
+   */
+  resumeSettleMs: 700,
+  /** Con dos esperas o más en este tiempo por la misma persona, su margen sube a `repeatBufferingGraceMs`. */
+  repeatHoldWindowMs: 60_000,
+  /** El margen de quien se atasca a menudo: sus atascos cortos no paran la sala. */
+  repeatBufferingGraceMs: 2_500,
   /** Con más desfase que esto, el reproductor salta a la posición de la sala. */
   driftSeekS: 1.0,
   /** Por encima de esto (y por debajo del salto) se corrige acelerando o frenando un poco. */

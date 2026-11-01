@@ -247,11 +247,16 @@ describe('«Ver juntos»: salas', () => {
 
     clock.advance(3_000);
     party.status(room, { token: ana.member.token, positionS: frozen, buffering: false });
+    /* No sigue con el primer «ya no cargo» (§16): tiene que durar `resumeSettleMs`. */
+    expect(sse.of('party.playback').at(-1)?.action).toBe('wait');
+    clock.advance(PARTY.resumeSettleMs + 1_000);
     last = sse.of('party.playback').at(-1);
     expect(last?.action).toBe('resume');
     expect(last?.playback.waitingFor).toEqual([]);
     expect(last?.playback.positionS).toBe(frozen);
-    expect(last?.playback.at).toBe(clock.now());
+    /* La quita el barrido (cada segundo): el reloj sigue desde ese momento. */
+    expect(last?.playback.at).toBeLessThanOrEqual(clock.now());
+    expect(last?.playback.at).toBeGreaterThan(clock.now() - 1_000);
 
     /* Si no vuelve nunca, a los 20 s la sala sigue sin ella. */
     party.status(room, { token: ana.member.token, positionS: frozen, buffering: true });
@@ -262,6 +267,71 @@ describe('«Ver juntos»: salas', () => {
     /* Y no se la vuelve a esperar enseguida. */
     clock.advance(2_000);
     expect(sse.of('party.playback').at(-1)?.action).toBe('resume');
+  });
+
+  it('§16: quien para la sala a menudo tiene más margen; un «ya no cargo» que no dura no la reanuda', async () => {
+    const { party, clock } = setup();
+    const host = party.create(BODY);
+    const room = host.room.code;
+    const ana = party.join(room, 'Ana');
+    const sse = listen(party, room, host.member.token);
+    await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    party.control(room, { token: host.member.token, action: 'play', positionS: 0 });
+    const actions = () => sse.of('party.playback').map((s) => s.action);
+    const hold = () => {
+      party.status(room, { token: ana.member.token, positionS: 0, buffering: true });
+      clock.advance(PARTY.bufferingGraceMs + 1_000);
+    };
+    const recover = () => {
+      party.status(room, { token: ana.member.token, positionS: 0, buffering: false });
+      clock.advance(PARTY.resumeSettleMs + 1_000);
+    };
+
+    /* Recupera y enseguida vuelve a cargar: la espera sigue, sin «resume» de en medio. */
+    hold();
+    party.status(room, { token: ana.member.token, positionS: 0, buffering: false });
+    clock.advance(200);
+    party.status(room, { token: ana.member.token, positionS: 0, buffering: true });
+    clock.advance(1_500);
+    expect(actions()).toEqual(['play', 'wait']);
+    recover();
+    expect(actions().at(-1)).toBe('resume');
+
+    /* Segunda espera, con el margen de siempre. */
+    hold();
+    expect(actions().at(-1)).toBe('wait');
+    recover();
+
+    /* Ya son dos en un minuto: un atasco de 1,8 s no para la sala; uno de más de 2,5 s, sí. */
+    const before = actions().length;
+    hold();
+    expect(actions()).toHaveLength(before);
+    clock.advance(PARTY.repeatBufferingGraceMs);
+    expect(actions().at(-1)).toBe('wait');
+  });
+
+  it('§16: quien se recupera justo antes del tope sale de la espera sin enfriamiento', async () => {
+    const { party, clock } = setup();
+    const host = party.create(BODY);
+    const room = host.room.code;
+    const ana = party.join(room, 'Ana');
+    const sse = listen(party, room, host.member.token);
+    await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    party.control(room, { token: host.member.token, action: 'play', positionS: 0 });
+    const last = () => sse.of('party.playback').at(-1)?.action;
+    party.status(room, { token: ana.member.token, positionS: 0, buffering: true });
+    clock.advance(PARTY.bufferingGraceMs + 1_000);
+    expect(last()).toBe('wait');
+    /* «Ya no cargo» a 300 ms del tope: el tope llega antes de los 700 ms. */
+    clock.advance(PARTY.holdMaxMs - 1_300);
+    party.status(room, { token: ana.member.token, positionS: 0, buffering: false });
+    clock.advance(1_000);
+    expect(last()).toBe('resume');
+    /* Sin castigo: un atasco nuevo vuelve a parar la sala. */
+    clock.advance(5_000);
+    party.status(room, { token: ana.member.token, positionS: 0, buffering: true });
+    clock.advance(PARTY.bufferingGraceMs + 1_000);
+    expect(last()).toBe('wait');
   });
 
   it('el SSE empieza con la foto entera; el chat llega a todos y tiene tope por minuto', () => {

@@ -90,6 +90,13 @@ interface Member {
   connections: number;
   buffering: boolean;
   bufferingSince: number | null;
+  /**
+   * Dijo «ya no cargo» estando la sala esperándole: la sala sigue cuando lleva
+   * así `PARTY.resumeSettleMs` (§16), no con el primer aviso.
+   */
+  recoveredAt: number | null;
+  /** Cuándo empezaron las últimas esperas por esta persona (para ser más paciente si se repiten). */
+  holdStarts: number[];
   /** No se le espera hasta esta hora (ya se le esperó `holdMaxMs`). */
   holdSkipUntil: number;
   readonly chatTimes: number[];
@@ -511,6 +518,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       connections: 0,
       buffering: false,
       bufferingSince: null,
+      recoveredAt: null,
+      holdStarts: [],
       holdSkipUntil: 0,
       chatTimes: [],
       readyReported: null,
@@ -791,8 +800,22 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       /* Esperas que vencen y avisos de «cargando» que ya duran bastante. */
       for (const [memberId, since] of [...room.waiting]) {
         const member = room.members.get(memberId);
-        if (member && member.buffering && now - since < PARTY.holdMaxMs) continue;
-        if (member) member.holdSkipUntil = now + HOLD_COOLDOWN_MS;
+        const settled =
+          member !== undefined &&
+          !member.buffering &&
+          member.recoveredAt !== null &&
+          now - member.recoveredAt >= PARTY.resumeSettleMs;
+        if (settled) {
+          /* Se ha recuperado de verdad (§16): la sala sigue sin castigarle. */
+          member.recoveredAt = null;
+          stopWaiting(room, memberId, now);
+          continue;
+        }
+        if (member && now - since < PARTY.holdMaxMs) continue;
+        /* El enfriamiento, solo a quien sigue cargando: quien ya dijo «ya no cargo»
+           y no llegó a cumplir `resumeSettleMs` antes del tope sale sin castigo. */
+        if (member?.buffering) member.holdSkipUntil = now + HOLD_COOLDOWN_MS;
+        if (member) member.recoveredAt = null;
         stopWaiting(room, memberId, now);
       }
       for (const member of room.members.values()) maybeWait(room, member, now);
@@ -845,7 +868,14 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     if (room.live || !room.playback.playing || room.interrupted) return;
     if (!member.buffering || member.bufferingSince === null) return;
     if (room.waiting.has(member.id) || now < member.holdSkipUntil) return;
-    if (now - member.bufferingSince < PARTY.bufferingGraceMs) return;
+    /* Quien ya ha parado la sala dos veces en el último minuto tiene más margen:
+       sus atascos cortos los resuelve solo, sin parar a los demás cada vez (§16). */
+    member.holdStarts = member.holdStarts.filter((at) => now - at < PARTY.repeatHoldWindowMs);
+    const grace =
+      member.holdStarts.length >= 2 ? PARTY.repeatBufferingGraceMs : PARTY.bufferingGraceMs;
+    if (now - member.bufferingSince < grace) return;
+    member.holdStarts.push(now);
+    member.recoveredAt = null;
     const first = room.waiting.size === 0;
     if (first) fix(room, positionNow(room, now), now);
     room.waiting.set(member.id, now);
@@ -1237,8 +1267,10 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       if (body.buffering !== member.buffering) {
         member.buffering = body.buffering;
         member.bufferingSince = body.buffering ? now : null;
-        if (!body.buffering) stopWaiting(room, member.id, now);
-        else maybeWait(room, member, now);
+        /* La espera no acaba con el primer «ya no cargo»: el barrido la quita
+           cuando lleva `resumeSettleMs` así (§16). */
+        member.recoveredAt = body.buffering ? null : now;
+        if (body.buffering) maybeWait(room, member, now);
         changed = true;
       }
       const ready = body.ready ?? null;

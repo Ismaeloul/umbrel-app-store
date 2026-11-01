@@ -346,3 +346,33 @@ abierta hasta caducar (10 min sin nadie, 12 h como mucho).
   cada sala con «Volver» (si este navegador tiene su credencial: vuelves a tu sitio y a tu corona) o «Entrar» (se pide
   el nombre) y «Cerrar» con segundo toque.
 - **Pruebas**: `modules/party/live.test.ts` y `features/juntos/OpenRooms.test.tsx`.
+
+## 16. El «CD rayado» en el iPhone y el móvil (nov 2026)
+
+Con la 0.9.15, un invitado desde fuera con un iPhone veía la película a tirones: se paraba, volvía un poco atrás y
+seguía, una y otra vez. Un análisis con agentes independientes (y otros que intentaban refutarlo) dejó una causa
+confirmada, el bucle de la espera, y descartó o rebajó otras 16 hipótesis.
+
+- **El bucle**: el iPhone se queda sin datos → avisa «cargando» → a los 0,8 s la sala para a todos («Esperando a…»)
+  → Safari vuelve a `readyState` 3 con apenas un fotograma → el siguiente tic dice «ya no cargo» → la sala sigue al
+  momento → el iPhone, sin colchón, se para otra vez. Los demás recibían la pausa hasta medio segundo tarde, ya
+  pasados del punto, y la corrección en pausa los devolvía atrás (el «vuelve un poquito»).
+- **Web** (`sync.ts`, `StallDetector`; `player.ts`): «atascado» ya no es `readyState < 3`. Entra si reproduce y el
+  tiempo no avanza 0,8 s, con el evento `waiting` o con `readyState < 2`; sale solo con colchón por delante (3 s con
+  hls.js, 4 s con el HLS nativo del iPhone; 6 y 10 s si los atascos se repiten en un minuto, y vuelve al de partida
+  tras 2 min sin atascos), con `readyState` 4 y 2 s, o si el vídeo avanza de verdad. Cerca del final basta con lo
+  que queda. Reproduciendo, un salto de corrección cada 4 s como mucho (cada salto tira lo que se estaba bajando). Una
+  orden nueva de la sala (`playback.rev`) se aplica al momento, no en el siguiente tic. En «Esperando a todos»,
+  `readyState` 4 cuenta como listo solo con 4 s por delante.
+- **Servidor** (`party/service.ts`): un «ya no cargo» no reanuda la sala; el barrido la reanuda cuando lleva
+  `PARTY.resumeSettleMs` (700 ms) así. Quien ha parado la sala dos veces en el último minuto tiene 2,5 s de margen
+  (`repeatBufferingGraceMs`) en vez de 0,8 s: sus atascos cortos no paran a los demás.
+- **Revisión**: otra tanda de agentes revisó el cambio y encontró 5 fallos, ya arreglados: el reloj de «no avanza»
+  corría en pausa (al reanudar, la pausa contaba como atasco y volvía a parar la sala), el colchón no unía tramos
+  cargados separados por huecos de centésimas (`forwardBufferEnd`), el freno de 4 s frenaba también los saltos del
+  líder y quien se recuperaba justo antes de los 20 s se llevaba el enfriamiento de 30 s.
+- **Lo que falta**: la película va a la calidad original (unos 4,3 Mbit/s en el registro, trozos de 6 s y ~3,2 MB).
+  Si la conexión del invitado no llega a eso, se seguirá atascando, solo que mucho menos a menudo. El arreglo de
+  fondo es una calidad más baja para los invitados de fuera (una segunda versión recodificada o calidad adaptativa).
+- **Pruebas**: `features/juntos/sync.test.ts` (detector) y `modules/party/service.test.ts` (reanudar tras 700 ms y
+  el margen de quien se atasca a menudo).

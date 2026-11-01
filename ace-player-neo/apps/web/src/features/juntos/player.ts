@@ -41,13 +41,23 @@ import { chooseEngine, detectPlatform, streamClient } from '../../player/engines
 import { absoluteUrl } from '../../player/engines/types.ts';
 import { canPlayHevc } from '../cine/play.ts';
 import { canControl, type PartyClient } from './client.ts';
-import { correction, isRunning, lobbyReport, targetPosition } from './sync.ts';
+import {
+  correction,
+  forwardBufferEnd,
+  isRunning,
+  lobbyReport,
+  RESUME_AHEAD_S,
+  StallDetector,
+  targetPosition,
+} from './sync.ts';
 import { JUNTOS_TEXT } from './texts.ts';
 
 const TICK_MS = 500;
 /** Tras perder la sesión sin interrupción, lo que se espera antes de reabrir. */
 const REOPEN_DELAY_MS = 2_000;
 const REOPENS_PER_MINUTE = 3;
+/** Reproduciendo, entre dos saltos de corrección pasa al menos esto. */
+const SEEK_BACKOFF_MS = 4_000;
 /** Un salto en los controles nativos tiene que apartarse al menos esto de la sala para ser una orden. */
 const NATIVE_SEEK_S = 1.5;
 /** Un evento del vídeo hasta esto después de un toque o una tecla cuenta como de la persona. */
@@ -138,6 +148,14 @@ export class RoomPlayer {
   };
   private readonly listeners = new Set<() => void>();
   private grant: PartyStreamGrant | null = null;
+  /** ¿Atascado? Con histéresis; el colchón de partida depende del motor (se pone al abrir). */
+  private stall = new StallDetector(RESUME_AHEAD_S.mse);
+  /** El último salto de corrección (para no encadenarlos). */
+  private lastSeekAt = Number.NEGATIVE_INFINITY;
+  /** La última orden de la sala que se ha aplicado (`playback.rev`). */
+  private seenRev: number | null = null;
+  /** La orden de la sala (`playback.rev`) del último salto de corrección. */
+  private seekRev: number | null = null;
   private hls: HlsInstance | null = null;
   private tickTimer: unknown = null;
   private reopenTimer: unknown = null;
@@ -168,6 +186,10 @@ export class RoomPlayer {
       play: () => this.onNative('play'),
       pause: () => this.onNative('pause'),
       seeking: () => this.onNative('seeking'),
+      /* Sin datos ya: atascado al momento (no hay que esperar al tic). */
+      waiting: () => {
+        if (this.view.phase === 'ready' && !this.video.paused) this.stall.waiting(this.env.now());
+      },
     };
   }
 
@@ -194,7 +216,16 @@ export class RoomPlayer {
       });
     }
     this.tickTimer = this.env.setInterval(() => this.tick(), TICK_MS);
-    this.unsubscribe = this.client.subscribe(() => this.reconcile());
+    this.unsubscribe = this.client.subscribe(() => {
+      this.reconcile();
+      /* Una orden nueva de la sala (pausa, espera, salto) se aplica ya, no en el
+         próximo tic: hasta 500 ms tarde, los demás seguían y luego volvían atrás. */
+      const rev = this.room()?.playback.rev ?? null;
+      if (rev !== this.seenRev) {
+        this.seenRev = rev;
+        this.tick();
+      }
+    });
     this.reconcile();
   }
 
@@ -311,6 +342,11 @@ export class RoomPlayer {
       return;
     }
     this.grant = grant;
+    /* Safari (HLS nativo) llena el colchón a trozos enteros: pide más para darse por recuperado. */
+    this.stall = new StallDetector(
+      engine === 'native' ? RESUME_AHEAD_S.native : RESUME_AHEAD_S.mse,
+    );
+    this.lastSeekAt = Number.NEGATIVE_INFINITY;
     this.acquiredAudio = grant.vod.audioIndex >= 0 ? grant.vod.audioIndex : null;
     const startS = targetPosition(room.playback, this.client.serverNow(), grant.vod.durationS);
     const Hls = engine === 'hls' ? await this.env.loadHls() : null;
@@ -358,6 +394,11 @@ export class RoomPlayer {
       return;
     }
     this.grant = grant;
+    /* Safari (HLS nativo) llena el colchón a trozos enteros: pide más para darse por recuperado. */
+    this.stall = new StallDetector(
+      engine === 'native' ? RESUME_AHEAD_S.native : RESUME_AHEAD_S.mse,
+    );
+    this.lastSeekAt = Number.NEGATIVE_INFINITY;
     this.acquiredAudio = null;
     const Hls = engine === 'hls' ? await this.env.loadHls() : null;
     if (generation !== this.generation || this.destroyed) return;
@@ -427,15 +468,29 @@ export class RoomPlayer {
       room?.title.durationS ?? (Number.isFinite(video.duration) ? video.duration : null);
     const preparing = phase === 'preparing';
     const ready = phase === 'ready';
-    const buffering = preparing || (ready && video.readyState < 3);
+    const now = this.env.now();
     let bufferedS = 0;
     try {
       const ranges = video.buffered;
-      for (let i = 0; i < ranges.length; i += 1) {
-        if (ranges.start(i) <= video.currentTime + 0.5)
-          bufferedS = Math.max(bufferedS, ranges.end(i));
-      }
+      const list: [number, number][] = [];
+      for (let i = 0; i < ranges.length; i += 1) list.push([ranges.start(i), ranges.end(i)]);
+      bufferedS = list.length ? forwardBufferEnd(list, video.currentTime || 0) : 0;
     } catch {}
+    /* Con histéresis (sync.ts, StallDetector): `readyState < 3` sola volvía a
+       «listo» con un fotograma en el iPhone y la sala se paraba y seguía sin fin. */
+    const stalled =
+      ready &&
+      this.stall.update({
+        now,
+        currentTime: video.currentTime || 0,
+        paused: video.paused,
+        seeking: video.seeking,
+        ended: video.ended,
+        readyState: video.readyState,
+        aheadS: Math.max(0, bufferedS - (video.currentTime || 0)),
+        leftS: durationS !== null ? Math.max(0, durationS - (video.currentTime || 0)) : null,
+      });
+    const buffering = preparing || stalled;
     this.set({ positionS: video.currentTime || 0, durationS, bufferedS, buffering });
     this.client.report(
       video.currentTime || 0,
@@ -463,7 +518,16 @@ export class RoomPlayer {
     if (video.readyState < 1 || video.seeking) return;
     const fix = correction(video.currentTime, target, running);
     if (fix.kind === 'seek') {
+      /* Reproduciendo, un salto cada `SEEK_BACKOFF_MS` como mucho: en una conexión
+         justa, cada salto tira lo que se estaba bajando, cae sin datos, se aparta
+         otra vez y vuelve a saltar (el «CD rayado»). En pausa se coloca siempre. */
+      /* El freno es para la deriva: una orden nueva de la sala (un salto del líder) pasa siempre. */
+      const order = room.playback.rev !== this.seekRev;
+      if (running && !order && now - this.lastSeekAt < SEEK_BACKOFF_MS) return;
       video.playbackRate = 1;
+      this.lastSeekAt = now;
+      this.seekRev = room.playback.rev;
+      this.stall.moved(now, true);
       this.seekVideo(fix.to);
     } else if (fix.kind === 'rate' && video.playbackRate !== fix.rate) {
       video.playbackRate = fix.rate;
