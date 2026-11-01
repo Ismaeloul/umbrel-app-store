@@ -2,6 +2,14 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 1.1.3 (2026-11-01)
+
+Version 1.1.3. La app del iPhone puede entrar desde fuera de casa sin VPN
+por tv.ismaeloul.es, con HTTPS y todas las protecciones: solo la entrada de
+la app, emparejar solo desde casa, permiso por aparato (apagado hasta que lo
+enciendas en Ajustes, Dispositivos), bloqueo de intentos y registro de
+accesos. La web y las salas siguen igual.
+
 ## 1.1.2 (2026-11-01)
 
 Version 1.1.2. Ver juntos mucho mas fiable: el movil ya no va un segundo
