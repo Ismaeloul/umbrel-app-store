@@ -99,7 +99,7 @@ services:
       OLLAMA_TIMEOUT_MS: "12000"
       PARTY_PUBLIC_URL: "https://sala.ismaeloul.es"
       # Calidad ligera para los invitados (docs/ver-juntos.md §17), como en el NAS.
-      ACE_PARTY_LITE: "0"
+      ACE_PARTY_LITE: "1"
       # Arranca como root solo para instalar ffmpeg; antes de abrir ningun
       # fichero el backend pasa a ser este usuario (el node de la imagen) y
       # deja suya la carpeta de datos (core/privileges.ts). Desde fuera llega

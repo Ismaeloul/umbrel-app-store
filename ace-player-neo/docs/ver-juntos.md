@@ -439,7 +439,8 @@ servidor; la web, al final de la sección.
   vuelven a `index.m3u8`. Se escribe una vez en el registro y sale en `remux.stats().partyLite` (`on`, `off` o
   `tripped` y por qué; solo con `ACE_PARTY_LITE=1`).
 - **Interruptores**, de menos a más: «Alta» en el menú «Calidad» del invitado (la web), el fusible de la sesión y
-  `ACE_PARTY_LITE` en el Compose (`"0"` de fábrica hasta probarla en el NAS; con `"0"`, `master.m3u8`, `lo.m3u8` y los
+  `ACE_PARTY_LITE` en el Compose (`"1"` desde la 1.0.0, que la sube encendida porque el fusible ya vuelve a la original si
+  el NAS no da abasto; con `"0"`, `master.m3u8`, `lo.m3u8` y los
   `lo_*` dan 404 y nadie recibe oferta). El ajuste de casa «Calidad para invitados» del plan NO está hecho: haría falta
   otro fichero de ajustes, rutas y la pantalla de Ajustes; el interruptor del Compose cubre lo mismo con un reinicio.
 - **Despliegue**: storage pasa de `mem_limit` 768m a 1280m y de `pids_limit` 128 a 192 (decodificar más x264 son

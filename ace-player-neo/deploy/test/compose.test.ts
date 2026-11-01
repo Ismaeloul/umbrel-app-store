@@ -120,16 +120,16 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
     expect(RAW).toContain('PROXY_AUTH_WHITELIST: "/native/*"');
   });
 
-  it('storage: el entorno de la 0.6.59 más ACE_SEED de APP_SEED, el enlace público de «Ver juntos», sin root (ACE_RUN_AS) y la calidad ligera apagada', () => {
+  it('storage: el entorno de la 0.6.59 más ACE_SEED de APP_SEED, el enlace público de «Ver juntos», sin root (ACE_RUN_AS) y la calidad ligera encendida desde la 1.0.0', () => {
     expect(service('storage').environment).toEqual({
       ...legacy('storage').environment,
       ACE_SEED: '${APP_SEED}',
       PARTY_PUBLIC_URL: 'https://sala.ismaeloul.es',
-      ACE_PARTY_LITE: '0',
+      ACE_PARTY_LITE: '1',
       ACE_RUN_AS: '1000:1000',
     });
-    /* Apagada hasta probarla en el NAS (docs/ver-juntos.md §17). */
-    expect(RAW).toContain('ACE_PARTY_LITE: "0"');
+    /* Encendida desde la 1.0.0 (docs/ver-juntos.md §17): si el NAS no da abasto, el fusible vuelve a la original. */
+    expect(RAW).toContain('ACE_PARTY_LITE: "1"');
     expect(RAW).toContain('ACE_SEED: "${APP_SEED}"');
     expect(service('engine_control').environment).toEqual(legacy('engine_control').environment);
   });
