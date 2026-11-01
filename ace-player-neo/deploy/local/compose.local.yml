@@ -107,6 +107,12 @@ services:
       ACE_RUN_AS: "1000:1000"
       # Los grupos de /dev/dri, como en el NAS (docs/ver-juntos.md §17.6).
       ACE_RUN_GROUPS: "dri"
+      # El dominio de la app de iPhone (docs/acceso-remoto.md), como en el NAS. En la pila local no
+      # hay Caddy: el 3002 escucha pero lo rechaza todo (no resuelve el contenedor sala).
+      ACE_EDGE_PORT: "3002"
+      ACE_EDGE_PEER: "ismaeloul-ace-player-neo_sala_1"
+      NATIVE_PUBLIC_URL: "https://tv.ismaeloul.es"
+      ACE_NATIVE_LITE: "0"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # Sin devices: /dev/dri ni group_add: Docker Desktop no tiene la grafica

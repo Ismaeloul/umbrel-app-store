@@ -11,6 +11,9 @@
       recolector del remux, precalentado, disco del diagnóstico…
    5. `listen` en 0.0.0.0:PORT. El healthcheck de Docker da sano en cuanto
       escucha (/api/v1/health/live).
+   6. Con `ACE_EDGE_PORT`, un segundo servidor en 0.0.0.0:<ese puerto>: el del dominio de fuera
+      (tv.ismaeloul.es), al que solo llama Caddy (core/edge.ts). Si no puede escuchar, el resto
+      sigue y el dominio queda cerrado.
 
    Apagado (`stopServer`), una sola vez aunque lleguen varias señales
    (backend-modulos §8.6.29): deja de aceptar (Fastify contesta 503 a lo
@@ -24,12 +27,14 @@
    `fork`, como scripts/smoke-bundle.mjs), el mensaje `shutdown` hace el mismo
    apagado. En el NAS no hay canal IPC y esto no hace nada. */
 
+import type { Server } from 'node:http';
 import type { FastifyInstance } from 'fastify';
 import { LOG_CLEAN_STOP_MSG, SHUTDOWN_TIMINGS } from '@ace/shared';
 import { buildApp } from './app.js';
 import { DEFAULTS, loadConfig, type Env } from './config/index.js';
 import { createDomainBus } from './core/bus.js';
 import { createSystemClock, type Clock } from './core/clock.js';
+import { createEdgeServer } from './core/edge.js';
 import { createLogger, createLogRing, logRingOf, logStoreOf, type Logger } from './core/logger.js';
 import { dropRoot } from './core/privileges.js';
 import {
@@ -138,6 +143,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   else await app.listen({ host: config.host, port: config.port });
   const startupMs = Math.round(performance.now() - startedAt);
   logger.info({ port: config.port, startupMs }, 'escuchando');
+  const edge = options.listen === false ? null : await listenEdge(app, services);
   /* Cada 6 h, memoria y sesiones: dentro de un mes se ve si algo fue a más. */
   const heartbeat = clock.setInterval(() => logHeartbeat(services), HEARTBEAT_MS, { unref: true });
 
@@ -148,7 +154,13 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     startupMs,
     stop() {
       stopping ??= (async () => {
+        if (edge) {
+          services.remote.setListening(false);
+          edge.close();
+          edge.closeIdleConnections();
+        }
         await stopServices(services, app);
+        edge?.closeAllConnections();
         clock.clearInterval(heartbeat);
         detachLog?.();
         /* La última línea: el próximo arranque sabe que este terminó bien. */
@@ -158,6 +170,32 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       return stopping;
     },
   };
+}
+
+/**
+ * El servidor del dominio de fuera (`ACE_EDGE_PORT`): las peticiones se marcan como «del dominio»
+ * y pasan al mismo Fastify (`app.routing`). null si no hay puerto o no se puede escuchar.
+ */
+export async function listenEdge(app: FastifyInstance, services: Services): Promise<Server | null> {
+  const { config, logger } = services;
+  const port = config.edge.port;
+  if (port === null) return null;
+  const server = createEdgeServer((req, res) => app.routing(req, res));
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, config.host, () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
+  } catch (error) {
+    logger.error({ err: error, port }, 'dominio: no se pudo abrir su puerto; queda cerrado');
+    return null;
+  }
+  services.remote.setListening(true);
+  logger.info({ port, peer: config.edge.peer }, 'dominio: escuchando (solo para Caddy)');
+  return server;
 }
 
 /**

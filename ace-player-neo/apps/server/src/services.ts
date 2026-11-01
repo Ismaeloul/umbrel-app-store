@@ -20,6 +20,7 @@
      teams        → net, football
      auth         → state
      events       (solo el bus)
+     remote       → auth, events (el dominio de fuera, tv.ismaeloul.es)
      diagnostics  (solo el bus)
      health       → todos los anteriores (hoja: nadie depende de él)
 
@@ -50,6 +51,7 @@ import {
 import { createIptvService, type IptvService } from './modules/iptv/index.js';
 import { createNetClient, type NetClient } from './modules/net/index.js';
 import { createPlaybackService, type PlaybackService } from './modules/playback/index.js';
+import { createRemoteService, type RemoteService } from './modules/remote/index.js';
 import { createRemuxService, type RemuxService } from './modules/remux/index.js';
 import { createScannerService, type ScannerService } from './modules/scanner/index.js';
 import { createSearchService, type SearchService } from './modules/search/index.js';
@@ -78,6 +80,7 @@ export interface Services {
   readonly teams: TeamsService;
   readonly auth: AuthService;
   readonly events: EventsHub;
+  readonly remote: RemoteService;
   readonly diagnostics: DiagnosticsService;
   readonly health: HealthService;
 }
@@ -102,6 +105,7 @@ export const SERVICE_ORDER: readonly ServiceName[] = [
   'teams',
   'auth',
   'events',
+  'remote',
   'diagnostics',
   'health',
 ];
@@ -159,6 +163,7 @@ export function createServices(
   const teams = overrides.teams ?? createTeamsService({ ...core, net, football });
   const auth = overrides.auth ?? createAuthService({ ...core, state });
   const events = overrides.events ?? createEventsHub(core);
+  const remote = overrides.remote ?? createRemoteService({ ...core, auth, events });
   const diagnostics = overrides.diagnostics ?? createDiagnosticsService(core);
   const health =
     overrides.health ??
@@ -176,6 +181,7 @@ export function createServices(
       teams,
       diagnostics,
       events,
+      remote,
     });
 
   return {
@@ -196,6 +202,7 @@ export function createServices(
     teams,
     auth,
     events,
+    remote,
     diagnostics,
     health,
   };

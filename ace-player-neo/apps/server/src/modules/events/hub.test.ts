@@ -429,3 +429,100 @@ describe('events · cierre, revocación y contrapresión', () => {
     expect(sink.headers).toEqual(SSE_HEADERS);
   });
 });
+
+describe('events · el dominio de fuera (tv.ismaeloul.es)', () => {
+  function openRemote(ctx: Setup, deviceId: string, ipKey: string | null = '198.51.100.7') {
+    const sink = new FakeSink();
+    const closed = ctx.hub.connect(fakeReply(sink), {
+      origin: 'native',
+      deviceId,
+      lastEventId: null,
+      signal: new AbortController().signal,
+      remote: { ipKey },
+    });
+    return { sink, closed };
+  }
+
+  it('remote.changed (lleva a mirar IPs) solo llega a la web, nunca a un iPhone', () => {
+    const ctx = setup();
+    const browser = open(ctx, { origin: 'web' });
+    const phone = open(ctx, { origin: 'native', deviceId: 'dev_iphone01' });
+    const outside = openRemote(ctx, 'dev_iphone01');
+    ctx.core.bus.emit('remote.changed', {});
+    expect(browser.sink.events().map((event) => event.event)).toEqual(['remote.changed']);
+    expect(phone.sink.events()).toEqual([]);
+    expect(outside.sink.events()).toEqual([]);
+    expect(browser.sink.events()[0]?.data).toEqual({});
+  });
+
+  it('closeRemote cierra las del dominio (de un aparato o todas) y deja las de casa', () => {
+    const ctx = setup();
+    const home = open(ctx, { origin: 'native', deviceId: 'dev_iphone01' });
+    const mine = openRemote(ctx, 'dev_iphone01');
+    const other = openRemote(ctx, 'dev_ipad0001');
+    ctx.hub.closeRemote('dev_iphone01');
+    expect(mine.sink.writableEnded || mine.sink.destroyed).toBe(true);
+    expect(other.sink.writableEnded || other.sink.destroyed).toBe(false);
+    expect(ctx.hub.remoteConnections('198.51.100.7')).toBe(1);
+    ctx.hub.closeRemote(null);
+    expect(other.sink.writableEnded || other.sink.destroyed).toBe(true);
+    expect(home.sink.writableEnded || home.sink.destroyed).toBe(false);
+    expect(ctx.hub.connections()).toBe(1);
+  });
+
+  it('cada aparato, como mucho 4 por el dominio: la quinta cierra la más vieja', () => {
+    const ctx = setup();
+    const opened = Array.from({ length: 5 }, () => openRemote(ctx, 'dev_iphone01'));
+    expect(opened.map(({ sink }) => sink.writableEnded || sink.destroyed)).toEqual([
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(ctx.hub.remoteConnections('198.51.100.7')).toBe(4);
+  });
+
+  it('devices.changed por el dominio: solo el del propio aparato (ni ids ni altas de los demás)', () => {
+    const ctx = setup();
+    const home = open(ctx, { origin: 'native', deviceId: 'dev_iphone01' });
+    const outside = openRemote(ctx, 'dev_iphone01');
+    ctx.core.bus.emit('devices.changed', { reason: 'paired', deviceId: 'dev_ipad0001' });
+    ctx.core.bus.emit('devices.changed', { reason: 'renamed', deviceId: 'dev_iphone01' });
+    ctx.core.bus.emit('devices.changed', { reason: 'revoked', deviceId: 'dev_mac00001' });
+    expect(outside.sink.events().map((event) => event.data)).toEqual([
+      { reason: 'renamed', deviceId: 'dev_iphone01' },
+    ]);
+    /* Desde casa, todos (como siempre). */
+    expect(home.sink.events()).toHaveLength(3);
+  });
+
+  it('devices.changed de otros tampoco llega al reanudar con Last-Event-ID', () => {
+    const ctx = setup();
+    const before = ctx.hub.lastEventId();
+    ctx.core.bus.emit('devices.changed', { reason: 'paired', deviceId: 'dev_ipad0001' });
+    ctx.core.bus.emit('devices.changed', { reason: 'renamed', deviceId: 'dev_iphone01' });
+    const sink = new FakeSink();
+    void ctx.hub.connect(fakeReply(sink), {
+      origin: 'native',
+      deviceId: 'dev_iphone01',
+      lastEventId: before,
+      signal: new AbortController().signal,
+      remote: { ipKey: '198.51.100.7' },
+    });
+    expect(sink.events().map((event) => event.data)).toEqual([
+      { reason: 'renamed', deviceId: 'dev_iphone01' },
+    ]);
+  });
+
+  it('remoteConnections(ip, aparato): de las suyas solo cuentan las que no va a cerrar attach', () => {
+    const ctx = setup();
+    for (let index = 0; index < 4; index += 1) openRemote(ctx, 'dev_iphone01');
+    openRemote(ctx, 'dev_ipad0001');
+    expect(ctx.hub.remoteConnections('198.51.100.7')).toBe(5);
+    /* El iPhone abre otra: la más vieja suya se cierra, así que cuentan 3 suyas + 1 del iPad. */
+    expect(ctx.hub.remoteConnections('198.51.100.7', 'dev_iphone01')).toBe(4);
+    expect(ctx.hub.remoteConnections('198.51.100.7', 'dev_ipad0001')).toBe(5);
+    expect(ctx.hub.remoteConnections('203.0.113.1', 'dev_iphone01')).toBe(0);
+  });
+});

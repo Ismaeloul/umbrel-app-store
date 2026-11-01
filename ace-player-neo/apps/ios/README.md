@@ -142,6 +142,51 @@ Agenda · Canales · Buscar · Ajustes (`Tab` y `Tab(role: .search)` en iOS 18+;
   teléfono (`NWPathMonitor`) también se vuelve a elegir.
 - **401** en una ruta con token = el dispositivo ya no vale (revocado o
   caducado): se borra el token y la app vuelve a la pantalla de emparejar.
+  **Por el dominio no llega nunca un 401** (ver abajo): allí un token que no
+  vale sale como un 404 vacío, igual que lo demás.
+- **Tercera dirección: `https://tv.ismaeloul.es`** (el dominio de fuera,
+  [`docs/acceso-remoto.md`](../../docs/acceso-remoto.md), «Por el dominio»). El QR
+  la trae como última `u=` cuando el servidor tiene `NATIVE_PUBLIC_URL`; se
+  empareja igual desde casa (el canje por el dominio da 403
+  `pairing_local_only`) y la app se guarda las tres. Lo que tiene que hacer la app:
+  - **Mandar `Authorization` también en el `ping`** cuando ya está emparejada.
+    Por el dominio, sin un `Authorization` con forma de token
+    (`Bearer <deviceId>.<secreto de 43>`) Caddy contesta **404 sin cuerpo** y
+    la petición ni llega al servidor; no hay 401. Desde casa el `ping` sigue
+    sin pedirlo. Hoy `Rutas.swift` hace el `ping` con `conToken: false`: así
+    `ServerResolver` nunca elegiría la dirección del dominio. Para esa dirección
+    hay que mandar el token (`conToken: true`).
+  - **Un 404 vacío por el dominio** (sin cuerpo JSON) es «el dominio no me
+    reconoce»: token revocado o que no vale, dominio cerrado, IP bloqueada o
+    un límite superado sin token bueno. El servidor no dice cuál, para no
+    darle pistas a nadie de fuera (la razón queda en la web, en Ajustes →
+    Dispositivos). La app NO debe borrar el token por eso: que pruebe la LAN
+    o Tailscale, y desde casa sí sabrá si el token vale (401).
+  - **Preferir la LAN o Tailscale cuando respondan**; el dominio, solo si no.
+    Desde la Wi-Fi de casa el dominio puede ir por el NAT de retorno de la
+    Freebox (y entonces el servidor no ve la IP real).
+  - Los errores en JSON solo llegan con un token bueno:
+    **`remote_forbidden`** (403: este aparato no tiene el permiso «Acceso desde
+    fuera de casa», o caducó): sin reintentar en bucle y con el mensaje
+    «Activa el acceso desde fuera en la web» (el del catálogo). NO borrar el
+    token: el aparato sigue emparejado y desde casa funciona. Con el dominio
+    cerrado («Cerrar el dominio ya») no hay 403 `remote_disabled`: es el 404
+    vacío de arriba.
+  - **`rate_limited`** (429): esperar lo que diga `Retry-After` (segundos)
+    antes de volver a probar. El bloqueo por IP no le afecta a un aparato
+    emparejado (es para quien no tiene llave).
+  - **`remote_forbidden_route`** (403): esa función solo existe desde casa
+    (ver la lista de dispositivos, cambiar ajustes…). «Olvidar este iPhone»
+    (`DELETE devices/<el propio id>`) sí vale. Emparejar y las salas ni se
+    ofrecen por el dominio: 404 vacío.
+  - `bootstrap` trae `remote: { viaDomain, allowed, expiresAt }` cuando hay
+    dominio: sirve para avisar «Tu acceso desde fuera caduca el …».
+  - El vídeo firmado no cambia; si a mitad se quita el permiso, el siguiente
+    segmento da 403 `remote_forbidden`. Una descarga en curso
+    (`vod/titles/<id>/download`) se corta en ese momento: la conexión se cierra
+    sin terminar el tramo.
+  - ATS: el dominio va por `https://` con un certificado de Let's Encrypt, así
+    que no necesita ninguna excepción.
 - **Errores**: el mensaje en español del catálogo común. `ErrorCatalog.swift`
   se genera desde `packages/shared/src/errors.ts` y la CI comprueba que está al
   día (`node scripts/generar-catalogo-errores.mjs --check`).
@@ -256,7 +301,8 @@ Se escriben a mano (arquitectura §10.3) porque:
     (`appTransportSecurityRequiresSecureConnection`) y la salida es usar el
     nombre `.ts.net` o el `.local`.
 - Por HTTP en la LAN el token viaja sin cifrar: riesgo aceptado en casa; fuera
-  de casa, Tailscale ya cifra el tráfico (arquitectura §10.2).
+  de casa, Tailscale ya cifra el tráfico (arquitectura §10.2), y el dominio
+  `https://tv.ismaeloul.es` va por TLS 1.3.
 
 ## Permisos y capacidades (Info.plist)
 

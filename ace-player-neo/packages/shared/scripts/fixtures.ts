@@ -115,6 +115,12 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   /* Las salas abiertas y cerrarlas desde casa: solo la web de casa. */
   'partyList',
   'partyEnd',
+  /* El dominio de fuera (tv.ismaeloul.es): permisos, bloqueos y registro. Llevan IPs: solo web. */
+  'remoteGet',
+  'remoteUpdate',
+  'deviceRemoteUpdate',
+  'remoteBlockDelete',
+  'remoteBlocksClear',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 
@@ -655,6 +661,40 @@ export const V1_FIXTURES = {
     ],
   },
 } satisfies { [K in AppFixtureRouteId]: V1ResponseInput<K> };
+
+// --- El dominio de fuera (tv.ismaeloul.es): IPs de documentación (RFC 5737 y RFC 3849) ---
+
+const remoteView: V1ResponseInput<'remoteGet'> = {
+  domain: { configured: true, url: 'https://tv.example.org' },
+  enabled: true,
+  edge: { listening: true, peerResolved: true },
+  devices: [
+    {
+      deviceId: DEVICE_ID,
+      enabled: true,
+      enabledAt: AT,
+      expiresAt: '2026-10-23T18:30:00.000Z',
+      expired: false,
+      lastAccess: { at: AT, ip: '198.51.100.23' },
+    },
+  ],
+  blocks: [
+    {
+      key: '203.0.113.9',
+      label: '203.0.113.9',
+      until: '2026-09-23T18:45:00.000Z',
+      level: 1,
+      firstAt: '2026-09-23T18:21:00.000Z',
+      lastAt: AT,
+    },
+  ],
+  events: [
+    { at: AT, kind: 'blocked', deviceId: null, ip: '203.0.113.9', route: null },
+    { at: AT, kind: 'ok-new-ip', deviceId: DEVICE_ID, ip: '198.51.100.23', route: 'bootstrap' },
+    { at: AT, kind: 'denied-device', deviceId: 'dev_ipad0001', ip: '2001:db8::7', route: 'ping' },
+  ],
+  last24h: { ok: 412, denied: 9, blocked: 3, ipUntrusted: 0 },
+};
 
 // --- Rutas solo web con ejemplo aparte (web/v1/): Ajustes → IPTV ---
 
@@ -1556,6 +1596,11 @@ export const WEB_V1_FIXTURES = {
     ],
   },
   partyEnd: { ok: true },
+  remoteGet: remoteView,
+  remoteUpdate: { ...remoteView, enabled: false },
+  deviceRemoteUpdate: remoteView,
+  remoteBlockDelete: { removed: 1 },
+  remoteBlocksClear: { removed: 1 },
 } satisfies { [K in WebFixtureRouteId | AppFromWebFixtureRouteId]: V1ResponseInput<K> };
 
 // --- Variantes (variantes/<ruta>.<caso>.json) ---
@@ -2088,6 +2133,7 @@ export const EVENT_FIXTURES = {
 /** Eventos solo web (web/events/): no llegan nunca a /native. */
 export const WEB_EVENT_FIXTURES = {
   'iptv.status': { ...iptvStatusOk, vod: iptvVodStatus },
+  'remote.changed': {},
 } satisfies { [T in WebOnlyEventType]: SseEventData<T> };
 
 export const ERROR_FIXTURE: ApiError = {

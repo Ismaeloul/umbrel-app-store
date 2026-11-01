@@ -345,9 +345,9 @@ describe('contrato de la IPTV (docs/iptv.md §5)', () => {
     }
   });
 
-  it('iptv.status es un evento solo web (y el único)', () => {
+  it('iptv.status es un evento solo web (y, con remote.changed del dominio de fuera, el único)', () => {
     expect(SSE_EVENT_TYPES).toContain('iptv.status');
-    expect([...WEB_ONLY_EVENT_TYPES]).toEqual(['iptv.status']);
+    expect([...WEB_ONLY_EVENT_TYPES]).toEqual(['iptv.status', 'remote.changed']);
   });
 
   it('7 rutas del módulo iptv: las 4 que la configuran, solo web; leerla (iptvGet, el buscador y la pestaña) también la app; sin iptvTest; video pasa a any con t opcional', () => {

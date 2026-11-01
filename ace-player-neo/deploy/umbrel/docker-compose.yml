@@ -117,6 +117,17 @@ services:
       # la 1.0.0 (si el NAS no da abasto, cada sala vuelve sola a la original);
       # "0" la apaga (todos con la original, como antes).
       ACE_PARTY_LITE: "1"
+      # La app de iPhone fuera de casa por https://tv.ismaeloul.es (docs/acceso-remoto.md, «Por el
+      # dominio»): Caddy (servicio sala) habla con un SEGUNDO puerto del backend, el 3002, que nginx
+      # no conoce y que no se publica (sin "ports"). El backend sabe que una peticion viene del
+      # dominio por el puerto, no por una cabecera, y ademas exige que la conexion venga de la IP
+      # del contenedor de Caddy (ACE_EDGE_PEER): otro contenedor del NAS no se hace pasar por el.
+      ACE_EDGE_PORT: "3002"
+      ACE_EDGE_PEER: "ismaeloul-ace-player-neo_sala_1"
+      # La tercera direccion del QR de emparejar (se empareja igual desde casa; la app se la guarda).
+      NATIVE_PUBLIC_URL: "https://tv.ismaeloul.es"
+      # Calidad ligera por el dominio (Fase 2, solo Peliculas y series): apagada.
+      ACE_NATIVE_LITE: "0"
       # Arranca como root solo para instalar ffmpeg; antes de abrir ningun
       # fichero el backend pasa a ser este usuario (el node de la imagen) y
       # deja suya la carpeta de datos (core/privileges.ts). Desde fuera llega
@@ -198,6 +209,10 @@ services:
   # en el 8443 del NAS, al que la Freebox manda el 443 de fuera. Solo deja
   # pasar la pagina de invitado y las rutas de una sala (Caddyfile de la
   # release); lo demas, 404. Al backend le llega con X-Ace-Origin: guest.
+  # Sirve tambien el dominio de la app de iPhone fuera de casa,
+  # tv.ismaeloul.es (caddy/tv-on.caddy, docs/acceso-remoto.md): con su propio
+  # certificado y al puerto 3002 del backend. NATIVE_SITE distinto de "on"
+  # (o sin el) quita ese sitio entero.
   sala:
     image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
     container_name: ismaeloul-ace-player-neo_sala_1
@@ -207,6 +222,8 @@ services:
       - no-new-privileges:true
     environment:
       PARTY_DOMAIN: "sala.ismaeloul.es"
+      NATIVE_SITE: "on"
+      NATIVE_DOMAIN: "tv.ismaeloul.es"
       ACE_WEB_ROOT: "/releases/1.1.2/web"
       XDG_CONFIG_HOME: "/data/config"
     depends_on:

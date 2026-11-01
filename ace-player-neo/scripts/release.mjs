@@ -8,6 +8,8 @@
 //   ├── engine-control.js
 //   ├── nginx.conf          deploy/umbrel/nginx.conf
 //   ├── Caddyfile           deploy/umbrel/Caddyfile (proxy de «Ver juntos», docs/ver-juntos.md §9)
+//   ├── caddy/tv-on.caddy   el dominio de la app de iPhone (docs/acceso-remoto.md, «Por el dominio»)
+//   ├── caddy/tv-off.caddy  lo que importa el Caddyfile con ese dominio apagado (nada)
 //   └── web/                lo único que nginx copia a /www (apps/web/dist + sw.js)
 //
 // Se construye en una carpeta temporal junto al destino y solo al final se
@@ -51,6 +53,8 @@ export const APP_RELEASES_DIR = path.join(REPO_DIR, 'ismaeloul-ace-player-neo', 
 export const NGINX_TEMPLATE = path.join(MONOREPO_DIR, 'deploy', 'umbrel', 'nginx.conf');
 /** El proxy de «Ver juntos» desde fuera (docs/ver-juntos.md §9). */
 export const CADDY_TEMPLATE = path.join(MONOREPO_DIR, 'deploy', 'umbrel', 'Caddyfile');
+/** Los dos sitios del dominio de la app que importa el Caddyfile según NATIVE_SITE. */
+export const CADDY_SITE_FILES = ['caddy/tv-on.caddy', 'caddy/tv-off.caddy'];
 export const SW_TEMPLATE = path.join(SCRIPTS_DIR, 'templates', 'sw.js');
 export const DEFAULT_WEB_DIST = path.join(MONOREPO_DIR, 'apps', 'web', 'dist');
 
@@ -65,6 +69,8 @@ export const REQUIRED_FILES = [
   'engine-control.js',
   'nginx.conf',
   'Caddyfile',
+  'caddy/tv-on.caddy',
+  'caddy/tv-off.caddy',
   'web/index.html',
   'web/invitado.html',
   'web/sw.js',
@@ -316,6 +322,11 @@ export async function createRelease(options = {}) {
     //    los hashes no cuadrarían con los de CI.
     writeFileSync(path.join(staging, 'nginx.conf'), toLf(readFileSync(NGINX_TEMPLATE, 'utf8')));
     writeFileSync(path.join(staging, 'Caddyfile'), toLf(readFileSync(CADDY_TEMPLATE, 'utf8')));
+    mkdirSync(path.join(staging, 'caddy'), { recursive: true });
+    for (const relative of CADDY_SITE_FILES) {
+      const source = path.join(MONOREPO_DIR, 'deploy', 'umbrel', ...relative.split('/'));
+      writeFileSync(path.join(staging, ...relative.split('/')), toLf(readFileSync(source, 'utf8')));
+    }
 
     // 4. RELEASE.json sin fecha: la misma fuente da los mismos bytes.
     writeFileSync(

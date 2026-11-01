@@ -202,6 +202,8 @@ function operation(route: V1RouteEntry): JsonObject {
     },
     security: security(route),
     'x-access': route.access,
+    /* El dominio de fuera, tv.ismaeloul.es (docs/acceso-remoto.md): allow, allow-self o deny. */
+    'x-remote': route.remote,
     'x-native-path': toOpenApiPath(nativePath(route.path)),
     'x-side-effects': route.sideEffects,
     'x-legacy-twin': route.legacyTwin,

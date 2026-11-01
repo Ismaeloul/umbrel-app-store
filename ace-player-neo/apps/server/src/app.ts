@@ -11,6 +11,9 @@
    4. Origen web: regla anti-CSRF de la 0.6.59, también para los GET con
       efectos (403 `cross_origin`, antes que el 404, como hoy).
    5. Rutas antiguas: enrutado exacto de la 0.6.59 (404/405 con la URL cruda).
+   Lo que entra por el puerto del dominio de fuera (tv.ismaeloul.es, core/edge.ts) no sigue estos
+   pasos: va siempre como native y pasa por core/remote-gate.ts (Caddy, permiso del aparato,
+   bloqueo por IP y límites).
    Luego Fastify lee el cuerpo (2 MiB → 413 `body_too_large`), valida con zod
    (v1) y llama al manejador del módulo. Errores con el formato de la ruta:
    `{ error: "<código>" }` en las antiguas y `{ error: { code, message,
@@ -37,6 +40,7 @@ import {
   type V1RouteId,
 } from '@ace/shared';
 import { isAllowedMutation } from './core/csrf.js';
+import { isEdgeRequest } from './core/edge.js';
 import { AppError, errorCodeOf, isAppError, toLegacyError, toV1Error } from './core/errors.js';
 import {
   fastifyPathForLegacy,
@@ -46,6 +50,12 @@ import {
 import { redactUrl } from './core/logger.js';
 import type { AuthenticatedDevice, RequestContext } from './core/module.js';
 import { ORIGIN_HEADER, extractBearer, isV1Path, resolveOrigin } from './core/origin.js';
+import {
+  concealRemoteError,
+  noteRemoteResponse,
+  remoteGate,
+  type RemoteRequestState,
+} from './core/remote-gate.js';
 import { createRouteCollector, type RouteCollector } from './core/router.js';
 import { normalizeQuery, parseInput, parseOutput } from './core/validation.js';
 import * as authRoutes from './modules/auth/routes.js';
@@ -60,6 +70,7 @@ import * as iptvRoutes from './modules/iptv/routes.js';
 import * as netRoutes from './modules/net/routes.js';
 import * as partyRoutes from './modules/party/routes.js';
 import * as playbackRoutes from './modules/playback/routes.js';
+import * as remoteRoutes from './modules/remote/routes.js';
 import * as remuxRoutes from './modules/remux/routes.js';
 import * as scannerRoutes from './modules/scanner/routes.js';
 import * as searchRoutes from './modules/search/routes.js';
@@ -74,6 +85,10 @@ declare module 'fastify' {
     aceOrigin: Origin;
     /** Dispositivo emparejado ya comprobado (solo origen native). */
     aceDevice: AuthenticatedDevice | null;
+    /** Entró por el dominio de fuera (tv.ismaeloul.es): su IP y su aparato; null desde casa. */
+    aceRemote: RemoteRequestState | null;
+    /** Código del error con el que se contestó (para contar los fallos del dominio). */
+    aceErrorCode: string | null;
   }
   interface FastifyContextConfig {
     /** Id de la tabla de rutas v1 que atiende esta ruta. */
@@ -101,6 +116,7 @@ export const MODULE_ROUTES = [
   teamsRoutes,
   authRoutes,
   eventsRoutes,
+  remoteRoutes,
   diagnosticsRoutes,
   healthRoutes,
 ] as const;
@@ -154,6 +170,7 @@ function requestContext(request: FastifyRequest, reply: FastifyReply): RequestCo
     requestId: request.id,
     origin: request.aceOrigin,
     device: request.aceDevice,
+    remote: request.aceRemote,
     signal: controller.signal,
     request,
     reply,
@@ -179,6 +196,11 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       /* El tipo genérico de esta respuesta no admite códigos arbitrarios. */
       const reply = genericReply as unknown as FastifyReply;
       const url = request.url;
+      /* Por el dominio de fuera, sin huella: el mismo 404 vacío que Caddy (core/remote-gate.ts). */
+      if (isEdgeRequest(request.raw)) {
+        void reply.code(404).send();
+        return;
+      }
       reply.header('x-request-id', request.id);
       if (isV1Path(url)) {
         const out = toV1Error(new AppError('not_found', { cause: error }), request.id);
@@ -210,15 +232,27 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   app.decorateRequest('aceOrigin', 'web');
   app.decorateRequest('aceDevice', null);
+  app.decorateRequest('aceRemote', null);
+  app.decorateRequest('aceErrorCode', null);
 
   app.addHook('onRequest', async (request, reply) => {
     reply.header('x-request-id', request.id);
     const url = request.url;
-    const origin = resolveOrigin(request.headers[ORIGIN_HEADER], url);
-    request.aceOrigin = origin;
     request.aceDevice = null;
+    request.aceRemote = null;
+    request.aceErrorCode = null;
     const routeId = request.routeOptions.config?.v1RouteId;
     const route: V1RouteDefinition | undefined = routeId ? V1_ROUTES[routeId] : undefined;
+
+    /* Por el puerto del dominio de fuera: siempre el origen más estricto, y sus propias reglas. */
+    if (isEdgeRequest(request.raw)) {
+      request.aceOrigin = 'native';
+      await remoteGate(request, reply, routeId, route, services);
+      return;
+    }
+
+    const origin = resolveOrigin(request.headers[ORIGIN_HEADER], url);
+    request.aceOrigin = origin;
 
     if (origin === 'native') {
       /* La app iOS solo usa v1: las antiguas y cualquier otra cosa, 403. */
@@ -255,7 +289,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     }
   });
 
-  app.addHook('onSend', async (_request, reply, payload) => {
+  app.addHook('onSend', async (request, reply, payload) => {
+    /* Un 404 sin huella del dominio no lleva cabeceras propias (Caddy pone nosniff igual). */
+    if (request.aceRemote?.concealed) return payload;
     /* Las cabeceras de `send()` de la 0.6.59 (api.md §2.5), en todas. */
     if (!reply.hasHeader('cache-control')) reply.header('cache-control', 'no-store');
     reply.header('x-content-type-options', 'nosniff');
@@ -270,7 +306,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       status: reply.statusCode,
       ms: Math.round(reply.elapsedTime),
       origin: request.aceOrigin,
+      /* Sin la IP: esa solo va al registro de accesos del dominio (v2/remote-events.json). */
+      ...(request.aceRemote ? { via: 'domain' } : {}),
     };
+    noteRemoteResponse(request, reply.statusCode, request.aceErrorCode, services);
     if (reply.statusCode >= 400) request.log.info(entry, 'petición');
     else request.log.debug(entry, 'petición');
   });
@@ -284,6 +323,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         ? new AppError('backup_too_large', { cause: rawError })
         : rawError;
     const out = v1 ? toV1Error(error, request.id) : toLegacyError(error);
+    request.aceErrorCode = errorCodeOf(error) ?? null;
     if (out.internal) {
       request.log.error({ err: error, reqId: request.id }, 'error interno');
     } else if (isAppError(error) && (error.detail || error.data)) {
@@ -291,6 +331,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         { reqId: request.id, errorCode: error.code, detail: error.detail, data: error.data },
         'petición rechazada',
       );
+    }
+    /* Por el dominio, sin una credencial buena: 404 vacío, sin decir qué app es ni por qué. */
+    if (concealRemoteError(request, reply, out.status, request.aceErrorCode)) {
+      return reply.code(404).send();
     }
     /* Un 401 de v1 dice cómo autenticarse (RFC 9110 §11.6.1). */
     if (v1 && out.status === 401) reply.header('www-authenticate', 'Bearer');
@@ -330,7 +374,12 @@ function registerV1(app: FastifyInstance, collector: RouteCollector, services: S
         ? parseInput(route.query, normalizeQuery(request.query), 'query')
         : {};
       const body = route.body ? parseInput(route.body, request.body ?? {}, 'body') : undefined;
-      if (route.credential === 'video-token' && request.aceOrigin === 'native') {
+      /* Por el dominio ya la comprobó core/remote-gate.ts (con el permiso de fuera del aparato). */
+      if (
+        route.credential === 'video-token' &&
+        request.aceOrigin === 'native' &&
+        request.aceDevice?.via !== 'video-token'
+      ) {
         const { t } = query as { t: string };
         const { sid } = params as { sid: string };
         request.aceDevice = await services.auth.verifyVideoToken(t, sid, (sessionId, deviceId) =>

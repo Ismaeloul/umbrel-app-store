@@ -22,6 +22,17 @@
 	auto_https disable_redirects
 	servers {
 		protocols h1 h2
+		# El Host tiene que ser el del SNI: desde una conexion TLS de la sala no se llega al sitio
+		# del dominio de la app (tv.ismaeloul.es, caddy/tv-on.caddy), ni al reves.
+		strict_sni_host on
+		# Cabeceras pequenas y sin esperar a quien no las termina de mandar. Sin read_body ni
+		# write: en Go, el plazo de lectura corta tambien el contexto de una respuesta larga (el
+		# SSE y el video duran horas). El cuerpo lo acota request_body en cada sitio.
+		timeouts {
+			read_header 10s
+			idle 2m
+		}
+		max_header_size 16KB
 	}
 }
 
@@ -92,3 +103,9 @@
 		}
 	}
 }
+
+# El dominio de la app de iPhone fuera de casa (docs/acceso-remoto.md, «Por el dominio»): con
+# NATIVE_SITE: "on" en el Compose se importa caddy/tv-on.caddy (el sitio {$NATIVE_DOMAIN}:8443); si
+# no, caddy/tv-off.caddy, que no tiene nada. Un sitio con NATIVE_DOMAIN vacio seria ":8443", que
+# atiende cualquier Host: por eso no basta con dejar la variable vacia.
+import caddy/tv-{$NATIVE_SITE:off}.caddy

@@ -13,6 +13,7 @@ import type { AppConfig } from '../config/index.js';
 import type { DomainBus } from './bus.js';
 import type { Clock } from './clock.js';
 import type { Logger } from './logger.js';
+import type { RemoteClient } from '../modules/remote/types.js';
 
 /** Lo que reciben todos los módulos. */
 export interface CoreDeps {
@@ -47,6 +48,8 @@ export interface RequestContext {
   readonly origin: Origin;
   /** El dispositivo si el origen es native y ya se comprobó su credencial. */
   readonly device: AuthenticatedDevice | null;
+  /** Entró por el dominio de fuera (tv.ismaeloul.es): la IP que dio Caddy. null desde casa. */
+  readonly remote: RemoteClient | null;
   /**
    * Se aborta si el cliente cuelga: las esperas largas (arranque del remux,
    * meta de la sesión) se cancelan con ella (api.md §6.16).

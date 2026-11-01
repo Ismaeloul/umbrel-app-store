@@ -1,0 +1,3 @@
+# El dominio de fuera de la app de iPhone (tv.ismaeloul.es) APAGADO: el Caddyfile importa este
+# fichero cuando NATIVE_SITE no es "on" (docs/acceso-remoto.md, «Por el dominio»). Va vacio a
+# proposito: un sitio con NATIVE_DOMAIN vacio seria ":8443", que atiende cualquier Host.

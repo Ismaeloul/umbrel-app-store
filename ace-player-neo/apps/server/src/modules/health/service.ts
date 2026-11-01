@@ -368,6 +368,9 @@ export function createHealthService(deps: HealthDeps): HealthService {
       const playback = read('reproducción', warnings, () => deps.playback.status(), null);
       const remux = read('remux', warnings, () => deps.remux.stats(), { sessions: 0, max: 0 });
       const connections = read('eventos', warnings, () => deps.events.connections(), 0);
+      const edge = deps.remote
+        ? read('dominio', warnings, () => deps.remote?.edgeStatus() ?? null, null)
+        : null;
       const counts24h = read(
         'diagnóstico',
         warnings,
@@ -468,6 +471,8 @@ export function createHealthService(deps: HealthDeps): HealthService {
           ...(instantStart ? { instantStart } : {}),
           /* La gráfica del NAS (docs/ver-juntos.md §17.6): para mirarlo desde la LAN. */
           ...(remux.video ? { video: remux.video } : {}),
+          /* El dominio de fuera (tv.ismaeloul.es): si su puerto escucha y se conoce a Caddy. Sin IPs. */
+          ...(edge ? { edge } : {}),
         },
         reports,
         diagnostics: { counts24h: { ...ZERO_COUNTS, ...counts24h } },

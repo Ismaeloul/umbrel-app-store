@@ -25,6 +25,7 @@ import type { EventsHub } from '../events/types.js';
 import type { FootballService } from '../football/types.js';
 import type { InstantStartService } from '../instant-start/types.js';
 import type { PlaybackService } from '../playback/types.js';
+import type { RemoteService } from '../remote/types.js';
 import type { RemuxService } from '../remux/types.js';
 import type { ScannerService } from '../scanner/types.js';
 import type { SourcesService } from '../sources/types.js';
@@ -50,6 +51,8 @@ export interface HealthDeps extends CoreDeps {
   readonly teams?: TeamsService;
   readonly diagnostics: DiagnosticsService;
   readonly events: EventsHub;
+  /** El dominio de fuera (tv.ismaeloul.es): `components.edge`. Opcional para los fakes de los tests. */
+  readonly remote?: Pick<RemoteService, 'edgeStatus'>;
   /**
    * Sondas de lo que ningún servicio guarda todavía en caché (Ollama y, si
    * el comprobador no expone `online`, su `get_version`). Opcional: sin ella

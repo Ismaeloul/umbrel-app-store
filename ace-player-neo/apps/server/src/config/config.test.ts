@@ -294,3 +294,40 @@ describe('HKDF-SHA256 (arquitectura §5.3)', () => {
     );
   });
 });
+
+describe('config · el dominio de fuera (tv.ismaeloul.es)', () => {
+  it('sin nada: sin puerto, sin Caddy, sin dirección pública y sin ligera', () => {
+    const { config, warnings } = loadConfig({ ACE_SEED: SEED });
+    expect(config.edge).toEqual({ port: null, peer: null });
+    expect(config.native).toEqual({ publicUrl: null, lite: false });
+    expect(warnings).toEqual([]);
+  });
+
+  it('el Compose: 3002, el contenedor de Caddy y https://tv…', () => {
+    const { config, warnings } = loadConfig({
+      ACE_SEED: SEED,
+      ACE_EDGE_PORT: '3002',
+      ACE_EDGE_PEER: 'ismaeloul-ace-player-neo_sala_1',
+      NATIVE_PUBLIC_URL: 'https://tv.ismaeloul.es/',
+      ACE_NATIVE_LITE: '0',
+    });
+    expect(config.edge).toEqual({ port: 3002, peer: 'ismaeloul-ace-player-neo_sala_1' });
+    expect(config.native).toEqual({ publicUrl: 'https://tv.ismaeloul.es', lite: false });
+    expect(warnings).toEqual([]);
+  });
+
+  it('valores que no valen: aviso y el dominio queda cerrado', () => {
+    const { config, warnings } = loadConfig({
+      ACE_SEED: SEED,
+      ACE_EDGE_PORT: '99999',
+      NATIVE_PUBLIC_URL: 'http://tv.ismaeloul.es',
+      ACE_NATIVE_LITE: 'si',
+    });
+    expect(config.edge.port).toBeNull();
+    expect(config.native.publicUrl).toBeNull();
+    expect(warnings).toHaveLength(3);
+    const noPeer = loadConfig({ ACE_SEED: SEED, ACE_EDGE_PORT: '3002' });
+    expect(noPeer.config.edge).toEqual({ port: 3002, peer: null });
+    expect(noPeer.warnings).toHaveLength(1);
+  });
+});

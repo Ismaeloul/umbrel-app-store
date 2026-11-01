@@ -66,6 +66,7 @@ import { restoreScroll } from './scroll-memory.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
 import { QuickSearchHost } from '../features/search/QuickSearchHost.tsx';
 import { AvisosClock } from '../features/avisos/Clock.tsx';
+import { RemoteAlertBanner } from '../features/devices/RemoteAlertBanner.tsx';
 import {
   finishEntranceAnimations,
   playerSwapsByName,
@@ -401,6 +402,8 @@ export function Shell() {
               {inStage && kind === 'mobile' ? <StatusLineHost className="stage__status" /> : null}
             </div>
           ) : null}
+          {/* Intentos bloqueados o aparatos sin permiso por el dominio de fuera (tv.ismaeloul.es). */}
+          <RemoteAlertBanner />
           <div className="views">
             {/* Una <ViewTransition> por vista, la primera cosa dentro de su
                 Activity: al cambiar de vista, una sale y otra entra, cada una

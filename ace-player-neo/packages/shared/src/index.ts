@@ -8,6 +8,7 @@ export * from './primitives.js';
 export * from './errors.js';
 export * from './events.js';
 export * from './routes.js';
+export * from './remote-caddy.js';
 
 export * from './constants/guide.js';
 export * from './constants/iptv.js';
@@ -34,6 +35,7 @@ export * from './domain/zip.js';
 
 export * from './state/v1.js';
 export * from './state/v2.js';
+export * from './state/remote.js';
 
 export * from './api/common.js';
 export * from './api/legacy.js';
@@ -49,6 +51,7 @@ export * from './api/v1/iptv.js';
 export * from './api/v1/library.js';
 export * from './api/v1/party.js';
 export * from './api/v1/playback.js';
+export * from './api/v1/remote.js';
 export * from './api/v1/search.js';
 export * from './api/v1/settings.js';
 export * from './api/v1/sources.js';

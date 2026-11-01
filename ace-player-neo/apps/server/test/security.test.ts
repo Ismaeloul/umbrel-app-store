@@ -286,6 +286,12 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
          (docs/ver-juntos.md §15); el proxy de la sala tampoco las deja pasar. */
       'partyList',
       'partyEnd',
+      /* El dominio de fuera (tv.ismaeloul.es): dar permiso, ver IPs y desbloquear, solo la web. */
+      'remoteGet',
+      'remoteUpdate',
+      'deviceRemoteUpdate',
+      'remoteBlockDelete',
+      'remoteBlocksClear',
     ]);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {
