@@ -49,6 +49,8 @@ export function registerV1Routes(router: V1Router, services: Services): void {
       deviceId,
       lastEventId: lastEventIdFrom(ctx.request.headers['last-event-id'], input.query.lastEventId),
       signal: ctx.signal,
+      /* Por el dominio de fuera (tv.ismaeloul.es): se cierra al quitarle el permiso o cerrar el dominio. */
+      remote: ctx.remote ? { ipKey: ctx.remote.trusted ? ctx.remote.key : null } : null,
     });
   });
 }

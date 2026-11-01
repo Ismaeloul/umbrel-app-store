@@ -155,7 +155,19 @@ describe('nginx.conf: blindaje de la ruta nativa (arquitectura §8.2)', () => {
       const expected = candidate.match === '/native/' ? 'native' : '$ace_origin';
       expect(headers.get('x-ace-origin'), candidate.match).toBe(expected);
       expect(headers.get('x-request-id'), candidate.match).toBe('$request_id');
+      /* Las del dominio de fuera (las pone Caddy en el 3002): nginx las borra siempre. */
+      expect(headers.get('x-ace-client-ip'), candidate.match).toBe('');
+      expect(headers.get('x-ace-via'), candidate.match).toBe('');
     }
+  });
+
+  it('ningún proxy_pass va al puerto del dominio (3002): por nginx nunca se entra como «del dominio»', () => {
+    const passes = locations(TREE).flatMap((candidate) =>
+      directiveArgs(candidate.block, 'proxy_pass').map((args) => args[0] ?? ''),
+    );
+    expect(passes.length).toBeGreaterThan(5);
+    for (const target of passes) expect(target).not.toMatch(/:3002\b/);
+    expect(TEXT).not.toContain(':3002');
   });
 
   it('capa 2: todas las demás location responden 403 al origen native', () => {

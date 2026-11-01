@@ -38,6 +38,8 @@ export const SSE_TYPES = [
   'devices.changed',
   /* Solo web (docs/iptv.md §5.5): Ajustes → IPTV y `features.iptv` del bootstrap. */
   'iptv.status',
+  /* Solo web: el dominio de fuera (tv.ismaeloul.es) en Ajustes → Dispositivos, sin datos. */
+  'remote.changed',
   'resync',
 ] as const satisfies readonly SseEventType[];
 
@@ -179,6 +181,12 @@ export function applyToCache(client: QueryClient, type: SseEventType, data: unkn
     }
     case 'devices.changed':
       void client.invalidateQueries({ queryKey: routePrefix('devicesList') });
+      /* Revocar borra su permiso de fuera. */
+      void client.invalidateQueries({ queryKey: routePrefix('remoteGet') });
+      break;
+    case 'remote.changed':
+      // «Desde fuera de casa»: permisos, bloqueos y sucesos (el aviso de arriba también lo lee).
+      void client.invalidateQueries({ queryKey: routePrefix('remoteGet') });
       break;
     case 'diagnostics.new':
       void client.invalidateQueries({ queryKey: routePrefix('diagnosticsList') });

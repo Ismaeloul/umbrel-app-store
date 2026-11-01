@@ -62,6 +62,15 @@ export const V2_FILES = {
    * de proveedor (lo que ya no esté se marca «ya no está en tu IPTV»).
    */
   vodList: 'v2/vod-mi-lista.json',
+  /**
+   * El dominio de fuera (tv.ismaeloul.es, docs/acceso-remoto.md): el permiso de cada aparato, el
+   * registro de sucesos y los bloqueos por IP. Ficheros APARTE de `devices.json` a propósito: su
+   * esquema es estricto y volver a la 1.1.2 dejaría a todos los iPhone sin emparejar (R-14). La
+   * 1.1.2 no los lee. 0600, y fuera de la copia de seguridad (como los aparatos).
+   */
+  remoteAccess: 'v2/remote-access.json',
+  remoteEvents: 'v2/remote-events.json',
+  remoteBlocks: 'v2/remote-blocks.json',
 } as const;
 
 /** state.json tal y como lo escribe la 0.7.0: las 12 claves v1 más la versión. */

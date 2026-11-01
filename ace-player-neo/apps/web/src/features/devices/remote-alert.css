@@ -1,0 +1,42 @@
+/* El aviso de arriba del dominio de fuera (RemoteAlertBanner.tsx). */
+.remote-alert {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: var(--s-2) var(--s-3) 0;
+  padding: 10px 12px;
+  border-radius: var(--r-inner, var(--r-m));
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--text-1);
+  font-size: var(--fs-15);
+}
+.remote-alert > svg {
+  flex: none;
+  color: var(--fail-ink);
+}
+.remote-alert__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.remote-alert__go {
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--accent-ink, var(--text-1));
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.remote-alert__close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}

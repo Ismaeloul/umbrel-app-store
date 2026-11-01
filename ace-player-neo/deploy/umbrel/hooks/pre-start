@@ -55,6 +55,8 @@ readonly -a REQUIRED_FILES=(
   "engine-control.js"
   "nginx.conf"
   "Caddyfile"
+  "caddy/tv-on.caddy"
+  "caddy/tv-off.caddy"
   "web/index.html"
   "web/invitado.html"
   "web/sw.js"

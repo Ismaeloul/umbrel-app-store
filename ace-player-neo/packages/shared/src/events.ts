@@ -263,6 +263,16 @@ export const IptvStatusEventSchema = z.strictObject({
   data: IptvStatusSchema,
 });
 
+/**
+ * Algo cambió en «Desde fuera de casa» (tv.ismaeloul.es): un permiso, un bloqueo o un suceso
+ * nuevo. Va SIN datos y SOLO a la web (`WEB_ONLY_EVENT_TYPES`): lo de ahí lleva IPs y el bus llega
+ * también a los iPhone (R-2). La web vuelve a pedir `remoteGet`.
+ */
+export const RemoteChangedEventSchema = z.strictObject({
+  type: z.literal('remote.changed'),
+  data: z.strictObject({}),
+});
+
 /** El cliente reconecta tarde y lo que le falta ya no está en el búfer: que recargue. */
 export const ResyncEventSchema = z.strictObject({
   type: z.literal('resync'),
@@ -287,6 +297,7 @@ export const SseEventSchema = z.discriminatedUnion('type', [
   DiagnosticsNewEventSchema,
   DevicesChangedEventSchema,
   IptvStatusEventSchema,
+  RemoteChangedEventSchema,
   ResyncEventSchema,
 ]);
 export type SseEvent = z.infer<typeof SseEventSchema>;
@@ -303,7 +314,10 @@ export const SSE_EVENT_TYPES: readonly SseEventType[] = SseEventSchema.options.m
  * porque la IPTV solo se configura en la web (docs/iptv.md §5.5, D13).
  * Sus ejemplos van en `fixtures/web/events/`, que la app no recorre.
  */
-export const WEB_ONLY_EVENT_TYPE_LIST = ['iptv.status'] as const satisfies readonly SseEventType[];
+export const WEB_ONLY_EVENT_TYPE_LIST = [
+  'iptv.status',
+  'remote.changed',
+] as const satisfies readonly SseEventType[];
 export type WebOnlyEventType = (typeof WEB_ONLY_EVENT_TYPE_LIST)[number];
 /** Lo que reciben también los iPhone. */
 export type SharedEventType = Exclude<SseEventType, WebOnlyEventType>;

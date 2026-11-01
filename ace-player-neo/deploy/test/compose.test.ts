@@ -133,6 +133,10 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
       ACE_PARTY_LITE: '1',
       ACE_RUN_AS: '1000:1000',
       ACE_RUN_GROUPS: 'dri',
+      ACE_EDGE_PORT: '3002',
+      ACE_EDGE_PEER: 'ismaeloul-ace-player-neo_sala_1',
+      NATIVE_PUBLIC_URL: 'https://tv.ismaeloul.es',
+      ACE_NATIVE_LITE: '0',
     });
     /* Encendida desde la 1.0.0 (docs/ver-juntos.md §17): si el NAS no da abasto, el fusible vuelve a la original. */
     expect(RAW).toContain('ACE_PARTY_LITE: "1"');
@@ -158,6 +162,28 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
     expect(`https://${String(sala.environment?.PARTY_DOMAIN)}`).toBe(
       service('storage').environment?.PARTY_PUBLIC_URL,
     );
+  });
+
+  it('el dominio de la app (tv.ismaeloul.es): NATIVE_SITE con un dominio válido, Caddy como par y el 3002 sin publicar', () => {
+    const sala = service('sala');
+    const storage = service('storage');
+    const site = sala.environment?.NATIVE_SITE;
+    const domain = String(sala.environment?.NATIVE_DOMAIN ?? '');
+    expect(site).toBe('on');
+    /* Con NATIVE_SITE "on", el dominio tiene que ser un nombre de host: vacío, el sitio sería ":8443". */
+    expect(domain).toMatch(/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/);
+    expect(domain).not.toBe(sala.environment?.PARTY_DOMAIN);
+    expect(`https://${domain}`).toBe(storage.environment?.NATIVE_PUBLIC_URL);
+    expect(storage.environment?.ACE_EDGE_PEER).toBe(sala.container_name);
+    expect(storage.environment?.ACE_EDGE_PORT).toBe('3002');
+    /* El 3002 no se publica: solo lo alcanza la red de Docker (y el backend exige que sea Caddy). */
+    expect(storage.ports).toBeUndefined();
+    for (const [name, definition] of Object.entries(COMPOSE.services)) {
+      for (const port of definition.ports ?? []) expect(port, name).not.toContain('3002');
+    }
+    expect(sala.ports).toEqual(['8443:8443']);
+    expect(RAW).toContain('NATIVE_SITE: "on"');
+    expect(RAW).toContain('ACE_NATIVE_LITE: "0"');
   });
 
   it('storage: ffmpeg y el driver VAAPI con plazo (cada uno el suyo) y node sobre el server.js CommonJS de la release', () => {

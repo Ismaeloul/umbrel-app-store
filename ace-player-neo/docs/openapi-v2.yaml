@@ -2,7 +2,7 @@
 openapi: 3.1.0
 info:
   title: Ace Player Neo · API v1
-  version: 1.1.2
+  version: 1.1.3
   description: "Generado desde packages/shared/src/routes.ts con scripts/openapi.ts: no editar a mano. Cada ruta existe también bajo /native (la entrada de la app iOS, D4), con origen native. Las rutas antiguas /api/* están en docs/openapi.yaml."
 servers:
   - url: /
@@ -28,6 +28,7 @@ tags:
   - name: health
   - name: search
   - name: party
+  - name: remote
 paths:
   /api/v1/ping:
     get:
@@ -75,6 +76,7 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/ping
       x-side-effects: false
       x-legacy-twin: null
@@ -634,6 +636,24 @@ paths:
                       - ai
                       - demoSchedule
                     additionalProperties: false
+                  remote:
+                    type: object
+                    properties:
+                      viaDomain:
+                        type: boolean
+                      allowed:
+                        type: boolean
+                      expiresAt:
+                        anyOf:
+                          - type: string
+                            format: date-time
+                            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                          - type: "null"
+                    required:
+                      - viaDomain
+                      - allowed
+                      - expiresAt
+                    additionalProperties: false
                 required:
                   - version
                   - serverTime
@@ -656,6 +676,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/bootstrap
       x-side-effects: false
       x-legacy-twin: GET /api/state
@@ -939,6 +960,17 @@ paths:
                         required:
                           - connections
                         additionalProperties: false
+                      edge:
+                        type: object
+                        properties:
+                          listening:
+                            type: boolean
+                          peerResolved:
+                            type: boolean
+                        required:
+                          - listening
+                          - peerResolved
+                        additionalProperties: false
                       instantStart:
                         type: object
                         properties:
@@ -1134,6 +1166,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/health
       x-side-effects: false
       x-legacy-twin: GET /api/health
@@ -1198,6 +1231,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/health/live
       x-side-effects: false
       x-legacy-twin: null
@@ -1268,6 +1302,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/events
       x-side-effects: false
       x-legacy-twin: null
@@ -1385,6 +1420,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/engine/status
       x-side-effects: false
       x-legacy-twin: GET /api/engine/status
@@ -1450,6 +1486,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/engine/restart
       x-side-effects: true
       x-legacy-twin: POST /api/restart-engine
@@ -1705,6 +1742,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/channels/{id}/stream
       x-side-effects: true
       x-legacy-twin: GET /api/remux
@@ -1878,6 +1916,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/sessions/{sid}/heartbeat
       x-side-effects: true
       x-legacy-twin: POST /api/playback/claim
@@ -1979,6 +2018,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/sessions/{sid}/release
       x-side-effects: true
       x-legacy-twin: POST /api/playback/release
@@ -2167,6 +2207,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/playback
       x-side-effects: false
       x-legacy-twin: GET /api/playback
@@ -2253,6 +2294,7 @@ paths:
         - umbrelGateway: []
         - videoToken: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/video/{sid}/{file}
       x-side-effects: false
       x-legacy-twin: GET /remux/{hash}/{fichero}
@@ -2344,6 +2386,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/settings
       x-side-effects: false
       x-legacy-twin: null
@@ -2440,6 +2483,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/settings
       x-side-effects: true
       x-legacy-twin: null
@@ -3035,6 +3079,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/backup
       x-side-effects: true
       x-legacy-twin: null
@@ -3644,6 +3689,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/backup/export
       x-side-effects: true
       x-legacy-twin: null
@@ -3971,6 +4017,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/backup/import
       x-side-effects: true
       x-legacy-twin: null
@@ -4243,6 +4290,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/iptv
       x-side-effects: false
       x-legacy-twin: null
@@ -4546,6 +4594,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/iptv
       x-side-effects: true
       x-legacy-twin: null
@@ -4861,6 +4910,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/iptv
       x-side-effects: true
       x-legacy-twin: null
@@ -5123,6 +5173,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/iptv
       x-side-effects: true
       x-legacy-twin: null
@@ -5382,6 +5433,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/iptv/sync
       x-side-effects: true
       x-legacy-twin: null
@@ -5531,6 +5583,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/iptv/channels
       x-side-effects: false
       x-legacy-twin: null
@@ -5882,6 +5935,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/iptv/browse
       x-side-effects: false
       x-legacy-twin: null
@@ -6121,6 +6175,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/iptv/guide
       x-side-effects: false
       x-legacy-twin: null
@@ -6269,6 +6324,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/iptv/guide/programmes
       x-side-effects: false
       x-legacy-twin: null
@@ -6453,6 +6509,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/iptv/guide/programmes/{id}
       x-side-effects: false
       x-legacy-twin: null
@@ -6621,6 +6678,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/iptv/guide/now
       x-side-effects: false
       x-legacy-twin: null
@@ -6701,6 +6759,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/iptv/guide/art/{ref}
       x-side-effects: false
       x-legacy-twin: null
@@ -7278,6 +7337,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod
       x-side-effects: false
       x-legacy-twin: null
@@ -7556,6 +7616,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod/browse
       x-side-effects: false
       x-legacy-twin: null
@@ -8200,6 +8261,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod/titles/{id}
       x-side-effects: false
       x-legacy-twin: null
@@ -8295,6 +8357,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod/titles/{id}/art/{art}
       x-side-effects: false
       x-legacy-twin: null
@@ -8694,6 +8757,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod/titles/{id}/stream
       x-side-effects: true
       x-legacy-twin: null
@@ -8832,6 +8896,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod/titles/{id}/download
       x-side-effects: true
       x-legacy-twin: null
@@ -8966,6 +9031,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod/titles/{id}/progress
       x-side-effects: true
       x-legacy-twin: null
@@ -9061,6 +9127,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod/languages
       x-side-effects: false
       x-legacy-twin: null
@@ -9181,6 +9248,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod/languages
       x-side-effects: true
       x-legacy-twin: null
@@ -9353,6 +9421,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod/list
       x-side-effects: false
       x-legacy-twin: null
@@ -9531,6 +9600,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod/list/{id}
       x-side-effects: true
       x-legacy-twin: null
@@ -9717,6 +9787,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/vod/list/{id}
       x-side-effects: true
       x-legacy-twin: null
@@ -9822,6 +9893,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/pairing
       x-side-effects: true
       x-legacy-twin: null
@@ -9964,6 +10036,7 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/pairing/claim
       x-side-effects: true
       x-legacy-twin: null
@@ -10078,6 +10151,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/devices
       x-side-effects: false
       x-legacy-twin: null
@@ -10188,6 +10262,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow-self
       x-native-path: /native/api/v1/devices/{id}
       x-side-effects: true
       x-legacy-twin: null
@@ -10393,6 +10468,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/diagnostics
       x-side-effects: false
       x-legacy-twin: null
@@ -10520,6 +10596,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/diagnostics
       x-side-effects: true
       x-legacy-twin: null
@@ -11028,6 +11105,17 @@ paths:
                                         maximum: 9007199254740991
                                     required:
                                       - connections
+                                    additionalProperties: false
+                                  edge:
+                                    type: object
+                                    properties:
+                                      listening:
+                                        type: boolean
+                                      peerResolved:
+                                        type: boolean
+                                    required:
+                                      - listening
+                                      - peerResolved
                                     additionalProperties: false
                                   instantStart:
                                     type: object
@@ -11608,6 +11696,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/diagnostics/export
       x-side-effects: true
       x-legacy-twin: null
@@ -11699,6 +11788,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/diagnostics/log
       x-side-effects: false
       x-legacy-twin: null
@@ -11854,6 +11944,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/diagnostics/log/download
       x-side-effects: true
       x-legacy-twin: null
@@ -12000,6 +12091,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/diagnostics/web-log
       x-side-effects: true
       x-legacy-twin: null
@@ -12253,6 +12345,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/library
       x-side-effects: false
       x-legacy-twin: GET /api/state
@@ -12631,6 +12724,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/library
       x-side-effects: true
       x-legacy-twin: POST /api/library
@@ -12745,6 +12839,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/preferences
       x-side-effects: false
       x-legacy-twin: GET /api/state
@@ -12874,6 +12969,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/preferences
       x-side-effects: true
       x-legacy-twin: POST /api/preferences
@@ -13031,6 +13127,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/directories
       x-side-effects: false
       x-legacy-twin: GET /api/state
@@ -13213,6 +13310,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/directories/sync
       x-side-effects: true
       x-legacy-twin: POST /api/streams/sync
@@ -13460,6 +13558,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/directories/upload
       x-side-effects: true
       x-legacy-twin: null
@@ -13635,6 +13734,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/directories/{id}/activate
       x-side-effects: true
       x-legacy-twin: POST /api/streams/activate
@@ -13801,6 +13901,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/directories/{id}
       x-side-effects: true
       x-legacy-twin: POST /api/streams/delete
@@ -14090,6 +14191,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/football
       x-side-effects: false
       x-legacy-twin: GET /api/football
@@ -14686,6 +14788,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/football/resolve
       x-side-effects: true
       x-legacy-twin: GET /api/football/resolve
@@ -14923,6 +15026,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/football/scans/{id}
       x-side-effects: false
       x-legacy-twin: GET /api/football/scan
@@ -15055,6 +15159,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/football/preheat/{matchId}
       x-side-effects: false
       x-legacy-twin: GET /api/football/preheat
@@ -15206,6 +15311,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/football/bindings
       x-side-effects: true
       x-legacy-twin: POST /api/football/bind
@@ -15324,6 +15430,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/scores
       x-side-effects: false
       x-legacy-twin: GET /api/scores
@@ -15396,6 +15503,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/football/teams/{teamId}/crest
       x-side-effects: false
       x-legacy-twin: null
@@ -15468,6 +15576,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/football/competitions/{competitionId}/logo
       x-side-effects: false
       x-legacy-twin: null
@@ -15649,6 +15758,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/sources/report
       x-side-effects: true
       x-legacy-twin: POST /api/sources/report
@@ -15810,6 +15920,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/sources/outcome
       x-side-effects: true
       x-legacy-twin: POST /api/sources/outcome
@@ -15965,6 +16076,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/sources/feedback
       x-side-effects: true
       x-legacy-twin: POST /api/sources/feedback
@@ -16076,6 +16188,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: allow
       x-native-path: /native/api/v1/search
       x-side-effects: false
       x-legacy-twin: GET /api/search
@@ -16713,6 +16826,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party
       x-side-effects: true
       x-legacy-twin: null
@@ -16852,6 +16966,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/party
       x-side-effects: false
       x-legacy-twin: null
@@ -16977,6 +17092,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}
       x-side-effects: false
       x-legacy-twin: null
@@ -17502,6 +17618,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/join
       x-side-effects: true
       x-legacy-twin: null
@@ -17587,6 +17704,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/events
       x-side-effects: false
       x-legacy-twin: null
@@ -18122,6 +18240,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/stream
       x-side-effects: true
       x-legacy-twin: null
@@ -18294,6 +18413,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/v/{key}/{file}
       x-side-effects: false
       x-legacy-twin: null
@@ -18392,6 +18512,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/art/{artId}
       x-side-effects: false
       x-legacy-twin: null
@@ -18595,6 +18716,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/control
       x-side-effects: true
       x-legacy-twin: null
@@ -18720,6 +18842,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/status
       x-side-effects: true
       x-legacy-twin: null
@@ -18816,6 +18939,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/chat
       x-side-effects: true
       x-legacy-twin: null
@@ -18910,6 +19034,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/typing
       x-side-effects: true
       x-legacy-twin: null
@@ -19016,6 +19141,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/settings
       x-side-effects: true
       x-legacy-twin: null
@@ -19121,6 +19247,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/member
       x-side-effects: true
       x-legacy-twin: null
@@ -19286,6 +19413,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/queue
       x-side-effects: true
       x-legacy-twin: null
@@ -19708,6 +19836,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/sources
       x-side-effects: true
       x-legacy-twin: null
@@ -19804,6 +19933,7 @@ paths:
         - umbrelGateway: []
         - partyMember: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/leave
       x-side-effects: true
       x-legacy-twin: null
@@ -19894,6 +20024,7 @@ paths:
         - umbrelGateway: []
         - deviceBearer: []
       x-access: any
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/close
       x-side-effects: true
       x-legacy-twin: null
@@ -19974,6 +20105,7 @@ paths:
       security:
         - umbrelGateway: []
       x-access: web
+      x-remote: deny
       x-native-path: /native/api/v1/party/{code}/end
       x-side-effects: true
       x-legacy-twin: null
@@ -19981,6 +20113,959 @@ paths:
         - code: party_not_found
           status: 404
           message: Esta sala ya no existe. Pide un enlace nuevo.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/remote:
+    get:
+      operationId: remoteGet
+      tags:
+        - remote
+      summary: "Desde fuera de casa: permisos por aparato, bloqueos y últimos accesos"
+      description: "Lleva IPs: solo la web. El SSE avisa de cambios con `remote.changed` (sin datos y solo a la web)."
+      parameters: []
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domain:
+                    type: object
+                    properties:
+                      configured:
+                        type: boolean
+                      url:
+                        anyOf:
+                          - type: string
+                            maxLength: 300
+                          - type: "null"
+                    required:
+                      - configured
+                      - url
+                    additionalProperties: false
+                  enabled:
+                    type: boolean
+                  edge:
+                    type: object
+                    properties:
+                      listening:
+                        type: boolean
+                      peerResolved:
+                        type: boolean
+                    required:
+                      - listening
+                      - peerResolved
+                    additionalProperties: false
+                  devices:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        deviceId:
+                          type: string
+                          pattern: ^[A-Za-z0-9_-]{4,64}$
+                        enabled:
+                          type: boolean
+                        enabledAt:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        expiresAt:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        expired:
+                          type: boolean
+                        lastAccess:
+                          anyOf:
+                            - type: object
+                              properties:
+                                at:
+                                  type: string
+                                  format: date-time
+                                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                ip:
+                                  type: string
+                                  minLength: 2
+                                  maxLength: 45
+                                  pattern: ^(?:[0-9a-f:.]+|desconocida)$
+                              required:
+                                - at
+                                - ip
+                              additionalProperties: false
+                            - type: "null"
+                      required:
+                        - deviceId
+                        - enabled
+                        - enabledAt
+                        - expiresAt
+                        - expired
+                        - lastAccess
+                      additionalProperties: false
+                  blocks:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                          maxLength: 45
+                          pattern: ^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}|[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){3}::)$
+                        label:
+                          type: string
+                          maxLength: 48
+                        until:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        level:
+                          type: integer
+                          minimum: 1
+                          maximum: 32
+                        firstAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        lastAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      required:
+                        - key
+                        - label
+                        - until
+                        - level
+                        - firstAt
+                        - lastAt
+                      additionalProperties: false
+                  events:
+                    maxItems: 100
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        kind:
+                          type: string
+                          enum:
+                            - ok-new-ip
+                            - denied-device
+                            - blocked
+                            - unblocked
+                            - peer-mismatch
+                            - enabled
+                            - disabled
+                            - expired
+                        deviceId:
+                          anyOf:
+                            - type: string
+                              pattern: ^[A-Za-z0-9_-]{4,64}$
+                            - type: "null"
+                        ip:
+                          anyOf:
+                            - type: string
+                              minLength: 2
+                              maxLength: 45
+                              pattern: ^(?:[0-9a-f:.]+|desconocida)$
+                            - type: "null"
+                        route:
+                          anyOf:
+                            - type: string
+                              maxLength: 64
+                            - type: "null"
+                        count:
+                          type: integer
+                          minimum: 1
+                          maximum: 1000000000
+                      required:
+                        - at
+                        - kind
+                        - deviceId
+                        - ip
+                        - route
+                      additionalProperties: false
+                  last24h:
+                    type: object
+                    properties:
+                      ok:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      denied:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      blocked:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      ipUntrusted:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                    required:
+                      - ok
+                      - denied
+                      - blocked
+                      - ipUntrusted
+                    additionalProperties: false
+                required:
+                  - domain
+                  - enabled
+                  - edge
+                  - devices
+                  - blocks
+                  - events
+                  - last24h
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-remote: deny
+      x-native-path: /native/api/v1/remote
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+    put:
+      operationId: remoteUpdate
+      tags:
+        - remote
+      summary: Interruptor general del dominio de fuera (y «Cerrar el dominio ya»)
+      description: Apagado, todo lo que llega por el dominio recibe 403 `remote_disabled` y se cierran al momento los SSE abiertos por él.
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+              required:
+                - enabled
+              additionalProperties: false
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domain:
+                    type: object
+                    properties:
+                      configured:
+                        type: boolean
+                      url:
+                        anyOf:
+                          - type: string
+                            maxLength: 300
+                          - type: "null"
+                    required:
+                      - configured
+                      - url
+                    additionalProperties: false
+                  enabled:
+                    type: boolean
+                  edge:
+                    type: object
+                    properties:
+                      listening:
+                        type: boolean
+                      peerResolved:
+                        type: boolean
+                    required:
+                      - listening
+                      - peerResolved
+                    additionalProperties: false
+                  devices:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        deviceId:
+                          type: string
+                          pattern: ^[A-Za-z0-9_-]{4,64}$
+                        enabled:
+                          type: boolean
+                        enabledAt:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        expiresAt:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        expired:
+                          type: boolean
+                        lastAccess:
+                          anyOf:
+                            - type: object
+                              properties:
+                                at:
+                                  type: string
+                                  format: date-time
+                                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                ip:
+                                  type: string
+                                  minLength: 2
+                                  maxLength: 45
+                                  pattern: ^(?:[0-9a-f:.]+|desconocida)$
+                              required:
+                                - at
+                                - ip
+                              additionalProperties: false
+                            - type: "null"
+                      required:
+                        - deviceId
+                        - enabled
+                        - enabledAt
+                        - expiresAt
+                        - expired
+                        - lastAccess
+                      additionalProperties: false
+                  blocks:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                          maxLength: 45
+                          pattern: ^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}|[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){3}::)$
+                        label:
+                          type: string
+                          maxLength: 48
+                        until:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        level:
+                          type: integer
+                          minimum: 1
+                          maximum: 32
+                        firstAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        lastAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      required:
+                        - key
+                        - label
+                        - until
+                        - level
+                        - firstAt
+                        - lastAt
+                      additionalProperties: false
+                  events:
+                    maxItems: 100
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        kind:
+                          type: string
+                          enum:
+                            - ok-new-ip
+                            - denied-device
+                            - blocked
+                            - unblocked
+                            - peer-mismatch
+                            - enabled
+                            - disabled
+                            - expired
+                        deviceId:
+                          anyOf:
+                            - type: string
+                              pattern: ^[A-Za-z0-9_-]{4,64}$
+                            - type: "null"
+                        ip:
+                          anyOf:
+                            - type: string
+                              minLength: 2
+                              maxLength: 45
+                              pattern: ^(?:[0-9a-f:.]+|desconocida)$
+                            - type: "null"
+                        route:
+                          anyOf:
+                            - type: string
+                              maxLength: 64
+                            - type: "null"
+                        count:
+                          type: integer
+                          minimum: 1
+                          maximum: 1000000000
+                      required:
+                        - at
+                        - kind
+                        - deviceId
+                        - ip
+                        - route
+                      additionalProperties: false
+                  last24h:
+                    type: object
+                    properties:
+                      ok:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      denied:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      blocked:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      ipUntrusted:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                    required:
+                      - ok
+                      - denied
+                      - blocked
+                      - ipUntrusted
+                    additionalProperties: false
+                required:
+                  - domain
+                  - enabled
+                  - edge
+                  - devices
+                  - blocks
+                  - events
+                  - last24h
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-remote: deny
+      x-native-path: /native/api/v1/remote
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/devices/{id}/remote:
+    put:
+      operationId: deviceRemoteUpdate
+      tags:
+        - remote
+      summary: Permiso «Acceso desde fuera de casa» de un aparato, con su caducidad
+      description: Apagado por defecto. Quitarlo corta al momento lo que ese aparato tenga abierto por el dominio (SSE y el siguiente segmento de vídeo).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{4,64}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                expiresIn:
+                  default: 30d
+                  type: string
+                  enum:
+                    - 24h
+                    - 7d
+                    - 30d
+                    - never
+              required:
+                - enabled
+              additionalProperties: false
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domain:
+                    type: object
+                    properties:
+                      configured:
+                        type: boolean
+                      url:
+                        anyOf:
+                          - type: string
+                            maxLength: 300
+                          - type: "null"
+                    required:
+                      - configured
+                      - url
+                    additionalProperties: false
+                  enabled:
+                    type: boolean
+                  edge:
+                    type: object
+                    properties:
+                      listening:
+                        type: boolean
+                      peerResolved:
+                        type: boolean
+                    required:
+                      - listening
+                      - peerResolved
+                    additionalProperties: false
+                  devices:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        deviceId:
+                          type: string
+                          pattern: ^[A-Za-z0-9_-]{4,64}$
+                        enabled:
+                          type: boolean
+                        enabledAt:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        expiresAt:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        expired:
+                          type: boolean
+                        lastAccess:
+                          anyOf:
+                            - type: object
+                              properties:
+                                at:
+                                  type: string
+                                  format: date-time
+                                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                ip:
+                                  type: string
+                                  minLength: 2
+                                  maxLength: 45
+                                  pattern: ^(?:[0-9a-f:.]+|desconocida)$
+                              required:
+                                - at
+                                - ip
+                              additionalProperties: false
+                            - type: "null"
+                      required:
+                        - deviceId
+                        - enabled
+                        - enabledAt
+                        - expiresAt
+                        - expired
+                        - lastAccess
+                      additionalProperties: false
+                  blocks:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                          maxLength: 45
+                          pattern: ^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}|[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){3}::)$
+                        label:
+                          type: string
+                          maxLength: 48
+                        until:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        level:
+                          type: integer
+                          minimum: 1
+                          maximum: 32
+                        firstAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        lastAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      required:
+                        - key
+                        - label
+                        - until
+                        - level
+                        - firstAt
+                        - lastAt
+                      additionalProperties: false
+                  events:
+                    maxItems: 100
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        kind:
+                          type: string
+                          enum:
+                            - ok-new-ip
+                            - denied-device
+                            - blocked
+                            - unblocked
+                            - peer-mismatch
+                            - enabled
+                            - disabled
+                            - expired
+                        deviceId:
+                          anyOf:
+                            - type: string
+                              pattern: ^[A-Za-z0-9_-]{4,64}$
+                            - type: "null"
+                        ip:
+                          anyOf:
+                            - type: string
+                              minLength: 2
+                              maxLength: 45
+                              pattern: ^(?:[0-9a-f:.]+|desconocida)$
+                            - type: "null"
+                        route:
+                          anyOf:
+                            - type: string
+                              maxLength: 64
+                            - type: "null"
+                        count:
+                          type: integer
+                          minimum: 1
+                          maximum: 1000000000
+                      required:
+                        - at
+                        - kind
+                        - deviceId
+                        - ip
+                        - route
+                      additionalProperties: false
+                  last24h:
+                    type: object
+                    properties:
+                      ok:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      denied:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      blocked:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      ipUntrusted:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                    required:
+                      - ok
+                      - denied
+                      - blocked
+                      - ipUntrusted
+                    additionalProperties: false
+                required:
+                  - domain
+                  - enabled
+                  - edge
+                  - devices
+                  - blocks
+                  - events
+                  - last24h
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-remote: deny
+      x-native-path: /native/api/v1/devices/{id}/remote
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: device_not_found
+          status: 404
+          message: Ese dispositivo no existe.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/remote/blocks/{key}:
+    delete:
+      operationId: remoteBlockDelete
+      tags:
+        - remote
+      summary: Desbloquear una IP (o un /64 de IPv6) del dominio de fuera
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 45
+            pattern: ^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}|[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){3}::)$
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  removed:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                required:
+                  - removed
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-remote: deny
+      x-native-path: /native/api/v1/remote/blocks/{key}
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/remote/blocks:
+    delete:
+      operationId: remoteBlocksClear
+      tags:
+        - remote
+      summary: Desbloquear todas las IPs del dominio de fuera
+      parameters: []
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  removed:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                required:
+                  - removed
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-remote: deny
+      x-native-path: /native/api/v1/remote/blocks
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
         - code: validation_error
           status: 400
           message: Falta algún dato o no tiene el formato esperado.
@@ -21001,6 +22086,19 @@ components:
                 - staleSince
                 - account
                 - guide
+              additionalProperties: false
+          required:
+            - type
+            - data
+          additionalProperties: false
+        - type: object
+          properties:
+            type:
+              type: string
+              const: remote.changed
+            data:
+              type: object
+              properties: {}
               additionalProperties: false
           required:
             - type

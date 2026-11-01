@@ -141,6 +141,13 @@ import {
   BackupImportBodySchema,
   BackupImportResponseSchema,
 } from './api/v1/backup.js';
+import {
+  DeviceRemoteBodySchema,
+  RemoteBlockParamsSchema,
+  RemoteUnblockResponseSchema,
+  RemoteUpdateBodySchema,
+  RemoteViewSchema,
+} from './api/v1/remote.js';
 import { SearchQuerySchema, SearchResponseSchema } from './api/v1/search.js';
 import {
   VodArtParamsSchema,
@@ -212,6 +219,23 @@ export type V1Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type RouteAccess = 'web' | 'native' | 'any';
 export type NativeCredential = 'none' | 'bearer' | 'video-token' | 'party';
 /**
+ * Qué se deja pasar por el dominio de fuera, `https://tv.ismaeloul.es` (la app
+ * de iPhone fuera de casa sin VPN; docs/acceso-remoto.md, «Por el dominio»):
+ * - `allow`: pasa con token de dispositivo y con el permiso «Acceso desde fuera
+ *   de casa» de ese aparato (en `video`, con su `?t=` y el permiso del aparato
+ *   que lleva dentro). Por el dominio también `ping` pide token.
+ * - `allow-self`: solo sobre el propio aparato (`deviceRevoke`: «Olvidar este
+ *   iPhone»); sobre otro, 403 `remote_forbidden_route`.
+ * - `deny`: 403 `remote_forbidden_route` (y Caddy ni la deja llegar): emparejar
+ *   y administrar aparatos, cambiar ajustes, todas las de sala (son de
+ *   `sala.ismaeloul.es`) y todo lo que es solo de la web.
+ * Obligatorio y sin valor por defecto: cada ruta nueva tiene que decidirlo. Las
+ * expresiones de Caddy (deploy/umbrel/caddy/tv-on.caddy) salen de aquí
+ * (`remoteCaddyPatterns`, remote-caddy.ts) y un test las compara en los dos
+ * sentidos.
+ */
+export type RemoteAccess = 'allow' | 'allow-self' | 'deny';
+/**
  * `json` = respuesta JSON validada; `sse` = text/event-stream; `binary` =
  * ficheros del remux, escudos (PNG) y carteles VOD; `empty` = 204 sin cuerpo
  * (hoy, `vodProgress`: docs/vod.md §11.1).
@@ -238,6 +262,8 @@ export const SERVER_MODULES = [
   'health',
   'search',
   'party',
+  /* El dominio de fuera (tv.ismaeloul.es): permisos por aparato, bloqueos y registro. */
+  'remote',
 ] as const;
 export type ServerModuleName = (typeof SERVER_MODULES)[number];
 
@@ -247,6 +273,8 @@ export interface V1RouteDefinition {
   readonly path: string;
   readonly access: RouteAccess;
   readonly credential: NativeCredential;
+  /** Si pasa por el dominio de fuera (`tv.ismaeloul.es`); ver `RemoteAccess`. */
+  readonly remote: RemoteAccess;
   readonly module: ServerModuleName;
   readonly summary: string;
   readonly description?: string;
@@ -381,6 +409,7 @@ export const V1_ROUTES = {
     path: '/api/v1/ping',
     access: 'any',
     credential: 'none',
+    remote: 'allow',
     module: 'health',
     summary: 'Vivo y versión, sin datos',
     description:
@@ -397,6 +426,7 @@ export const V1_ROUTES = {
     path: '/api/v1/bootstrap',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'state',
     summary: 'Todo lo necesario para pintar la primera pantalla en una sola llamada',
     response: BootstrapResponseSchema,
@@ -411,6 +441,7 @@ export const V1_ROUTES = {
     path: '/api/v1/health',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'health',
     summary: 'Panel de salud, desde las cachés de los vigilantes (sin red en cada llamada)',
     response: HealthResponseSchema,
@@ -425,6 +456,7 @@ export const V1_ROUTES = {
     path: '/api/v1/health/live',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'health',
     summary: 'Healthcheck de Docker: sano en cuanto escucha, sin red ni disco',
     response: HealthLiveResponseSchema,
@@ -439,6 +471,7 @@ export const V1_ROUTES = {
     path: '/api/v1/events',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'events',
     summary: 'Tiempo real por SSE (reanudable con Last-Event-ID)',
     query: EventsQuerySchema,
@@ -456,6 +489,7 @@ export const V1_ROUTES = {
     path: '/api/v1/engine/status',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'engine',
     summary: 'Estado del motor con histéresis (el del vigilante del backend)',
     response: EngineStatusSchema,
@@ -470,6 +504,7 @@ export const V1_ROUTES = {
     path: '/api/v1/engine/restart',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'engine',
     summary: 'Reiniciar el motor (enfriamiento de 15 s; no gasta el cupo automático)',
     response: EngineRestartResponseSchema,
@@ -486,6 +521,7 @@ export const V1_ROUTES = {
     path: '/api/v1/channels/:id/stream',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'playback',
     summary: 'Abrir (o unirse a) la sesión del motor de un canal y recibir su URL',
     description:
@@ -515,6 +551,7 @@ export const V1_ROUTES = {
     path: '/api/v1/sessions/:sid/heartbeat',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'playback',
     summary: 'Latido del visor cada 15 s; sin latido en 45 s se le da por ido',
     params: SessionParamsSchema,
@@ -531,6 +568,7 @@ export const V1_ROUTES = {
     path: '/api/v1/sessions/:sid/release',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'playback',
     summary: 'Soltar la sesión (también con sendBeacon al cerrar la página)',
     params: SessionParamsSchema,
@@ -547,6 +585,7 @@ export const V1_ROUTES = {
     path: '/api/v1/playback',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'playback',
     summary: 'El mando de siempre más las sesiones abiertas (respaldo si falla el SSE)',
     response: PlaybackStatusSchema,
@@ -561,6 +600,7 @@ export const V1_ROUTES = {
     path: '/api/v1/video/:sid/:file',
     access: 'any',
     credential: 'video-token',
+    remote: 'allow',
     module: 'remux',
     summary:
       'Lista y segmentos del remux para AVPlayer y, con la IPTV, para hls.js (Range, 206/416, no-store)',
@@ -583,6 +623,7 @@ export const V1_ROUTES = {
     path: '/api/v1/settings',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'state',
     summary: 'Ajustes v2 (política de mismo canal)',
     response: SettingsResponseSchema,
@@ -597,6 +638,7 @@ export const V1_ROUTES = {
     path: '/api/v1/settings',
     access: 'any',
     credential: 'bearer',
+    remote: 'deny',
     module: 'state',
     summary: 'Cambiar los ajustes v2 (parcial: lo que no llega se queda como está)',
     body: SettingsUpdateBodySchema,
@@ -614,6 +656,7 @@ export const V1_ROUTES = {
     path: '/api/v1/backup',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'state',
     summary: 'Descargar la copia de seguridad de tus ajustes (sin la contraseña de la IPTV)',
     description:
@@ -632,6 +675,7 @@ export const V1_ROUTES = {
     path: '/api/v1/backup/export',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'state',
     summary:
       'Descargar la copia con la contraseña de la IPTV, protegida con una clave (scrypt + AES-256-GCM)',
@@ -651,6 +695,7 @@ export const V1_ROUTES = {
     path: '/api/v1/backup/import',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'state',
     summary: 'Restaurar una copia: vista previa (`dryRun`) o aplicarla (Reemplazar o Combinar)',
     description:
@@ -677,6 +722,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary:
       'Tu IPTV: tipo, nombre, host, estado, cuenta y guía (nunca URL, usuario ni contraseña)',
@@ -692,6 +738,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'iptv',
     summary:
       'Conectar o cambiar la IPTV (M3U o Xtream): prueba rápida, cifra, guarda y sincroniza de fondo',
@@ -711,6 +758,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'iptv',
     summary: 'Pausar o reanudar la IPTV, o cambiarle el nombre',
     description:
@@ -728,6 +776,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv/sync',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'iptv',
     summary: 'Actualizar ya la lista de la IPTV (responde syncing; el recuento llega por SSE)',
     response: IptvViewSchema,
@@ -742,6 +791,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'iptv',
     summary: 'Eliminar la IPTV y todos sus datos del Umbrel (copias incluidas)',
     description:
@@ -759,6 +809,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv/channels',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: 'Buscar canales en tu IPTV (2 a 80 letras; hasta 50, España o sin país, sin adultos)',
     description:
@@ -777,6 +828,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv/browse',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary:
       'Recorrer tu IPTV como la ordena el proveedor: categorías, canales por páginas, texto y filtros con facetas',
@@ -801,6 +853,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv/guide',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary:
       'Guía TV: estado de la guía y canales con programación por páginas (Favoritos o Todos)',
@@ -822,6 +875,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv/guide/programmes',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: 'Guía TV: los programas de un trozo de la parrilla (hasta 60 canales × 12 h)',
     description:
@@ -840,6 +894,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv/guide/programmes/:id',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: 'Guía TV: la ficha de un programa (sinopsis, episodio, edad, nota, reparto…)',
     description:
@@ -858,6 +913,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv/guide/now',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: 'Guía TV: «ahora / después» de unos canales IPTV (para Canales)',
     description:
@@ -877,6 +933,7 @@ export const V1_ROUTES = {
     path: '/api/v1/iptv/guide/art/:ref',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary:
       'Guía TV: logo de un canal o imagen de un programa (JPEG, PNG o WebP) por el proxy propio',
@@ -899,6 +956,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary:
       'Portada de Películas y series en una petición: «Seguir viendo», novedades, series actualizadas, categorías y distintivos',
@@ -919,6 +977,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod/browse',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary:
       'Rejilla y buscador de películas o series: categoría, distintivo, texto y orden, por páginas',
@@ -939,6 +998,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod/titles/:id',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: 'Ficha de una película o una serie (con temporadas y episodios)',
     description:
@@ -958,6 +1018,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod/titles/:id/art/:art',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: 'Cartel, fondo o fotograma de un título (JPEG, PNG o WebP) por el proxy propio',
     description:
@@ -977,6 +1038,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod/titles/:id/stream',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'playback',
     summary: 'Abrir una película o un episodio y recibir su lista HLS VOD completa',
     description:
@@ -996,6 +1058,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod/titles/:id/download',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'playback',
     summary: 'Descargar un tramo de una película o un episodio (segmentos from..to) en un solo MP4',
     description:
@@ -1015,6 +1078,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod/titles/:id/progress',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: 'Guardar el progreso de una película o un episodio, o marcarlo (204 sin cuerpo)',
     description:
@@ -1034,6 +1098,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod/languages',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: 'Los idiomas elegidos para Películas y series (castellano y latino, aparte)',
     description:
@@ -1051,6 +1116,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod/languages',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: 'Elegir los idiomas de Películas y series (sustituye la elección)',
     description:
@@ -1068,6 +1134,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod/list',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: '«Mi lista»: las películas y series guardadas para ver luego',
     description:
@@ -1086,6 +1153,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod/list/:id',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: 'Añadir una película o una serie a «Mi lista» (si ya está, no cambia nada)',
     description:
@@ -1104,6 +1172,7 @@ export const V1_ROUTES = {
     path: '/api/v1/vod/list/:id',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'iptv',
     summary: 'Quitar un título de «Mi lista»',
     description:
@@ -1123,6 +1192,7 @@ export const V1_ROUTES = {
     path: '/api/v1/pairing',
     access: 'any',
     credential: 'bearer',
+    remote: 'deny',
     module: 'auth',
     summary: 'Crear un código de 6 dígitos y su QR (5 min, un solo uso, anula el anterior)',
     description:
@@ -1140,6 +1210,7 @@ export const V1_ROUTES = {
     path: '/api/v1/pairing/claim',
     access: 'any',
     credential: 'none',
+    remote: 'deny',
     module: 'auth',
     summary: 'Canjear el código desde la app iOS y recibir el token',
     description: '5 intentos por código y 10 por minuto en total; comparación en tiempo constante.',
@@ -1156,6 +1227,7 @@ export const V1_ROUTES = {
     path: '/api/v1/devices',
     access: 'any',
     credential: 'bearer',
+    remote: 'deny',
     module: 'auth',
     summary: 'Dispositivos emparejados',
     response: DevicesListResponseSchema,
@@ -1170,6 +1242,7 @@ export const V1_ROUTES = {
     path: '/api/v1/devices/:id',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow-self',
     module: 'auth',
     summary: 'Revocar un dispositivo: cierra su SSE, suelta sus visores y anula sus URLs de vídeo',
     description:
@@ -1189,6 +1262,7 @@ export const V1_ROUTES = {
     path: '/api/v1/diagnostics',
     access: 'any',
     credential: 'bearer',
+    remote: 'deny',
     module: 'diagnostics',
     summary: 'Últimos fallos y recuento por causa en 24 h',
     query: DiagnosticsQuerySchema,
@@ -1204,6 +1278,7 @@ export const V1_ROUTES = {
     path: '/api/v1/diagnostics',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'diagnostics',
     summary: 'Un cliente informa de un fallo o de sus métricas de reproducción',
     body: DiagnosticReportBodySchema,
@@ -1219,6 +1294,7 @@ export const V1_ROUTES = {
     path: '/api/v1/diagnostics/export',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'diagnostics',
     summary: '«Descargar fallos» de Salud: un fichero con fallos y registro, redactado',
     description:
@@ -1240,6 +1316,7 @@ export const V1_ROUTES = {
     path: '/api/v1/diagnostics/log',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'diagnostics',
     summary: '«Descargar logs» de Ajustes → Registro: cuánto registro hay guardado en el disco',
     description:
@@ -1257,6 +1334,7 @@ export const V1_ROUTES = {
     path: '/api/v1/diagnostics/log/download',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'diagnostics',
     summary: '«Descargar logs»: un zip con el registro del último día, semana o mes, redactado',
     description:
@@ -1277,6 +1355,7 @@ export const V1_ROUTES = {
     path: '/api/v1/diagnostics/web-log',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'diagnostics',
     summary: 'La web manda sus errores importantes para que queden en el registro del servidor',
     description:
@@ -1299,6 +1378,7 @@ export const V1_ROUTES = {
     path: '/api/v1/library',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'state',
     summary: 'Favoritos, recientes y canales del directorio activo',
     response: LibraryViewSchema,
@@ -1313,6 +1393,7 @@ export const V1_ROUTES = {
     path: '/api/v1/library',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'state',
     summary: 'Alta, renombrado o borrado por acción (no pisa colecciones de otros dispositivos)',
     body: LibraryMutationBodySchema,
@@ -1328,6 +1409,7 @@ export const V1_ROUTES = {
     path: '/api/v1/preferences',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'state',
     summary: 'Preferencias de fútbol',
     response: PreferencesResponseSchema,
@@ -1342,6 +1424,7 @@ export const V1_ROUTES = {
     path: '/api/v1/preferences',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'state',
     summary: 'Guardar las preferencias de fútbol (sustituye, como POST /api/preferences)',
     body: PreferencesInputSchema,
@@ -1357,6 +1440,7 @@ export const V1_ROUTES = {
     path: '/api/v1/directories',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'directories',
     summary: 'Directorios guardados y canales del activo',
     response: DirectoryViewSchema,
@@ -1371,6 +1455,7 @@ export const V1_ROUTES = {
     path: '/api/v1/directories/sync',
     access: 'any',
     credential: 'bearer',
+    remote: 'deny',
     module: 'directories',
     summary: 'Añadir o refrescar un directorio (M3U, HTML o IPFS)',
     body: DirectorySyncBodySchema,
@@ -1386,6 +1471,7 @@ export const V1_ROUTES = {
     path: '/api/v1/directories/upload',
     access: 'any',
     credential: 'bearer',
+    remote: 'deny',
     module: 'directories',
     summary:
       'Añadir o sustituir una lista subida como archivo (con su enlace de origen, si se sabe)',
@@ -1405,6 +1491,7 @@ export const V1_ROUTES = {
     path: '/api/v1/directories/:id/activate',
     access: 'any',
     credential: 'bearer',
+    remote: 'deny',
     module: 'directories',
     summary: 'Elegir el directorio activo',
     params: DirectoryIdParamsSchema,
@@ -1420,6 +1507,7 @@ export const V1_ROUTES = {
     path: '/api/v1/directories/:id',
     access: 'any',
     credential: 'bearer',
+    remote: 'deny',
     module: 'directories',
     summary: 'Borrar un directorio (nunca el último)',
     params: DirectoryIdParamsSchema,
@@ -1437,6 +1525,7 @@ export const V1_ROUTES = {
     path: '/api/v1/football',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'football',
     summary: 'Agenda de partidos (60 s como máximo; si vence, la última buena con stale)',
     response: FootballScheduleResponseSchema,
@@ -1451,6 +1540,7 @@ export const V1_ROUTES = {
     path: '/api/v1/football/resolve',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'football',
     summary: 'Buscar fuentes para un partido o canal y lanzar su comprobación',
     query: ResolveQuerySchema,
@@ -1466,6 +1556,7 @@ export const V1_ROUTES = {
     path: '/api/v1/football/scans/:id',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'scanner',
     summary: 'Estado de un trabajo del comprobador',
     params: ScanParamsSchema,
@@ -1481,6 +1572,7 @@ export const V1_ROUTES = {
     path: '/api/v1/football/preheat/:matchId',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'football',
     summary: 'Estado del precalentado de un partido',
     params: PreheatParamsSchema,
@@ -1496,6 +1588,7 @@ export const V1_ROUTES = {
     path: '/api/v1/football/bindings',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'football',
     summary: 'Vincular a mano un canal con un hash',
     body: BindBodySchema,
@@ -1511,6 +1604,7 @@ export const V1_ROUTES = {
     path: '/api/v1/scores',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'football',
     summary: 'Marcadores en vivo (ESPN); sin agenda, available: false con 200',
     response: ScoresResponseSchema,
@@ -1527,6 +1621,7 @@ export const V1_ROUTES = {
     path: '/api/v1/football/teams/:teamId/crest',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'teams',
     summary: 'Escudo del equipo (PNG) con ETag y caché larga',
     description:
@@ -1547,6 +1642,7 @@ export const V1_ROUTES = {
     path: '/api/v1/football/competitions/:competitionId/logo',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'teams',
     summary: 'Logo de la competición (PNG) con ETag y caché larga',
     description:
@@ -1567,6 +1663,7 @@ export const V1_ROUTES = {
     path: '/api/v1/sources/report',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'sources',
     summary: 'Reportar una fuente: cuarentena y recomprobación prioritaria',
     body: ReportBodySchema,
@@ -1582,6 +1679,7 @@ export const V1_ROUTES = {
     path: '/api/v1/sources/outcome',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'sources',
     summary: 'Resultado real de reproducir una fuente (sigue no suma)',
     body: OutcomeBodySchema,
@@ -1597,6 +1695,7 @@ export const V1_ROUTES = {
     path: '/api/v1/sources/feedback',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'sources',
     summary: 'Confirmar o rechazar que una fuente es el canal',
     body: FeedbackBodySchema,
@@ -1614,6 +1713,7 @@ export const V1_ROUTES = {
     path: '/api/v1/search',
     access: 'any',
     credential: 'bearer',
+    remote: 'allow',
     module: 'search',
     summary: 'Buscador del motor AceStream (2 a 80 caracteres; hasta 100 resultados)',
     query: SearchQuerySchema,
@@ -1632,6 +1732,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party',
     access: 'any',
     credential: 'bearer',
+    remote: 'deny',
     module: 'party',
     summary: 'Crear una sala para ver una película o un episodio a la vez',
     description:
@@ -1650,6 +1751,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'Lo que se ve de una sala antes de entrar: el título y quién está',
     params: PartyParamsSchema,
@@ -1665,6 +1767,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/join',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'Entrar en una sala con un nombre',
     params: PartyParamsSchema,
@@ -1681,6 +1784,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/events',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'Tiempo real de la sala por SSE: estado, personas y chat',
     description:
@@ -1701,6 +1805,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/stream',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'Abrir el vídeo de la sala: la misma sesión para todos',
     description:
@@ -1734,6 +1839,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/v/:key/:file',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'El vídeo de la sala (lista, init y segmentos) con la clave de vídeo de la persona',
     description:
@@ -1752,6 +1858,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/art/:artId',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'El cartel del título de la sala (o de lo que viene) por la ruta de la sala',
     description:
@@ -1773,6 +1880,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/control',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'Reproducir, pausar, saltar o cambiar el idioma para todos',
     description:
@@ -1792,6 +1900,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/status',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'Latido de cada persona: su posición y si está cargando (y el de su sesión de vídeo)',
     params: PartyParamsSchema,
@@ -1808,6 +1917,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/chat',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'Mandar un mensaje al chat de la sala',
     params: PartyParamsSchema,
@@ -1824,6 +1934,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/typing',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'Avisar de que se está escribiendo en el chat («Ana está escribiendo…»)',
     description:
@@ -1843,6 +1954,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/settings',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary:
       'Ajustes de la sala: quién controla (el líder) y qué pasa al acabar (el líder y los co-líderes)',
@@ -1860,6 +1972,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/member',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'Echar a alguien, darle el liderazgo o hacerle co-líder (solo el líder)',
     params: PartyParamsSchema,
@@ -1876,6 +1989,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/queue',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary:
       'La lista de la sala: añadir, quitar, votar, poner ya, siguiente o cancelar la cuenta atrás',
@@ -1893,6 +2007,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/sources',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'Las fuentes del directo de la sala (el líder, los co-líderes y el anfitrión)',
     description:
@@ -1913,6 +2028,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/leave',
     access: 'any',
     credential: 'party',
+    remote: 'deny',
     module: 'party',
     summary: 'Salir de la sala (también con sendBeacon al cerrar la página)',
     params: PartyParamsSchema,
@@ -1929,6 +2045,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/close',
     access: 'any',
     credential: 'bearer',
+    remote: 'deny',
     module: 'party',
     summary: 'Cerrar la sala para todos (solo el anfitrión)',
     params: PartyParamsSchema,
@@ -1945,6 +2062,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'party',
     summary: 'Las salas abiertas (solo la web de casa)',
     description:
@@ -1962,6 +2080,7 @@ export const V1_ROUTES = {
     path: '/api/v1/party/:code/end',
     access: 'web',
     credential: 'bearer',
+    remote: 'deny',
     module: 'party',
     summary: 'Cerrar una sala para todos desde casa (sin credencial de la sala)',
     description:
@@ -1973,6 +2092,94 @@ export const V1_ROUTES = {
     content: 'json',
     sideEffects: true,
     errors: ['party_not_found'],
+    legacyTwin: null,
+  }),
+
+  // --- El dominio de fuera, tv.ismaeloul.es (docs/acceso-remoto.md, «Por el dominio») ---
+  // Solo la web, detrás del login de Umbrel: un iPhone no puede darse permiso a sí mismo.
+  remoteGet: defineRoute({
+    method: 'GET',
+    path: '/api/v1/remote',
+    access: 'web',
+    credential: 'bearer',
+    remote: 'deny',
+    module: 'remote',
+    summary: 'Desde fuera de casa: permisos por aparato, bloqueos y últimos accesos',
+    description:
+      'Lleva IPs: solo la web. El SSE avisa de cambios con `remote.changed` (sin datos y solo a la web).',
+    response: RemoteViewSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  remoteUpdate: defineRoute({
+    method: 'PUT',
+    path: '/api/v1/remote',
+    access: 'web',
+    credential: 'bearer',
+    remote: 'deny',
+    module: 'remote',
+    summary: 'Interruptor general del dominio de fuera (y «Cerrar el dominio ya»)',
+    description:
+      'Apagado, todo lo que llega por el dominio recibe 403 `remote_disabled` y se cierran al momento los SSE abiertos por él.',
+    body: RemoteUpdateBodySchema,
+    response: RemoteViewSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [],
+    legacyTwin: null,
+  }),
+  deviceRemoteUpdate: defineRoute({
+    method: 'PUT',
+    path: '/api/v1/devices/:id/remote',
+    access: 'web',
+    credential: 'bearer',
+    remote: 'deny',
+    module: 'remote',
+    summary: 'Permiso «Acceso desde fuera de casa» de un aparato, con su caducidad',
+    description:
+      'Apagado por defecto. Quitarlo corta al momento lo que ese aparato tenga abierto por el dominio (SSE y el siguiente segmento de vídeo).',
+    params: DeviceParamsSchema,
+    body: DeviceRemoteBodySchema,
+    response: RemoteViewSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: ['device_not_found'],
+    legacyTwin: null,
+  }),
+  remoteBlockDelete: defineRoute({
+    method: 'DELETE',
+    path: '/api/v1/remote/blocks/:key',
+    access: 'web',
+    credential: 'bearer',
+    remote: 'deny',
+    module: 'remote',
+    summary: 'Desbloquear una IP (o un /64 de IPv6) del dominio de fuera',
+    params: RemoteBlockParamsSchema,
+    response: RemoteUnblockResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [],
+    legacyTwin: null,
+  }),
+  remoteBlocksClear: defineRoute({
+    method: 'DELETE',
+    path: '/api/v1/remote/blocks',
+    access: 'web',
+    credential: 'bearer',
+    remote: 'deny',
+    module: 'remote',
+    summary: 'Desbloquear todas las IPs del dominio de fuera',
+    response: RemoteUnblockResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [],
     legacyTwin: null,
   }),
 } as const satisfies Record<string, V1RouteDefinition>;

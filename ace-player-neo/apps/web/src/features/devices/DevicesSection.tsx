@@ -16,11 +16,14 @@
      el backend).
    - Datos: GET /api/v1/devices. El SSE `devices.changed` la invalida
      (src/api/sse.ts); sin SSE se sondea cada 5 s solo con un código a la
-     vista (usePairing). */
+     vista (usePairing).
+   - «Desde fuera de casa» (el dominio tv.ismaeloul.es, RemoteSection.tsx): el
+     permiso de cada aparato debajo de su fila, el bloque con los bloqueos y los
+     sucesos, y los avisos arriba. Datos: GET /api/v1/remote (solo en vivo). */
 
-import type { Device } from '@ace/shared';
+import type { Device, RemoteDeviceView } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   api,
   describeFailure,
@@ -47,6 +50,7 @@ import {
   splitDevices,
 } from './model.ts';
 import { PairingPanel } from './PairingPanel.tsx';
+import { DeviceRemote, RemoteBlock, RemoteNotices, useRemoteActions } from './RemoteSection.tsx';
 import { PAIRING_POLL_MS, usePairing } from './usePairing.ts';
 import './devices.css';
 
@@ -59,12 +63,15 @@ function DeviceRow({
   armed,
   busy,
   onRevoke,
+  remote,
 }: {
   device: Device;
   now: number;
   armed: boolean;
   busy: boolean;
   onRevoke(): void;
+  /** El permiso de fuera de este aparato (null sin dominio o en la demo). */
+  remote?: ReactNode;
 }) {
   const { bind, menu } = useContextMenu();
   const online = isOnlineNow(device, now);
@@ -82,6 +89,7 @@ function DeviceRow({
           </span>
         </span>
         <span className="disp-dev__meta disp-dev__meta--soft">{pairedText(device)}</span>
+        {remote}
       </div>
       <Button
         size="sm"
@@ -163,6 +171,18 @@ export function DevicesSection() {
   const deviceIds = useMemo(() => (devices ? devices.map((d) => d.id) : null), [devices]);
   const pairing = usePairing({ deviceIds });
   const { active, revoked } = useMemo(() => splitDevices(devices ?? []), [devices]);
+  /* El dominio de fuera: solo con el servidor de verdad (la demo no tiene). */
+  const remote = useApiQuery('remoteGet', undefined, {
+    enabled: mode === 'live',
+    refetchOnMount: 'always',
+  });
+  const remoteActions = useRemoteActions();
+  const remoteView = mode === 'live' ? remote.data : undefined;
+  const remoteById = useMemo(
+    () =>
+      new Map<string, RemoteDeviceView>((remoteView?.devices ?? []).map((d) => [d.deviceId, d])),
+    [remoteView],
+  );
 
   // Sondeo de respaldo: solo con un código a la vista, en vivo y sin SSE.
   const shouldPoll = pairing.state.phase === 'code' && mode === 'live' && realtime !== 'open';
@@ -223,6 +243,16 @@ export function DevicesSection() {
             armed={confirm.armed === device.id}
             busy={revoking === device.id}
             onRevoke={() => confirm.tap(device.id, () => void revoke(device))}
+            remote={
+              remoteView?.domain.configured ? (
+                <DeviceRemote
+                  device={device}
+                  view={remoteById.get(device.id)}
+                  now={now}
+                  actions={remoteActions}
+                />
+              ) : null
+            }
           />
         ))}
       </ul>
@@ -235,6 +265,10 @@ export function DevicesSection() {
         Empareja la app de iPhone o iPad con este Ace Player Neo: ve la agenda y tus canales y
         reproduce desde el propio dispositivo. El código dura 5 minutos y solo sirve una vez.
       </p>
+
+      {remoteView ? (
+        <RemoteNotices view={remoteView} devices={active} now={now} actions={remoteActions} />
+      ) : null}
 
       <PairingPanel pairing={pairing} pairedName={pairedName} demo={mode === 'demo'} />
       <OriginNote origin={origin} hostname={hostname} />
@@ -283,6 +317,10 @@ export function DevicesSection() {
           </div>
         ) : null}
       </section>
+
+      {remoteView ? (
+        <RemoteBlock view={remoteView} devices={active} now={now} actions={remoteActions} />
+      ) : null}
     </div>
   );
 }

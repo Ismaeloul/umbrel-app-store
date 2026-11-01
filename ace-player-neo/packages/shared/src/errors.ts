@@ -140,6 +140,40 @@ export const ERROR_CATALOG = {
     message: 'Demasiadas peticiones seguidas. Espera un momento.',
   },
 
+  // --- El dominio de fuera, tv.ismaeloul.es (docs/acceso-remoto.md, «Por el dominio») ---
+  remote_disabled: {
+    status: 403,
+    legacyStatus: null,
+    public: true,
+    message:
+      'El acceso desde fuera de casa está apagado. Actívalo en la web, en Ajustes → Dispositivos.',
+  },
+  remote_forbidden: {
+    status: 403,
+    legacyStatus: null,
+    public: true,
+    message:
+      'Este dispositivo no tiene permiso para entrar desde fuera de casa. Activa el acceso desde fuera en la web, en Ajustes → Dispositivos.',
+  },
+  remote_forbidden_route: {
+    status: 403,
+    legacyStatus: null,
+    public: true,
+    message: 'Esto solo se puede hacer desde casa.',
+  },
+  remote_blocked: {
+    status: 429,
+    legacyStatus: null,
+    public: true,
+    message: 'Demasiados intentos fallidos desde esta conexión. Espera un rato y vuelve a probar.',
+  },
+  pairing_local_only: {
+    status: 403,
+    legacyStatus: null,
+    public: true,
+    message: 'Para emparejar, conéctate a la red de casa o a Tailscale.',
+  },
+
   // --- Sesiones de reproducción (arquitectura §6.3) ---
   session_expired: {
     status: 410,

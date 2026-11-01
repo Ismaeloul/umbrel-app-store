@@ -220,6 +220,9 @@ describe('scripts/release.mjs', () => {
     expect(files.filter((file) => !file.startsWith('web/')).sort()).toEqual(
       [
         'Caddyfile',
+        /* El dominio de la app de iPhone (docs/acceso-remoto.md): los dos sitios que importa el Caddyfile. */
+        'caddy/tv-off.caddy',
+        'caddy/tv-on.caddy',
         'RELEASE.json',
         'SHA256SUMS',
         'engine-control.js',

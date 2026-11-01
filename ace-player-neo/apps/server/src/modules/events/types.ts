@@ -30,6 +30,12 @@ export interface SseConnectOptions {
   readonly lastEventId: number | null;
   /** Se aborta cuando el cliente cierra. */
   readonly signal: AbortSignal;
+  /**
+   * Llegó por el dominio de fuera (tv.ismaeloul.es): con la clave de su IP (o null si no es de
+   * fiar). Se cierra al quitarle el permiso al aparato o cerrar el dominio, y cada aparato tiene
+   * como mucho `REMOTE_LIMITS.sse.perDevice` abiertas por ahí (se cierra la más vieja).
+   */
+  readonly remote?: { readonly ipKey: string | null } | null;
 }
 
 export interface EventsHub extends Lifecycle {
@@ -40,6 +46,17 @@ export interface EventsHub extends Lifecycle {
   connections(): number;
   /** Cierra las conexiones de un dispositivo (revocación). */
   closeDevice(deviceId: string): void;
+  /**
+   * Cierra las conexiones abiertas por el dominio de fuera: las de un aparato (le han quitado el
+   * permiso o ha caducado) o, con null, todas («Cerrar el dominio ya»). Las de casa no se tocan.
+   */
+  closeRemote(deviceId: string | null): void;
+  /**
+   * Conexiones abiertas por el dominio desde esa IP (tope por IP, core/remote-gate.ts). Con
+   * `deviceId`, las que quedarán cuando ese aparato abra una más: de las suyas solo cuentan
+   * `perDevice - 1`, porque `attach` cierra la más vieja al pasar de ahí.
+   */
+  remoteConnections(ipKey: string, deviceId?: string): number;
   /** Cierra todas (apagado, arquitectura §5.16). */
   closeAll(): void;
 }

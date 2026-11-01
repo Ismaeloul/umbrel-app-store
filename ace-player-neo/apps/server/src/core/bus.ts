@@ -103,6 +103,11 @@ export interface DomainEvents {
    * manda solo a la web (`WEB_ONLY_EVENT_TYPES`).
    */
   'iptv.status': SseEventData<'iptv.status'>;
+  /**
+   * Cambió algo de «Desde fuera de casa» (módulo remote, el dominio tv.ismaeloul.es): sin datos.
+   * El hub lo manda solo a la web (`WEB_ONLY_EVENT_TYPES`), que vuelve a pedir `remoteGet`.
+   */
+  'remote.changed': SseEventData<'remote.changed'>;
 }
 
 export type DomainEventType = keyof DomainEvents;

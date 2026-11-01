@@ -14,7 +14,7 @@ public struct ErrorDefinition: Sendable, Equatable {
     public let message: String
 }
 
-/// Catálogo de códigos de error con sus mensajes en español (125 códigos).
+/// Catálogo de códigos de error con sus mensajes en español (133 códigos).
 public enum ErrorCatalog {
     public static let entries: [String: ErrorDefinition] = [
         "bad_request": ErrorDefinition(status: 400, isPublic: true, message: "La petición no es válida."),
@@ -35,6 +35,11 @@ public enum ErrorCatalog {
         "pairing_rate_limited": ErrorDefinition(status: 429, isPublic: true, message: "Demasiados intentos. Espera un minuto y vuelve a probar."),
         "device_not_found": ErrorDefinition(status: 404, isPublic: true, message: "Ese dispositivo no existe."),
         "rate_limited": ErrorDefinition(status: 429, isPublic: true, message: "Demasiadas peticiones seguidas. Espera un momento."),
+        "remote_disabled": ErrorDefinition(status: 403, isPublic: true, message: "El acceso desde fuera de casa está apagado. Actívalo en la web, en Ajustes → Dispositivos."),
+        "remote_forbidden": ErrorDefinition(status: 403, isPublic: true, message: "Este dispositivo no tiene permiso para entrar desde fuera de casa. Activa el acceso desde fuera en la web, en Ajustes → Dispositivos."),
+        "remote_forbidden_route": ErrorDefinition(status: 403, isPublic: true, message: "Esto solo se puede hacer desde casa."),
+        "remote_blocked": ErrorDefinition(status: 429, isPublic: true, message: "Demasiados intentos fallidos desde esta conexión. Espera un rato y vuelve a probar."),
+        "pairing_local_only": ErrorDefinition(status: 403, isPublic: true, message: "Para emparejar, conéctate a la red de casa o a Tailscale."),
         "session_expired": ErrorDefinition(status: 410, isPublic: true, message: "La sesión de este canal ha terminado. Vuelve a abrirlo."),
         "session_not_found": ErrorDefinition(status: 404, isPublic: true, message: "Esa sesión de reproducción no existe."),
         "handoff_denied": ErrorDefinition(status: 409, isPublic: true, message: "Otro dispositivo tiene el mando y no se ha podido pasar a este."),
@@ -119,6 +124,9 @@ public enum ErrorCatalog {
         "party_full": ErrorDefinition(status: 409, isPublic: true, message: "La sala está llena."),
         "party_forbidden": ErrorDefinition(status: 403, isPublic: true, message: "Ya no estás en esta sala. Vuelve a entrar con el enlace."),
         "party_host_only": ErrorDefinition(status: 403, isPublic: true, message: "Solo quien ha creado la sala puede cerrarla."),
+        "party_leader_only": ErrorDefinition(status: 403, isPublic: true, message: "Solo el líder de la sala puede hacerlo."),
+        "party_gone": ErrorDefinition(status: 404, isPublic: true, message: "Eso ya no está en la sala."),
+        "party_queue_full": ErrorDefinition(status: 409, isPublic: true, message: "La lista de la sala está llena. Quita algún título."),
         "party_limit": ErrorDefinition(status: 503, isPublic: true, message: "Ya hay demasiadas salas abiertas. Cierra alguna y vuelve a intentarlo."),
         "state_unreadable": ErrorDefinition(status: 500, isPublic: false, message: "No se pudo leer el estado guardado."),
         "scanner_unavailable": ErrorDefinition(status: 502, isPublic: false, message: "El comprobador no responde."),

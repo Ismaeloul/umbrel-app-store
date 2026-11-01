@@ -14,6 +14,7 @@ import { DiagnosticCountsSchema } from './diagnostics.js';
 import { EngineStatusSchema } from './engine.js';
 import { LibraryViewSchema } from './library.js';
 import { PlaybackStatusSchema } from './playback.js';
+import { BootstrapRemoteSchema } from './remote.js';
 import { SettingsViewSchema } from './settings.js';
 
 /** GET /api/v1/ping: vivo y versión, sin datos. Sin token también desde /native. */
@@ -65,6 +66,12 @@ export const BootstrapResponseSchema = z.strictObject({
      */
     vod: z.boolean().optional(),
   }),
+  /**
+   * El dominio de fuera (tv.ismaeloul.es, docs/acceso-remoto.md): si esta petición llegó por él
+   * y si este aparato tiene el permiso «Acceso desde fuera de casa». Solo con token (la app);
+   * ausente desde la web y en `fixtures/v1/bootstrap.json`.
+   */
+  remote: BootstrapRemoteSchema.optional(),
 });
 export type BootstrapResponse = z.infer<typeof BootstrapResponseSchema>;
 
@@ -117,6 +124,11 @@ export const HealthResponseSchema = z.strictObject({
       remuxSessions: z.number().int().nonnegative(),
     }),
     events: z.strictObject({ connections: z.number().int().nonnegative() }),
+    /**
+     * El dominio de fuera (tv.ismaeloul.es): el segundo puerto del backend, el que solo usa Caddy,
+     * escucha y se conoce la IP de Caddy. Sin IPs. Opcional: un servidor anterior no lo manda.
+     */
+    edge: z.strictObject({ listening: z.boolean(), peerResolved: z.boolean() }).optional(),
     /**
      * «Arranque instantáneo» (D24): qué se está preparando y cómo acabó lo
      * último. Opcional: un servidor anterior no lo manda.

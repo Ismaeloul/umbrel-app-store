@@ -23,12 +23,16 @@
    - Contrapresión: si tras escribir el búfer de salida de una conexión pasa
      de 256 KiB, se cierra (destroy) y el cliente reconecta con su
      `Last-Event-ID`.
+   - Por el dominio de fuera (tv.ismaeloul.es) `devices.changed` solo llega si es del propio
+     aparato: desde fuera no se aprenden los ids de los demás ni cuándo se emparejan
+     (`devicesList` está prohibida por el dominio por lo mismo).
    - `devices.changed` con `revoked` cierra las conexiones de ese dispositivo.
      Se publica ANTES de cerrar: el propio dispositivo revocado recibe su
      `devices.changed` `revoked` y luego se le cierra el SSE. */
 
 import type { FastifyReply } from 'fastify';
 import {
+  REMOTE_LIMITS,
   SSE_BUFFER_EVENTS,
   SSE_HEARTBEAT_FRAME,
   SSE_MAX_BUFFERED_BYTES,
@@ -57,7 +61,14 @@ export interface SseSink {
 }
 
 /** Por qué se cierra una conexión (va al log). */
-export type CloseReason = 'client' | 'backpressure' | 'error' | 'revoked' | 'shutdown';
+export type CloseReason =
+  | 'client'
+  | 'backpressure'
+  | 'error'
+  | 'revoked'
+  | 'shutdown'
+  /* El dominio de fuera: sin permiso, caducado, dominio cerrado o una de más del mismo aparato. */
+  | 'remote';
 
 /** Eventos del bus que se reenvían tal cual a los clientes (tienen esquema SSE). */
 export const FORWARDED_EVENTS = [
@@ -76,6 +87,7 @@ export const FORWARDED_EVENTS = [
   'diagnostics.new',
   'devices.changed',
   'iptv.status',
+  'remote.changed',
 ] as const satisfies readonly (DomainEventType & SseEventType)[];
 
 /** Cabeceras de la respuesta SSE (el hijack se salta onSend: se ponen aquí las de siempre). */
@@ -92,6 +104,8 @@ interface BufferedEvent {
   readonly frame: string;
   readonly webOnly: boolean;
   readonly deviceIds: ReadonlySet<string> | null;
+  /** `devices.changed`: el aparato del que habla (por el dominio solo lo recibe ese). */
+  readonly aboutDevice: string | null;
 }
 
 interface Connection {
@@ -99,6 +113,8 @@ interface Connection {
   readonly origin: Origin;
   readonly deviceId: string | null;
   readonly sink: SseSink;
+  /** Abierta por el dominio de fuera (tv.ismaeloul.es), con la clave de su IP. */
+  readonly remote: { readonly ipKey: string | null } | null;
   closed: boolean;
   detach: () => void;
   done: () => void;
@@ -135,6 +151,9 @@ export function createHub(deps: EventsDeps): EventsHubInternal {
 
   function matches(connection: Connection, event: BufferedEvent): boolean {
     if (event.webOnly && connection.origin !== 'web') return false;
+    if (connection.remote && event.aboutDevice !== null) {
+      return event.aboutDevice === connection.deviceId;
+    }
     if (event.deviceIds) {
       return connection.deviceId !== null && event.deviceIds.has(connection.deviceId);
     }
@@ -234,6 +253,7 @@ export function createHub(deps: EventsDeps): EventsHubInternal {
       frame: encodeSseEvent(id, valid),
       webOnly: WEB_ONLY_EVENT_TYPES.has(valid.type),
       deviceIds: target?.deviceIds ? new Set(target.deviceIds) : null,
+      aboutDevice: valid.type === 'devices.changed' ? valid.data.deviceId : null,
     };
     buffer.push(entry);
     if (buffer.length > SSE_BUFFER_EVENTS) buffer.shift();
@@ -246,6 +266,24 @@ export function createHub(deps: EventsDeps): EventsHubInternal {
     for (const connection of [...connections]) {
       if (connection.deviceId === deviceId) close(connection, 'revoked');
     }
+  }
+
+  function closeRemote(deviceId: string | null): void {
+    for (const connection of [...connections]) {
+      if (!connection.remote) continue;
+      if (deviceId === null || connection.deviceId === deviceId) close(connection, 'remote');
+    }
+  }
+
+  function remoteConnections(ipKey: string, deviceId?: string): number {
+    let others = 0;
+    let mine = 0;
+    for (const connection of connections) {
+      if (!connection.remote || connection.remote.ipKey !== ipKey) continue;
+      if (deviceId !== undefined && connection.deviceId === deviceId) mine += 1;
+      else others += 1;
+    }
+    return others + Math.min(mine, Math.max(0, REMOTE_LIMITS.sse.perDevice - 1));
   }
 
   /** Del bus al cable: quita `targetDeviceIds` (si viene) y lo usa como destino. */
@@ -296,10 +334,23 @@ export function createHub(deps: EventsDeps): EventsHubInternal {
         origin: options.origin,
         deviceId: options.deviceId,
         sink,
+        remote: options.remote ?? null,
         closed: false,
         detach: () => options.signal.removeEventListener('abort', onAbort),
         done: resolve,
       };
+      /* Por el dominio, cada aparato como mucho con REMOTE_LIMITS.sse.perDevice: sale la más vieja. */
+      if (connection.remote && connection.deviceId !== null) {
+        const mine = [...connections].filter(
+          (other) => other.remote && other.deviceId === connection.deviceId,
+        );
+        for (const old of mine.slice(
+          0,
+          Math.max(0, mine.length - REMOTE_LIMITS.sse.perDevice + 1),
+        )) {
+          close(old, 'remote');
+        }
+      }
       connections.add(connection);
       if (options.signal.aborted) {
         close(connection, 'client');
@@ -338,6 +389,8 @@ export function createHub(deps: EventsDeps): EventsHubInternal {
     publish,
     connections: () => connections.size,
     closeDevice,
+    closeRemote,
+    remoteConnections,
     closeAll,
     lastEventId: lastIssued,
     firstEventId: () => firstId,

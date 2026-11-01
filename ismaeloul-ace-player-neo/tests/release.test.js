@@ -194,7 +194,7 @@ test("la release solo lleva lo que toca: backend, config (nginx y el proxy de Ve
   const files = listFiles(releaseDir);
   assert.deepEqual(
     files.filter((file) => !file.startsWith("web/")),
-    ["Caddyfile", "RELEASE.json", "SHA256SUMS", "engine-control.js", "nginx.conf", "server.js"]
+    ["Caddyfile", "RELEASE.json", "SHA256SUMS", "caddy/tv-off.caddy", "caddy/tv-on.caddy", "engine-control.js", "nginx.conf", "server.js"]
   );
   assert.deepEqual(files.filter((file) => file.endsWith(".map") || file.endsWith(".complete")), []);
   const release = JSON.parse(fs.readFileSync(path.join(releaseDir, "RELEASE.json"), "utf8"));

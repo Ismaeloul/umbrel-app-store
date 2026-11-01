@@ -70,3 +70,26 @@ jobs:
           git diff --exit-code "${base}" HEAD -- releases/0.6.59
           git show "${base}:ismaeloul-ace-player-neo/docker-compose.yml" | cmp - tests/legacy-0.6.59/paquete/docker-compose.yml
           git show "${base}:ismaeloul-ace-player-neo/hooks/pre-start" | cmp - tests/legacy-0.6.59/paquete/hooks/pre-start
+
+  caddy:
+    # Que Caddy (la misma imagen que el Compose) carga el Caddyfile de la sala con el dominio de
+    # la app encendido y apagado. Un fallo en caddy/tv-on.caddy (p. ej. un escape de CEL mal
+    # escrito en @raro) no solo tumba tv: es el mismo proceso, así que se cae también la sala.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: caddy validate (NATIVE_SITE on y off)
+        run: |
+          image=$(grep -oE 'caddy:[0-9.]+-alpine@sha256:[0-9a-f]{64}' ace-player-neo/deploy/umbrel/docker-compose.yml | head -n 1)
+          test -n "${image}"
+          for site in on off; do
+            echo "NATIVE_SITE=${site} (${image})"
+            docker run --rm \
+              -e NATIVE_SITE="${site}" \
+              -e NATIVE_DOMAIN=tv.example.com \
+              -e PARTY_DOMAIN=sala.example.com \
+              -e ACE_WEB_ROOT=/r/web \
+              -v "${GITHUB_WORKSPACE}/ace-player-neo/deploy/umbrel:/r:ro" \
+              "${image}" caddy validate --config /r/Caddyfile --adapter caddyfile
+          done

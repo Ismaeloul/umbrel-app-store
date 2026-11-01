@@ -1,0 +1,49 @@
+{
+  "domain": { "configured": true, "url": "https://tv.example.org" },
+  "enabled": false,
+  "edge": { "listening": true, "peerResolved": true },
+  "devices": [
+    {
+      "deviceId": "dev_iphone01",
+      "enabled": true,
+      "enabledAt": "2026-09-23T18:30:00.000Z",
+      "expiresAt": "2026-10-23T18:30:00.000Z",
+      "expired": false,
+      "lastAccess": { "at": "2026-09-23T18:30:00.000Z", "ip": "198.51.100.23" }
+    }
+  ],
+  "blocks": [
+    {
+      "key": "203.0.113.9",
+      "label": "203.0.113.9",
+      "until": "2026-09-23T18:45:00.000Z",
+      "level": 1,
+      "firstAt": "2026-09-23T18:21:00.000Z",
+      "lastAt": "2026-09-23T18:30:00.000Z"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-09-23T18:30:00.000Z",
+      "kind": "blocked",
+      "deviceId": null,
+      "ip": "203.0.113.9",
+      "route": null
+    },
+    {
+      "at": "2026-09-23T18:30:00.000Z",
+      "kind": "ok-new-ip",
+      "deviceId": "dev_iphone01",
+      "ip": "198.51.100.23",
+      "route": "bootstrap"
+    },
+    {
+      "at": "2026-09-23T18:30:00.000Z",
+      "kind": "denied-device",
+      "deviceId": "dev_ipad0001",
+      "ip": "2001:db8::7",
+      "route": "ping"
+    }
+  ],
+  "last24h": { "ok": 412, "denied": 9, "blocked": 3, "ipUntrusted": 0 }
+}

@@ -163,6 +163,26 @@ export interface AppConfig {
      */
     readonly lite: boolean;
   };
+  /**
+   * El dominio de la app de iPhone fuera de casa (`https://tv.ismaeloul.es`, docs/acceso-remoto.md,
+   * «Por el dominio»). Caddy (servicio `sala`) llama a un SEGUNDO puerto del backend que nginx no
+   * conoce; lo que entra por él es «del dominio».
+   */
+  readonly edge: {
+    /** `ACE_EDGE_PORT` (3002 en el Compose); null = no se abre (desarrollo, tests). */
+    readonly port: number | null;
+    /**
+     * `ACE_EDGE_PEER`: el nombre del contenedor de Caddy. Solo se acepta una conexión al puerto del
+     * dominio si viene de su IP. Sin él, ese puerto lo rechaza todo (403).
+     */
+    readonly peer: string | null;
+  };
+  readonly native: {
+    /** `NATIVE_PUBLIC_URL`: la tercera dirección del QR de emparejar (`https://tv.ismaeloul.es`) o null. */
+    readonly publicUrl: string | null;
+    /** `ACE_NATIVE_LITE=1`: calidad ligera por el dominio (Fase 2; aún sin efecto). */
+    readonly lite: boolean;
+  };
   readonly video: {
     /**
      * La gráfica del NAS para lo que el remux recodifica (docs/ver-juntos.md §17.6): `ACE_HWACCEL`
@@ -301,6 +321,44 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
     warnings.push(`ACE_PARTY_LITE=${JSON.stringify(rawPartyLite)} no vale ("0" o "1"); se usa "0"`);
   }
 
+  // --- El dominio de la app de iPhone (tv.ismaeloul.es) ---
+  let edgePort: number | null = null;
+  const rawEdgePort = String(env.ACE_EDGE_PORT || '').trim();
+  if (rawEdgePort) {
+    const value = Number(rawEdgePort);
+    if (/^\d{1,5}$/.test(rawEdgePort) && value >= 1 && value <= 65_535) edgePort = value;
+    else
+      warnings.push(
+        `ACE_EDGE_PORT=${JSON.stringify(rawEdgePort)} no vale (1..65535); el dominio queda cerrado`,
+      );
+  }
+  const edgePeer = sanitizeHost(env.ACE_EDGE_PEER, '') || null;
+  if (edgePort !== null && edgePeer === null) {
+    warnings.push('ACE_EDGE_PORT sin ACE_EDGE_PEER: el puerto del dominio lo rechazará todo');
+  }
+  let nativePublicUrl: string | null = null;
+  const rawNativeUrl = String(env.NATIVE_PUBLIC_URL || '').trim();
+  if (rawNativeUrl) {
+    try {
+      const url = new URL(rawNativeUrl);
+      if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+        throw new Error('forma');
+      }
+      if (url.pathname !== '/' && url.pathname !== '') throw new Error('ruta');
+      nativePublicUrl = url.origin;
+    } catch {
+      warnings.push(
+        `NATIVE_PUBLIC_URL=${JSON.stringify(rawNativeUrl)} no vale (https://host); el QR no la llevará`,
+      );
+    }
+  }
+  const rawNativeLite = String(env.ACE_NATIVE_LITE || '').trim();
+  if (rawNativeLite && rawNativeLite !== '0' && rawNativeLite !== '1') {
+    warnings.push(
+      `ACE_NATIVE_LITE=${JSON.stringify(rawNativeLite)} no vale ("0" o "1"); se usa "0"`,
+    );
+  }
+
   // --- La gráfica (§17.6) ---
   const rawHwaccel = String(env.ACE_HWACCEL || '')
     .trim()
@@ -436,6 +494,8 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
     },
     playback: { sameChannelPolicy, relayLoopback },
     party: { publicUrl: partyPublicUrl, lite: partyLite },
+    edge: { port: edgePort, peer: edgePeer },
+    native: { publicUrl: nativePublicUrl, lite: rawNativeLite === '1' },
     video: { hwaccel, vaapiDevice },
     security: { seedSource, keys },
   };

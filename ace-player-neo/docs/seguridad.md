@@ -450,3 +450,65 @@ también los tests nuevos del otro verificador), ninguno saltado; `tsc
 - Pruebas: `apps/server/src/core/log-store.test.ts` (casos difíciles, redactor de antes, redactor que falla) y
   `apps/server/src/modules/diagnostics/logs.test.ts` (el zip entero no contiene ninguno de los secretos
   sembrados).
+
+## 11. El dominio de la app de iPhone, `https://tv.ismaeloul.es`
+
+Desde aquí la app de iPhone se puede usar fuera de casa sin VPN, por un dominio
+propio que apunta a la IP de casa. El diseño, cómo se pone en marcha y la lista
+completa de lo que protege y lo que no: [`acceso-remoto.md`](acceso-remoto.md),
+«Por el dominio». Resumen del modelo de amenazas:
+
+- **Quién puede llegar:** cualquiera de internet hasta Caddy (servicio `sala`,
+  8443). Caddy solo deja pasar la lista blanca de `/native/api/v1` de la app
+  (`remote` de la tabla de rutas) con un `Authorization` con forma de token, o
+  el vídeo firmado; todo lo demás, 404. Al backend llega por un puerto propio
+  (3002) que nginx no conoce, y el backend exige que la conexión venga de la IP
+  del contenedor de Caddy. Lo que entra por ahí es siempre `native` y pasa por
+  `core/remote-gate.ts`: interruptor general, ruta permitida, token (también en
+  `ping`), permiso de fuera del aparato (apagado por defecto, con caducidad),
+  bloqueo por IP (8 fallos en 10 min → 15 min, ×4 hasta 24 h; la llave buena
+  pasa y lo de un aparato emparejado no cuenta como fallo) y límites por IP
+  (solo para quien no tiene permiso) y por aparato. Mientras no hay una
+  credencial buena, todo error sale como 404 vacío y sin cabeceras propias: un
+  `Bearer` inventado con forma buena no sabe qué app hay detrás ni si el
+  dominio está abierto. Quitar el permiso, que caduque o cerrar el dominio
+  corta al momento el SSE y las respuestas largas (descargas) de ese aparato.
+  Por el dominio, `devices.changed` solo llega si es del propio aparato.
+- **Qué NO se puede hacer desde fuera:** emparejar (403 `pairing_local_only`, visto
+  como 404 vacío),
+  crear códigos, listar aparatos, revocar otros, cambiar ajustes o directorios,
+  nada de sala ni de lo que es solo web (403 `remote_forbidden_route`). El
+  permiso de fuera solo se cambia desde la web (`access: 'web'`): un iPhone no
+  se lo puede dar a sí mismo. Esto cierra, POR EL DOMINIO, lo peor de R-9 y R-14.
+- **IPs:** solo en `v2/remote-*.json` (0600, fuera de la copia de seguridad) y en
+  la web. Ni en el registro del servidor ni en el de Caddy; el SSE
+  `remote.changed` va sin datos y solo a la web (R-2 no se agranda).
+- **El registro no se deja vaciar ni reescribir sin tope:** bloqueos de un
+  minuto agrupados, rechazos juntados por /64, la mitad del anillo reservada
+  para accesos y cambios, `remote-blocks.json` cada 5 s como mucho y
+  `remote.changed` como mucho uno por segundo.
+- **Lo que no se ha podido probar aquí:** el Caddy de verdad (certificado,
+  `strict_sni_host`) y si la IP real llega a Caddy (Docker `userland-proxy`, NAT
+  de retorno de la Freebox). `caddy validate` lo corre la CI (job `caddy`), no
+  este PC. Hay que medir lo demás en el NAS antes de dar permiso a nadie.
+
+Riesgos nuevos o que cambian:
+
+| Id | Riesgo | Por qué se acepta | Qué lo arreglaría |
+|---|---|---|---|
+| R-15 | El nombre `tv.ismaeloul.es` y la IP de casa quedan públicos y ligados (transparencia de certificados); el SNI y el DNS dicen con quién habla el iPhone. | Es el precio de un dominio propio sin VPN; los escáneres solo ven 404. | Certificado comodín con el reto DNS de DonDominio (otra imagen de Caddy). |
+| R-16 | Un token robado de un aparato CON permiso entra desde cualquier sitio hasta que caduque o se revoque. | Caducidad, aviso de IP nueva y revocar al momento. | App Attest / DeviceCheck (atar el token al iPhone). |
+| R-17 | Una red de bots con muchas IPs puede saturar Caddy y la subida antes de llegar a los límites del backend (Caddy no trae `rate_limit`). «Cerrar el dominio ya» no para el TLS. | Los límites por IP y por aparato acotan lo que llega al backend; lo que corta del todo es quitar la redirección de la Freebox (documentado). | Una imagen de Caddy con `rate_limit` (habría que construirla: hoy no se puede, sin `build:`). |
+| R-18 | Si Caddy no ve la IP real (userland-proxy, NAT de retorno), no se bloquea por IP. | Se detecta (`ipUntrusted`, aviso en la web) y quedan los límites por aparato; peor sería bloquear a todo el mundo. | Medirlo en el NAS; desde casa, la app prefiere la LAN o Tailscale. |
+| R-19 | Lo que el iPhone ve por SSE y en `playback` (R-2) ahora también sale de casa. | Solo para aparatos con permiso; revocar lo corta. | Lo de R-2. |
+| R-1 | Sigue igual: el 3002 no lo arregla ni lo empeora (un contenedor que se haga pasar por Caddy solo consigue el trato más estricto). | — | Lo de R-1. |
+| R-3 | Sigue, un poco mejor: por el dominio una URL de vídeo firmada con un `APP_SEED` filtrado solo vale para aparatos con permiso de fuera. | — | Lo de R-3. |
+
+Pruebas: `apps/server/src/core/edge.test.ts` (el puerto decide, no las
+cabeceras; par TCP y DNS de Caddy; IPs y /64), `apps/server/src/modules/remote/`
+(`remote-routes`: la tabla entera; `remote-access`: permiso, caducidad, SSE,
+revocar, vuelta atrás; `remote-lockout`: bloqueos y límites; `remote-video`:
+URLs firmadas y el registro sin secretos ni IPs), `packages/shared/test/remote.test.ts`
+(la tabla, las expresiones RE2 y el tamaño de los cuerpos) y
+`deploy/test/caddy-native.test.ts` (el sitio de Caddy frente a la tabla).
+

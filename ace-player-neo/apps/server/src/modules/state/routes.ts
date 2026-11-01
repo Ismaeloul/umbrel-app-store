@@ -268,5 +268,16 @@ export function bootstrap(services: Services, ctx: RequestContext): BootstrapRes
         ? { vod: true }
         : {}),
     },
+    /* El dominio de fuera (tv.ismaeloul.es): solo a la app y solo si hay dominio (o se entra por él). */
+    ...(ctx.device && (ctx.remote || config.native.publicUrl !== null)
+      ? {
+          remote: safely(
+            services,
+            'dominio',
+            () => services.remote.bootstrapInfo(ctx.device?.deviceId ?? '', ctx.remote !== null),
+            () => ({ viaDomain: ctx.remote !== null, allowed: false, expiresAt: null }),
+          ),
+        }
+      : {}),
   };
 }

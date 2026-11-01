@@ -152,3 +152,56 @@ export function isUploadedSourceUrl(url: string): boolean {
 }
 /** Texto de una lista subida (cabe en el tope del cuerpo JSON con margen). */
 export const MAX_UPLOADED_LIST_CHARS = 1_900_000;
+
+/**
+ * El dominio de fuera, `https://tv.ismaeloul.es` (docs/acceso-remoto.md, «Por el dominio»). Todo en
+ * el backend: la imagen estándar de Caddy no trae `rate_limit`. Los cubos son de fichas: `burst` de
+ * golpe y `perSecond` de recarga. Un 429 por estos límites NO cuenta como fallo para el bloqueo.
+ */
+export const REMOTE_LIMITS = {
+  /** Lo que no es vídeo. */
+  api: {
+    perIp: { burst: 120, perSecond: 10 },
+    perDevice: { burst: 240, perSecond: 20 },
+  },
+  /** `video` (cada segmento) y `vodDownload` (cada tramo de la descarga). */
+  video: {
+    perIp: { burst: 200, perSecond: 30 },
+    perDevice: { burst: 120, perSecond: 15 },
+  },
+  /**
+   * SSE abiertos a la vez por el dominio: por aparato se cierra el más viejo; por IP se rechaza el
+   * nuevo. Por IP es el doble del de un aparato: dos aparatos tras la misma IP (CGNAT, el mismo
+   * punto de acceso) pueden reconectar aunque el otro tenga sus cuatro colgadas.
+   */
+  sse: { perIp: 8, perDevice: 4 },
+  /** Sesiones nuevas (`channelStream` + `vodStream`) por IP y minuto. */
+  sessionsPerIpPerMinute: 20,
+  /** Bloqueo por fuerza bruta: 8 respuestas 401/403/404 en 10 min → 15 min; ×4 cada reincidencia hasta 24 h. */
+  lockout: {
+    windowMs: 10 * 60 * 1000,
+    threshold: 8,
+    baseMs: 15 * 60 * 1000,
+    factor: 4,
+    maxMs: 24 * 60 * 60 * 1000,
+    /** El nivel (las reincidencias) se olvida tras 7 días sin fallos. */
+    forgetMs: 7 * 24 * 60 * 60 * 1000,
+    /** IPs que se recuerdan a la vez; con la tabla llena sale la más antigua. */
+    maxKeys: 10_000,
+  },
+  /** Registro de sucesos (`v2/remote-events.json`): un anillo de 500 y 30 días. La web ve 100. */
+  events: { max: 500, maxAgeMs: 30 * 24 * 60 * 60 * 1000, view: 100 },
+  /** IPs conocidas por aparato (una nueva da el suceso `ok-new-ip`). */
+  knownIpsPerDevice: 10,
+  /** `lastAccess` se guarda como mucho una vez por minuto (como `lastSeenAt`). */
+  lastAccessThrottleMs: 60_000,
+  /**
+   * Cuerpo máximo por el dominio (el `request_body` de Caddy y el backend en el 3002). 512 KiB y no
+   * 64: el peor caso de `preferencesUpdate` (3 listas de 100 nombres de 200 caracteres, todo
+   * escapado) pasa de 350 KB, y packages/shared/test/remote.test.ts exige que quepa cualquier cuerpo
+   * que admita una ruta permitida. Desde casa el tope sigue siendo 2 MiB.
+   */
+  maxBodyBytes: 512 * 1024,
+  /** Cada cuánto se vuelve a resolver la IP del contenedor de Caddy (`ACE_EDGE_PEER`). */
+  peerRefreshMs: 60_000,
+} as const;

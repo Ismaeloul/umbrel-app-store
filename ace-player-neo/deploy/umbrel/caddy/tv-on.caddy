@@ -1,0 +1,140 @@
+# El dominio de fuera de la app de iPhone, https://tv.ismaeloul.es (docs/acceso-remoto.md, «Por el
+# dominio»). El Caddyfile lo importa con NATIVE_SITE: "on" en el Compose; si no, importa
+# tv-off.caddy y este sitio no existe.
+#
+# Solo deja pasar la lista blanca de /native/api/v1 que usa la app (sacada de la tabla de rutas:
+# `remote` de packages/shared/src/routes.ts) con un Authorization con forma de token de
+# dispositivo, y las URL de video firmadas (?t=). Todo lo demas da 404, sin huella de la app: ni la
+# web de casa, ni /api/*, ni /remux/, ni el motor, ni el panel de Umbrel, ni las salas (esas van
+# por sala.ismaeloul.es). Al backend le llega por OTRO puerto (3002, que nginx no conoce) y el
+# backend lo trata como el origen mas estricto: token, permiso de fuera de ese aparato, bloqueo por
+# IP y limites (apps/server/src/core/remote-gate.ts). Son dos cerraduras, no una.
+#
+# Certificado propio de Let's Encrypt por TLS-ALPN en el mismo 8443 (como la sala), en /data.
+
+(tv_backend) {
+	reverse_proxy ismaeloul-ace-player-neo_storage_1:3002 {
+		# La IP de quien llama, la del par TCP (nunca un X-Forwarded-For del cliente): sin
+		# trusted_proxies, remote.host es la conexion que le llega a Caddy.
+		header_up X-Ace-Client-Ip {http.request.remote.host}
+		# Solo para el registro: el backend decide por el puerto (3002), no por esta cabecera.
+		header_up X-Ace-Via domain
+		header_up X-Request-Id {http.request.uuid}
+		# SSE y segmentos de video: salen conforme el servidor los escribe.
+		flush_interval -1
+		transport http {
+			dial_timeout 5s
+			# channelStream y vodStream tardan hasta unos 45 s en dar la URL.
+			response_header_timeout 60s
+		}
+	}
+}
+
+{$NATIVE_DOMAIN:tv.invalid}:8443 {
+	tls {
+		protocols tls1.3
+		issuer acme {
+			disable_http_challenge
+			alt_tlsalpn_port 8443
+		}
+	}
+
+	# Aqui no se sirve HTML: CSP que no deja cargar nada.
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Robots-Tag "noindex, nofollow"
+		X-Frame-Options DENY
+		Cross-Origin-Resource-Policy same-origin
+		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+	}
+
+	# Cualquier cuerpo que admita una ruta permitida cabe (lo comprueba
+	# packages/shared/test/remote.test.ts con REMOTE_LIMITS.maxBodyBytes); el backend aplica el
+	# mismo tope en el 3002. Desde casa son 2 MiB.
+	request_body {
+		max_size 512KiB
+	}
+
+	# Lo mismo que corta nginx y la sala: %2f, %2e, %5c, ".." o "\" en la ruta cruda, y "//".
+	@raro expression `{http.request.orig_uri.path}.matches("(?i)%(2f|2e|5c)|\\.\\.|\\x5c|^//")`
+
+	# --- GENERADO por `pnpm --filter @ace/shared caddy-tv` desde la tabla de rutas: no tocar a mano ---
+	@get {
+		method GET
+		path_regexp `^/native/api/v1/(?:ping|bootstrap|health|events|engine/status|channels/(?:[a-f0-9]{40})/stream|playback|settings|iptv|iptv/channels|iptv/browse|iptv/guide|iptv/guide/programmes|iptv/guide/programmes/(?:[1-9]\d{0,6}\.\d{1,9})|iptv/guide/now|iptv/guide/art/(?:(?:c[1-9]\d{0,6}|p[1-9]\d{0,6}\.\d{1,9}))|vod|vod/browse|vod/titles/(?:[a-f0-9]{40})|vod/titles/(?:[a-f0-9]{40})/art/(?:poster|backdrop|still)|vod/titles/(?:[a-f0-9]{40})/stream|vod/titles/(?:[a-f0-9]{40})/download|vod/languages|vod/list|library|preferences|directories|football|football/resolve|football/scans/(?:[a-f0-9]{24})|football/preheat/[^/]{1,100}|scores|football/teams/(?:[A-Za-z0-9_-]{1,64})/crest|football/competitions/(?:[A-Za-z0-9_-]{1,64})/logo|search)$`
+		header_regexp Authorization `^Bearer [A-Za-z0-9_-]{4,64}\.[A-Za-z0-9_-]{43}$`
+	}
+	@post {
+		method POST
+		path_regexp `^/native/api/v1/(?:engine/restart|sessions/(?:s_[A-Za-z0-9_-]{8,64})/heartbeat|sessions/(?:s_[A-Za-z0-9_-]{8,64})/release|vod/titles/(?:[a-f0-9]{40})/progress|diagnostics|library|football/bindings|sources/report|sources/outcome|sources/feedback)$`
+		header_regexp Authorization `^Bearer [A-Za-z0-9_-]{4,64}\.[A-Za-z0-9_-]{43}$`
+	}
+	@put {
+		method PUT
+		path_regexp `^/native/api/v1/(?:vod/languages|vod/list/(?:[a-f0-9]{40})|preferences)$`
+		header_regexp Authorization `^Bearer [A-Za-z0-9_-]{4,64}\.[A-Za-z0-9_-]{43}$`
+	}
+	@delete {
+		method DELETE
+		path_regexp `^/native/api/v1/(?:vod/list/(?:[a-f0-9]{40})|devices/(?:[A-Za-z0-9_-]{4,64}))$`
+		header_regexp Authorization `^Bearer [A-Za-z0-9_-]{4,64}\.[A-Za-z0-9_-]{43}$`
+	}
+	# El video firmado: AVPlayer no pone cabeceras; la credencial va en ?t= (y el backend mira
+	# en cada segmento que ese aparato siga teniendo permiso de fuera).
+	@video {
+		method GET
+		path_regexp `^/native/api/v1/(?:video/(?:s_[A-Za-z0-9_-]{8,64})/(?:(?:index\.m3u8|init(?:_\d{1,6})?\.mp4|index\d{1,9}\.m4s)))$`
+		query t=*
+	}
+	# --- FIN GENERADO ---
+
+	route {
+		respond @raro 400
+
+		# Nada de lo que mande el cliente con estos nombres llega al backend.
+		request_header -X-Ace-Origin
+		request_header -X-Ace-Via
+		request_header -X-Ace-Client-Ip
+		request_header -X-Forwarded-For
+		request_header -X-Forwarded-Host
+		request_header -X-Forwarded-Proto
+		request_header -Forwarded
+		request_header -X-Real-IP
+
+		handle @get {
+			import tv_backend
+		}
+		handle @post {
+			import tv_backend
+		}
+		handle @put {
+			import tv_backend
+		}
+		handle @delete {
+			import tv_backend
+		}
+		handle @video {
+			import tv_backend
+		}
+
+		# Un escaner solo ve un certificado y un 404 sin cuerpo.
+		respond 404
+	}
+
+	log {
+		output stdout
+		format filter {
+			# Ni el token (Authorization), ni la URL firmada (?t=), ni la IP: la IP queda solo en el
+			# registro de accesos del backend (v2/remote-events.json), que ve la web.
+			request>uri query {
+				replace t REDACTADO
+			}
+			request>remote_ip delete
+			request>client_ip delete
+			request>headers delete
+		}
+	}
+}

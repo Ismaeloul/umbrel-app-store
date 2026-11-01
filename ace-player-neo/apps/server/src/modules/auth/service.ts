@@ -273,6 +273,12 @@ export function createAuth(deps: AuthDeps, options: AuthOptions = {}): AuthServi
         }
         if (!urls.some((known) => known.toLowerCase() === url.toLowerCase())) urls.push(url);
       }
+      /* La dirección del dominio de fuera (NATIVE_PUBLIC_URL, https://tv.ismaeloul.es), la
+         última: se empareja igual desde casa y la app se la guarda para cuando salga. */
+      const publicUrl = config.native.publicUrl;
+      if (publicUrl && !urls.some((known) => known.toLowerCase() === publicUrl.toLowerCase())) {
+        urls.push(publicUrl);
+      }
       const now = clock.now();
       if (createdBy !== null) checkCreateRateLimit(createdBy, now);
       const code = String(random.randomInt(10 ** PAIRING_CODE_DIGITS)).padStart(
