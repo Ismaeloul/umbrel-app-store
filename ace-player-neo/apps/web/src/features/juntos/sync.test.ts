@@ -5,11 +5,25 @@ import {
   bestOffset,
   clock,
   correction,
+  DRIFT_MAX_RATE,
+  DRIFT_RATE_NATIVE_FAR,
+  driftRate,
   forwardBufferEnd,
+  freshSamples,
   isRunning,
+  coldSeekLead,
+  leadTarget,
   lobbyReport,
+  OFFSET_MAX_AGE_MS,
+  offsetJumps,
   offsetSample,
+  PAUSED_SNAP_S,
   pausedSeek,
+  SEEK_LEAD_DEFAULT_MS,
+  SEEK_LEAD_MAX_MS,
+  seekLead,
+  seekPlan,
+  slewOffset,
   StallDetector,
   WAITED_STAY_S,
   targetPosition,
@@ -38,18 +52,27 @@ describe('«Ver juntos»: sincronización (docs/ver-juntos.md §6)', () => {
     expect(isRunning(playback({ waitingFor: ['m_AnaInvitada01'] }))).toBe(false);
   });
 
-  it('corrige: salta lejos, acelera o frena un 5 % cerca, y en pausa coloca el vídeo', () => {
+  it('corrige: salta lejos, cerca la velocidad proporcional a la deriva, y en pausa coloca el vídeo', () => {
     expect(correction(100, 103, true)).toEqual({ kind: 'seek', to: 103 });
-    expect(correction(100, 100.5, true)).toEqual({ kind: 'rate', rate: 1 + PARTY.driftRate });
-    expect(correction(100.5, 100, true)).toEqual({ kind: 'rate', rate: 1 - PARTY.driftRate });
-    expect(correction(100, 100.1, true)).toEqual({ kind: 'rate', rate: 1 });
+    /* 0,5 s en 4 s: un 12,5 %, con el tope de hls.js (10 %); 0,2 s: un 5 %. */
+    expect(correction(100, 100.5, true)).toEqual({ kind: 'rate', rate: 1.1 });
+    expect(correction(100.5, 100, true)).toEqual({ kind: 'rate', rate: 0.9 });
+    expect(correction(100, 100.2, true)).toEqual({ kind: 'rate', rate: 1.05 });
+    /* Antes, por debajo de 0,25 s no se corregía nada: ahora desde 0,06 s, al menos un 1 %. */
+    expect(correction(100, 100.12, true)).toEqual({ kind: 'rate', rate: 1.03 });
+    expect(correction(100, 100.07, true)).toEqual({ kind: 'rate', rate: 1.02 });
+    expect(correction(100, 100.05, true)).toEqual({ kind: 'rate', rate: 1 });
     expect(correction(100, 100.5, false)).toEqual({ kind: 'seek', to: 100.5 });
-    expect(correction(100, 100.2, false)).toEqual({ kind: 'none' });
+    /* En pausa: hls.js cae justo donde se le pide (0,05 s); Safari, a unas décimas (0,3 s). */
+    expect(correction(100, 100.2, false)).toEqual({ kind: 'seek', to: 100.2 });
+    expect(correction(100, 100.2, false, { engine: 'native' })).toEqual({ kind: 'none' });
+    expect(correction(100, 100.04, false)).toEqual({ kind: 'none' });
+    expect(PAUSED_SNAP_S).toEqual({ mse: 0.05, native: 0.3 });
   });
 
   it('el desfase de reloj sale de la ida y vuelta, y gana la muestra más rápida', () => {
     /* Enviado a las 1000, recibido a las 1100: el servidor dijo 5050 a mitad de camino. */
-    expect(offsetSample(1_000, 1_100, 5_050)).toEqual({ offsetMs: 4_000, rttMs: 100 });
+    expect(offsetSample(1_000, 1_100, 5_050)).toEqual({ offsetMs: 4_000, rttMs: 100, at: 1_100 });
     let samples = addSample([], { offsetMs: 4_200, rttMs: 400 });
     samples = addSample(samples, { offsetMs: 4_000, rttMs: 40 });
     samples = addSample(samples, { offsetMs: 4_100, rttMs: 120 });
@@ -289,17 +312,135 @@ describe('pausedSeek: el salto en pausa, una vez por orden (§16)', () => {
 });
 
 describe('correction: el umbral del salto mientras se absorbe lo que quedó al colocarse', () => {
-  it('con `seekS`, hasta ahí corrige con la velocidad; más allá, salta', () => {
+  it('con `seekS` (Safari), hasta ahí corrige con la velocidad; más allá, salta', () => {
+    const native = { engine: 'native' as const, seekS: WAITED_STAY_S };
     expect(correction(146, 147.5, true)).toEqual({ kind: 'seek', to: 147.5 });
-    expect(correction(146, 147.5, true, WAITED_STAY_S)).toEqual({
+    /* 1,5 s en Safari: por encima de 0,5 s el tope sube al 8 %. */
+    expect(correction(146, 147.5, true, native)).toEqual({
       kind: 'rate',
-      rate: 1 + PARTY.driftRate,
+      rate: 1 + DRIFT_RATE_NATIVE_FAR,
     });
-    expect(correction(149, 147.5, true, WAITED_STAY_S)).toEqual({
+    expect(correction(149, 147.5, true, native)).toEqual({
       kind: 'rate',
-      rate: 1 - PARTY.driftRate,
+      rate: 1 - DRIFT_RATE_NATIVE_FAR,
     });
-    expect(correction(145, 147.5, true, WAITED_STAY_S)).toEqual({ kind: 'seek', to: 147.5 });
+    expect(correction(145, 147.5, true, native)).toEqual({ kind: 'seek', to: 147.5 });
+  });
+});
+
+describe('correction: control proporcional (§6)', () => {
+  it('la velocidad es 1 + deriva / 4 s, en pasos de 0,01, con el tope de cada motor', () => {
+    expect(driftRate(0.4, 'mse')).toBe(1.1);
+    expect(driftRate(0.4, 'native')).toBe(1.06);
+    expect(driftRate(0.9, 'native')).toBe(1.08);
+    expect(driftRate(-0.9, 'mse')).toBe(0.9);
+    expect(driftRate(0.16, 'mse')).toBe(1.04);
+    expect(driftRate(0.12, 'native')).toBe(1.03);
+    expect(DRIFT_MAX_RATE).toEqual({ mse: 0.1, native: 0.06 });
+    /* Los números de `PARTY` siguen igual: la app iOS los copia. */
+    expect(PARTY.driftRate).toBe(0.05);
+    expect(PARTY.driftRateS).toBe(0.25);
+  });
+
+  it('histéresis: empieza con más de 0,06 s y para con menos de 0,02 s; entre medias, sigue como iba', () => {
+    expect(correction(100, 100.04, true, { correcting: false })).toEqual({ kind: 'rate', rate: 1 });
+    expect(correction(100, 100.04, true, { correcting: true })).toEqual({
+      kind: 'rate',
+      rate: 1.01,
+    });
+    expect(correction(100, 100.015, true, { correcting: true })).toEqual({ kind: 'rate', rate: 1 });
+    /* Un vídeo que se acerca a la sala no oscila: corrige hasta bajar de 0,02 s y ahí para. */
+    let local = 100;
+    let correcting = false;
+    const rates: number[] = [];
+    for (let i = 0; i < 80; i += 1) {
+      const fix = correction(local, 100.3, true, { correcting });
+      const rate = fix.kind === 'rate' ? fix.rate : 1;
+      correcting = rate !== 1;
+      rates.push(rate);
+      local += 0.5 * (rate - 1);
+    }
+    expect(Math.abs(100.3 - local)).toBeLessThanOrEqual(0.02);
+    /* Siempre hacia el mismo lado y, al acabar, quieta: nunca por debajo de 1. */
+    expect(rates.every((rate) => rate >= 1)).toBe(true);
+    expect(rates.slice(-10)).toEqual(Array.from({ length: 10 }, () => 1));
+    const changes = rates.filter((rate, i) => i > 0 && rate !== rates[i - 1]).length;
+    expect(changes).toBeLessThanOrEqual(12);
+  });
+});
+
+describe('seekLead: lo que tarda un salto en este aparato (§6)', () => {
+  it('sin medidas, lo de partida de cada motor', () => {
+    expect(seekLead([], 'mse')).toBe(SEEK_LEAD_DEFAULT_MS.mse);
+    expect(seekLead([], 'native')).toBe(SEEK_LEAD_DEFAULT_MS.native);
+    expect(SEEK_LEAD_DEFAULT_MS).toEqual({ mse: 150, native: 800 });
+  });
+
+  it('media móvil con α 0,3, y tope de 3 s', () => {
+    expect(seekLead([450], 'mse')).toBeCloseTo(150 + 0.3 * 300, 6);
+    expect(seekLead([450, 450], 'mse')).toBeCloseTo(240 + 0.3 * 210, 6);
+    /* Una medida enorme cuenta como 3 s, y la media nunca pasa del tope. */
+    expect(seekLead([60_000], 'native')).toBeCloseTo(800 + 0.3 * 2_200, 6);
+    expect(
+      seekLead(
+        Array.from({ length: 50 }, () => 9_000),
+        'native',
+      ),
+    ).toBeLessThanOrEqual(SEEK_LEAD_MAX_MS);
+    /* Lo que no es un número se ignora. */
+    expect(seekLead([Number.NaN], 'mse')).toBe(150);
+  });
+
+  it('el salto va a la sala más eso si está cargado; si no, como mucho 0,3 s', () => {
+    expect(leadTarget(100, 800, [[90, 110]], null)).toBeCloseTo(100.8, 6);
+    expect(leadTarget(100, 800, [[90, 100.5]], null)).toBeCloseTo(100.3, 6);
+    expect(leadTarget(100, 150, [], null)).toBeCloseTo(100.15, 6);
+    expect(leadTarget(100, 800, [[90, 110]], 100.5)).toBe(100.5);
+  });
+
+  it('sin datos, con lo medido en saltos sin datos si lo hay; y dice si el salto tenía datos', () => {
+    expect(coldSeekLead([])).toBeNull();
+    expect(coldSeekLead([Number.NaN])).toBeNull();
+    expect(coldSeekLead([1_500])).toBe(1_500);
+    expect(coldSeekLead([1_500, 2_500])).toBeCloseTo(1_500 + 0.3 * 1_000, 6);
+    expect(coldSeekLead([60_000])).toBe(SEEK_LEAD_MAX_MS);
+    expect(seekPlan(100, 150, [[90, 110]], null, 1_500)).toEqual({ to: 100.15, loaded: true });
+    const cold = seekPlan(100, 150, [[90, 100.1]], null, 1_500);
+    expect(cold.loaded).toBe(false);
+    expect(cold.to).toBeCloseTo(101.5, 6);
+    expect(seekPlan(100, 800, [], null, null).to).toBeCloseTo(100.3, 6);
+    expect(leadTarget(100, 150, [], 100.5, 1_500)).toBe(100.5);
+  });
+});
+
+describe('el reloj: cuatro marcas, caducidad y acercamiento (§6)', () => {
+  it('con la hora de llegada al servidor, lo que tarda en responder no tuerce el desfase', () => {
+    /* Sale a las 1000 (local); llega al servidor a las 5050 (servidor); responde a las 5850 tras
+       esperar 800 ms al latido; vuelve a las 1900. Ida y vuelta de red: 100 ms. */
+    expect(offsetSample(1_000, 1_900, 5_850, 5_050)).toEqual({
+      offsetMs: 4_000,
+      rttMs: 100,
+      at: 1_900,
+    });
+    /* Sin ella, la mitad de la ida y vuelta: 400 ms de error. */
+    expect(offsetSample(1_000, 1_900, 5_850).offsetMs).toBe(4_400);
+  });
+
+  it('las muestras caducan al minuto', () => {
+    const old = { offsetMs: 10, rttMs: 5, at: 0 };
+    const fresh = { offsetMs: 20, rttMs: 50, at: 50_000 };
+    expect(freshSamples([old, fresh], OFFSET_MAX_AGE_MS + 1)).toEqual([fresh]);
+    expect(addSample([old], fresh, OFFSET_MAX_AGE_MS + 1)).toEqual([fresh]);
+    expect(bestOffset(freshSamples([old, fresh], 30_000))).toBe(10);
+  });
+
+  it('un cambio pequeño se acerca 10 ms por tic; uno grande, de golpe', () => {
+    expect(slewOffset(0, 100, 500)).toBe(10);
+    expect(slewOffset(0, 100, 2_500)).toBe(50);
+    expect(slewOffset(0, 100, 60_000)).toBe(100);
+    expect(slewOffset(0, -40, 1_000)).toBe(-20);
+    expect(offsetJumps(0, 299)).toBe(false);
+    expect(offsetJumps(0, 300)).toBe(true);
   });
 });
 

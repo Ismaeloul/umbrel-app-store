@@ -73,13 +73,23 @@ function setup(env: Record<string, string> = {}, grant: VodGrant = GRANT) {
   const calls: Call[] = [];
   const beats: { sid: string; viewer: string; playing: boolean | undefined }[] = [];
   const released: { sid: string; viewer: string }[] = [];
-  /* `vodGate`: si la hay, `acquireVod` espera a que se abra (un título que tarda en abrir). */
-  const control: { beatFails: boolean; vodGate: Promise<void> | null } = {
+  /* `vodGate`: si la hay, `acquireVod` espera a que se abra (un título que tarda en abrir).
+     `beatMs`: lo que tarda el latido de la sesión (el reloj avanza mientras). */
+  const control: { beatFails: boolean; vodGate: Promise<void> | null; beatMs: number } = {
     beatFails: false,
     vodGate: null,
+    beatMs: 0,
   };
+  /* Los carteles (`partyArt`): qué se pidió. */
+  const arts: { id: string; art: string; v: string | undefined }[] = [];
   const party = createPartyService({
     ...core,
+    art: {
+      artOf: async (id, art, v) => {
+        arts.push({ id, art, v });
+        return { status: 200, headers: { 'content-type': 'image/jpeg' }, body: Buffer.from('j') };
+      },
+    },
     playback: {
       /* Las salas en directo tienen su prueba (live.test.ts). */
       acquire: () => Promise.reject(new Error('directo')),
@@ -89,6 +99,7 @@ function setup(env: Record<string, string> = {}, grant: VodGrant = GRANT) {
         return grant;
       },
       heartbeat: async (sid, body) => {
+        if (control.beatMs > 0) clock.advance(control.beatMs);
         if (control.beatFails) throw new AppError('session_expired');
         beats.push({ sid, viewer: body.viewer, playing: body.playing });
         return {
@@ -104,16 +115,16 @@ function setup(env: Record<string, string> = {}, grant: VodGrant = GRANT) {
       },
     },
   });
-  return { core, clock, calls, beats, released, control, party };
+  return { core, clock, calls, beats, released, control, arts, party };
 }
 
 type DataOf<K extends PartyEvent['type']> = Extract<PartyEvent, { type: K }>['data'];
 
 /** Un SSE abierto con lo que va llegando ya parseado. */
-function listen(party: PartyService, code: string, token: string) {
+function listen(party: PartyService, code: string, token: string, options?: { ping?: boolean }) {
   const sink = new FakeSink();
   const controller = new AbortController();
-  const done = party.attach(code, token, sink, controller.signal);
+  const done = party.attach(code, token, sink, controller.signal, options);
   const events = (): PartyEvent[] =>
     sink.chunks
       .filter((chunk) => chunk.startsWith('event: '))
@@ -618,7 +629,7 @@ describe('«Ver juntos» desde fuera (docs/ver-juntos.md §9)', () => {
     expect(isma.url).not.toBe(grant.url);
   });
 
-  it('el latido de la sesión va con el estado de la sala: ok, lost y none', async () => {
+  it('el latido de la sesión va con el estado de la sala: ok, lost (hasta volver a abrir) y none', async () => {
     const { party, beats, control } = setup();
     const host = party.create(BODY);
     const room = host.room.code;
@@ -631,7 +642,10 @@ describe('«Ver juntos» desde fuera (docs/ver-juntos.md §9)', () => {
     control.beatFails = true;
     expect((await status()).stream).toBe('lost');
     control.beatFails = false;
-    expect((await status()).stream).toBe('none');
+    /* Sin volver a abrir, sigue perdido (no «aún no ha abierto»). */
+    expect((await status()).stream).toBe('lost');
+    await party.stream(room, streamQuery(host.member.token, 'v-isma'), viewer('v-isma'), live());
+    expect((await status()).stream).toBe('ok');
   });
 
   it('salir o cerrar la sala suelta los visores de cada uno', async () => {
@@ -1324,3 +1338,155 @@ describe('«Ver juntos»: calidad ligera para invitados (§17)', () => {
 function keyOf(url: string): string {
   return /\/v\/([A-Za-z0-9_-]{32})\//.exec(url)?.[1] ?? '';
 }
+
+describe('«Ver juntos» 1.1.2: órdenes que no cambian nada, reloj, latido y cartel', () => {
+  /* Una sala ya empezada (fuera de la espera) a los 100 s, reproduciendo. */
+  function running() {
+    const s = setup();
+    const host = s.party.create(BODY);
+    const room = host.room.code;
+    const token = host.member.token;
+    const sse = listen(s.party, room, token);
+    s.party.control(room, { token, action: 'play', positionS: 100, source: 'lobby' });
+    const texts = () => sse.of('party.chat').map((c) => c.message.text);
+    const orders = () =>
+      sse.of('party.playback').map((p) => [p.action, p.playback.playing, p.playback.positionS]);
+    return { ...s, host, room, token, sse, texts, orders };
+  }
+
+  it('dos «reproducir» seguidos: un solo aviso y un solo rev; «Empezar para todos» sí avisa', () => {
+    const { party, room, token, clock, texts, orders } = running();
+    expect(texts().at(-1)).toBe('Isma ha empezado para todos.');
+    clock.advance(2_000);
+    const again = party.control(room, {
+      token,
+      action: 'play',
+      positionS: 101.6,
+      source: 'button',
+    });
+    expect(orders()).toEqual([['play', true, 100]]);
+    expect(again.rev).toBe(2);
+    expect(texts().filter((t) => t.includes('reproducir') || t.includes('empezado'))).toHaveLength(
+      1,
+    );
+  });
+
+  it('pausar una sala ya en pausa no hace nada; lejos, solo la recoloca sin «ha pausado»', () => {
+    const { party, room, token, clock, texts, orders } = running();
+    clock.advance(10_000);
+    party.control(room, { token, action: 'pause', positionS: 110 });
+    const before = texts().length;
+    party.control(room, { token, action: 'pause', positionS: 111 });
+    expect(orders()).toHaveLength(2);
+    party.control(room, { token, action: 'pause', positionS: 300 });
+    expect(orders().at(-1)).toEqual(['seek', false, 300]);
+    expect(texts()).toHaveLength(before);
+  });
+
+  it('un salto a menos de 1,5 s de donde va la sala no hace nada; uno mayor, sí', () => {
+    const { party, room, token, clock, orders } = running();
+    clock.advance(4_000);
+    party.control(room, { token, action: 'seek', positionS: 105, source: 'bar' });
+    expect(orders()).toHaveLength(1);
+    party.control(room, { token, action: 'seek', positionS: 110 });
+    expect(orders().at(-1)).toEqual(['seek', true, 110]);
+  });
+
+  it('pausar o reproducir cerca de la sala fija donde va la sala, no la posición del aparato', () => {
+    const { party, room, token, clock, orders } = running();
+    clock.advance(20_000);
+    /* Quien pausa va 0,8 s por detrás: la sala se para en 120, no en 119,2. */
+    party.control(room, { token, action: 'pause', positionS: 119.2 });
+    expect(orders().at(-1)).toEqual(['pause', false, 120]);
+    party.control(room, { token, action: 'play', positionS: 120.8 });
+    expect(orders().at(-1)).toEqual(['play', true, 120]);
+    /* Lejos, la posición pedida. */
+    party.control(room, { token, action: 'pause', positionS: 200 });
+    expect(orders().at(-1)).toEqual(['pause', false, 200]);
+  });
+
+  it('nueve saltos de +10 s seguidos (saltarse una intro): se aplican todos', () => {
+    const { party, room, token, clock, orders } = running();
+    clock.advance(10_000);
+    let target = 110;
+    for (let i = 0; i < 9; i += 1) {
+      target += 10;
+      party.control(room, { token, action: 'seek', positionS: target, source: 'button' });
+      clock.advance(1_000);
+    }
+    expect(orders().at(-1)).toEqual(['seek', true, 200]);
+    expect(orders()).toHaveLength(10);
+  });
+
+  it('el freno: solo cuentan las órdenes que cambian algo; la de más da rate_limited; la pausa pasa', () => {
+    const { party, room, token, clock, orders, core } = running();
+    const warn = vi.spyOn(core.logger, 'warn');
+    clock.advance(10_000);
+    /* Las que no cambian nada (un `play` con la sala en marcha) no gastan cupo. */
+    for (let i = 0; i < 20; i += 1) party.control(room, { token, action: 'play', positionS: 110 });
+    expect(orders()).toHaveLength(1);
+    for (let i = 0; i < 12; i += 1) {
+      party.control(room, { token, action: 'seek', positionS: 200 + i * 10 });
+    }
+    expect(orders()).toHaveLength(13);
+    expect(() => party.control(room, { token, action: 'seek', positionS: 900 })).toThrow(
+      expect.objectContaining({ code: 'rate_limited' }),
+    );
+    expect(orders()).toHaveLength(13);
+    expect(warn).toHaveBeenCalledTimes(1);
+    /* La pausa de quien quiere parar pasa siempre. */
+    party.control(room, { token, action: 'pause', positionS: 400 });
+    expect(orders().at(-1)).toEqual(['pause', false, 400]);
+    clock.advance(10_000);
+    party.control(room, { token, action: 'seek', positionS: 1_000 });
+    expect(orders().at(-1)?.[2]).toBe(1_000);
+  });
+
+  it('el reloj: receivedAt al llegar y serverNow al responder (tras el latido del vídeo)', async () => {
+    const { party, room, token, control } = running();
+    await party.stream(room, streamQuery(token, 'v-isma'), viewer('v-isma'), live());
+    control.beatMs = 40;
+    const status = await party.status(room, { token, positionS: 100, buffering: false });
+    expect(status.receivedAt).toBeDefined();
+    expect(status.serverNow - (status.receivedAt ?? 0)).toBe(40);
+    const order = party.control(room, { token, action: 'seek', positionS: 500 });
+    expect(order.receivedAt).toBeLessThanOrEqual(order.serverNow);
+  });
+
+  it('el latido: con ping=1 llega `party.ping` con la hora; sin él, solo el comentario', () => {
+    const { party, room, token, clock } = running();
+    const ana = party.join(room, 'Ana');
+    const withPing = listen(party, room, ana.member.token, { ping: true });
+    const plain = listen(party, room, token);
+    clock.advance(PARTY.heartbeatMs);
+    expect(withPing.of('party.ping')).toEqual([{ serverNow: clock.now() }]);
+    expect(plain.of('party.ping')).toEqual([]);
+    expect(plain.sink.chunks.filter((c) => c === ': ping\n\n')).toHaveLength(1);
+    expect(withPing.sink.chunks.filter((c) => c === ': ping\n\n')).toHaveLength(1);
+  });
+
+  it('partyArt: el cartel del título o de la lista; otro título, vod_not_found; sin sala, party_not_found', async () => {
+    const { party, room, token, arts } = running();
+    await party.art(room, PELI, 'v1', undefined);
+    expect(arts).toEqual([{ id: PELI, art: 'poster', v: 'v1' }]);
+    const OTRA = '0123456789abcdef0123456789abcdef01234567';
+    await expect(party.art(room, OTRA, undefined, undefined)).rejects.toMatchObject({
+      code: 'vod_not_found',
+    });
+    party.queue(room, {
+      token,
+      action: 'add',
+      titleId: OTRA,
+      kind: 'movie',
+      artId: OTRA,
+      poster: null,
+      title: 'Otra peli',
+      subtitle: null,
+    });
+    await party.art(room, OTRA, undefined, undefined);
+    expect(arts.at(-1)).toEqual({ id: OTRA, art: 'poster', v: undefined });
+    await expect(party.art('Z'.repeat(16), PELI, undefined, undefined)).rejects.toMatchObject({
+      code: 'party_not_found',
+    });
+  });
+});

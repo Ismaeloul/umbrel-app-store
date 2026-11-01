@@ -17548,7 +17548,7 @@ paths:
       tags:
         - party
       summary: "Tiempo real de la sala por SSE: estado, personas y chat"
-      description: Empieza con `party.snapshot` y luego manda `party.playback`, `party.room`, `party.chat`, `party.typing` y `party.closed`. Con la conexión abierta la persona cuenta como presente.
+      description: Empieza con `party.snapshot` y luego manda `party.playback`, `party.room`, `party.chat`, `party.typing` y `party.closed`. Con `ping=1`, además, `party.ping` en cada latido (`PARTY.heartbeatMs`). Con la conexión abierta la persona cuenta como presente.
       parameters:
         - name: code
           in: path
@@ -17562,6 +17562,14 @@ paths:
           schema:
             type: string
             pattern: ^m_[A-Za-z0-9_-]{8,32}\.[A-Za-z0-9_-]{20,64}$
+        - name: ping
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
       responses:
         "200":
           description: "Flujo SSE: `id`, `event` y `data` JSON (ver components/schemas/SseEvent)."
@@ -18332,12 +18340,108 @@ paths:
         - code: internal_error
           status: 500
           message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/party/{code}/art/{artId}:
+    get:
+      operationId: partyArt
+      tags:
+        - party
+      summary: El cartel del título de la sala (o de lo que viene) por la ruta de la sala
+      description: "Para el invitado de fuera, que no tiene `vodArt` (§9): siempre el cartel (`poster`), y solo de un `artId` que tenga la sala (el título, el siguiente episodio, lo que viene o la lista); si no, o en directo, 404 `vod_not_found`. La caché, la `v` y el 304 son los de `vodArt`; con la cola de carteles llena, 503 `vod_unavailable` con `Retry-After`."
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{16}$
+        - name: artId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{40}$
+        - name: v
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{8}$
+      responses:
+        "200":
+          description: El cartel del título de la sala, con las mismas cabeceras que `vodArt` (docs/ver-juntos.md §9).
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+        - partyMember: []
+      x-access: any
+      x-native-path: /native/api/v1/party/{code}/art/{artId}
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: party_not_found
+          status: 404
+          message: Esta sala ya no existe. Pide un enlace nuevo.
+        - code: vod_not_found
+          status: 404
+          message: Este título ya no está en tu IPTV.
+        - code: vod_unavailable
+          status: 503
+          message: Tu IPTV no ofrece películas ni series, o no responde ahora mismo.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
   /api/v1/party/{code}/control:
     post:
       operationId: partyControl
       tags:
         - party
       summary: Reproducir, pausar, saltar o cambiar el idioma para todos
+      description: "Con freno por persona: más de 12 órdenes que cambian algo en 10 s dan `rate_limited` (la pausa pasa siempre; las que no cambian nada no cuentan)."
       parameters:
         - name: code
           in: path
@@ -18366,6 +18470,16 @@ paths:
                       type: number
                       minimum: 0
                       maximum: 86400
+                    source:
+                      type: string
+                      enum:
+                        - button
+                        - nudge
+                        - bar
+                        - key
+                        - surface
+                        - lobby
+                        - mediaSession
                   required:
                     - token
                     - action
@@ -18450,6 +18564,10 @@ paths:
                     type: integer
                     minimum: 0
                     maximum: 9007199254740991
+                  receivedAt:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
                   rev:
                     type: integer
                     minimum: 0
@@ -18484,6 +18602,9 @@ paths:
         - code: party_forbidden
           status: 403
           message: Ya no estás en esta sala. Vuelve a entrar con el enlace.
+        - code: rate_limited
+          status: 429
+          message: Demasiadas peticiones seguidas. Espera un momento.
         - code: validation_error
           status: 400
           message: Falta algún dato o no tiene el formato esperado.
@@ -18563,6 +18684,10 @@ paths:
                 type: object
                 properties:
                   serverNow:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  receivedAt:
                     type: integer
                     minimum: 0
                     maximum: 9007199254740991

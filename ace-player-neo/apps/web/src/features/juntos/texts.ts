@@ -54,6 +54,12 @@ export const JUNTOS_TEXT = {
   chatEmpty: 'Aún no hay mensajes.',
   tapToStart: 'Toca para empezar',
   tapToStartHint: 'El navegador necesita un toque para poner el sonido.',
+  /* El navegador lo ha empezado en silencio (no deja sonar sin un toque). */
+  soundOff: 'Activar sonido',
+  soundOffHint: 'Tu navegador lo ha empezado en silencio.',
+  lobbySoundHint: 'Toca aquí para que suene al empezar',
+  connectSlow: 'La sala no contesta',
+  connectSlowHint: 'Puede ser la conexión. Vuelve a intentarlo en un momento.',
   preparing: 'Preparando el vídeo…',
   waitingFor: (names: string) => `Esperando a ${names}…`,
   interruptedTaken: 'Alguien ha puesto otra cosa en la IPTV de casa.',

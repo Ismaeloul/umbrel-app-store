@@ -25,10 +25,9 @@ import { JUNTOS_TEXT } from './texts.ts';
 
 /* Las opciones con las que se crea cada reproductor (el invitado pide las dos calidades, §17). */
 const playerOptions = vi.hoisted(() => [] as unknown[]);
-
-/* El reproductor de verdad pide el vídeo y monta hls.js: aquí no hace falta. */
-vi.mock('./player.ts', () => {
-  const view = {
+/* Lo que dice el reproductor de pega y lo que se le pide (desbloquear o quitar el silencio). */
+const playerState = vi.hoisted(() => ({
+  view: {
     phase: 'ready',
     error: null,
     positionS: 0,
@@ -37,7 +36,14 @@ vi.mock('./player.ts', () => {
     buffering: false,
     quality: null,
     sounded: false,
-  };
+    soundBlocked: false,
+    localError: false,
+  } as Record<string, unknown>,
+  calls: [] as string[],
+}));
+
+/* El reproductor de verdad pide el vídeo y monta hls.js: aquí no hace falta. */
+vi.mock('./player.ts', () => {
   return {
     RoomPlayer: class {
       constructor(_video: unknown, _client: unknown, options: unknown) {
@@ -45,12 +51,17 @@ vi.mock('./player.ts', () => {
       }
       start(): void {}
       destroy(): void {}
-      unlock(): void {}
+      unlock(): void {
+        playerState.calls.push('unlock');
+      }
+      unmute(): void {
+        playerState.calls.push('unmute');
+      }
       subscribe(): () => void {
         return () => undefined;
       }
       getView() {
-        return view;
+        return playerState.view;
       }
     },
   };
@@ -102,6 +113,8 @@ function setViewport(width: number) {
 let net: ReturnType<typeof mockFetch> | undefined;
 
 beforeEach(() => {
+  playerState.view = { ...playerState.view, phase: 'ready', soundBlocked: false };
+  playerState.calls = [];
   resetMode();
   setMode('live', 'bootstrap');
   FakeSource.last = null;
@@ -120,7 +133,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mountRoom(selfId: string, onLeft = vi.fn(), guest = false) {
+function mountRoom(selfId: string, onLeft = vi.fn(), guest = false, room: PartyRoom = ROOM) {
   saveCredential(CODE, credential(selfId));
   rememberRoom(CODE);
   render(
@@ -133,7 +146,7 @@ function mountRoom(selfId: string, onLeft = vi.fn(), guest = false) {
       guest={guest}
     />,
   );
-  act(() => FakeSource.last?.emit('party.snapshot', { room: ROOM, chat: [], serverNow: 1 }));
+  act(() => FakeSource.last?.emit('party.snapshot', { room, chat: [], serverNow: 1 }));
   return onLeft;
 }
 
@@ -283,7 +296,12 @@ describe('la sala en el móvil (ver-juntos.html y ver-juntos-pelis.html)', () =>
     );
     fireEvent.click(screen.getByRole('tab', { name: /Siguiente/ }));
     fireEvent.click(screen.getByRole('button', { name: JUNTOS_TEXT.skipNext }));
-    await waitFor(() => expect(net?.calls.at(-1)?.body).toMatchObject({ action: 'next' }));
+    /* La de la lista (el cliente también manda sus latidos de `status`). */
+    await waitFor(() =>
+      expect(net?.calls.filter((call) => call.url.endsWith('/queue')).at(-1)?.body).toMatchObject({
+        action: 'next',
+      }),
+    );
   });
 
   it('el invitado: «Salir» arriba, sin «Invitar» ni «Pasar al siguiente»', () => {
@@ -354,5 +372,78 @@ describe('el reproductor de la sala y las dos calidades (§17)', () => {
     expect(playerOptions.at(-1)).toEqual({ guest: false });
     mountRoom(ANA, vi.fn(), true);
     expect(playerOptions.at(-1)).toEqual({ guest: true });
+  });
+});
+
+describe('el cartel de la sala (docs/ver-juntos.md §9)', () => {
+  it('va por la ruta de la sala (`partyArt`), nunca por el catálogo', () => {
+    setViewport(1280);
+    mountRoom(ANA);
+    const sources = [...document.querySelectorAll('img')].map((img) => img.getAttribute('src'));
+    const art = `/api/v1/party/${CODE}/art/${ROOM.title.artId}?v=${ROOM.title.poster}`;
+    expect(sources).toContain(art);
+    expect(sources.filter((src) => src?.includes('/vod/'))).toEqual([]);
+  });
+});
+
+describe('«Esperando a todos»: el toque que deja sonar', () => {
+  const LOBBY: PartyRoom = { ...ROOM, playback: { ...ROOM.playback, lobby: true, playing: false } };
+
+  it('si el navegador no ha dejado ni empezar, lo desbloquea', () => {
+    setViewport(1280);
+    playerState.view = { ...playerState.view, phase: 'blocked' };
+    mountRoom(ANA, vi.fn(), false, LOBBY);
+    fireEvent.click(document.querySelector('.juntos-lobby') as HTMLElement);
+    expect(playerState.calls).toEqual(['unlock']);
+  });
+
+  it('si lo ha empezado en silencio, quita el silencio', () => {
+    setViewport(1280);
+    playerState.view = { ...playerState.view, soundBlocked: true };
+    mountRoom(ANA, vi.fn(), false, LOBBY);
+    expect(screen.getByText('Toca aquí para que suene al empezar')).toBeTruthy();
+    fireEvent.click(document.querySelector('.juntos-lobby') as HTMLElement);
+    expect(playerState.calls).toEqual(['unmute']);
+    /* Ya tocado: sin el aviso. */
+    expect(screen.queryByText('Toca aquí para que suene al empezar')).toBeNull();
+  });
+
+  it('al bajar el dedo no hace nada (en el iPhone aún no cuenta como gesto)', () => {
+    setViewport(390);
+    playerState.view = { ...playerState.view, phase: 'blocked' };
+    mountRoom(ANA, vi.fn(), false, LOBBY);
+    fireEvent.pointerDown(document.querySelector('.juntos-lobby') as HTMLElement, {
+      pointerType: 'touch',
+    });
+    expect(playerState.calls).toEqual([]);
+  });
+});
+
+describe('la sala que no contesta', () => {
+  it('a los 10 s sin la foto de la sala, «Reintentar» abre otra conexión', () => {
+    vi.useFakeTimers();
+    try {
+      setViewport(1280);
+      saveCredential(CODE, credential(ANA));
+      render(
+        <Room
+          code={CODE}
+          credential={credential(ANA)}
+          onForbidden={() => undefined}
+          onLeft={() => undefined}
+          exitAction={null}
+        />,
+      );
+      const first = FakeSource.last;
+      expect(screen.queryByText(JUNTOS_TEXT.connectSlow)).toBeNull();
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(screen.getByText(JUNTOS_TEXT.connectSlow)).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: JUNTOS_TEXT.retry }));
+      expect(FakeSource.last).not.toBe(first);
+      expect(first?.readyState).toBe(2);
+      expect(screen.queryByText(JUNTOS_TEXT.connectSlow)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

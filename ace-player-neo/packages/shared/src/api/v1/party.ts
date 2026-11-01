@@ -318,12 +318,31 @@ export const PartyPreviewSchema = z.strictObject({
 });
 export type PartyPreview = z.infer<typeof PartyPreviewSchema>;
 
+/**
+ * Qué tocó la persona para mandar una orden: el botón central (`button`), los saltos de ±10 s
+ * (`nudge`), la barra (`bar`), el teclado (`key`), un toque o clic sobre el vídeo (`surface`),
+ * «Empezar para todos» (`lobby`) o las teclas multimedia, la pantalla de bloqueo o el Centro de
+ * control (`mediaSession`). Solo va al registro: el servidor no decide nada con él.
+ */
+export const PartyControlSourceSchema = z.enum([
+  'button',
+  'nudge',
+  'bar',
+  'key',
+  'surface',
+  'lobby',
+  'mediaSession',
+]);
+export type PartyControlSource = z.infer<typeof PartyControlSourceSchema>;
+
 /** POST /api/v1/party/:code/control: reproducir, pausar o saltar (para todos). */
 export const PartyControlBodySchema = z.discriminatedUnion('action', [
   z.strictObject({
     token: PartyTokenSchema,
     action: z.enum(['play', 'pause', 'seek']),
     positionS: z.number().min(0).max(86_400),
+    /** De dónde sale la orden (solo para el registro del servidor; las apps viejas no lo mandan). */
+    source: PartyControlSourceSchema.optional(),
   }),
   z.strictObject({
     token: PartyTokenSchema,
@@ -353,7 +372,13 @@ export type PartyStatusBody = z.infer<typeof PartyStatusBodySchema>;
 
 /** La hora del servidor sirve para estimar el desfase de reloj con la ida y vuelta. */
 export const PartyStatusResponseSchema = z.strictObject({
+  /**
+   * Hora del servidor (ms) al responder. Con `receivedAt`, el cliente tiene las cuatro marcas de
+   * NTP (su envío, la llegada, la respuesta y su recepción) y descuenta lo que tarda el servidor.
+   */
   serverNow: z.number().int().nonnegative(),
+  /** Hora del servidor (ms) al llegar la petición; los servidores viejos no la mandan. */
+  receivedAt: z.number().int().nonnegative().optional(),
   rev: z.number().int().nonnegative(),
   /**
    * Solo en `partyStatus`: el latido de la sesión de vídeo de la persona. `ok`,
@@ -454,8 +479,22 @@ export const PartyVideoParamsSchema = z.strictObject({
 export type PartyVideoParams = z.infer<typeof PartyVideoParamsSchema>;
 
 /** GET /api/v1/party/:code/events (SSE). */
-export const PartyEventsQuerySchema = z.strictObject({ t: PartyTokenSchema });
+export const PartyEventsQuerySchema = z.strictObject({
+  t: PartyTokenSchema,
+  /**
+   * `1`: además del comentario `: ping`, en cada latido un `party.ping` con la hora del servidor,
+   * que el JS sí ve (para saber que el SSE sigue vivo). Las apps viejas no lo piden.
+   */
+  ping: z.enum(['0', '1']).optional(),
+});
 export type PartyEventsQuery = z.infer<typeof PartyEventsQuerySchema>;
+
+/**
+ * GET /api/v1/party/:code/art/:artId: el cartel del título de la sala (o de lo que viene), por la
+ * ruta de la sala: el invitado de fuera no tiene `vodArt` (§9). Solo un `artId` que tenga la sala.
+ */
+export const PartyArtParamsSchema = z.strictObject({ code: PartyCodeSchema, artId: HashSchema });
+export type PartyArtParams = z.infer<typeof PartyArtParamsSchema>;
 
 /** GET /api/v1/party/:code/stream: el vídeo de la sala (una `VodGrant`). */
 export const PartyStreamQuerySchema = ChannelStreamQuerySchema.pick({
@@ -543,6 +582,14 @@ export const PartyEventSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('party.chat'),
     data: z.strictObject({ message: PartyChatMessageSchema }),
+  }),
+  /**
+   * El latido con nombre: solo a las conexiones con `ping=1`, cada `PARTY.heartbeatMs`. No cambia
+   * nada de la sala; el cliente sabe así que el SSE sigue vivo.
+   */
+  z.strictObject({
+    type: z.literal('party.ping'),
+    data: z.strictObject({ serverNow: z.number().int().nonnegative() }),
   }),
   z.strictObject({
     type: z.literal('party.closed'),

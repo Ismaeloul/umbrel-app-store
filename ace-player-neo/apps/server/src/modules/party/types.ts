@@ -29,6 +29,8 @@ import type {
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { PlaybackService, ViewerIdentity } from '../playback/types.js';
 import type { RemuxService } from '../remux/types.js';
+import type { VodApi } from '../iptv/types.js';
+import type { ArtReply } from '../iptv/vod/art.js';
 
 export interface PartyDeps extends CoreDeps {
   readonly playback: Pick<PlaybackService, 'acquire' | 'acquireVod' | 'heartbeat' | 'release'>;
@@ -37,6 +39,17 @@ export interface PartyDeps extends CoreDeps {
    * recibe: `index.m3u8` como siempre.
    */
   readonly remux?: Pick<RemuxService, 'vodLiteOffer' | 'vodLiteCovers'>;
+  /**
+   * Los carteles de Películas y series, para `partyArt` (docs/ver-juntos.md §9): el invitado de
+   * fuera no tiene `vodArt`. Sin él (sin VOD o dobles de tests), `vod_unavailable`.
+   */
+  readonly art?: Pick<VodApi, 'artOf'>;
+}
+
+/** Cómo se abre el SSE de la sala (`partyEvents`). */
+export interface PartyConnectOptions {
+  /** `ping=1`: en cada latido, además del comentario, un `party.ping` que el JS sí ve. */
+  readonly ping?: boolean;
 }
 
 /** De dónde viene la petición de `partyStream`. */
@@ -68,9 +81,21 @@ export interface PartyService extends Lifecycle {
   preview(code: string): PartyPreview;
   join(code: string, name: string): PartyJoinResponse;
   /** Toma la respuesta (hijack) y la mantiene abierta hasta que el cliente cierre. */
-  connect(code: string, token: string, reply: FastifyReply, signal: AbortSignal): Promise<void>;
+  connect(
+    code: string,
+    token: string,
+    reply: FastifyReply,
+    signal: AbortSignal,
+    options?: PartyConnectOptions,
+  ): Promise<void>;
   /** Engancha una salida ya preparada (lo que hace `connect` tras el hijack; los tests la usan). */
-  attach(code: string, token: string, sink: PartySink, signal: AbortSignal): Promise<void>;
+  attach(
+    code: string,
+    token: string,
+    sink: PartySink,
+    signal: AbortSignal,
+    options?: PartyConnectOptions,
+  ): Promise<void>;
   stream(
     code: string,
     query: PartyStreamQuery,
@@ -78,6 +103,16 @@ export interface PartyService extends Lifecycle {
     signal: AbortSignal,
     options?: PartyStreamOptions,
   ): Promise<PartyStreamGrant>;
+  /**
+   * El cartel (`poster`) de un `artId` que tenga la sala: el título, el siguiente episodio, lo que
+   * viene o la lista (`partyArt`). Otro, o en directo, `vod_not_found`.
+   */
+  art(
+    code: string,
+    artId: string,
+    version: string | undefined,
+    ifNoneMatch: string | undefined,
+  ): Promise<ArtReply>;
   /** La sesión de vídeo de la persona con esta clave (`partyVideo`). */
   videoSession(code: string, key: string): string;
   control(code: string, body: PartyControlBody): PartyStatusResponse;

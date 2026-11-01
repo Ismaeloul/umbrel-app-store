@@ -12,10 +12,19 @@
      un poco de azar), lo que tarda la cola en vaciarse.
    - Si aun así falla, se queda el relleno, pero se vuelve a probar UNA vez
      cuando la tarjeta sale de la pantalla y vuelve a entrar: un cartel no se
-     queda en blanco hasta recargar la página. */
+     queda en blanco hasta recargar la página.
+   - Un 404 no se reintenta: la imagen no existe (o, en la página del
+     invitado, la ruta no está abierta) y pedirla cuatro veces no la trae.
+     El <img> no dice el estado: tras el primer fallo se mira con un fetch.
+
+   De dónde sale la dirección lo decide `ArtSrcContext`: en casa, `vodArt`;
+   en una sala de «Ver juntos», `partyArt` (el invitado de fuera no tiene el
+   catálogo, docs/ver-juntos.md §9). */
 
 import type { VodArtKind } from '@ace/shared';
 import {
+  createContext,
+  useContext,
   useEffect,
   useRef,
   useState,
@@ -36,6 +45,32 @@ const ART_RETRY_JITTER_MS = 1000;
 export const ART_NEAR_MARGIN = '300px 0px';
 /** …y, dentro de un carrusel, a los lados (Chrome; donde no se sepa, al entrar). */
 const ART_NEAR_SCROLL_MARGIN = '0px 200px';
+
+/** La dirección de una imagen (null = sin imagen, solo el relleno). */
+export type ArtSrcResolver = (
+  id: string,
+  art: VodArtKind,
+  v: string,
+  title: string,
+) => string | null;
+
+/** Quién da las direcciones de las imágenes: `vodArt` salvo que una sala diga otra cosa. */
+export const ArtSrcContext = createContext<ArtSrcResolver>(artSrc);
+
+/**
+ * ¿La imagen no existe (404)? Solo tras un fallo del <img>, que no dice el estado. Un fallo de
+ * red, un 503 o una imagen `data:` cuentan como «no se sabe»: se reintenta como siempre.
+ */
+async function artMissing(src: string): Promise<boolean> {
+  if (!src.startsWith('/') || typeof fetch !== 'function') return false;
+  try {
+    const response = await fetch(src, { credentials: 'same-origin' });
+    void response.body?.cancel().catch(() => undefined);
+    return response.status === 404;
+  } catch {
+    return false;
+  }
+}
 
 /** «La casa de papel» → «LC»; «Dune» → «D». */
 export function monogram(title: string): string {
@@ -104,7 +139,8 @@ interface Load {
   attempt: number;
   /** Vueltas tras volver a la pantalla (cambia la clave del <img>). */
   round: number;
-  state: 'loading' | 'image' | 'retry' | 'failed';
+  /** `gone`: un 404, sin reintentos ni al volver a la pantalla. */
+  state: 'loading' | 'image' | 'retry' | 'failed' | 'gone';
 }
 
 export function Art({
@@ -119,7 +155,8 @@ export function Art({
 }: ArtProps) {
   const ref = useRef<HTMLSpanElement>(null);
   const near = useNear(ref, eager);
-  const src = v ? artSrc(id, art, v, title) : null;
+  const resolve = useContext(ArtSrcContext);
+  const src = v ? resolve(id, art, v, title) : null;
   const [load, setLoad] = useState<Load | null>(null);
   const current: Load | null =
     load && load.src === src ? load : src ? { src, attempt: 0, round: 0, state: 'loading' } : null;
@@ -158,9 +195,15 @@ export function Art({
   }, [current?.state, current?.src, current?.round]);
 
   const image =
-    near && current && current.state !== 'failed' && current.state !== 'retry' ? current : null;
+    near &&
+    current &&
+    current.state !== 'failed' &&
+    current.state !== 'retry' &&
+    current.state !== 'gone'
+      ? current
+      : null;
   const state =
-    !current || current.state === 'failed' || current.state === 'retry'
+    !current || current.state === 'failed' || current.state === 'retry' || current.state === 'gone'
       ? 'fill'
       : image?.state === 'image'
         ? 'image'
@@ -193,12 +236,22 @@ export function Art({
           decoding="async"
           draggable={false}
           onLoad={() => setLoad({ ...image, state: 'image' })}
-          onError={() =>
+          onError={() => {
             setLoad({
               ...image,
               state: image.attempt < ART_RETRY_DELAYS_MS.length ? 'retry' : 'failed',
-            })
-          }
+            });
+            /* El primer fallo: si es un 404, ni se reintenta ni se vuelve a probar. */
+            if (image.attempt !== 0 || image.round !== 0) return;
+            void artMissing(image.src).then((missing) => {
+              if (!missing) return;
+              setLoad((now) =>
+                now && now.src === image.src
+                  ? { ...now, state: 'gone' }
+                  : { ...image, state: 'gone' },
+              );
+            });
+          }}
         />
       ) : null}
     </span>

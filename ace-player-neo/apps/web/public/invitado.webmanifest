@@ -4,6 +4,7 @@
   "description": "Ver una película o una serie a la vez, con chat.",
   "lang": "es",
   "dir": "ltr",
+  "id": "/s/",
   "scope": "/s/",
   "display": "standalone",
   "background_color": "#05070a",

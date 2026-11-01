@@ -15,7 +15,7 @@ import type { PartyClient } from './client.ts';
 import type * as Live from './live.ts';
 import type { LiveSource } from './live.ts';
 import type { PlayerView, RoomPlayer } from './player.ts';
-import { LiveAutoSwitch } from './Room.tsx';
+import { LiveAutoSwitch } from './LiveTools.tsx';
 
 const sources = vi.hoisted(() => ({ list: [] as LiveSource[] }));
 
@@ -60,6 +60,8 @@ function fakePlayer() {
     buffering: false,
     quality: null,
     sounded: false,
+    soundBlocked: false,
+    localError: false,
   };
   const listeners = new Set<() => void>();
   const player = {
@@ -78,12 +80,12 @@ function fakePlayer() {
   return { player, setView };
 }
 
-function setup() {
+function setup(interrupted: PartyRoom['interrupted'] = 'failed') {
   const control = vi.fn(async () => undefined);
   const client = { credential: { id: HOST }, control } as unknown as PartyClient;
   const { player, setView } = fakePlayer();
   const view = render(
-    <LiveAutoSwitch room={roomWith(1, 'failed')} client={client} player={player} />,
+    <LiveAutoSwitch room={roomWith(1, interrupted)} client={client} player={player} />,
   );
   const show = (room: PartyRoom) =>
     view.rerender(<LiveAutoSwitch room={room} client={client} player={player} />);
@@ -161,5 +163,17 @@ describe('«Cambio automático si se cae» (§14)', () => {
     ctx.show(roomWith(4, 'failed'));
     expect(ctx.control).toHaveBeenCalledTimes(4);
     expect(ctx.jumpedTo().at(-1)).not.toBe(hash(4));
+  });
+
+  it('un fallo solo de este aparato (no decodifica el códec) no cambia el canal a todos', () => {
+    const ctx = setup(null);
+    ctx.setView({ phase: 'error', error: 'códec', localError: true });
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(ctx.control).not.toHaveBeenCalled();
+    /* Un fallo del vídeo de la sala sí. */
+    ctx.setView({ phase: 'error', error: 'caído', localError: false });
+    expect(ctx.jumpedTo()).toEqual([hash(2)]);
   });
 });

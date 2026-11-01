@@ -3,7 +3,11 @@
 # La Freebox manda el 443 de fuera al 8443 del NAS y aqui solo se deja pasar:
 # - la pagina de invitado (/s/<codigo> -> invitado.html) y sus ficheros;
 # - la API de una sala SIN crear ni cerrar (join, events, stream, control,
-#   status, chat, leave y el video con la clave de cada persona).
+#   status, chat, typing, settings, member, queue, leave, el cartel del titulo
+#   de la sala por /art/<id de 40 hex> y el video con la clave de cada
+#   persona). El catalogo (/api/v1/vod/...) no: el cartel va por la sala.
+# La pagina (/s/<codigo>) sale con Cache-Control no-cache, para que tras una
+# release se pida el invitado.html nuevo (los /assets/ llevan su hash).
 # Todo lo demas da 404: ni la web de casa, ni sus rutas, ni el panel de Umbrel.
 # Al servidor le llega con X-Ace-Origin: guest, que el backend trata como
 # native (el origen mas estricto): sin token de dispositivo solo valen las
@@ -41,8 +45,9 @@
 	# Lo mismo que corta nginx: %2f, %2e, %5c, ".." o "\" en la ruta cruda, y "//".
 	@raro expression `{http.request.orig_uri.path}.matches("(?i)%(2f|2e|5c)|\\.\\.|\\x5c|^//")`
 
-	# La API de una sala: el codigo (16), la accion o el video (clave de 32 y fichero).
-	@sala path_regexp ^/api/v1/party/[A-Za-z0-9_-]{16}(/(join|events|stream|control|status|chat|typing|settings|member|queue|leave)|/v/[A-Za-z0-9_-]{32}/[A-Za-z0-9_.-]{1,40})?$
+	# La API de una sala: el codigo (16), la accion, el cartel (id de 40 hex; la
+	# ?v= va en la query, que path_regexp no mira) o el video (clave de 32 y fichero).
+	@sala path_regexp ^/api/v1/party/[A-Za-z0-9_-]{16}(/(join|events|stream|control|status|chat|typing|settings|member|queue|leave)|/art/[a-f0-9]{40}|/v/[A-Za-z0-9_-]{32}/[A-Za-z0-9_.-]{1,40})?$
 
 	# La pagina de invitado y lo que carga.
 	@pagina path_regexp ^/s/[A-Za-z0-9_-]{16}/?$
@@ -58,8 +63,11 @@
 			flush_interval -1
 		}
 
-		rewrite @pagina /invitado.html
+		# La cabecera ANTES del rewrite: despues la ruta ya es /invitado.html y
+		# @pagina no casaria (en la 1.1.1 no se aplicaba nunca).
 		header @pagina Cache-Control no-cache
+		header /invitado.html Cache-Control no-cache
+		rewrite @pagina /invitado.html
 		header /assets/* Cache-Control "public, max-age=31536000, immutable"
 		root * {$ACE_WEB_ROOT}
 		file_server @estaticos {

@@ -1531,8 +1531,8 @@ export const WEB_V1_FIXTURES = {
   },
   partyJoin: partyJoined('m_AnaInvitada01', [partyMember('m_AnaInvitada01', 'Ana', false)]),
   partyStream: vodDuneGrant,
-  partyControl: { serverNow: AT_MS + 60_000, rev: 3 },
-  partyStatus: { serverNow: AT_MS + 65_000, rev: 3, stream: 'ok' },
+  partyControl: { serverNow: AT_MS + 60_000, rev: 3, receivedAt: AT_MS + 59_998 },
+  partyStatus: { serverNow: AT_MS + 65_000, rev: 3, receivedAt: AT_MS + 64_996, stream: 'ok' },
   partyChat: { ok: true },
   partyTyping: { ok: true },
   partySettings: { ok: true },
@@ -2152,6 +2152,8 @@ export const NON_JSON_ROUTE_IDS: readonly V1RouteId[] = [
   'partyEvents',
   /* El vídeo de una sala (la misma respuesta que `video`). */
   'partyVideo',
+  /* El cartel de la sala (la misma respuesta que `vodArt`). */
+  'partyArt',
   /* Un tramo de película para la descarga en segundo plano del iPhone (0.9.8). */
   'vodDownload',
 ];

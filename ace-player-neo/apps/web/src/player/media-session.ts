@@ -129,6 +129,19 @@ export function useMediaSession(state: PlayerState, actions: MediaSessionActions
       });
     } catch {}
   }, [vod?.positionS, vod?.durationS, engaged]);
+  /* Al desmontarse, la barra se va con él: si no, el sistema seguía moviendo la de esta película
+     y la «Ver juntos» que se abre desde ella recibía `seekto` sobre esa línea de tiempo. */
+  useEffect(
+    () => () => {
+      lastPosition.current = 0;
+      const ms = session();
+      if (!ms || typeof ms.setPositionState !== 'function') return;
+      try {
+        ms.setPositionState();
+      } catch {}
+    },
+    [],
+  );
 
   const hasPrevious = actions.previous !== null;
   const hasNext = actions.next !== null;

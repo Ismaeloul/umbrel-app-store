@@ -6,7 +6,7 @@
 
 import type { PartyMember, PartyRoom } from '@ace/shared';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import joined from '@fixtures/web/v1/partyJoin.json';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { json, mockFetch } from '../../test/fetch.ts';
@@ -250,7 +250,34 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
     expect(within(screen.getByText('Ana').closest('li')!).getByText('63 %')).toBeTruthy();
     expect(screen.getByText(/Esperando a Ana… empieza sola/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Empezar para todos' }));
-    await waitFor(() => expect(net?.calls.at(-1)?.body).toMatchObject({ action: 'play' }));
+    /* Con su fuente, para el registro del servidor. */
+    await waitFor(() =>
+      expect(net?.calls.at(-1)?.body).toMatchObject({ action: 'play', source: 'lobby' }),
+    );
+  });
+
+  it('el toque que deja sonar va con el clic, no al bajar el dedo (en el iPhone eso no cuenta)', () => {
+    const { client: party } = client(ANA);
+    const onGesture = vi.fn();
+    render(<Lobby room={lobby} client={party} selfId={ANA} onGesture={onGesture} soundHint />);
+    const card = document.querySelector('.juntos-lobby') as HTMLElement;
+    expect(screen.getByText('Toca aquí para que suene al empezar')).toBeTruthy();
+    fireEvent.pointerDown(card, { pointerType: 'touch' });
+    expect(onGesture).not.toHaveBeenCalled();
+    fireEvent.click(card);
+    expect(onGesture).toHaveBeenCalledTimes(1);
+    /* Con el teclado, Intro o espacio; otra tecla, no. */
+    fireEvent.keyDown(card, { key: 'Tab' });
+    expect(onGesture).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(card, { key: 'Enter' });
+    fireEvent.keyDown(card, { key: ' ' });
+    expect(onGesture).toHaveBeenCalledTimes(3);
+  });
+
+  it('ya tocada la espera, sin el aviso del sonido', () => {
+    const { client: party } = client(ANA);
+    render(<Lobby room={lobby} client={party} selfId={ANA} onGesture={() => undefined} />);
+    expect(screen.queryByText('Toca aquí para que suene al empezar')).toBeNull();
   });
 
   it('el invitado no puede empezar', () => {

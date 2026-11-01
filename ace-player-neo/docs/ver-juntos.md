@@ -49,6 +49,7 @@ de terceros) y Tailscale (el invitado tendría que instalar algo).
 | `partyJoin`    | `POST /api/v1/party/:code/join`     | entrar con un nombre                                                                |
 | `partyEvents`  | `GET /api/v1/party/:code/events?t=` | SSE: `party.snapshot`, `party.playback`, `party.room`, `party.chat`, `party.closed` |
 | `partyStream`  | `GET /api/v1/party/:code/stream`    | el vídeo (una `VodGrant`)                                                           |
+| `partyArt`     | `GET /api/v1/party/:code/art/:artId` | el cartel de un título de la sala (1.1.2, §9)                                      |
 | `partyControl` | `POST /api/v1/party/:code/control`  | `play`, `pause`, `seek` o `audio` para todos                                        |
 | `partyStatus`  | `POST /api/v1/party/:code/status`   | latido de cada uno: posición y si carga                                             |
 | `partyChat`    | `POST /api/v1/party/:code/chat`     | un mensaje                                                                          |
@@ -56,7 +57,10 @@ de terceros) y Tailscale (el invitado tendría que instalar algo).
 | `partyLeave`   | `POST /api/v1/party/:code/leave`    | salir                                                                               |
 | `partyClose`   | `POST /api/v1/party/:code/close`    | cerrar (solo el anfitrión)                                                          |
 
-El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 salen como JSON normal.
+El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 salen como JSON normal. Con `ping=1`
+(1.1.2), además del comentario `: ping`, cada `PARTY.heartbeatMs` (10 s) llega `party.ping` con `serverNow`: el
+comentario no lo ve el JS, el evento sí, y la web da el SSE por muerto si pasan 25 s sin ninguna trama. Las apps
+viejas no lo piden y no lo reciben.
 
 ## 5. El vídeo: una sesión para todos
 
@@ -77,18 +81,41 @@ El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 sale
 - **El servidor manda.** `playback = { playing, positionS, at, rev, waitingFor }`; la posición «ahora» es
   `positionS + (ahora − at) / 1000` si reproduce y nadie carga. Cada orden fija una posición nueva y sube `rev`.
 - **Reloj**: el desfase con el servidor se estima con la ida y vuelta de `status` y `control` (la muestra de menor ida
-  y vuelta de las 8 últimas).
+  y vuelta de las 8 últimas). Desde la 1.1.2 las dos respuestas traen `receivedAt` (la hora al llegar) además de
+  `serverNow` (la hora al responder, en `status` después del latido del vídeo): con las cuatro marcas de NTP la web
+  descuenta lo que tarda el servidor. Un servidor viejo no manda `receivedAt` y la web usa la fórmula de antes.
 - **Corrección** (cada 500 ms): más de 1 s de diferencia, se salta; entre 0,25 y 1 s, velocidad ±5 %; en pausa, se
   coloca el vídeo si se aparta más de 0,3 s. Medido en local con dos pestañas: 0,12 s de diferencia reproduciendo y el
-  mismo fotograma en pausa.
+  mismo fotograma en pausa. **En la web, desde la 1.1.2** (el «segundo de retraso» entre el PC y el iPhone): control
+  proporcional (`rate = 1 + drift / 4 s`, desde 0,06 s y hasta 0,02 s con histéresis, tope ±10 % con hls.js y ±6-8 %
+  con el HLS nativo) y el salto compensa lo que tarda en caer y arrancar (la latencia medida de cada motor, media
+  móvil). La absorción de 60 s tras una reanudación (`WAITED_STAY_S`) queda solo para el HLS nativo. La app del iPhone
+  y las constantes de `PARTY` (`driftRate`, `driftRateS`, `driftSeekS`) no cambian.
+- **Órdenes que no cambian nada** (1.1.2, `party/service.ts`): un `play` con la sala ya reproduciendo (sin espera ni
+  «Esperando a todos») a menos de `driftSeekS`, una pausa con la sala ya en pausa a menos de 1,5 s y un salto a menos
+  de 1,5 s con la sala en marcha no se fijan, ni salen en el chat, ni se mandan a nadie (el doble clic, el `play` de
+  quien llega tarde). Una pausa en pausa más lejos solo recoloca, sin «ha pausado». Un `play` o una pausa que sí
+  cambian, a menos de `driftSeekS` de la sala, se fijan donde va la sala, no donde va el aparato que la manda (que va
+  un poco por detrás). Freno: con 12 órdenes que cambian algo en 10 s de una persona, la siguiente da `rate_limited`
+  (quien la manda ve el aviso) y deja una línea de aviso; las que no cambian nada no cuentan y la pausa pasa siempre.
+  Una tecla que se queda pulsada solo manda la primera. Cada orden deja una línea en el registro con la sala, la persona, la acción, la posición, el `rev` y de
+  dónde sale (`source`: `button`, `nudge`, `bar`, `key`, `surface`, `lobby`, `mediaSession`; solo para el registro).
+  «Empezar para todos» y un `play` mientras se espera a alguien siguen siendo órdenes.
 - **Esperar al que carga**: un cliente avisa al momento si su vídeo se queda sin datos. Si dura más de 0,8 s con la
   sala reproduciendo, el reloj se para (`waitingFor`, «Esperando a Ana…») hasta que vuelve, o hasta 20 s: entonces la
   sala sigue sin esa persona y no la vuelve a esperar en 30 s. Quien entra a mitad de película también se espera.
-- **Controles nativos** (pantalla completa del iPhone, teclas multimedia): un play, una pausa o un salto del vídeo que
-  no coincide con la sala se manda como orden. Lo que coincide (lo que hace el propio reproductor, el salto de una
-  recarga) no. Con la página oculta, tampoco: el navegador pausa solo al bloquear el iPhone.
+- **Controles nativos** (hasta la 1.1.1): un play, una pausa o un salto del vídeo que no coincidía con la sala se
+  mandaba como orden si había habido un toque en cualquier parte de la página en los últimos 1,5 s. Eso daba las
+  «órdenes fantasma» del chat del iPhone («ha dado a reproducir / ha pausado» varias veces seguidas). **Desde la
+  1.1.2** los eventos del `<video>` (`onNative`) solo se apuntan en `__aceJuntosDebug.native` para depurar; la única
+  vía de órdenes fuera de la interfaz es **Media Session** (teclas multimedia del PC, pantalla de bloqueo y Centro de
+  control del iPhone), con la posición de la sala. Pendiente: una pausa del sistema sin gesto (quitarse los AirPods)
+  la sigue deshaciendo el tic.
 - **El primer play necesita un toque** («Toca para empezar»): sin él, los navegadores no dejan sonar un vídeo. Ese
-  play no es una orden de la sala.
+  play no es una orden de la sala. **Desde la 1.1.2**, si el navegador no deja sonar, el vídeo arranca en silencio
+  (eso sí se permite en iOS y Chrome) con una píldora «Activar sonido»; la fase `blocked` («Toca para empezar») queda
+  solo de respaldo, cuando ni en silencio se deja. Así «Empezar para todos» arranca para todos, no solo para quien
+  tocó.
 
 ## 7. Web
 
@@ -118,7 +145,7 @@ El SSE comprueba la credencial ANTES de tomar la respuesta: un 403 o un 404 sale
 ```
 iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:8443 ── Caddy (servicio sala)
                                                                    ├─ /s/<código>, invitado.html, assets → ficheros de la release
-                                                                   ├─ /api/v1/party/<código>[/join|events|stream|control|status|chat|react|settings|member|queue|leave|v/<clave>/<fichero>]
+                                                                   ├─ /api/v1/party/<código>[/join|events|stream|control|status|chat|typing|settings|member|queue|leave|v/<clave>/<fichero>|art/<artId>]
                                                                    │      → storage:3000 con X-Ace-Origin: guest
                                                                    └─ todo lo demás → 404 (y rutas raras, 400)
 ```
@@ -135,19 +162,29 @@ iPhone del amigo ──https──► 82.65.65.99:443 (Freebox) ──► NAS:84
   `partyChat`, `partyLeave`), cuyo manejador comprueba la credencial de la sala. Crear y cerrar salas piden el
   token de un dispositivo emparejado (`bearer`): un invitado no puede (§10). Lo fija `test/security.test.ts` y lo probé con un Caddy de verdad (ficheros 200; web de casa, ajustes,
   bootstrap, crear sala y `/native` 404; `%2f` 400).
+- **Cartel de la sala** (`partyArt`, 1.1.2): la miniatura del invitado salía morada porque pedía
+  `/api/v1/vod/titles/<id>/art/poster` (`vodArt`, con token de dispositivo), que Caddy no deja pasar (404). Ahora va
+  por `/api/v1/party/<código>/art/<artId>?v=…`: siempre el `poster`, y solo un `artId` que tenga la sala (el título,
+  el siguiente episodio, lo que viene o la lista); otro, o una sala en directo, `vod_not_found`. La caché, el ETag, el
+  304 y el 503 con `Retry-After` son los de `vodArt` (el mismo `sendArt`, `iptv/art-reply.ts`). En Caddy, `@sala`
+  deja pasar `/art/[a-f0-9]{40}` (la `?v=` no la mira `path_regexp`). La web de casa usa el mismo camino dentro de la
+  sala.
+- **`invitado.html` sin caché**: el `header @pagina Cache-Control no-cache` iba detrás del `rewrite` y no se aplicaba
+  nunca; desde la 1.1.2 va antes, para que una release nueva llegue al invitado sin borrar la caché de Safari.
 - **Vídeo con clave**: cada persona tiene una clave de vídeo (24 bytes); `partyStream` devuelve
   `/api/v1/party/<código>/v/<clave>/index.m3u8` y los segmentos, relativos, la heredan. `partyVideo` sirve los mismos
   ficheros que `video` (Range 206/416) de la sesión de esa persona.
 - **Latido por la sala**: `partyStatus` da el latido de la sesión de playback de la persona y dice `stream: ok | lost |
-none`; con `lost`, el reproductor vuelve a abrir (si la sala no está interrumpida). Así ni la web de casa ni el
+none`; con `lost`, el reproductor vuelve a abrir (si la sala no está interrumpida). Desde la 1.1.2, quien perdió su
+  visor sin que la sala cambiara de título sigue en `lost` (no `none`) hasta que vuelve a abrir. Así ni la web de casa ni el
   invitado llaman a las rutas de playback. Salir o cerrar suelta los visores.
 - **Enlace público**: `PARTY_PUBLIC_URL=https://sala.ismaeloul.es` en storage; `room.inviteUrl` es
   `https://sala.ismaeloul.es/s/<código>` y «Copiar enlace» lo usa (sin él, el de casa).
 - **Página de invitado** (`apps/web/invitado.html`, `src/guest/`): segunda entrada de Vite, sin armazón, bootstrap,
   SSE de casa ni service worker; los mismos `Join` y `Room` (ya no dependen del enrutador), tema oscuro, manifiesto
   propio (`invitado.webmanifest`, ámbito `/s/`) para añadirla a la pantalla de inicio del iPhone.
-- **Órdenes del navegador**: un play, una pausa o un salto del vídeo solo cuentan como orden si la persona acaba de
-  tocar o pulsar algo (1,5 s) o está en la pantalla completa nativa del iPhone; con la página oculta, nunca (§6).
+- **Órdenes del navegador**: hasta la 1.1.1, un play, una pausa o un salto del vídeo contaban como orden si la persona
+  acababa de tocar o pulsar algo (1,5 s); desde la 1.1.2, nunca: solo los mandos de la sala y Media Session (§6).
 
 ## 10. Desde la app del iPhone (0.9.6)
 
@@ -160,6 +197,10 @@ none`; con `lost`, el reproductor vuelve a abrir (si la sala no está interrumpi
   (salto > 1 s, velocidad ±5 % entre 0,25 y 1 s, en pausa a > 0,3 s), aviso al momento si se queda cargando,
   «Reanudar» tras una interrupción y reabrir con `stream: lost` (3 veces por minuto como mucho). Los mandos son
   órdenes para la sala; la velocidad, «Episodios» y «Siguiente episodio» no salen dentro de una sala.
+- **1.1.2: la app no cambia.** Los campos nuevos son opcionales (`receivedAt` en las respuestas, `source` en
+  `partyControl`, `ping=1` en el SSE, `party.ping` solo a quien lo pide) y los números de `PARTY` que la app copia
+  (`driftRate`, `driftRateS`, `driftSeekS`, `holdRewindMaxS`…) siguen igual; solo `heartbeatMs` baja de 15 a 10 s,
+  y es el latido del servidor. Las órdenes que no cambian nada (§6) también se ignoran si vienen de la app.
 - La credencial se guarda en el iPhone (`ace.juntos.<código>`): volver a la sala recupera el mismo sitio (y el
   anfitrión sigue siéndolo). Unirse: botón de personas en Pelis y series, pegando el enlace o el código.
 - Probado en el simulador contra esta rama con el proveedor falso (`--vod-muestras`) y un invitado por la API: crear
@@ -435,6 +476,20 @@ El arreglo:
 - **Pendiente**: un fotograma clave cada 2 s en la ligera (hoy uno por segmento: cada salto a mitad de trozo obliga a
   decodificar hasta 6 s), bajar a 540p la ligera de una fuente que ya es 720p, el 503 del borde que AVPlayer no
   reintenta y el fusible de «plaza» tras 60 s sin peticiones (§17).
+
+**Pulido de la 1.1.2 (1-11-2026).** Tras probar la 1.1.1 con el PC y un iPhone de fuera: el segundo de retraso, la
+portada morada, «empieza para uno y no para el otro», las órdenes fantasma del chat y la caja del chat bajo la barra
+de Safari. Lo que se hizo está en §6 (reloj con cuatro marcas, control proporcional, latencia de salto medida,
+arranque en silencio con «Activar sonido», Media Session, órdenes que no cambian nada) y §9 (`partyArt`, Caddy y el
+`no-cache`). Sigue pendiente:
+
+- Un fotograma clave cada 2 s en la ligera (`lite-args.ts`; riesgo con `tfdt` y `placeFragment`).
+- Un arranque programado (`at` en el futuro): cambia la semántica de `at` y choca con la app del iPhone,
+  `holdPosition` y `upNext`.
+- La pausa del sistema sin gesto (quitarse los AirPods): el tic la deshace; habría que mandarla como orden con
+  cuidado de no volver a las órdenes fantasma.
+- Probar en el iPhone de verdad: la píldora «Activar sonido», la caja del chat con la barra de Safari abajo, con el
+  teclado y en modo standalone, y `__aceJuntosDebug` (`ticks`, `orders`, `native`) con drift < 150 ms en régimen.
 
 ## 17. Calidad ligera para invitados
 

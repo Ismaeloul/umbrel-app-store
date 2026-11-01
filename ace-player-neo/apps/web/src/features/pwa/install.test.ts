@@ -280,4 +280,17 @@ describe('manifiesto y accesos directos', () => {
       0,
     );
   });
+
+  it('el del invitado abre la sala de donde se instaló: sin start_url (la URL de la página, /s/<código>)', () => {
+    const manifest = JSON.parse(
+      readFileSync(path.join(WEB, 'public', 'invitado.webmanifest'), 'utf8'),
+    ) as { id?: string; start_url?: string; scope: string };
+    /* Un start_url relativo se resuelve contra la URL del manifiesto (/invitado.webmanifest): «.»
+       era «/», que Caddy contesta con 404, fuera del scope y sin el código de la sala. */
+    expect(manifest.start_url).toBeUndefined();
+    expect(manifest.scope).toBe('/s/');
+    const origin = 'https://sala.ismaeloul.es';
+    const id = new URL(manifest.id ?? '/s/', `${origin}/invitado.webmanifest`);
+    expect(id.pathname.startsWith(manifest.scope)).toBe(true);
+  });
 });

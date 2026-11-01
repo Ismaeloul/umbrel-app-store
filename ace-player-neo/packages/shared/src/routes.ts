@@ -162,6 +162,7 @@ import {
   VodTitleSchema,
 } from './api/v1/vod.js';
 import {
+  PartyArtParamsSchema,
   PartyChatBodySchema,
   PartyControlBodySchema,
   PartyCreateBodySchema,
@@ -1682,7 +1683,7 @@ export const V1_ROUTES = {
     summary: 'Tiempo real de la sala por SSE: estado, personas y chat',
     description:
       'Empieza con `party.snapshot` y luego manda `party.playback`, `party.room`, `party.chat`, `party.typing` y ' +
-      '`party.closed`. ' +
+      '`party.closed`. Con `ping=1`, además, `party.ping` en cada latido (`PARTY.heartbeatMs`). ' +
       'Con la conexión abierta la persona cuenta como presente.',
     params: PartyParamsSchema,
     query: PartyEventsQuerySchema,
@@ -1744,6 +1745,27 @@ export const V1_ROUTES = {
     errors: [...PARTY_MEMBER_ERRORS, 'session_not_found', 'session_expired'],
     legacyTwin: null,
   }),
+  partyArt: defineRoute({
+    method: 'GET',
+    path: '/api/v1/party/:code/art/:artId',
+    access: 'any',
+    credential: 'party',
+    module: 'party',
+    summary: 'El cartel del título de la sala (o de lo que viene) por la ruta de la sala',
+    description:
+      'Para el invitado de fuera, que no tiene `vodArt` (§9): siempre el cartel (`poster`), y solo de un ' +
+      '`artId` que tenga la sala (el título, el siguiente episodio, lo que viene o la lista); si no, o en ' +
+      'directo, 404 `vod_not_found`. La caché, la `v` y el 304 son los de `vodArt`; con la cola de ' +
+      'carteles llena, 503 `vod_unavailable` con `Retry-After`.',
+    params: PartyArtParamsSchema,
+    query: VodArtQuerySchema,
+    response: null,
+    status: 200,
+    content: 'binary',
+    sideEffects: false,
+    errors: ['party_not_found', 'vod_not_found', 'vod_unavailable'],
+    legacyTwin: null,
+  }),
   partyControl: defineRoute({
     method: 'POST',
     path: '/api/v1/party/:code/control',
@@ -1751,13 +1773,16 @@ export const V1_ROUTES = {
     credential: 'party',
     module: 'party',
     summary: 'Reproducir, pausar, saltar o cambiar el idioma para todos',
+    description:
+      'Con freno por persona: más de 12 órdenes que cambian algo en 10 s dan `rate_limited` (la pausa ' +
+      'pasa siempre; las que no cambian nada no cuentan).',
     params: PartyParamsSchema,
     body: PartyControlBodySchema,
     response: PartyStatusResponseSchema,
     status: 200,
     content: 'json',
     sideEffects: true,
-    errors: PARTY_MEMBER_ERRORS,
+    errors: [...PARTY_MEMBER_ERRORS, 'rate_limited'],
     legacyTwin: null,
   }),
   partyStatus: defineRoute({

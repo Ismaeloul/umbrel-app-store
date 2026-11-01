@@ -270,6 +270,16 @@
   color: rgb(255 255 255 / 0.75);
   font-size: var(--fs-12, 12px);
 }
+/* «Toca aquí para que suene al empezar»: hasta el primer toque en la espera. */
+.juntos-lobby__sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: rgb(255 255 255 / 0.85);
+  font-size: var(--fs-12, 12px);
+  font-weight: 650;
+}
 @container (max-width: 520px) {
   .juntos-lobby > .juntos-poster {
     display: none;
@@ -521,10 +531,50 @@
 .juntos-chrome[data-visible='false'] {
   cursor: none;
 }
-/* La superficie que recibe toques y clics (debajo de los controles). */
+/* La superficie que recibe toques y clics (debajo de los controles). Sin la
+   espera del doble toque del navegador: el clic llega al momento. */
 .juntos-chrome__surface {
   position: absolute;
   inset: 0;
+  touch-action: manipulation;
+}
+/* «Activar sonido»: el navegador lo ha empezado en silencio. Sale aunque los
+   controles estén escondidos (en el móvil y en la pantalla completa de la
+   página), bajo la fila de arriba. */
+.juntos-sound {
+  position: absolute;
+  top: 48px;
+  left: 50%;
+  z-index: 4;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-color: rgb(255 255 255 / 0.22);
+  background: rgb(22 22 26 / 0.86);
+  color: #fff;
+  font-size: var(--fs-13, 13px);
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+.juntos-sound:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 2px;
+}
+/* `?debug=juntos`: lo último del reproductor, encima de todo y sin tocar nada. */
+.juntos-debug {
+  position: absolute;
+  bottom: 64px;
+  left: 6px;
+  z-index: 5;
+  max-width: calc(100% - 12px);
+  margin: 0;
+  padding: 4px 6px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.7);
+  color: #9ef0a5;
+  font: 10px/1.35 var(--font-mono, ui-monospace, monospace);
+  white-space: pre-wrap;
+  pointer-events: none;
 }
 .juntos-chrome__top,
 .juntos-chrome__bottom,
@@ -1869,5 +1919,77 @@
     padding: 6px 12px;
     border-radius: var(--r-pill, 999px);
     background: var(--accent-wash);
+  }
+}
+
+/* --- La página del invitado en el móvil (menos de 768, `.guest--room`): la
+   sala a la altura de lo que se ve (`--vvh`, guest.css), con el chat hasta
+   abajo y su caja por encima de la barra de Safari y del margen del iPhone.
+   Una cadena de cajas flexibles: la de la sala, el cuerpo, el lado de las
+   pestañas y su panel; solo la lista del chat (y Siguiente o Gente) se
+   desplaza. El teclado ya lo descuenta `--vvh`: aquí no se suma `--kb`. --- */
+@media (max-width: 767px) {
+  .guest--room .juntos {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .guest--room .juntos__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+  }
+  .guest--room .juntos__main {
+    flex: none;
+  }
+  .guest--room .juntos__side {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .guest--room .juntos__side > * {
+    flex: none;
+  }
+  .guest--room .juntos__side > .juntos__panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .guest--room .juntos-chat {
+    flex: 1;
+    height: 100%;
+    min-height: 0;
+  }
+  .guest--room .juntos__panel:has(> .juntos-chat) {
+    overflow: hidden;
+  }
+  .guest--room .juntos-chat__form {
+    margin-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+  /* «Esperando a todos»: la espera llena lo que se ve (como la maqueta) y el
+     chat queda debajo, deslizando el cuerpo. */
+  .guest--room .juntos__body:has(.juntos-lobby) {
+    overflow-y: auto;
+  }
+  .guest--room .juntos__main:has(> .juntos__stage > .juntos-lobby) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+  .guest--room .juntos__stage:has(> .juntos-lobby) {
+    flex: 1;
+    min-height: 420px;
+    overflow: auto;
+  }
+  .guest--room .juntos__body:has(.juntos-lobby) > .juntos__side {
+    flex: none;
+    height: 100%;
   }
 }

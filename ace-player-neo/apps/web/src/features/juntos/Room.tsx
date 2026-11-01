@@ -20,10 +20,20 @@
    - En directo (§14): sin «Cuando acabe» ni Siguiente. Quien controla tiene
      Chat, Fuentes, Partidos y Gente; los demás, Chat y Gente. Fuentes y
      Partidos tiran de la agenda y las fuentes de casa: solo en casa
-     (`liveTools`), no en la página del invitado. */
+     (`liveTools`), no en la página del invitado, que ni se baja ese código
+     (LiveTools.tsx va aparte, con React.lazy).
+   - Los carteles van por la ruta de la sala (`partyArt`, PartyArt): el
+     invitado de fuera no tiene `vodArt` (§9).
+   - Un toque en «Esperando a todos» deja sonar el vídeo luego: si el
+     navegador lo ha empezado en silencio, quita el silencio; si no ha dejado
+     ni eso, lo desbloquea.
+   - Si la sala no contesta en `CONNECT_SLOW_MS`, «Reintentar» (otro cliente
+     y otro reproductor desde cero). */
 
-import type { PartyCloseReason, PartyCredential, PartyRoom } from '@ace/shared';
+import type { PartyCloseReason, PartyCredential } from '@ace/shared';
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -47,11 +57,18 @@ import { Icon } from '../../ui/Icon.tsx';
 import { MEDIA, useMediaQuery } from '../../lib/media.ts';
 import { MobileFaces, MobileSkip } from './Mobile.tsx';
 import { Faces, joinNames, Lobby, NextCard, NextPanel, People } from './Panels.tsx';
-import { LiveMatches, LiveSources, useRoomMatch } from './LivePanels.tsx';
-import { nextSource, useLiveSources } from './live.ts';
-import { RoomPlayer, type PlayerView } from './player.ts';
+import { PartyArt } from './Join.tsx';
+import { RoomPlayer } from './player.ts';
 import { Theater } from './Theater.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
+
+/* Solo en casa (`liveTools`): la agenda, los partidos y las listas van en otro trozo. */
+const LiveAutoSwitch = lazy(() =>
+  import('./LiveTools.tsx').then((module) => ({ default: module.LiveAutoSwitch })),
+);
+const LivePanel = lazy(() =>
+  import('./LiveTools.tsx').then((module) => ({ default: module.LivePanel })),
+);
 
 const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
   host: JUNTOS_TEXT.closedByHost,
@@ -62,72 +79,13 @@ const CLOSED_TEXT: Record<PartyCloseReason | 'gone', string> = {
   gone: JUNTOS_TEXT.gone,
 };
 
-/** «Cambio automático si se cae»: como mucho un salto cada 30 s y 3 seguidos sin que suene ninguna. */
-const AUTO_SWITCH_GAP_MS = 30_000;
-const AUTO_SWITCH_MAX = 3;
-
 /** «Cerrar sala» queda armado este rato tras el primer toque. */
 const CLOSE_CONFIRM_MS = 5_000;
 
-type SideTab = 'chat' | 'siguiente' | 'fuentes' | 'partidos' | 'gente';
+/** Sin la foto de la sala en este rato, «Reintentar». */
+export const CONNECT_SLOW_MS = 10_000;
 
-/**
- * «Cambio automático si se cae» (§14): si el vídeo de la sala falla y quien lo
- * nota manda (el líder, o quien controle si el líder no está), salta a la
- * siguiente fuente que la sala no haya probado aún. Sin pintar nada.
- *
- * Con freno: un salto cada `AUTO_SWITCH_GAP_MS` como mucho y
- * `AUTO_SWITCH_MAX` seguidos sin que ninguna llegue a sonar. Con el motor
- * del NAS caído, todas fallan igual y saltar no arregla nada (en local se
- * comía las siete fuentes en un minuto).
- */
-export function LiveAutoSwitch({
-  room,
-  client,
-  player,
-}: {
-  room: PartyRoom;
-  client: PartyClient;
-  player: RoomPlayer;
-}) {
-  const match = useRoomMatch(room);
-  const sources = useLiveSources(match, true);
-  const view: PlayerView = useSyncExternalStore(player.subscribe, player.getView);
-  const tried = useRef(new Set<string>());
-  /* Saltos seguidos sin que ninguna suene y cuándo fue el último. */
-  const streak = useRef({ count: 0, at: Number.NEGATIVE_INFINITY });
-  /* Para volver a mirar cuando se cumple el hueco entre saltos. */
-  const [tick, setTick] = useState(0);
-  const live = room.live;
-  const selfId = client.credential.id;
-  const leader = room.members.find((member) => member.id === room.leaderId);
-  const decides = selfId === room.leaderId || (!leader?.online && canControl(room, selfId));
-  if (live) tried.current.add(live.hash);
-  /* Una que suena de verdad: vuelve a valer todo. 'ready' no basta: llega con la concesión,
-     antes de que suene nada, y con un fallo después de ella el freno no se aplicaba nunca. */
-  if (view.sounded && streak.current.count > 0) {
-    streak.current = { count: 0, at: streak.current.at };
-    tried.current = new Set(live ? [live.hash] : []);
-  }
-  const failed = view.phase === 'error' || room.interrupted === 'failed';
-  useEffect(() => {
-    if (!live?.auto || !decides || !failed || room.interrupted === 'taken') return;
-    const now = Date.now();
-    if (streak.current.count >= AUTO_SWITCH_MAX) return;
-    const wait = AUTO_SWITCH_GAP_MS - (now - streak.current.at);
-    if (wait > 0) {
-      /* Demasiado pronto: se vuelve a mirar al cumplirse el hueco (nada más lo haría). */
-      const timer = setTimeout(() => setTick((n) => n + 1), wait);
-      return () => clearTimeout(timer);
-    }
-    const next = nextSource(sources.data ?? [], live, tried.current);
-    if (!next) return;
-    tried.current.add(next.choice.hash);
-    streak.current = { count: streak.current.count + 1, at: now };
-    void client.control({ action: 'live', live: next.choice }).catch(() => undefined);
-  }, [live, decides, failed, room.interrupted, sources.data, client, tick]);
-  return null;
-}
+type SideTab = 'chat' | 'siguiente' | 'fuentes' | 'partidos' | 'gente';
 
 /** ¿Este navegador sabe poner un elemento cualquiera en pantalla completa? (el iPhone, no). */
 function nativeFullscreen(element: HTMLElement | null): boolean {
@@ -164,8 +122,16 @@ export function Room({
   /** La página del invitado: el reproductor pide las dos calidades (`abr=1`, docs/ver-juntos.md §17). */
   guest?: boolean;
 }) {
-  const client = useMemo(() => new PartyClient(code, credential), [code, credential]);
+  /* «Reintentar» cuando la sala no contesta: otro cliente (y con él, otro reproductor). */
+  const [attempt, setAttempt] = useState(0);
+  const client = useMemo(() => {
+    void attempt;
+    return new PartyClient(code, credential);
+  }, [code, credential, attempt]);
   const state = useSyncExternalStore(client.subscribe, client.getState);
+  const [slow, setSlow] = useState(false);
+  /* El primer toque en la espera ya ha preparado el vídeo para sonar. */
+  const [primed, setPrimed] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const [player, setPlayer] = useState<RoomPlayer | null>(null);
@@ -200,6 +166,28 @@ export function Room({
   useEffect(() => {
     if (state.closed === 'forbidden') onForbidden();
   }, [state.closed, onForbidden]);
+
+  const hasRoom = !!state.room;
+  useEffect(() => {
+    if (hasRoom) return;
+    const timer = globalThis.setTimeout(() => setSlow(true), CONNECT_SLOW_MS);
+    return () => globalThis.clearTimeout(timer);
+  }, [client, hasRoom]);
+  const reconnect = () => {
+    setSlow(false);
+    setAttempt((n) => n + 1);
+  };
+
+  /* Un toque en «Esperando a todos»: lo que haga falta para que luego suene. */
+  const onLobbyGesture = () => {
+    if (!player) return;
+    const now = player.getView();
+    if (now.phase === 'blocked') player.unlock();
+    else if (now.soundBlocked) player.unmute();
+    else if (!primed && now.phase === 'ready') player.unlock();
+    else return;
+    setPrimed(true);
+  };
 
   /* Salir de la pantalla completa del navegador (Esc, el gesto de atrás) también la quita aquí. */
   useEffect(() => {
@@ -317,18 +305,16 @@ export function Room({
   const closeArmed = closeTap.armed === 'close';
 
   const liveSide =
-    room && live && liveTools ? (
-      <>
-        {player && control ? <LiveAutoSwitch room={room} client={client} player={player} /> : null}
-      </>
+    room && live && liveTools && player && control ? (
+      <Suspense fallback={null}>
+        <LiveAutoSwitch room={room} client={client} player={player} />
+      </Suspense>
     ) : null;
   const livePanel = (which: 'fuentes' | 'partidos') =>
     room ? (
-      which === 'fuentes' ? (
-        <LiveSourcesHere room={room} client={client} />
-      ) : (
-        <LiveMatches room={room} client={client} />
-      )
+      <Suspense fallback={<span className="juntos-spinner" aria-hidden="true" />}>
+        <LivePanel which={which} room={room} client={client} />
+      </Suspense>
     ) : null;
 
   const stageContent = (
@@ -350,10 +336,8 @@ export function Room({
           room={room}
           client={client}
           selfId={selfId}
-          onGesture={() => {
-            /* «Toca para empezar» queda debajo: este toque ya desbloquea el sonido. */
-            if (player?.getView().phase === 'blocked') player.unlock();
-          }}
+          soundHint={!primed}
+          onGesture={onLobbyGesture}
         />
       ) : null}
     </div>
@@ -405,108 +389,119 @@ export function Room({
   );
 
   return (
-    <div
-      className={cx(
-        'juntos',
-        !!header && 'juntos--house',
-        fullscreen === 'page' && 'juntos--page-fs',
-      )}
-    >
-      {header}
-      {liveSide}
-      <div className="juntos__body" data-fullscreen={fullscreen ? 'true' : 'false'}>
-        <div className="juntos__main">
-          {stageContent}
-          {room ? (
-            <div className="juntos-info">
-              {live ? (
-                <span className="juntos-info__live" aria-hidden="true">
-                  <Icon name="tv" size={24} />
-                </span>
+    <PartyArt code={code}>
+      <div
+        className={cx(
+          'juntos',
+          !!header && 'juntos--house',
+          fullscreen === 'page' && 'juntos--page-fs',
+        )}
+      >
+        {header}
+        {liveSide}
+        <div className="juntos__body" data-fullscreen={fullscreen ? 'true' : 'false'}>
+          <div className="juntos__main">
+            {stageContent}
+            {room ? (
+              <div className="juntos-info">
+                {live ? (
+                  <span className="juntos-info__live" aria-hidden="true">
+                    <Icon name="tv" size={24} />
+                  </span>
+                ) : (
+                  <Art
+                    id={room.title.artId}
+                    art="poster"
+                    v={room.title.poster}
+                    title={room.title.title}
+                    className="juntos-poster juntos-info__poster"
+                  />
+                )}
+                <div className="juntos-info__text">
+                  <h1 className="juntos-info__title">
+                    {room.title.title}
+                    {room.title.subtitle ? (
+                      <span className="juntos-info__sub"> · {room.title.subtitle}</span>
+                    ) : null}
+                  </h1>
+                  <p className="juntos-info__who">{whoControls}</p>
+                </div>
+                <div className="juntos-info__actions">{deskActions}</div>
+              </div>
+            ) : slow ? (
+              <EmptyState
+                tone="error"
+                title={JUNTOS_TEXT.connectSlow}
+                actions={
+                  <>
+                    <Button variant="primary" icon="refresh" onClick={reconnect}>
+                      {JUNTOS_TEXT.retry}
+                    </Button>
+                    {exitAction}
+                  </>
+                }
+              >
+                {JUNTOS_TEXT.connectSlowHint}
+              </EmptyState>
+            ) : (
+              <h1 className="juntos-info__title">{JUNTOS_TEXT.connecting}</h1>
+            )}
+            {/* En el móvil, «Cuando acabe» va solo en la pestaña Siguiente (como la maqueta). */}
+            {room && !live && desk ? (
+              <NextCard room={room} onSeeList={() => setTab('siguiente')} />
+            ) : null}
+          </div>
+          <aside className="juntos__side">
+            {/* En directo, en el móvil, las caras apiladas con los nombres al lado (ver-juntos.html). */}
+            {room ? (
+              live && !desk ? (
+                <MobileFaces room={room} selfId={selfId} />
               ) : (
-                <Art
-                  id={room.title.artId}
-                  art="poster"
-                  v={room.title.poster}
-                  title={room.title.title}
-                  className="juntos-poster juntos-info__poster"
+                <Faces room={room} selfId={selfId} />
+              )
+            ) : null}
+            <div className="juntos__side-head">
+              <Tabs
+                label={JUNTOS_TEXT.people}
+                idPrefix="juntos"
+                block
+                items={tabs}
+                value={shownSide}
+                onChange={setTab}
+              />
+            </div>
+            <div className="juntos__panel" {...tabPanelProps('juntos', shownSide)}>
+              {shownSide === 'chat' ? (
+                <Chat
+                  messages={state.chat}
+                  room={room}
+                  selfId={selfId}
+                  typing={state.typing}
+                  onSend={(text) => client.chat(text)}
+                  onTyping={() => client.typing()}
+                  onExpireTyping={() => client.expireTyping()}
+                />
+              ) : !room ? null : shownSide === 'fuentes' || shownSide === 'partidos' ? (
+                livePanel(shownSide)
+              ) : shownSide === 'siguiente' ? (
+                <>
+                  <NextPanel room={room} client={client} selfId={selfId} onPropose={onPropose} />
+                  {desk ? null : <MobileSkip room={room} client={client} selfId={selfId} />}
+                </>
+              ) : (
+                <People
+                  room={room}
+                  client={client}
+                  selfId={selfId}
+                  onCloseRoom={isHost ? () => void leave() : undefined}
+                  closeArmed={closeArmed}
+                  closing={closing}
                 />
               )}
-              <div className="juntos-info__text">
-                <h1 className="juntos-info__title">
-                  {room.title.title}
-                  {room.title.subtitle ? (
-                    <span className="juntos-info__sub"> · {room.title.subtitle}</span>
-                  ) : null}
-                </h1>
-                <p className="juntos-info__who">{whoControls}</p>
-              </div>
-              <div className="juntos-info__actions">{deskActions}</div>
             </div>
-          ) : (
-            <h1 className="juntos-info__title">{JUNTOS_TEXT.connecting}</h1>
-          )}
-          {/* En el móvil, «Cuando acabe» va solo en la pestaña Siguiente (como la maqueta). */}
-          {room && !live && desk ? (
-            <NextCard room={room} onSeeList={() => setTab('siguiente')} />
-          ) : null}
+          </aside>
         </div>
-        <aside className="juntos__side">
-          {/* En directo, en el móvil, las caras apiladas con los nombres al lado (ver-juntos.html). */}
-          {room ? (
-            live && !desk ? (
-              <MobileFaces room={room} selfId={selfId} />
-            ) : (
-              <Faces room={room} selfId={selfId} />
-            )
-          ) : null}
-          <div className="juntos__side-head">
-            <Tabs
-              label={JUNTOS_TEXT.people}
-              idPrefix="juntos"
-              block
-              items={tabs}
-              value={shownSide}
-              onChange={setTab}
-            />
-          </div>
-          <div className="juntos__panel" {...tabPanelProps('juntos', shownSide)}>
-            {shownSide === 'chat' ? (
-              <Chat
-                messages={state.chat}
-                room={room}
-                selfId={selfId}
-                typing={state.typing}
-                onSend={(text) => client.chat(text)}
-                onTyping={() => client.typing()}
-                onExpireTyping={() => client.expireTyping()}
-              />
-            ) : !room ? null : shownSide === 'fuentes' || shownSide === 'partidos' ? (
-              livePanel(shownSide)
-            ) : shownSide === 'siguiente' ? (
-              <>
-                <NextPanel room={room} client={client} selfId={selfId} onPropose={onPropose} />
-                {desk ? null : <MobileSkip room={room} client={client} selfId={selfId} />}
-              </>
-            ) : (
-              <People
-                room={room}
-                client={client}
-                selfId={selfId}
-                onCloseRoom={isHost ? () => void leave() : undefined}
-                closeArmed={closeArmed}
-                closing={closing}
-              />
-            )}
-          </div>
-        </aside>
       </div>
-    </div>
+    </PartyArt>
   );
-}
-
-/** Fuentes del partido que suena (lo busca en la agenda de casa). */
-function LiveSourcesHere({ room, client }: { room: PartyRoom; client: PartyClient }) {
-  const match = useRoomMatch(room);
-  return <LiveSources room={room} client={client} match={match} />;
 }

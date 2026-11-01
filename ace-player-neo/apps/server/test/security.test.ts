@@ -51,6 +51,8 @@ const PARAM_VALUES: Record<string, string> = {
   code: 'k3J9xQ2mZpL8wR4t',
   /* Clave de vídeo de una persona de la sala. */
   key: 'k'.repeat(32),
+  /* Cartel de un título de la sala (`partyArt`). */
+  artId: HASH,
 };
 
 function concretePath(route: V1RouteDefinition): string {
@@ -197,6 +199,8 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'partyEvents',
       'partyStream',
       'partyVideo',
+      /* El cartel de la sala (sin la credencial: el código ya es secreto; solo carteles de la sala). */
+      'partyArt',
       'partyControl',
       'partyStatus',
       'partyChat',

@@ -14,3 +14,6 @@ apps/ios/DerivedData/
 # Datos de pruebas locales del servidor
 .data/
 .env
+
+# Lo deja un test de remux al fallar
+apps/server/init.mp4

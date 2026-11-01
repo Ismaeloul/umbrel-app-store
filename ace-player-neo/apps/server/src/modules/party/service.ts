@@ -53,6 +53,7 @@ import {
   type PartyMember,
   type PartyPlayback,
   type PartyQueueBody,
+  type PartyStatusResponse,
   type PartyStreamQuery,
   type StreamGrant,
   type VodGrant,
@@ -68,7 +69,7 @@ import type { TimerHandle } from '../../core/clock.js';
 import { AppError } from '../../core/errors.js';
 import type { Unsubscribe } from '../../core/bus.js';
 import type { ViewerIdentity } from '../playback/types.js';
-import type { PartyDeps, PartyService, PartySink } from './types.js';
+import type { PartyConnectOptions, PartyDeps, PartyService, PartySink } from './types.js';
 import type { RemuxLiteOffer } from '../remux/types.js';
 
 /** Tras dejar de esperar a alguien, no se le vuelve a esperar durante esto. */
@@ -77,6 +78,19 @@ const HOLD_COOLDOWN_MS = 30_000;
 const AUDIO_SWITCH_WINDOW_MS = 45_000;
 /** Cada cuánto se revisan esperas, ausencias y caducidades. */
 const SWEEP_MS = 1_000;
+/**
+ * Una pausa sobre una sala ya en pausa, o un salto con la sala en marcha, a menos de esto de donde
+ * va la sala no cambia nada: no se fija, ni se avisa en el chat, ni se manda a nadie.
+ */
+const NOOP_ORDER_S = 1.5;
+/**
+ * Freno de órdenes por persona: con `ORDER_MAX` órdenes aplicadas en `ORDER_WINDOW_MS`, las de más
+ * dan `rate_limited` (un bucle de órdenes de un aparato no mueve a todos cada medio segundo). Solo
+ * cuentan las que cambian algo, y una pausa pasa siempre: es la intención de parar, y no hace
+ * bucle (otra pausa ya no cambia nada).
+ */
+const ORDER_WINDOW_MS = 10_000;
+const ORDER_MAX = 12;
 
 const SSE_HEADERS: Readonly<Record<string, string>> = {
   'content-type': 'text/event-stream; charset=utf-8',
@@ -123,11 +137,22 @@ interface Member {
   readonly videoKey: string;
   /** Su visor de playback: el latido de la sesión lo da `status` (docs/ver-juntos.md §9). */
   viewer: { readonly identity: ViewerIdentity; readonly sessionId: string } | null;
+  /**
+   * Cuándo perdió su visor (falló el latido de la sesión) sin que la sala cambiara de título, o
+   * null. Hasta que vuelva a abrir, `status` dice `lost` y no `none`.
+   */
+  viewerLostAt: number | null;
+  /** Las órdenes aplicadas de los últimos `ORDER_WINDOW_MS` (el freno, `ORDER_MAX`). */
+  readonly orderTimes: number[];
+  /** La última vez que se apuntó en el registro que se le frenan las órdenes. */
+  orderMutedLoggedAt: number;
 }
 
 interface Connection {
   readonly memberId: string;
   readonly sink: PartySink;
+  /** Pidió `ping=1`: en cada latido recibe también `party.ping`. */
+  readonly ping: boolean;
   closed: boolean;
   done: () => void;
   detach: () => void;
@@ -257,7 +282,7 @@ export function formatPosition(seconds: number): string {
 }
 
 export function createPartyRuntime(deps: PartyDeps): PartyService {
-  const { clock, logger, bus, playback, config, remux } = deps;
+  const { clock, logger, bus, playback, config, remux, art } = deps;
   const publicUrl = config.party.publicUrl;
   /** «Calidad ligera para invitados» (§17): `ACE_PARTY_LITE=1` y el remux que la hace. */
   const partyLite = config.party.lite && remux !== undefined;
@@ -446,13 +471,32 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     if (heartbeat) return;
     heartbeat = clock.setInterval(
       () => {
+        /* El comentario lo ve el navegador (y los proxys), no el JS; `party.ping`, sí. */
+        const ping = frameOf({ type: 'party.ping', data: { serverNow: clock.now() } });
         for (const room of rooms.values()) {
-          for (const connection of [...room.connections]) write(room, connection, ': ping\n\n');
+          for (const connection of [...room.connections]) {
+            write(room, connection, ': ping\n\n');
+            if (connection.ping && ping) write(room, connection, ping);
+          }
         }
       },
       PARTY.heartbeatMs,
       { unref: true },
     );
+  }
+
+  /**
+   * Los carteles que se ven en la sala (`partyArt`): el del título, el del siguiente episodio, el de
+   * lo que viene y los de la lista. En directo, ninguno (el «cartel» sería el canal).
+   */
+  function roomArtIds(room: Room): Set<string> {
+    const ids = new Set<string>();
+    if (room.live) return ids;
+    ids.add(room.title.artId);
+    if (room.nextEpisode) ids.add(room.nextEpisode.artId);
+    if (room.upNext) ids.add(room.upNext.title.artId);
+    for (const item of room.queue) ids.add(item.title.artId);
+    return ids;
   }
 
   // --- Chat ---
@@ -576,6 +620,9 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       typingAt: Number.NEGATIVE_INFINITY,
       videoKey: randomId(24),
       viewer: null,
+      viewerLostAt: null,
+      orderTimes: [],
+      orderMutedLoggedAt: Number.NEGATIVE_INFINITY,
     };
     room.members.set(id, member);
     return { member, token: `${id}.${secret}` };
@@ -594,6 +641,8 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
   function releaseViewer(member: Member): void {
     const viewer = member.viewer;
     member.viewer = null;
+    /* Soltarlo adrede (otro título, salir, cerrar) no es perderlo. */
+    member.viewerLostAt = null;
     if (!viewer) return;
     void playback
       .release(
@@ -1035,6 +1084,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     room.viewers.add(viewer.viewerId);
     if (member.viewer && member.viewer.identity.viewerId !== viewer.viewerId) releaseViewer(member);
     member.viewer = { identity: viewer, sessionId: grant.session.id };
+    member.viewerLostAt = null;
     /* Quien eligió el canal pudo no saber de dónde sale: lo dice la concesión. */
     const source = grant.source === 'iptv' ? 'iptv' : 'engine';
     let changed = false;
@@ -1112,6 +1162,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     token: string,
     sink: PartySink,
     signal: AbortSignal,
+    options: PartyConnectOptions = {},
   ): Promise<void> {
     const room = find(code);
     const member = authenticate(room, token);
@@ -1121,6 +1172,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       const connection: Connection = {
         memberId: member.id,
         sink,
+        ping: options.ping === true,
         closed: false,
         done: resolve,
         detach: () => signal.removeEventListener('abort', onAbort),
@@ -1241,11 +1293,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       return joined(room, credential);
     },
 
-    connect(code, token, reply: FastifyReply, signal) {
+    connect(code, token, reply: FastifyReply, signal, options = {}) {
       /* Se comprueba ANTES del hijack: un 404 o un 403 salen como JSON normal. */
       authenticate(find(code), token);
       reply.hijack();
-      return attach(code, token, reply.raw as unknown as PartySink, signal);
+      return attach(code, token, reply.raw as unknown as PartySink, signal, options);
     },
 
     attach,
@@ -1338,6 +1390,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       if (member.viewer && member.viewer.identity.viewerId !== viewer.viewerId)
         releaseViewer(member);
       member.viewer = { identity: viewer, sessionId: grant.session.id };
+      member.viewerLostAt = null;
       const vod = grant.vod;
       const tracks = vod.audio.map((track) => ({ index: track.index, label: track.label }));
       const title: PartyTitle = {
@@ -1376,6 +1429,16 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       return { ...grant, url };
     },
 
+    async art(code, artId, version, ifNoneMatch) {
+      const room = find(code);
+      /* Solo un cartel que se ve en la sala: el enlace no abre el catálogo entero. */
+      if (!roomArtIds(room).has(artId)) {
+        throw new AppError('vod_not_found', { detail: 'party_art_not_in_room' });
+      }
+      if (!art) throw new AppError('vod_unavailable', { detail: 'sin servicio VOD' });
+      return art.artOf(artId, 'poster', version, ifNoneMatch);
+    },
+
     videoSession(code, key) {
       const room = find(code);
       for (const member of room.members.values()) {
@@ -1392,19 +1455,77 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     },
 
     control(code, body) {
+      /* La hora de llegada (C2): con ella y `serverNow`, el cliente descuenta lo que tarda esto. */
+      const receivedAt = clock.now();
       const room = find(code);
       const member = authenticate(room, body.token);
       requireControl(room, member);
-      const now = clock.now();
+      const now = receivedAt;
+      const answer = (): PartyStatusResponse => ({
+        serverNow: clock.now(),
+        rev: room.playback.rev,
+        receivedAt,
+      });
       /* En directo (§14) solo se cambia de canal: ni pausa, ni saltos, ni idioma. */
       if (room.live || body.action === 'live') {
         if (body.action !== 'live' || !room.live) {
           throw new AppError('validation_error', { detail: 'party_live' });
         }
         switchLive(room, body.live, member);
-        return { serverNow: now, rev: room.playback.rev };
+        return answer();
       }
-      fix(room, body.positionS, now);
+      const source = 'source' in body ? (body.source ?? null) : null;
+      const log = (noop: boolean, positionS: number): void => {
+        logger.info(
+          {
+            room: room.code,
+            member: member.id,
+            action: body.action,
+            positionS: Math.round(positionS * 1000) / 1000,
+            rev: room.playback.rev,
+            source,
+            noop,
+          },
+          noop ? 'Ver juntos: orden que no cambia nada' : 'Ver juntos: orden',
+        );
+      };
+      const current = positionNow(room, now);
+      const running = room.playback.playing && room.waiting.size === 0 && room.lobby === null;
+      const off = Math.abs(body.positionS - current);
+      /* Órdenes que no cambian nada (el segundo toque de un doble clic, el `play` de quien llega
+         tarde): ni se fijan, ni salen en el chat, ni paran a nadie. «Empezar para todos» (la espera)
+         y un `play` mientras se espera a alguien sí son órdenes. */
+      const noop =
+        (body.action === 'play' && running && off < PARTY.driftSeekS) ||
+        (body.action === 'pause' && !room.playback.playing && off < NOOP_ORDER_S) ||
+        (body.action === 'seek' && running && off < NOOP_ORDER_S);
+      if (noop) {
+        log(true, body.positionS);
+        return answer();
+      }
+      /* El freno: un aparato que manda órdenes en bucle no mueve a todos. Cuentan solo las que
+         cambian algo (arriba); la pausa pasa siempre. La de más da `rate_limited`, para que quien
+         la mandó vea el aviso (antes se tiraba en silencio y su interfaz seguía como si nada). */
+      const times = member.orderTimes;
+      while (times.length && now - (times[0] ?? 0) >= ORDER_WINDOW_MS) times.shift();
+      if (body.action !== 'pause') {
+        if (times.length >= ORDER_MAX) {
+          if (now - member.orderMutedLoggedAt >= ORDER_WINDOW_MS) {
+            member.orderMutedLoggedAt = now;
+            logger.warn(
+              { room: room.code, member: member.id, action: body.action, source },
+              'Ver juntos: demasiadas órdenes seguidas, se rechazan las de más',
+            );
+          }
+          throw new AppError('rate_limited');
+        }
+        times.push(now);
+      }
+      /* Reproducir o pausar donde va la sala: la posición del aparato es la de alguien que va un
+         poco por detrás (o por delante), y fijarla movería a todos los demás. */
+      const near = (body.action === 'play' || body.action === 'pause') && off < PARTY.driftSeekS;
+      const positionS = near ? current : body.positionS;
+      fix(room, positionS, now);
       let action: PartyAction = body.action;
       switch (body.action) {
         case 'play':
@@ -1418,6 +1539,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
           say(room, `${member.name} ha dado a reproducir.`, null);
           break;
         case 'pause':
+          if (!room.playback.playing) {
+            /* Ya estaba en pausa: solo se recoloca, sin «ha pausado». */
+            action = 'seek';
+            break;
+          }
           room.playback.playing = false;
           room.waiting.clear();
           say(room, `${member.name} ha pausado.`, null);
@@ -1435,14 +1561,17 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
           break;
         }
       }
+      log(false, positionS);
       sendPlayback(room, action, member.id);
-      return { serverNow: now, rev: room.playback.rev };
+      return answer();
     },
 
     async status(code, body) {
+      /* La hora de llegada (C2); `serverNow` se toma al responder, después del latido del vídeo. */
+      const receivedAt = clock.now();
       const room = find(code);
       const member = authenticate(room, body.token);
-      const now = clock.now();
+      const now = receivedAt;
       let changed = false;
       /* Dónde va su vídeo: si se atasca, la sala se para ahí y no más adelante (§16). */
       member.reportedPositionS = body.positionS;
@@ -1483,11 +1612,17 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
           );
           stream = 'ok';
         } catch {
-          if (member.viewer === viewer) member.viewer = null;
+          if (member.viewer === viewer) {
+            member.viewer = null;
+            member.viewerLostAt = clock.now();
+          }
           stream = 'lost';
         }
+      } else if (member.viewerLostAt !== null) {
+        /* Lo perdió y aún no ha vuelto a abrir: sigue perdido (no «aún no ha abierto»). */
+        stream = 'lost';
       }
-      return { serverNow: clock.now(), rev: room.playback.rev, stream };
+      return { serverNow: clock.now(), rev: room.playback.rev, receivedAt, stream };
     },
 
     chat(code, body) {

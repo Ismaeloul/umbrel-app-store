@@ -725,12 +725,19 @@ export function Lobby({
   client,
   selfId,
   onGesture,
+  soundHint = false,
 }: {
   room: PartyRoom;
   client: PartyClient;
   selfId: string;
-  /** Un toque en la espera (el navegador lo necesita para que luego suene el vídeo). */
+  /**
+   * Un toque en la espera (el navegador lo necesita para que luego suene el vídeo). Con el clic
+   * (o Intro y espacio), no con `pointerdown`: en el iPhone, un dedo que baja aún no cuenta como
+   * gesto para el sonido y al otro le empezaba sin él.
+   */
   onGesture?: () => void;
+  /** «Toca aquí para que suene al empezar»: aún no ha tocado nada en la espera. */
+  soundHint?: boolean;
 }) {
   const control = canControl(room, selfId);
   const present = room.members.filter((member) => member.online);
@@ -753,8 +760,10 @@ export function Lobby({
     <section
       className="juntos-lobby"
       aria-labelledby="juntos-lobby-title"
-      onPointerDown={onGesture}
-      onKeyDown={onGesture}
+      onClick={onGesture}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') onGesture?.();
+      }}
     >
       <Poster stamp={room.title.poster} artId={room.title.artId} title={room.title.title} />
       <div className="juntos-lobby__body">
@@ -802,7 +811,9 @@ export function Lobby({
             icon="play"
             className="juntos-lobby__start"
             onClick={() =>
-              attempt(() => client.control({ action: 'play', positionS: room.playback.positionS }))
+              attempt(() =>
+                client.control({ action: 'play', positionS: room.playback.positionS }, 'lobby'),
+              )
             }
           >
             {JUNTOS_TEXT.startForAll}
@@ -811,6 +822,12 @@ export function Lobby({
         <p className="juntos-lobby__hint" role="status">
           {control ? hint : JUNTOS_TEXT.lobbyGuest(leader)}
         </p>
+        {soundHint && onGesture ? (
+          <p className="juntos-lobby__sound">
+            <Icon name="vol" size={16} />
+            {JUNTOS_TEXT.lobbySoundHint}
+          </p>
+        ) : null}
       </div>
     </section>
   );
