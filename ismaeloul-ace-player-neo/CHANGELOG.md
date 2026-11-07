@@ -2,6 +2,17 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 1.1.5 (2026-11-07)
+
+Version 1.1.5. Ver juntos renovado, sobre todo en el movil: el teclado ya
+no tapa el chat (el video encoge mientras escribes), tumbado el video va a
+pantalla completa con el chat en un cajon, y la espera, el sonido y la pausa
+se ven dentro del video. Proponer desde la sala ya funciona: en Pelis y series
+eliges y sale "Poner en la sala ahora" o "Proponer a la sala" segun tu papel.
+En el directo, Fuentes ya no se corta y Partidos se ve como la Agenda, con
+"Poner en la sala". Las salas abiertas incluyen las de directo. Agenda: el
+logo de la liga sale entero y sin la raya amarilla.
+
 ## 1.1.4 (2026-11-07)
 
 Version 1.1.4. Ver juntos en el iPhone: el audio ya no se corta a trozos.
