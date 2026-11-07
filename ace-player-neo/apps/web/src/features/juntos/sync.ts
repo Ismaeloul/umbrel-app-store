@@ -156,19 +156,25 @@ export type Correction =
 
 /** Control proporcional: la velocidad corrige la deriva en unos `DRIFT_TAU_S` (sin tope). */
 export const DRIFT_TAU_S = 4;
-/** Se empieza a corregir con más de esto de deriva… */
-export const DRIFT_START_S = 0.06;
+/**
+ * Se empieza a corregir con más de esto de deriva… En Safari (AVPlayer), cada cambio de
+ * `playbackRate` corta el audio un instante para recolocarlo: con 0,06 s (la 1.1.2) cambiaba cada
+ * pocos segundos y en el iPhone se oía «a trozos». Ahí solo se corrige un desfase que se note.
+ */
+export const DRIFT_START_S: Readonly<Record<SyncEngine, number>> = { mse: 0.06, native: 0.3 };
 /** …y se para con menos de esto (histéresis: entre los dos, sigue como iba). */
-export const DRIFT_STOP_S = 0.02;
+export const DRIFT_STOP_S: Readonly<Record<SyncEngine, number>> = { mse: 0.02, native: 0.08 };
 /** Pasos de la velocidad (un 1 %): no se cambia en cada tic por milésimas. */
 export const RATE_STEP = 0.01;
+/** Lo más que se acelera o frena con hls.js: lo aguanta sin vaciar el colchón. */
+export const DRIFT_MAX_RATE: Readonly<Record<SyncEngine, number>> = { mse: 0.1, native: 0.05 };
 /**
- * Lo más que se acelera o frena: hls.js lo aguanta sin vaciar el colchón; Safari (AVPlayer) va
- * más justo y sube a `DRIFT_RATE_NATIVE_FAR` solo con más de `DRIFT_FAR_S` de deriva.
+ * En Safari, una sola velocidad fija por corrección (no proporcional): cada escalón sería otro
+ * corte de audio. 0,3 s se recuperan en unos 6 s.
  */
-export const DRIFT_MAX_RATE: Readonly<Record<SyncEngine, number>> = { mse: 0.1, native: 0.06 };
-export const DRIFT_RATE_NATIVE_FAR = 0.08;
-export const DRIFT_FAR_S = 0.5;
+export const DRIFT_RATE_NATIVE = 0.05;
+/** En Safari, entre el fin de una corrección y el principio de la siguiente, al menos esto. */
+export const NATIVE_RATE_HOLD_MS = 8_000;
 
 export interface CorrectionOptions {
   /**
@@ -183,9 +189,9 @@ export interface CorrectionOptions {
 
 /** La velocidad para una deriva (`drift` > 0: el vídeo va por detrás), ya con tope y en pasos. */
 export function driftRate(drift: number, engine: SyncEngine): number {
+  if (engine === 'native') return Number((1 + Math.sign(drift) * DRIFT_RATE_NATIVE).toFixed(2));
   const size = Math.abs(drift);
-  const max =
-    engine === 'native' && size > DRIFT_FAR_S ? DRIFT_RATE_NATIVE_FAR : DRIFT_MAX_RATE[engine];
+  const max = DRIFT_MAX_RATE[engine];
   const raw = Math.min(max, size / DRIFT_TAU_S);
   /* En pasos de `RATE_STEP`, y al menos uno: corrigiendo, la velocidad nunca se queda en 1. */
   const stepped = Math.max(RATE_STEP, Math.min(max, Math.round(raw / RATE_STEP) * RATE_STEP));
@@ -215,7 +221,7 @@ export function correction(
     return size > PAUSED_SNAP_S[engine] ? { kind: 'seek', to: targetS } : { kind: 'none' };
   }
   if (size > seekS) return { kind: 'seek', to: targetS };
-  const threshold = options.correcting ? DRIFT_STOP_S : DRIFT_START_S;
+  const threshold = options.correcting ? DRIFT_STOP_S[engine] : DRIFT_START_S[engine];
   if (size <= threshold) return { kind: 'rate', rate: 1 };
   return { kind: 'rate', rate: driftRate(drift, engine) };
 }

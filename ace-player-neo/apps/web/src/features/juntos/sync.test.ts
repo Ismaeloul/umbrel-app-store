@@ -6,7 +6,7 @@ import {
   clock,
   correction,
   DRIFT_MAX_RATE,
-  DRIFT_RATE_NATIVE_FAR,
+  DRIFT_RATE_NATIVE,
   driftRate,
   forwardBufferEnd,
   freshSamples,
@@ -315,14 +315,14 @@ describe('correction: el umbral del salto mientras se absorbe lo que quedó al c
   it('con `seekS` (Safari), hasta ahí corrige con la velocidad; más allá, salta', () => {
     const native = { engine: 'native' as const, seekS: WAITED_STAY_S };
     expect(correction(146, 147.5, true)).toEqual({ kind: 'seek', to: 147.5 });
-    /* 1,5 s en Safari: por encima de 0,5 s el tope sube al 8 %. */
+    /* 1,5 s en Safari: una sola velocidad fija (cada escalón cortaría el audio). */
     expect(correction(146, 147.5, true, native)).toEqual({
       kind: 'rate',
-      rate: 1 + DRIFT_RATE_NATIVE_FAR,
+      rate: 1 + DRIFT_RATE_NATIVE,
     });
     expect(correction(149, 147.5, true, native)).toEqual({
       kind: 'rate',
-      rate: 1 - DRIFT_RATE_NATIVE_FAR,
+      rate: 1 - DRIFT_RATE_NATIVE,
     });
     expect(correction(145, 147.5, true, native)).toEqual({ kind: 'seek', to: 147.5 });
   });
@@ -331,12 +331,13 @@ describe('correction: el umbral del salto mientras se absorbe lo que quedó al c
 describe('correction: control proporcional (§6)', () => {
   it('la velocidad es 1 + deriva / 4 s, en pasos de 0,01, con el tope de cada motor', () => {
     expect(driftRate(0.4, 'mse')).toBe(1.1);
-    expect(driftRate(0.4, 'native')).toBe(1.06);
-    expect(driftRate(0.9, 'native')).toBe(1.08);
+    /* Safari: siempre el mismo 5 % (cada cambio de velocidad corta el audio en el iPhone). */
+    expect(driftRate(0.4, 'native')).toBe(1.05);
+    expect(driftRate(0.9, 'native')).toBe(1.05);
+    expect(driftRate(-0.35, 'native')).toBe(0.95);
     expect(driftRate(-0.9, 'mse')).toBe(0.9);
     expect(driftRate(0.16, 'mse')).toBe(1.04);
-    expect(driftRate(0.12, 'native')).toBe(1.03);
-    expect(DRIFT_MAX_RATE).toEqual({ mse: 0.1, native: 0.06 });
+    expect(DRIFT_MAX_RATE).toEqual({ mse: 0.1, native: 0.05 });
     /* Los números de `PARTY` siguen igual: la app iOS los copia. */
     expect(PARTY.driftRate).toBe(0.05);
     expect(PARTY.driftRateS).toBe(0.25);
@@ -366,6 +367,26 @@ describe('correction: control proporcional (§6)', () => {
     expect(rates.slice(-10)).toEqual(Array.from({ length: 10 }, () => 1));
     const changes = rates.filter((rate, i) => i > 0 && rate !== rates[i - 1]).length;
     expect(changes).toBeLessThanOrEqual(12);
+  });
+
+  it('Safari: no corrige por debajo de 0,3 s y, corrigiendo, para con menos de 0,08 s', () => {
+    const native = { engine: 'native' as const };
+    expect(correction(100, 100.25, true, { ...native, correcting: false })).toEqual({
+      kind: 'rate',
+      rate: 1,
+    });
+    expect(correction(100, 100.35, true, { ...native, correcting: false })).toEqual({
+      kind: 'rate',
+      rate: 1.05,
+    });
+    expect(correction(100, 100.1, true, { ...native, correcting: true })).toEqual({
+      kind: 'rate',
+      rate: 1.05,
+    });
+    expect(correction(100, 100.07, true, { ...native, correcting: true })).toEqual({
+      kind: 'rate',
+      rate: 1,
+    });
   });
 });
 

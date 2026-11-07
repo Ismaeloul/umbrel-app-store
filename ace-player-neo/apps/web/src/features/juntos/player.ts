@@ -79,6 +79,7 @@ import {
   coldSeekLead,
   leadTarget,
   lobbyReport,
+  NATIVE_RATE_HOLD_MS,
   pausedSeek,
   RESUME_AHEAD_S,
   SAME_TARGET_S,
@@ -441,6 +442,8 @@ export class RoomPlayer {
   private leadProbe: { at: number; landed: number | null; loaded: boolean } | null = null;
   /** ¿Se corregía con la velocidad en el tic anterior? (la histéresis de `correction`). */
   private correcting = false;
+  /** Cuándo acabó la última corrección por velocidad (el freno de Safari, `NATIVE_RATE_HOLD_MS`). */
+  private rateEndedAt = Number.NEGATIVE_INFINITY;
   /** El `loadedmetadata` pendiente de colocar (se quita al quitar el vídeo). */
   private pendingMeta: (() => void) | null = null;
   /** Hay un play() en curso: no se pide otro en cada tic. */
@@ -1234,11 +1237,23 @@ export class RoomPlayer {
       this.absorbUntil = Number.NEGATIVE_INFINITY;
     }
     const absorbing = engine === 'native' && running && !order && now < this.absorbUntil;
-    const fix = correction(video.currentTime, target, running, {
+    let fix = correction(video.currentTime, target, running, {
       engine,
       ...(absorbing ? { seekS: WAITED_STAY_S } : {}),
       correcting: this.correcting,
     });
+    /* Safari corta el audio en cada cambio de velocidad: una corrección nueva no empieza hasta
+       `NATIVE_RATE_HOLD_MS` después de acabar la anterior (volver a 1 sí, siempre). */
+    if (
+      engine === 'native' &&
+      fix.kind === 'rate' &&
+      fix.rate !== 1 &&
+      !this.correcting &&
+      now - this.rateEndedAt < NATIVE_RATE_HOLD_MS
+    ) {
+      fix = { kind: 'rate', rate: 1 };
+    }
+    if (this.correcting && !(fix.kind === 'rate' && fix.rate !== 1)) this.rateEndedAt = now;
     this.correcting = fix.kind === 'rate' && fix.rate !== 1;
     const lead = running ? this.currentLead() : 0;
     this.logTick({

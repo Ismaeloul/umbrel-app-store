@@ -14,7 +14,7 @@ import type * as Engines from '../../player/engines/index.ts';
 import { setHevcSupport } from '../cine/play.ts';
 import type { PartyClient, PartyState } from './client.ts';
 import { RoomPlayer, savedQuality, variantUrl, type HlsStatic, type PlayerEnv } from './player.ts';
-import { DRIFT_RATE_NATIVE_FAR } from './sync.ts';
+import { DRIFT_RATE_NATIVE } from './sync.ts';
 import { JUNTOS_TEXT } from './texts.ts';
 
 const api = vi.hoisted(() => vi.fn());
@@ -700,8 +700,8 @@ describe('«Ver juntos», Safari con la sala esperando (§16): el salto en pausa
     tick();
     run(500);
     expect(video.paused).toBe(false);
-    /* Safari, 1,5 s: la velocidad proporcional con el tope de lejos (8 %). */
-    expect(video.playbackRate).toBe(1 + DRIFT_RATE_NATIVE_FAR);
+    /* Safari, 1,5 s: la velocidad fija de Safari (5 %). */
+    expect(video.playbackRate).toBe(1 + DRIFT_RATE_NATIVE);
     run(20_000);
     /* Antes: un salto en el primer tic (la «orden» de 'resume'), que tiraba el colchón recién lleno. */
     expect(video.fetches).toBe(1);

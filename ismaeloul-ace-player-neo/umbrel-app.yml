@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "1.1.3"
+version: "1.1.4"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,11 +13,10 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Version 1.1.3. La app del iPhone puede entrar desde fuera de casa sin VPN
-  por tv.ismaeloul.es, con HTTPS y todas las protecciones: solo la entrada de
-  la app, emparejar solo desde casa, permiso por aparato (apagado hasta que lo
-  enciendas en Ajustes, Dispositivos), bloqueo de intentos y registro de
-  accesos. La web y las salas siguen igual.
+  Version 1.1.4. Ver juntos en el iPhone: el audio ya no se corta a trozos.
+  Para ir a la par, el iPhone cambiaba la velocidad del video cada pocos
+  segundos y Safari corta el sonido en cada cambio; ahora solo corrige
+  desfases que se notan, a una velocidad fija y con pausas entre medias.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []

@@ -87,10 +87,12 @@ viejas no lo piden y no lo reciben.
 - **Corrección** (cada 500 ms): más de 1 s de diferencia, se salta; entre 0,25 y 1 s, velocidad ±5 %; en pausa, se
   coloca el vídeo si se aparta más de 0,3 s. Medido en local con dos pestañas: 0,12 s de diferencia reproduciendo y el
   mismo fotograma en pausa. **En la web, desde la 1.1.2** (el «segundo de retraso» entre el PC y el iPhone): control
-  proporcional (`rate = 1 + drift / 4 s`, desde 0,06 s y hasta 0,02 s con histéresis, tope ±10 % con hls.js y ±6-8 %
-  con el HLS nativo) y el salto compensa lo que tarda en caer y arrancar (la latencia medida de cada motor, media
+  proporcional con hls.js (`rate = 1 + drift / 4 s`, desde 0,06 s y hasta 0,02 s con histéresis, tope ±10 %) y el salto compensa lo que tarda en caer y arrancar (la latencia medida de cada motor, media
   móvil). La absorción de 60 s tras una reanudación (`WAITED_STAY_S`) queda solo para el HLS nativo. La app del iPhone
-  y las constantes de `PARTY` (`driftRate`, `driftRateS`, `driftSeekS`) no cambian.
+  y las constantes de `PARTY` (`driftRate`, `driftRateS`, `driftSeekS`) no cambian. **Safari (HLS nativo), desde la
+  1.1.4:** cada cambio de `playbackRate` corta el audio un instante en el iPhone, y con la regla de 0,06 s se oía «a
+  trozos». Ahí la velocidad es fija (±5 %, `DRIFT_RATE_NATIVE`), solo desde 0,3 s y hasta 0,08 s, y entre una
+  corrección y la siguiente pasan al menos 8 s (`NATIVE_RATE_HOLD_MS`).
 - **Órdenes que no cambian nada** (1.1.2, `party/service.ts`): un `play` con la sala ya reproduciendo (sin espera ni
   «Esperando a todos») a menos de `driftSeekS`, una pausa con la sala ya en pausa a menos de 1,5 s y un salto a menos
   de 1,5 s con la sala en marcha no se fijan, ni salen en el chat, ni se mandan a nadie (el doble clic, el `play` de
