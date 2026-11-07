@@ -1,0 +1,108 @@
+/* Siguiente (Queue.tsx, docs/ver-juntos.md §11): lo que se añade al estilo de
+   la cola que ya pinta juntos.css. «Proponer» pegado arriba, la regla en una
+   línea para quien no la cambia, «Poner ya» a la vista en el móvil y el
+   resaltado de lo recién propuesto. */
+
+/* «Proponer una peli o serie», pegado arriba mientras se desplaza la lista. */
+.juntos-next__propose {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 4px;
+  /* El fondo del panel (escritorio, `--bg-sunk`) o de la página (móvil). */
+  background: var(--juntos-panel-bg, var(--bg));
+}
+.juntos-next__propose .juntos-propose {
+  width: 100%;
+}
+
+/* La regla, de solo lectura (quien no manda no ve los chips). */
+.juntos-next__rule-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13, 13px);
+  line-height: 1.35;
+}
+.juntos-next__rule-line .icon,
+.juntos-next__rule-line svg {
+  flex: none;
+}
+
+/* «Poner ya» en la fila: solo en el móvil (en escritorio, el menú contextual). */
+.juntos-next__play {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: var(--fs-13, 13px);
+  font-weight: 750;
+  cursor: pointer;
+}
+.juntos-next__play:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 2px;
+}
+@media (min-width: 768px) {
+  .juntos__side .juntos-next__propose {
+    --juntos-panel-bg: var(--bg-sunk);
+  }
+}
+@media (max-width: 767.98px) {
+  .juntos-next__play {
+    display: inline-flex;
+  }
+  /* Los chips de la regla, con el tamaño de un dedo (ahora solo los ve quien manda). */
+  .juntos-next .juntos-rule-chip {
+    min-height: 44px;
+  }
+  /* Con poco ancho, solo el icono (el nombre accesible lo dice entero). */
+  .juntos-next__play-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* Lo recién propuesto: el fondo del acento un momento (una capa debajo que se funde: solo
+   opacidad, como pide el sistema de movimiento). */
+.juntos-next .juntos-next__item {
+  position: relative;
+  isolation: isolate;
+}
+.juntos-next .juntos-next__item::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--accent-wash);
+  content: '';
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fade) var(--ease-out);
+}
+.juntos-next .juntos-next__item--new::after {
+  opacity: 1;
+}
+.juntos-next__fresh {
+  color: var(--accent-ink);
+  font-weight: 750;
+}
+@media (prefers-reduced-motion: reduce) {
+  .juntos-next .juntos-next__item::after {
+    transition: none;
+  }
+}

@@ -3,10 +3,13 @@
    «Con enlace»: no hay amigos ni salas públicas), quién controla (Solo yo /
    Yo y co-líderes / Todos), «Votar lo siguiente» y «Crear sala e invitar»,
    que además copia el enlace. Sin chat de voz (fase 2). Si este navegador
-   está en una sala, ofrece antes «Proponer en la sala»: va a su Siguiente. */
+   está en una sala de pelis y series, ofrece antes «Proponer en la sala»: va
+   a su Siguiente (en una de directo no hay lista: no se ofrece). Eligiendo
+   para una sala (`?vista=cine&sala=`, §11) este botón no sale: la ficha ya
+   lleva las acciones de la sala (cine/RoomPicking.tsx). */
 
 import type { PartyCreateVodBody } from '@ace/shared';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { api, describeFailure, isApiError } from '../../api/index.ts';
 import { useNavigate } from '../../app/router.tsx';
 import { notify } from '../../notices/index.ts';
@@ -26,6 +29,8 @@ import {
   savedName,
 } from './client.ts';
 import { ControlTiles, controlSettings, type ControlValue } from './Panels.tsx';
+import { PROPOSE_TEXT } from './proposeTexts.ts';
+import { usePicking } from './RoomPresence.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
 import './juntos.css';
 
@@ -54,6 +59,7 @@ export function JuntosButton({
   look?: JuntosLook;
 }) {
   const navigate = useNavigate();
+  const picking = usePicking();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(savedName);
   const [control, setControl] = useState<ControlValue>('leaders');
@@ -62,14 +68,38 @@ export function JuntosButton({
   const [error, setError] = useState<string | null>(null);
   /* Se mira al abrir: la sala pudo cambiar mientras la ficha estaba abierta. */
   const [current, setCurrent] = useState(lastRoom);
+  /* Si la última sala es de directo (o ya no existe), no se ofrece «Proponer»: allí no hay lista.
+     null mientras no responde la vista previa: hasta saberlo, tampoco (en directo daría error). */
+  const [liveRoom, setLiveRoom] = useState<boolean | null>(null);
+  const code = open ? (current?.code ?? null) : null;
+  useEffect(() => {
+    if (!code) return;
+    const controller = new AbortController();
+    setLiveRoom(null);
+    api('partyPreview', { params: { code }, signal: controller.signal })
+      .then((preview) => setLiveRoom(preview.title.kind === 'live'))
+      .catch((failure: unknown) => {
+        if (controller.signal.aborted) return;
+        /* Ya no existe: se olvida y queda «crear». */
+        if (isApiError(failure) && failure.code === 'party_not_found') {
+          forgetLastRoom();
+          setCurrent(null);
+          return;
+        }
+        /* Otro fallo (la red): se deja proponer; si fuera de directo, lo dirá el servidor. */
+        setLiveRoom(false);
+      });
+    return () => controller.abort();
+  }, [code]);
 
   const addToRoom = async () => {
     if (!current || busy) return;
     setBusy(true);
     setError(null);
     try {
+      const room = current.code;
       await api('partyQueue', {
-        params: { code: current.code },
+        params: { code: room },
         body: {
           token: current.credential.token,
           action: 'add',
@@ -82,7 +112,13 @@ export function JuntosButton({
         },
       });
       setOpen(false);
-      notify(JUNTOS_TEXT.addedToRoom, { tone: 'ok' });
+      notify(JUNTOS_TEXT.addedToRoom, {
+        tone: 'ok',
+        action: {
+          label: PROPOSE_TEXT.backToRoom,
+          onAction: () => navigate({ vista: 'juntos', code: room, tab: 'siguiente' }),
+        },
+      });
     } catch (failure) {
       /* La sala ya no existe o ya no estás: se olvida y queda «crear». */
       if (isApiError(failure) && ['party_not_found', 'party_forbidden'].includes(failure.code)) {
@@ -126,6 +162,8 @@ export function JuntosButton({
     }
   };
 
+  /* Eligiendo para una sala: la ficha ya lleva «Proponer a la sala» / «Poner en la sala ahora». */
+  if (picking) return null;
   return (
     <>
       <Button
@@ -178,7 +216,10 @@ export function JuntosButton({
               <span>{target.subtitle ? `${target.title} · ${target.subtitle}` : target.title}</span>
             </p>
           </div>
-          {current ? (
+          {current && liveRoom ? (
+            <p className="juntos-add__hint">{PROPOSE_TEXT.liveRoomNoPropose}</p>
+          ) : null}
+          {current && liveRoom === false ? (
             <div className="juntos-add">
               <Button variant="quiet" icon="plus" busy={busy} onClick={() => void addToRoom()}>
                 {JUNTOS_TEXT.addToRoom}

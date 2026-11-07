@@ -317,6 +317,8 @@ export const PartyPreviewSchema = z.strictObject({
   title: PartyTitleSchema,
   members: z.array(z.string().max(PARTY.nameMaxChars)).max(PARTY.maxMembers),
   full: z.boolean(),
+  /** Quien la creó («Isma te invita a ver»). Opcional: un servidor anterior no lo manda. */
+  host: z.string().max(PARTY.nameMaxChars).optional(),
 });
 export type PartyPreview = z.infer<typeof PartyPreviewSchema>;
 
@@ -457,6 +459,11 @@ export const PartyQueueBodySchema = z.discriminatedUnion('action', [
     poster: VodArtStampSchema.nullable().default(null),
     title: z.string().trim().min(1).max(200),
     subtitle: z.string().trim().max(200).nullable().default(null),
+    /**
+     * «Poner en la sala ahora» desde Pelis y series (§11): se añade y se pone para todos en la
+     * misma llamada. Solo quien controla; sin él, se propone como siempre.
+     */
+    play: z.boolean().optional(),
   }),
   z.strictObject({
     token: PartyTokenSchema,
@@ -467,6 +474,13 @@ export const PartyQueueBodySchema = z.discriminatedUnion('action', [
   z.strictObject({ token: PartyTokenSchema, action: z.enum(['next', 'cancel']) }),
 ]);
 export type PartyQueueBody = z.infer<typeof PartyQueueBodySchema>;
+
+/** Respuesta de `partyQueue`: con `add`, el id de lo añadido (para resaltarlo en Siguiente). */
+export const PartyQueueResponseSchema = z.strictObject({
+  ok: z.literal(true),
+  itemId: PartyQueueItemIdSchema.optional(),
+});
+export type PartyQueueResponse = z.infer<typeof PartyQueueResponseSchema>;
 
 /** Clave de vídeo de una persona (base64url de 24 bytes). */
 export const PartyVideoKeySchema = z.string().regex(/^[A-Za-z0-9_-]{32}$/, 'clave de vídeo');

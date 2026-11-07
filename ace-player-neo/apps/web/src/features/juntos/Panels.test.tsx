@@ -166,12 +166,7 @@ describe('«Ver juntos»: Siguiente', () => {
     expect(within(list).getAllByRole('listitem')[0]?.textContent).toContain('La más votada');
     expect(screen.getByText('El más votado · 2 votos')).toBeTruthy();
     expect(screen.getByText('Película · propuesta por Isma')).toBeTruthy();
-    /* La regla la cambian el líder y los co-líderes. */
-    expect(screen.getByRole('radio', { name: 'Por votos' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
-    expect(screen.getByRole('radio', { name: 'En orden' })).toBeDisabled();
+    /* La regla, para quien no la cambia, la cuenta Queue.test.tsx (Siguiente vive en Queue.tsx). */
     /* Como la maqueta, cada fila lleva solo su voto: ni «⋯» ni «Siguiente» debajo. */
     expect(screen.queryByRole('button', { name: /Opciones de/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Siguiente' })).toBeNull();
@@ -183,7 +178,7 @@ describe('«Ver juntos»: Siguiente', () => {
     fireEvent.contextMenu(vote('La más votada'));
     expect(await screen.findByRole('menuitem', { name: /Quitar/ })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /Poner ya/ })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Proponer algo de Pelis y series' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Proponer/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Votar Otra peli/ }));
     await waitFor(() =>
       expect(net?.calls.at(-1)?.body).toMatchObject({ action: 'vote', itemId: 'q_abcdefgh' }),
@@ -231,12 +226,14 @@ describe('«Ver juntos»: Gente', () => {
     expect(screen.queryByRole('radiogroup', { name: 'Quién controla' })).toBeNull();
   });
 
-  it('el invitado ve la nota de quién controla', () => {
+  it('el invitado ve la nota de quién controla (el de fuera vota; en casa, además, propone)', () => {
     const { client: party } = client(ANA);
-    render(<People room={room()} client={party} selfId={ANA} />);
+    const { rerender } = render(<People room={room()} client={party} selfId={ANA} />);
     expect(screen.queryByRole('button', { name: /Opciones de/ })).toBeNull();
     expect(screen.getByText(/Solo Isma y Bea pueden pausar/)).toBeTruthy();
-    expect(screen.getByText(/Tú puedes chatear/)).toBeTruthy();
+    expect(screen.getByText(/Tú puedes chatear y votar lo que propongan/)).toBeTruthy();
+    rerender(<People room={room()} client={party} selfId={ANA} canPropose />);
+    expect(screen.getByText(/Tú puedes chatear y proponer lo siguiente/)).toBeTruthy();
   });
 });
 
@@ -249,7 +246,7 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
     ],
   });
 
-  it('quién está listo y quién cargando; «Empezar ya» sin nadie por tocar sale al primer toque', async () => {
+  it('una sola pista: «Esperando a Ana (63 %)»; «Empezar sin esperar» pide un segundo toque', async () => {
     net = mockFetch({
       'POST /api/v1/party/:code/control': () => json({ serverNow: 1, rev: 2 }),
     });
@@ -257,9 +254,9 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
     const onVote = vi.fn();
     render(<Lobby room={lobby} client={party} selfId={HOST} voted onVote={onVote} />);
     expect(screen.getByText('Esperando a todos')).toBeTruthy();
-    expect(within(screen.getByText(/Isma/).closest('li')!).getByText('Listo')).toBeTruthy();
-    expect(within(screen.getByText('Ana').closest('li')!).getByText('63 %')).toBeTruthy();
-    expect(screen.getByText(/Esperando a Ana… empieza sola/)).toBeTruthy();
+    expect(screen.getByText('Esperando a Ana (63 %)')).toBeTruthy();
+    /* La lista uno a uno ya no va en la tarjeta (en el móvil no cabe): va en Gente y en las caras. */
+    expect(document.querySelector('.juntos-lobby li')).toBeNull();
     /* Ya he tocado: el mismo botón dice «Estás listo» y no hace nada (aria-disabled, sin perder
        el foco); la región de estado, que ya estaba montada, lo anuncia. */
     const done = screen.getByRole('button', { name: 'Estás listo' });
@@ -270,7 +267,7 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
       true,
     );
     /* Ana carga: forzar pide el segundo toque. */
-    fireEvent.click(screen.getByRole('button', { name: 'Empezar ya' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Empezar sin esperar' }));
     expect(net?.calls ?? []).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Toca otra vez: empieza sin esperar' }));
     /* Con su fuente, para el registro del servidor. */
@@ -280,7 +277,7 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
     expect(onVote).not.toHaveBeenCalled();
   });
 
-  it('«Faltan Ana…»: cada uno su «Estoy listo», con el clic (en el iPhone, bajar el dedo no cuenta)', () => {
+  it('sin tocar yo: «Te esperamos a ti», y se vota con el clic (en el iPhone, bajar el dedo no cuenta)', () => {
     const { client: party } = client(ANA);
     const onVote = vi.fn();
     const unvoted = room({
@@ -301,12 +298,10 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
         onVote={onVote}
       />,
     );
-    /* Lo mío, como lo sabe esta página (el servidor aún no se ha enterado de que recargué). */
-    expect(within(screen.getByText(/Ana/).closest('li')!).getByText('Sin confirmar')).toBeTruthy();
-    expect(within(screen.getByText('Bea').closest('li')!).getByText('Sin confirmar')).toBeTruthy();
-    expect(screen.getByText('Faltáis Bea y tú por darle a «Estoy listo»')).toBeTruthy();
-    expect(screen.getByText('Así suena en tu aparato cuando empiece.')).toBeTruthy();
+    expect(screen.getByText('Te esperamos a ti')).toBeTruthy();
     const button = screen.getByRole('button', { name: 'Estoy listo' });
+    /* Por qué hay que tocar, sin otra línea en la tarjeta. */
+    expect(button).toHaveAttribute('title', 'Así suena en tu aparato cuando empiece.');
     fireEvent.pointerDown(button, { pointerType: 'touch' });
     expect(onVote).not.toHaveBeenCalled();
     fireEvent.click(button);
@@ -316,7 +311,7 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
     expect(onVote).toHaveBeenCalledTimes(1);
   });
 
-  it('con dos o más por tocar además de mí: «Faltáis Ana, Bea y tú…»', () => {
+  it('ya votado y faltan otros: «Esperando a Ana y Bea» (sin % quien no ha tocado)', () => {
     const { client: party } = client(HOST);
     const three = room({
       playback: { ...BASE.playback, lobby: true, playing: false },
@@ -331,12 +326,12 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
         room={three}
         client={party}
         selfId={HOST}
-        voted={false}
-        unvoted={[HOST, ANA, BEA]}
+        voted
+        unvoted={[ANA, BEA]}
         onVote={() => undefined}
       />,
     );
-    expect(screen.getByText('Faltáis Ana, Bea y tú por darle a «Estoy listo»')).toBeTruthy();
+    expect(screen.getByText('Esperando a Ana y Bea')).toBeTruthy();
   });
 
   it('votar no deja el foco en el aire: el mismo botón pasa a «Estás listo» y el estado se anuncia', () => {
@@ -367,13 +362,13 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
       members: [{ ...BASE.members[0]!, ready: true, progress: 100 }],
     });
     render(<Lobby room={alone} client={party} selfId={HOST} voted={false} onVote={onVote} />);
-    expect(screen.getByText('Falta que le des a «Estoy listo»')).toBeTruthy();
+    expect(screen.getByText('Te esperamos a ti')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Empezar ya' }));
     expect(onVote).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(net?.calls.at(-1)?.body).toMatchObject({ action: 'play' }));
   });
 
-  it('el invitado no puede empezar', () => {
+  it('el invitado no puede empezar; con todos listos, «Ya estáis todos»', () => {
     const { client: party } = client(ANA);
     const ready = room({
       playback: { ...BASE.playback, lobby: true, playing: false },
@@ -383,8 +378,49 @@ describe('«Ver juntos»: «Esperando a todos»', () => {
       ],
     });
     render(<Lobby room={ready} client={party} selfId={ANA} voted onVote={() => undefined} />);
-    expect(screen.queryByRole('button', { name: 'Empezar ya' })).toBeNull();
-    expect(screen.getByText(/cuando Isma le dé/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Empezar/ })).toBeNull();
+    expect(screen.getByText('Ya estáis todos')).toBeTruthy();
+  });
+
+  it('el anillo de las caras sale de lo mismo que Gente: listo, el % cargando, sin tocar y desconectado', () => {
+    const { client: party } = client(HOST);
+    const ring = room({
+      playback: { ...BASE.playback, lobby: true, playing: false },
+      members: [
+        { ...BASE.members[0]!, ready: true, progress: 100 },
+        { ...ana, ready: false, progress: 42 },
+        { ...bea, ready: true, progress: 100 },
+        { ...bea, id: 'm_YassinFuera01', name: 'Yassin', role: 'guest', online: false },
+      ],
+    });
+    const { unmount } = render(
+      <Faces room={ring} selfId={HOST} selfVoted unvoted={[BEA, 'm_YassinFuera01']} />,
+    );
+    const face = (name: string) =>
+      screen.getByText(name, { exact: false }).closest('li')!.querySelector('.juntos-av')!;
+    expect(face('Isma').getAttribute('data-ring')).toBe('ready');
+    expect(face('Ana').getAttribute('data-ring')).toBe('loading');
+    expect((face('Ana') as HTMLElement).style.getPropertyValue('--ring')).toBe('0.42');
+    expect(face('Bea').getAttribute('data-ring')).toBe('wait');
+    /* Desconectado: gris entero, sin anillo de espera. */
+    expect(face('Yassin').hasAttribute('data-ring')).toBe(false);
+    expect(face('Yassin').classList.contains('juntos-av--off')).toBe(true);
+    unmount();
+    /* Gente dice lo mismo, con palabras. */
+    render(
+      <People
+        room={ring}
+        client={party}
+        selfId={HOST}
+        selfVoted
+        unvoted={[BEA, 'm_YassinFuera01']}
+      />,
+    );
+    const row = (name: string) => screen.getByText(name, { exact: false }).closest('li')!;
+    expect(within(row('Isma')).getByText('Líder · Listo')).toBeTruthy();
+    expect(within(row('Ana')).getByText('42 %')).toBeTruthy();
+    expect(within(row('Bea')).getByText('Co-líder · Sin confirmar')).toBeTruthy();
+    expect(within(row('Yassin')).getByText('desconectado')).toBeTruthy();
   });
 
   it('las caras llevan la marca de quien ya ha tocado (la mía, la de esta página); fuera de la espera, no', () => {

@@ -1570,6 +1570,7 @@ export const WEB_V1_FIXTURES = {
     title: partyTitle,
     members: ['Isma'],
     full: false,
+    host: 'Isma',
   },
   partyJoin: partyJoined('m_AnaInvitada01', [partyMember('m_AnaInvitada01', 'Ana', false)]),
   partyStream: vodDuneGrant,
@@ -1579,12 +1580,30 @@ export const WEB_V1_FIXTURES = {
   partyTyping: { ok: true },
   partySettings: { ok: true },
   partyMember: { ok: true },
-  partyQueue: { ok: true },
+  /* Proponer (`add`): el id de lo propuesto, para resaltarlo en Siguiente. */
+  partyQueue: { ok: true, itemId: 'q_Propuest' },
   partyLiveSources: { candidates: [candidate], scan: scanJob },
   partyLeave: { ok: true },
   partyClose: { ok: true },
   partyList: {
     rooms: [
+      /* La sala en directo de Leo (la más nueva, primero): el partido y el canal que suena. */
+      {
+        code: 'LeoDirectoRMBar1',
+        title: {
+          id: 'aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00',
+          kind: 'live',
+          artId: 'aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00',
+          poster: null,
+          title: 'Real Madrid – Barcelona',
+          subtitle: 'DAZN 1 · 1080p',
+          durationS: null,
+        },
+        host: 'Leo',
+        members: 3,
+        online: 3,
+        createdAt: AT_MS + 30_000,
+      },
       {
         code: partyJoined('m_IsmaAnfitrion', []).room.code,
         title: partyJoined('m_IsmaAnfitrion', []).room.title,

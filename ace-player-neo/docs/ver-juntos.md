@@ -466,6 +466,61 @@ abierta hasta caducar (10 min sin nadie, 12 h como mucho).
   el nombre) y «Cerrar» con segundo toque.
 - **Pruebas**: `modules/party/live.test.ts` y `features/juntos/OpenRooms.test.tsx`.
 
+### 15.1 Las salas en directo que no salían (nov 2026)
+
+Isma vio en «Salas abiertas» las salas de pelis, pero no la de un partido que tenía abierta. Lo que se sabe:
+
+- **La causa no está confirmada.** Con el servicio y por HTTP (`app.inject`, que valida la respuesta con el esquema de
+  la ruta) una sala en directo sale en la lista, también tras cambiar a un canal IPTV (`live.test.ts`,
+  `routes.test.ts`). No se ha podido reproducir con datos reales del NAS (motor, IPTV y la Agenda de ese día).
+- **Lo que sí fallaba, y se ha blindado en las dos puntas**:
+  - El servidor valida la respuesta entera (`parseOutput`): UNA sala que no cumpliera `PartyListItemSchema` (p. ej. un
+    título de directo raro que entrara por el cambio automático, que no pasa por la ruta) tumbaba TODA la lista con
+    un 500. Ahora `list()` valida cada sala con `safeParse`: la que falla se omite y queda en el registro
+    (`Ver juntos: una sala no cumple el contrato de la lista; se omite`, con `live` y los motivos). Si vuelve a pasar,
+    ese aviso dirá por qué.
+  - `switchLive` valida la elección con `PartyLiveChoiceSchema` (la del cambio automático incluida) y `choiceOf`
+    (`live-auto.ts`) la deja ya dentro del contrato (sin espacios de más, nombre no vacío, largos máximos).
+  - La web se tragaba el error (`if (!list.length) return null`): sin salas o sin poder cargarlas se veía igual. Ahora
+    dice «No se pueden cargar las salas» con «Reintentar».
+- **La portada** (`index.tsx`, `OpenRooms.tsx`, `open-rooms.css`): primero las salas abiertas, en dos grupos («En
+  directo», con la píldora DIRECTO, el partido de título y el canal debajo; «Pelis y series», con su cartel); luego dos
+  tarjetas para empezar una («Una peli o serie», a Pelis y series; «Un partido», a la Agenda).
+
+### 15.2 Proponer desde la sala (nov 2026)
+
+Antes, «Proponer una peli o serie» en Siguiente llevaba a Pelis y series sin decir para qué sala: al tocar un título se
+reproducía solo en el aparato (y cortaba la sala, que comparte la plaza de la IPTV). Ahora:
+
+- **Ruta**: `?vista=cine&sala=<código>` (`Route.cine.sala`). Dentro de Pelis y series se hereda (fichas, categorías,
+  búsqueda: `resolveRoute`); al volver a la sala, `?vista=juntos/<código>&panel=siguiente&nuevo=<id>` abre Siguiente
+  con lo propuesto resaltado 2 s (`initialTab`, `highlightItemId`).
+- **Seguir en la sala mientras se elige** (`RoomPresence.tsx`): la vista de Pelis y series abre el SSE de la sala SIN
+  reproductor (el `PartyClient` no lo necesita) y, al irse, `stop()` sin `leave`. Así no se sale como desconectado ni
+  se pierde la corona, y la barra de arriba (`cine/RoomPicking.tsx`) dice «Eligiendo para la sala de Isma · 2 sin
+  leer» con «Volver a la sala». Ojo: quien elige cuenta como conectado, así que una sala en «Esperando a todos» le
+  espera (quien controla tiene «Empezar sin esperar»).
+- **La ficha** (y un episodio, en una hoja): quien controla tiene «Poner en la sala ahora» (si suena otra cosa, con
+  segundo toque: «Se corta Dune para todos. ¿Poner Oppenheimer?») y «Proponer a la sala»; quien no, «Proponer a la
+  sala». Debajo, la pista de la regla («Se vota en Siguiente», «Va a la cola, en orden», «El líder elige entre lo
+  propuesto») y, discreto y con segundo toque, «Reproducir solo para mí». «Seguir viendo» y el destacado no salen, y
+  «Ver juntos» tampoco (ya se está en una).
+- **Servidor**: `partyQueue` `add` acepta `play` (solo quien controla; se comprueba antes de tocar la lista) y añade y
+  pone en la misma llamada; la respuesta lleva `itemId` (`PartyQueueResponseSchema`). En una sala de pelis, el
+  anfitrión conserva la corona `VOD_HOST_GRACE_MS` (45 s) sin conexión y, si la pierde, le vuelve al reconectarse
+  (como en directo, más corto). `partyPreview` manda `host` («Isma te invita a ver»).
+- **Siguiente** (`Queue.tsx`, sale de Panels.tsx): «Proponer» pegado arriba, el vacío según la regla, la regla en una
+  línea de solo lectura para quien no la cambia (los chips, solo quien manda) y «Poner ya» a la vista en el móvil.
+  El invitado de fuera sigue sin «Proponer» (no tiene catálogo): ve «Cuando alguien proponga algo, lo verás aquí para
+  votarlo».
+- **«Ver juntos» en la ficha** (`CreateButton.tsx`): si la última sala es de directo no ofrece «Proponer en la sala»
+  (allí no hay lista), y el aviso de «Propuesto» lleva «Volver a la sala».
+- **Pruebas**: `service.test.ts` (`add` con `play`, la gracia del anfitrión), `routes.test.ts` (la respuesta con
+  `itemId`, `play` de un invitado, la lista con una sala en directo), `security.test.ts` (el cuerpo nuevo),
+  `live.test.ts` (la lista con una sala mala y con una en directo), `app/routes.test.ts` y `router.test.tsx` (`sala`,
+  `panel` y `nuevo`), `cine/Ficha.test.tsx` (las acciones según el papel y la regla), `juntos/Queue.test.tsx` y
+  `juntos/OpenRooms.test.tsx`.
+
 ## 16. El «CD rayado» en el iPhone y el móvil (nov 2026)
 
 Con la 0.9.15, un invitado desde fuera con un iPhone veía la película a tirones: se paraba, volvía un poco atrás y

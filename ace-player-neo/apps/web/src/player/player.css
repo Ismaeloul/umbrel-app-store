@@ -764,41 +764,8 @@
   }
 }
 
-/* Ecualizador de «sonando». */
-.player-eq {
-  display: inline-flex;
-  align-items: flex-end;
-  gap: 1.5px;
-  width: 9px;
-  height: 10px;
-  flex: none;
-}
-.player-eq i {
-  width: 2px;
-  height: 100%;
-  border-radius: 1px;
-  background: currentColor;
-  transform-origin: bottom;
-  transform: scaleY(0.45);
-}
-.player-eq[data-playing='true'] i {
-  animation: player-eq 1.1s ease-in-out infinite;
-}
-.player-eq[data-playing='true'] i:nth-child(2) {
-  animation-delay: 0.2s;
-}
-.player-eq[data-playing='true'] i:nth-child(3) {
-  animation-delay: 0.4s;
-}
-@keyframes player-eq {
-  0%,
-  100% {
-    transform: scaleY(0.35);
-  }
-  50% {
-    transform: scaleY(1);
-  }
-}
+/* El ecualizador de «sonando» va en equalizer.css (lo importa PlayerSurface.tsx): sale
+   también en listas sin el reproductor montado, como Partidos de la sala en directo. */
 
 /* ---- Datos técnicos ----------------------------------------------------------- */
 .player-nerd {
@@ -1290,18 +1257,6 @@ body:has(.app[data-immersive='true']) .menu {
     animation: none;
     border-color: rgb(255 255 255 / 0.5);
     border-style: dashed;
-  }
-  .player-eq[data-playing='true'] i {
-    animation: none;
-  }
-  .player-eq i:nth-child(1) {
-    transform: scaleY(0.5);
-  }
-  .player-eq i:nth-child(2) {
-    transform: scaleY(1);
-  }
-  .player-eq i:nth-child(3) {
-    transform: scaleY(0.7);
   }
   .player[data-presentation='mini'] {
     animation-name: ace-funde;

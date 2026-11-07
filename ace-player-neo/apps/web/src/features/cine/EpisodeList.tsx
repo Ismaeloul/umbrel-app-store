@@ -15,7 +15,7 @@
    aquí como visto». */
 
 import type { VodEpisode, VodSeriesMain } from '@ace/shared';
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { describeFailure } from '../../api/index.ts';
 import { useLayout } from '../../app/layout.tsx';
 import { useNavigate } from '../../app/router.tsx';
@@ -43,11 +43,15 @@ import {
   shortDateText,
 } from './model.ts';
 import { canPlayHevc, playVod } from './play.ts';
+import { usePicking } from '../juntos/RoomPresence.tsx';
+import { EpisodeRoomSheet, type RoomTarget } from './RoomPicking.tsx';
 import { CINE_TEXT, detectedAudioText, formatBlocked } from './texts.ts';
 
 export interface EpisodeListProps {
   seriesId: string;
   seriesTitle: string;
+  /** El cartel de la serie (para proponer un episodio a una sala, §11 de ver-juntos). */
+  seriesPoster?: string | null;
   season: number;
   episodes: readonly VodEpisode[];
   /** El episodio del botón principal (se resalta). */
@@ -82,6 +86,11 @@ interface EpisodeRowProps {
   badge: string | null;
   /** Escritorio (maqueta): «Siguiente · 4. Dame la mano», con la palabra en amarillo. */
   desk: boolean;
+  /**
+   * Eligiendo para una sala (docs/ver-juntos.md §11): tocar el episodio no lo reproduce aquí,
+   * abre las acciones de la sala.
+   */
+  onRoom?: (target: RoomTarget, solo: () => void) => void;
 }
 
 function EpisodeRow({
@@ -92,6 +101,7 @@ function EpisodeRow({
   compact,
   badge,
   desk,
+  onRoom,
 }: EpisodeRowProps) {
   const navigate = useNavigate();
   const mark = useProgressMark();
@@ -165,18 +175,34 @@ function EpisodeRow({
         ]
           .filter(Boolean)
           .join('. ')}
-        onClick={() =>
-          playVod(
+        onClick={() => {
+          const solo = () =>
+            playVod(
+              {
+                id: episode.id,
+                kind: 'episode',
+                title: seriesTitle,
+                subtitle: `${code} · ${episode.title}`,
+                seriesId,
+              },
+              navigate,
+            );
+          if (!onRoom) {
+            solo();
+            return;
+          }
+          onRoom(
             {
-              id: episode.id,
+              titleId: episode.id,
               kind: 'episode',
+              artId: seriesId,
+              poster: null,
               title: seriesTitle,
               subtitle: `${code} · ${episode.title}`,
-              seriesId,
             },
-            navigate,
-          )
-        }
+            solo,
+          );
+        }}
       >
         {compact ? (
           <span className="cine-episode__num" aria-hidden="true">
@@ -273,16 +299,23 @@ function EpisodeRow({
 export function EpisodeList({
   seriesId,
   seriesTitle,
+  seriesPoster = null,
   season,
   episodes,
   mainId = null,
   mainAction = null,
 }: EpisodeListProps) {
+  const picking = usePicking();
+  const [room, setRoom] = useState<{ target: RoomTarget; solo: () => void } | null>(null);
+  const onRoom = picking
+    ? (target: RoomTarget, solo: () => void) =>
+        setRoom({ target: { ...target, poster: seriesPoster }, solo })
+    : undefined;
   /* Sin ningún fotograma en la temporada, la lista compacta. */
   const compact = episodes.every((episode) => episode.still === null);
   const desk = useLayout().kind !== 'mobile';
   const style = { '--ep-fill': artFill(seriesTitle) } as CSSProperties;
-  return (
+  const list = (
     <ol className={cx('cine-episodes', compact && 'cine-episodes--compact')} style={style}>
       {episodes.map((episode) => (
         <EpisodeRow
@@ -294,8 +327,24 @@ export function EpisodeList({
           compact={compact}
           desk={desk}
           badge={episode.id === mainId ? mainBadge(mainAction) : null}
+          onRoom={onRoom}
         />
       ))}
     </ol>
+  );
+  if (!picking) return list;
+  return (
+    <>
+      {list}
+      <EpisodeRoomSheet
+        target={room?.target ?? null}
+        onClose={() => setRoom(null)}
+        onSolo={() => {
+          const solo = room?.solo;
+          setRoom(null);
+          solo?.();
+        }}
+      />
+    </>
   );
 }

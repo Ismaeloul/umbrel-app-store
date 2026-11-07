@@ -37,6 +37,7 @@ import { vodUnsupported } from '../remux/vod/codecs.js';
 import { liteOfferFor, liteVariantFor } from '../remux/vod/lite.js';
 import type { VodIndex } from '../remux/vod/types.js';
 import { createPartyService, type PartyService } from './index.js';
+import { VOD_HOST_GRACE_MS } from './service.js';
 
 const PELI = '4b5c6d7e8f9012345678abcdef0123457a8b9c0d';
 const GRANT = JSON.parse(
@@ -191,6 +192,7 @@ describe('«Ver juntos»: salas', () => {
       title: host.room.title,
       members: ['Isma'],
       full: false,
+      host: 'Isma',
     });
 
     const ana = party.join(host.room.code, 'Ana');
@@ -956,6 +958,84 @@ describe('«Ver juntos»: líder, co-líderes y lista (§11 y §13)', () => {
         .at(-1)
         ?.queue.map((q) => q.title.title),
     ).toEqual(['De Isma', 'Propuesta']);
+  });
+
+  it('proponer desde Pelis y series: `add` devuelve el id; con `play`, solo quien controla y se pone ya', () => {
+    const { party, host, ana, room } = room2();
+    const sse = listen(party, room, host.member.token);
+    /* Proponer: cualquiera, y la respuesta trae el id de lo añadido. */
+    const proposed = party.queue(room, add(ana.member.token, EPI2, 'Propuesta de Ana'));
+    expect(proposed.itemId).toMatch(/^q_[A-Za-z0-9_-]{8}$/);
+    expect(
+      sse
+        .of('party.room')
+        .at(-1)
+        ?.queue.map((q) => q.id),
+    ).toEqual([proposed.itemId]);
+    /* «Poner en la sala ahora» sin poder controlar: ni se pone ni se añade nada. */
+    expect(
+      code(catchError(() => party.queue(room, { ...add(ana.member.token), play: true }))),
+    ).toBe('party_leader_only');
+    expect(sse.of('party.room').at(-1)?.queue).toHaveLength(1);
+    /* Quien controla: se añade y empieza para todos en la misma llamada (y sale de la lista). */
+    const put = party.queue(room, { ...add(host.member.token, OTRA, 'Oppenheimer'), play: true });
+    expect(put.itemId).toMatch(/^q_/);
+    const last = sse.of('party.room').at(-1)!;
+    expect(last.title).toMatchObject({ id: OTRA, title: 'Oppenheimer', durationS: null });
+    expect(last.queue.map((q) => q.id)).toEqual([proposed.itemId]);
+    expect(sse.of('party.playback').at(-1)?.action).toBe('title');
+    expect(sse.of('party.chat').map((m) => m.message.text)).toContain(
+      'Isma ha puesto Oppenheimer.',
+    );
+    /* `remove`, `vote` y compañía siguen respondiendo sin id. */
+    expect(
+      party.queue(room, { token: host.member.token, action: 'vote', itemId: proposed.itemId! }),
+    ).toEqual({});
+  });
+
+  it('el anfitrión de una sala de pelis conserva la corona un rato sin conexión y le vuelve al reconectarse', () => {
+    const { party, clock, host, ana, room } = room2();
+    const sse = listen(party, room, ana.member.token);
+    const leader = () => sse.of('party.room').at(-1)?.leaderId ?? null;
+    /* Isma no tiene SSE abierto: tras el tiempo de desconexión aún no pierde la corona. */
+    clock.advance(PARTY.memberTimeoutMs + 1_000);
+    expect(leader()).not.toBe(ana.member.id);
+    clock.advance(VOD_HOST_GRACE_MS);
+    expect(leader()).toBe(ana.member.id);
+    /* Vuelve (abre el SSE de la sala): la corona le vuelve. */
+    listen(party, room, host.member.token);
+    clock.advance(2_000);
+    expect(leader()).toBe(host.member.id);
+  });
+
+  it('en pelis, quien tuvo la corona mientras no estaba el anfitrión no se queda de co-líder', () => {
+    const { party, clock, host, ana, room } = room2();
+    const sse = listen(party, room, ana.member.token);
+    const leader = () => sse.of('party.room').at(-1)?.leaderId ?? null;
+    clock.advance(PARTY.memberTimeoutMs + 1_000 + VOD_HOST_GRACE_MS);
+    expect(leader()).toBe(ana.member.id);
+    listen(party, room, host.member.token);
+    clock.advance(2_000);
+    expect(leader()).toBe(host.member.id);
+    /* Ana vuelve a ser invitada: no controla la sala (el anfitrión no la hizo co-líder). */
+    const play = () =>
+      party.control(room, { token: ana.member.token, action: 'play', positionS: 0 });
+    expect(code(catchError(play))).toBe('party_leader_only');
+  });
+
+  it('en pelis, quien ya era co-líder antes de la corona lo sigue siendo al devolverla', () => {
+    const { party, clock, host, ana, room } = room2();
+    party.member(room, { token: host.member.token, action: 'coleader', memberId: ana.member.id });
+    const sse = listen(party, room, ana.member.token);
+    const leader = () => sse.of('party.room').at(-1)?.leaderId ?? null;
+    clock.advance(PARTY.memberTimeoutMs + 1_000 + VOD_HOST_GRACE_MS);
+    expect(leader()).toBe(ana.member.id);
+    listen(party, room, host.member.token);
+    clock.advance(2_000);
+    expect(leader()).toBe(host.member.id);
+    expect(
+      party.control(room, { token: ana.member.token, action: 'play', positionS: 0 }).rev,
+    ).toBeGreaterThan(1);
   });
 
   it('al acabar: cuenta atrás y lo primero de la lista empieza para todos', async () => {

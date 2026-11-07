@@ -41,6 +41,8 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   PARTY,
   PartyEventSchema,
+  PartyListItemSchema,
+  PartyLiveChoiceSchema,
   SSE_MAX_BUFFERED_BYTES,
   SSE_TIMINGS,
   type PartyAction,
@@ -52,6 +54,7 @@ import {
   type PartyInterrupted,
   type PartyJoinResponse,
   type PartyLive,
+  type PartyListItem,
   type PartyLiveChoice,
   type PartyMember,
   type PartyPlayback,
@@ -100,6 +103,13 @@ import { createLiveSources } from './live-sources.js';
  * iPhone que se bloquea o un cambio de wifi no le quita el mando a media parte.
  */
 export const LIVE_LEADER_GRACE_MS = 3 * 60_000;
+
+/**
+ * En una sala de pelis y series, el anfitrión que se queda sin conexión conserva la corona este
+ * rato (más corto que en directo), y si la pierde le vuelve al reconectarse: una red de seguridad
+ * para quien sale a Pelis y series a elegir algo y se le corta la conexión (§11).
+ */
+export const VOD_HOST_GRACE_MS = 45_000;
 
 /** Tras dejar de esperar a alguien, no se le vuelve a esperar durante esto. */
 const HOLD_COOLDOWN_MS = 30_000;
@@ -232,6 +242,8 @@ interface Room {
   /* directo §14 */
   /** El anfitrión perdió la corona por no estar (no porque la pasara): al volver, la recupera. */
   leaderLostBy: 'absence' | null;
+  /** El líder provisional ya era co-líder antes de la corona (al devolverla, sigue siéndolo). */
+  provisionalWasColeader: boolean;
   /** La racha del cambio automático del servidor. */
   readonly autoStreak: AutoStreak;
   /** El reintento pendiente del automático (hueco entre saltos o margen tras un «Poner»). */
@@ -668,13 +680,23 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     if (why === 'absence' && room.live && leader && now - leader.lastSeen < LIVE_LEADER_GRACE_MS) {
       return;
     }
+    /* §11: el anfitrión de una sala de pelis y series, una gracia más corta. */
+    if (
+      why === 'absence' &&
+      !room.live &&
+      leader?.host === true &&
+      now - leader.lastSeen < VOD_HOST_GRACE_MS
+    ) {
+      return;
+    }
     for (const member of room.members.values()) {
       if (member.id === room.leaderId || !online(member, now)) continue;
       /* Si el anfitrión ya la había perdido por no estar, sigue fuera: aunque ahora se vaya el
          líder provisional, la corona le tiene que volver a él al reconectarse. */
+      /* También en pelis y series (§11): al anfitrión le vuelve la corona al reconectarse. */
       const hostAway =
-        room.live !== null &&
-        ((why === 'absence' && leader?.host === true) || room.leaderLostBy === 'absence');
+        (why === 'absence' && leader?.host === true) || room.leaderLostBy === 'absence';
+      room.provisionalWasColeader = room.coleaders.has(member.id);
       setLeader(room, member, `${member.name} es ahora el líder.`);
       room.leaderLostBy = hostAway ? 'absence' : null;
       return;
@@ -690,8 +712,11 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     room.leaderLostBy = null;
     if (room.leaderId === host.id) return;
     const provisional = room.leaderId;
-    /* El líder provisional sigue pudiendo arreglar el directo: pasa a co-líder. */
-    if (room.members.has(provisional)) room.coleaders.add(provisional);
+    /* En directo, el líder provisional sigue pudiendo arreglar el directo: pasa a co-líder. En
+       pelis y series (§11) vuelve a lo que era: co-líder solo si ya lo era antes de la corona. */
+    const keep = room.live !== null || room.provisionalWasColeader;
+    room.provisionalWasColeader = false;
+    if (keep && room.members.has(provisional)) room.coleaders.add(provisional);
     setLeader(room, host, `${host.name} vuelve a ser el líder.`);
   }
 
@@ -861,9 +886,20 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
    * de todos (sus traspasos ya no son de la sala) y cada uno vuelve a abrir
    * (acción `title`). Sin espera: el directo no espera a nadie.
    */
-  function switchLive(room: Room, choice: PartyLiveChoice, by: Member | null): void {
+  function switchLive(room: Room, next: PartyLiveChoice, by: Member | null): void {
     const live = room.live;
     if (!live) return;
+    /* La elección se valida aquí también (§15): la del cambio automático no pasa por la ruta, y
+       un título que no cumpla el contrato dejaba la sala fuera de «Salas abiertas». */
+    const parsed = PartyLiveChoiceSchema.safeParse(next);
+    if (!parsed.success) {
+      logger.warn(
+        { room: room.code, issues: parsed.error.issues.map((issue) => issue.message) },
+        'Ver juntos: elección de directo no válida; se ignora',
+      );
+      return;
+    }
+    const choice = parsed.data;
     const otherMatch = choice.matchId !== live.matchId;
     /* directo §14: el otro partido va por el mismo canal (el mismo hash). Soltar a todos sin que
        cambie `title.id` dejaba la imagen congelada (el reproductor no reabre): solo cambia el
@@ -955,10 +991,13 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
     logger.info({ room: room.code, title: title.id }, 'Ver juntos: otro título');
   }
 
-  function queueAction(room: Room, member: Member, body: PartyQueueBody): void {
+  function queueAction(room: Room, member: Member, body: PartyQueueBody): { itemId?: string } {
     switch (body.action) {
       case 'add': {
-        /* Proponer, cualquiera, también en «Elijo yo»: el líder elige entre lo propuesto (§13). */
+        /* Proponer, cualquiera, también en «Elijo yo»: el líder elige entre lo propuesto (§13).
+           «Poner en la sala ahora» (`play`, desde Pelis y series), solo quien controla: se
+           comprueba antes de tocar la lista, para no dejar nada a medias. */
+        if (body.play) requireControl(room, member);
         if (room.queue.length >= PARTY.queueMax) throw new AppError('party_queue_full');
         const title: PartyQueueTitle = {
           id: body.titleId,
@@ -968,15 +1007,22 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
           title: body.title,
           subtitle: body.subtitle,
         };
+        const itemId = `q_${randomId(6)}`;
         room.queue.push({
-          id: `q_${randomId(6)}`,
+          id: itemId,
           title,
           addedBy: member.id,
           addedByName: member.name,
           votes: new Set(),
         });
+        if (body.play) {
+          /* Sin el aviso de «añadido»: lo que sale en el chat es «Isma ha puesto…». */
+          switchTo(room, title, itemId, member);
+          return { itemId };
+        }
         say(room, `${member.name} ha añadido ${titleLabel(title)} a la lista.`, null);
-        break;
+        sendRoom(room);
+        return { itemId };
       }
       case 'remove':
       case 'vote':
@@ -986,7 +1032,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         if (body.action === 'play') {
           requireControl(room, member);
           switchTo(room, item.title, item.id, member);
-          return;
+          return {};
         }
         if (body.action === 'vote') {
           if (!item.votes.delete(member.id)) item.votes.add(member.id);
@@ -1002,16 +1048,17 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         const next = room.upNext ?? pickNext(room);
         if (!next) throw new AppError('party_gone');
         switchTo(room, next.title, next.itemId, member);
-        return;
+        return {};
       }
       case 'cancel':
         requireControl(room, member);
-        if (!room.upNext) return;
+        if (!room.upNext) return {};
         room.upNext = null;
         say(room, `${member.name} ha cancelado lo siguiente.`, null);
         break;
     }
     sendRoom(room);
+    return {};
   }
 
   /** Esperas, ausencias y caducidades (cada `SWEEP_MS` mientras haya salas). */
@@ -1562,6 +1609,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         audioSwitchUntil: 0,
         live: live ? { ...live, auto: true } : null,
         leaderLostBy: null,
+        provisionalWasColeader: false,
         autoStreak: newStreak(),
         autoTimer: null,
         closed: false,
@@ -1585,6 +1633,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
         title: room.title,
         members: [...room.members.values()].map((member) => member.name),
         full: room.members.size >= PARTY.maxMembers,
+        host: room.members.get(room.hostId)?.name ?? '',
       };
     },
 
@@ -2073,7 +2122,7 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
       const member = authenticate(room, body.token);
       /* Sin lista ni votos en directo (§14). */
       if (room.live) throw new AppError('validation_error', { detail: 'party_live' });
-      queueAction(room, member, body);
+      return queueAction(room, member, body);
     },
 
     leave(code, token) {
@@ -2104,22 +2153,35 @@ export function createPartyRuntime(deps: PartyDeps): PartyService {
 
     list() {
       const now = clock.now();
-      return {
-        rooms: [...rooms.values()]
-          .filter((room) => !room.closed)
-          .sort((a, b) => b.createdAt - a.createdAt)
-          .map((room) => {
-            const members = [...room.members.values()];
-            return {
-              code: room.code,
-              title: room.title,
-              host: room.members.get(room.hostId)?.name ?? '',
-              members: members.length,
-              online: members.filter((member) => online(member, now)).length,
-              createdAt: room.createdAt,
-            };
-          }),
-      };
+      const items: PartyListItem[] = [];
+      for (const room of [...rooms.values()].sort((a, b) => b.createdAt - a.createdAt)) {
+        if (room.closed) continue;
+        const members = [...room.members.values()];
+        /* Cada sala se valida sola (§15): una que no cumpla el contrato (p. ej. un título en
+           directo raro) se queda fuera y en el registro, en vez de tumbar la lista entera con
+           un 500 al validar la respuesta (la portada se quedaba sin ninguna sala). */
+        const parsed = PartyListItemSchema.safeParse({
+          code: room.code,
+          title: room.title,
+          host: room.members.get(room.hostId)?.name ?? '',
+          members: members.length,
+          online: members.filter((member) => online(member, now)).length,
+          createdAt: room.createdAt,
+        });
+        if (parsed.success) items.push(parsed.data);
+        else
+          logger.warn(
+            {
+              room: room.code,
+              live: room.live !== null,
+              issues: parsed.error.issues.map(
+                (issue) => `${issue.path.join('.')}: ${issue.message}`,
+              ),
+            },
+            'Ver juntos: una sala no cumple el contrato de la lista; se omite',
+          );
+      }
+      return { rooms: items.slice(0, PARTY.maxRooms) };
     },
 
     end(code) {

@@ -4,16 +4,23 @@
    - El cartel va por la ruta de la sala (`partyArt`), no por `vodArt`: el
      invitado de fuera no tiene el catálogo (§9) y salía el relleno morado.
    - Sin red o con el servidor caído (5xx), se vuelve a probar solo a los 2,
-     5 y 10 s; y siempre queda «Reintentar». */
+     5 y 10 s; y siempre queda «Reintentar».
+   - «Isma te invita a ver» si la vista previa dice quién creó la sala (un
+     servidor anterior no lo manda: entonces «Te han invitado a ver»).
+   - Sin un nombre guardado, el cursor ya está en el nombre: se escribe y
+     se entra. En el móvil, el cartel va pequeño junto al título (no ocupa
+     media pantalla); en directo, en su sitio va el icono del partido. */
 
 import type { PartyCredential, PartyPreview, VodArtKind } from '@ace/shared';
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { api, describeFailure, isApiError } from '../../api/index.ts';
 import { isDemo } from '../../api/mode.ts';
 import { routeUrl } from '../../api/routes.ts';
+import { cx } from '../../lib/cx.ts';
 import { Button } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
 import { TextField } from '../../ui/Field.tsx';
+import { Icon } from '../../ui/Icon.tsx';
 import { Art, ArtSrcContext, type ArtSrcResolver } from '../cine/Art.tsx';
 import { demoArtSrc } from '../cine/demo-art.ts';
 import { saveCredential, saveName, savedName } from './client.ts';
@@ -67,6 +74,8 @@ export function Join({
 }) {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [name, setName] = useState(savedName);
+  /* El cursor en el nombre solo si hay que escribirlo (con uno guardado, se entra y ya). */
+  const [askName] = useState(() => !savedName().trim());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /* Cada intento de leer la sala: `auto` cuenta los solos (vuelve a 0 con «Reintentar»). */
@@ -153,10 +162,20 @@ export function Join({
   }
 
   const preview = load.state === 'ok' ? load.preview : null;
+  const live = preview?.title.kind === 'live';
+  const host = preview?.host?.trim();
   return (
     <PartyArt code={code}>
-      <form className="juntos-join" onSubmit={(event) => void submit(event)} aria-busy={!preview}>
-        {preview ? (
+      <form
+        className={cx('juntos-join', live && 'juntos-join--live')}
+        onSubmit={(event) => void submit(event)}
+        aria-busy={!preview}
+      >
+        {live ? (
+          <span className="juntos-join__poster juntos-join__live" aria-hidden="true">
+            <Icon name="directo" size={32} />
+          </span>
+        ) : preview ? (
           <Art
             id={preview.title.artId}
             art="poster"
@@ -169,7 +188,9 @@ export function Join({
           <span className="juntos-join__poster" />
         )}
         <div className="juntos-join__body">
-          <p className="juntos-join__kicker">{JUNTOS_TEXT.joinTitle}</p>
+          <p className="juntos-join__kicker">
+            {host ? JUNTOS_TEXT.joinTitleFrom(host) : JUNTOS_TEXT.joinTitle}
+          </p>
           <h1 className="juntos-join__title">{preview?.title.title ?? '…'}</h1>
           {preview?.title.subtitle ? (
             <p className="juntos-join__sub">{preview.title.subtitle}</p>
@@ -190,15 +211,17 @@ export function Join({
                 maxLength={24}
                 autoComplete="nickname"
                 enterKeyHint="go"
+                autoFocus={askName}
                 error={error}
                 onChange={(event) => setName(event.target.value)}
               />
               <Button
                 type="submit"
                 variant="primary"
-                icon="play"
+                icon="personas"
                 busy={busy}
                 disabled={!preview || !name.trim()}
+                className="juntos-join__submit"
               >
                 {JUNTOS_TEXT.join}
               </Button>

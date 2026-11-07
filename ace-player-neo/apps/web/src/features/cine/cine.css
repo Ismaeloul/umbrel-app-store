@@ -2120,3 +2120,163 @@
     white-space: nowrap;
   }
 }
+
+/* --- Eligiendo para una sala de «Ver juntos» (RoomPicking.tsx, docs/ver-juntos.md §11) ---
+   La barra: en el móvil, pegada arriba; desde 768, flotando abajo a la derecha (arriba ya va
+   pegada la barra de la sección). */
+.cine-picking {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin-inline: calc(-1 * (var(--gutter) + var(--safe-left, 0px)))
+    calc(-1 * (var(--gutter) + var(--safe-right, 0px)));
+  padding: calc(8px + var(--safe-top, 0px)) calc(var(--gutter) + var(--safe-right, 0px)) 8px
+    calc(var(--gutter) + var(--safe-left, 0px));
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.cine-art.cine-picking__poster,
+.cine-picking__icon {
+  flex: none;
+  width: 32px;
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+.cine-art.cine-picking__poster {
+  display: block;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+}
+.cine-picking__icon {
+  display: grid;
+  place-items: center;
+  height: 32px;
+  color: var(--text-2);
+}
+.cine-picking__text {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+.cine-picking__line {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-13);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cine-picking__now {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: var(--fs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cine-picking__back.btn {
+  flex: none;
+  min-height: 44px;
+}
+/* En los móviles más estrechos, sin el cartel: que quepa «Para la sala de Isma». */
+@media (max-width: 379.98px) {
+  .cine-art.cine-picking__poster,
+  .cine-picking__icon {
+    display: none;
+  }
+}
+@media (min-width: 768px) {
+  .cine-picking {
+    position: fixed;
+    top: auto;
+    right: 24px;
+    bottom: 24px;
+    z-index: var(--z-veil);
+    width: min(560px, calc(100vw - var(--side-w, 232px) - 48px));
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.28);
+  }
+  /* Que lo último de la página no quede debajo de la barra. */
+  .cine-picking ~ .cine-screen {
+    padding-bottom: 96px;
+  }
+}
+
+/* Las acciones de la ficha en una sala: el botón principal, el secundario, la pista de la regla
+   y «Reproducir solo para mí», discreto. */
+.cine-room-actions {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.cine-room-actions__buttons {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.cine-room-actions .btn {
+  min-height: 48px;
+  white-space: normal;
+}
+.cine-room-actions .cine-play.btn {
+  height: auto;
+  min-height: 54px;
+  padding-block: 8px;
+}
+.cine-room-actions__hint {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.cine-room-actions__solo {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-3);
+  font: inherit;
+  font-size: var(--fs-13);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.cine-room-actions__solo[data-armed] {
+  color: var(--fail-ink);
+  font-weight: 700;
+}
+.cine-room-actions__solo:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 2px;
+}
+.cine-room-actions__solo:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+@media (min-width: 768px) {
+  .cine-room-actions__buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+}
+.cine-room-sheet__body {
+  display: grid;
+  gap: var(--s-3);
+}
+.cine-room-sheet__title {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+.cine-room-sheet__title span {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}

@@ -3,12 +3,13 @@
    minuto 10. El tiempo y la barra salen del reloj de la sala, no del vídeo. */
 
 import type { PartyRoom } from '@ace/shared';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import joined from '@fixtures/web/v1/partyJoin.json';
 import { PartyClient, type PartyEnv, type PartyState } from './client.ts';
 import type { PlayerQuality, PlayerView, RoomPlayer } from './player.ts';
-import { CLICK_DELAY_MS, Theater } from './Theater.tsx';
+import { CLICK_DELAY_MS, pausedBy, resetReadOnlyNotice, Theater } from './Theater.tsx';
+import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { resetMemoryStorage, STORAGE_KEYS } from '../../lib/storage.ts';
 import { readSavedVolume, saveVolume } from '../../player/volume.ts';
 
@@ -22,6 +23,7 @@ function setup(
   quality: PlayerQuality | null = null,
   extra: Partial<PlayerView> = {},
   fullscreen = false,
+  chat: PartyState['chat'] = [],
 ) {
   const env: PartyEnv = {
     now: () => NOW,
@@ -67,7 +69,7 @@ function setup(
     playback: { playing: true, positionS: 600, at: NOW, rev: 3, waitingFor: [], lobby: false },
     ...over,
   };
-  const state = { ...client.getState(), room } as PartyState;
+  const state = { ...client.getState(), room, chat } as PartyState;
   /* El de la sala lo crea player.ts: aquí, uno suelto. */
   const video = document.createElement('video');
   render(
@@ -130,7 +132,7 @@ describe('«Ver juntos»: el reproductor', () => {
       'aria-valuetext',
       '10:00 / 1:48:36',
     );
-    expect(screen.getByText('Sala de Isma · 2')).toBeTruthy();
+    expect(screen.getByText('Sala de Isma · 2 de 2')).toBeTruthy();
     expect(screen.getByText('Sincronizados')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Pantalla completa' })).toBeTruthy();
     /* Sin reacciones ni chat encima del vídeo. */
@@ -281,9 +283,9 @@ describe('«Ver juntos»: el volumen según el aparato', () => {
 });
 
 describe('«Ver juntos»: el reproductor en el móvil (ver-juntos-pelis.html)', () => {
-  it('el mismo que en escritorio: «Sala de Isma · 2» arriba y −10 s, pausa y +10 s en el centro', () => {
+  it('el mismo que en escritorio: «Sala de Isma · 2 de 2» arriba y −10 s, pausa y +10 s en el centro', () => {
     setup(HOST);
-    expect(screen.getByText('Sala de Isma · 2')).toBeTruthy();
+    expect(screen.getByText('Sala de Isma · 2 de 2')).toBeTruthy();
     expect(document.querySelector('.juntos-center__controls')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Pausar' })).toHaveLength(1);
     expect(screen.queryByText('Controla Isma (líder)')).toBeNull();
@@ -348,18 +350,18 @@ function hideControls() {
 }
 
 describe('«Ver juntos»: el navegador lo ha empezado en silencio', () => {
-  it('sin silencio forzado no hay píldora', () => {
+  it('sin silencio forzado no hay botón', () => {
     setup(ANA);
-    expect(screen.queryByRole('button', { name: 'Activar sonido' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Toca para oír' })).toBeNull();
   });
 
-  it('«Activar sonido» sale aunque los controles se escondan y quita el silencio sin orden a la sala', () => {
+  it('«Toca para oír» sale aunque los controles se escondan y quita el silencio sin orden a la sala', () => {
     vi.useFakeTimers();
     try {
       const { unmute, control } = setup(ANA, {}, null, { soundBlocked: true });
       hideControls();
       expect(document.querySelector('.juntos-chrome')).toHaveAttribute('data-visible', 'false');
-      fireEvent.click(screen.getByRole('button', { name: 'Activar sonido' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Toca para oír' }));
       expect(unmute).toHaveBeenCalledTimes(1);
       expect(control).not.toHaveBeenCalled();
     } finally {
@@ -367,12 +369,102 @@ describe('«Ver juntos»: el navegador lo ha empezado en silencio', () => {
     }
   });
 
-  it('el primer toque sobre el vídeo también lo quita', () => {
-    const { unmute } = setup(ANA, {}, null, { soundBlocked: true });
+  it('tapa los controles del centro hasta que se toca: quien controla no pausa sin querer', () => {
+    const { unmute, control } = setup(HOST, {}, null, { soundBlocked: true });
+    expect(screen.queryByRole('button', { name: 'Pausar' })).toBeNull();
+    const hear = screen.getByRole('button', { name: 'Toca para oír' });
+    expect(hear.closest('.juntos-center')).toBeTruthy();
+    fireEvent.click(hear);
+    expect(unmute).toHaveBeenCalledTimes(1);
+    expect(control).not.toHaveBeenCalled();
+  });
+
+  it('el primer toque sobre el vídeo también lo quita, y no hace nada más (ni con el ratón)', () => {
+    vi.useFakeTimers();
+    try {
+      const { unmute, control } = setup(HOST, {}, null, { soundBlocked: true });
+      const surface = document.querySelector('.juntos-chrome__surface') as HTMLElement;
+      fireEvent.pointerDown(surface, { pointerType: 'touch' });
+      fireEvent.click(surface, { detail: 1 });
+      expect(unmute).toHaveBeenCalledTimes(1);
+      fireEvent.pointerDown(surface, { pointerType: 'mouse' });
+      fireEvent.click(surface, { detail: 1 });
+      act(() => vi.advanceTimersByTime(CLICK_DELAY_MS + 50));
+      expect(unmute).toHaveBeenCalledTimes(2);
+      expect(control).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('«Ver juntos»: en pausa, para quien no controla', () => {
+  const paused = (chat: PartyState['chat'] = []) => ({
+    room: {
+      playback: { playing: false, positionS: 600, at: NOW, rev: 4, waitingFor: [], lobby: false },
+    },
+    chat,
+  });
+
+  afterEach(() => {
+    resetReadOnlyNotice();
+    resetToasts();
+  });
+
+  it('«En pausa · la ha parado Isma» en el centro y «En pausa» arriba (no «Sincronizados»)', () => {
+    const { room, chat } = paused([
+      { id: 9, at: NOW, kind: 'system', memberId: null, name: 'Sala', text: 'Isma ha pausado.' },
+    ]);
+    setup(ANA, room, null, {}, false, chat);
+    expect(screen.getByText('En pausa · la ha parado Isma')).toBeTruthy();
+    expect(screen.queryByText('Sincronizados')).toBeNull();
+    expect(document.querySelector('.juntos-chrome__top')?.textContent).toContain('En pausa');
+  });
+
+  it('sin el aviso en el chat, quien controla (si es uno); quien controla no ve la tarjeta', () => {
+    const { room } = paused();
+    setup(ANA, room);
+    expect(screen.getByText('En pausa · la ha parado Isma')).toBeTruthy();
+    cleanup();
+    setup(HOST, room);
+    expect(screen.queryByText(/la ha parado/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Reproducir' })).toBeTruthy();
+  });
+
+  it('quién la ha parado: el último «X ha pausado.» de alguien de la sala; si no, quien controla', () => {
+    const room = { ...(joined.room as PartyRoom) };
+    const system = (id: number, text: string) => ({
+      id,
+      at: NOW,
+      kind: 'system' as const,
+      memberId: null,
+      name: 'Sala',
+      text,
+    });
+    expect(pausedBy([system(1, 'Ana ha pausado.'), system(2, 'Isma ha pausado.')], room)).toBe(
+      'Isma',
+    );
+    /* Un nombre que no es de la sala no vale: quien controla. */
+    expect(pausedBy([system(1, 'Pepe ha pausado.')], room)).toBe('Isma');
+    expect(
+      pausedBy([], { ...room, settings: { ...room.settings, control: 'everyone' } }),
+    ).toBeNull();
+  });
+
+  it('su primer toque en el vídeo dice, una vez por sesión, que solo Isma puede pausar', () => {
+    const { control } = setup(ANA);
     const surface = document.querySelector('.juntos-chrome__surface') as HTMLElement;
     fireEvent.pointerDown(surface, { pointerType: 'touch' });
     fireEvent.click(surface, { detail: 1 });
-    expect(unmute).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(surface, { pointerType: 'touch' });
+    fireEvent.click(surface, { detail: 1 });
+    const said = toastStore
+      .get()
+      .filter(
+        (toast) => toast.text === 'Solo Isma puede pausar o mover el vídeo. Tú puedes chatear.',
+      );
+    expect(said).toHaveLength(1);
+    expect(control).not.toHaveBeenCalled();
   });
 });
 

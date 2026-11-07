@@ -10,5 +10,6 @@
     "durationS": 9960
   },
   "members": ["Isma"],
-  "full": false
+  "full": false,
+  "host": "Isma"
 }

@@ -11,6 +11,7 @@ import {
   opensOverTabs,
   parseRoute,
   parseVista,
+  resolveRoute,
   routeDepth,
   sameRoute,
   searchFor,
@@ -281,5 +282,83 @@ describe('isla del móvil (rediseño móvil, maqueta movil-barra-isla)', () => {
     expect(isJuntosRoom({ vista: 'juntos', code: 'k3J9xQ2mZpL8wR4t' })).toBe(true);
     expect(isJuntosRoom({ vista: 'juntos', code: null })).toBe(false);
     expect(isJuntosRoom({ vista: 'agenda' })).toBe(false);
+  });
+});
+
+describe('proponer desde una sala (docs/ver-juntos.md §11): `sala`, `panel` y `nuevo`', () => {
+  const CODE = 'Ab3_dE5-gH7jK9mN';
+  const PELI = 'a'.repeat(40);
+
+  it('ida y vuelta: Pelis y series con `sala` y la sala con `panel` y `nuevo`', () => {
+    const cine = parseRoute(`?vista=cine/${PELI}&sala=${CODE}`);
+    expect(cine).toEqual({ vista: 'cine', id: PELI, sala: CODE });
+    expect(searchFor(cine, '?demo=1')).toBe(`?demo=1&vista=cine/${PELI}&sala=${CODE}`);
+    expect(parseRoute('?vista=cine&sala=corto')).toEqual({ vista: 'cine', id: null, sala: null });
+    const room = parseRoute(`?vista=juntos/${CODE}&panel=siguiente&nuevo=q_AbCd1234`);
+    expect(room).toEqual({ vista: 'juntos', code: CODE, tab: 'siguiente', nuevo: 'q_AbCd1234' });
+    expect(searchFor(room, '')).toBe(`?vista=juntos/${CODE}&panel=siguiente&nuevo=q_AbCd1234`);
+    expect(parseRoute(`?vista=juntos/${CODE}&panel=otra&nuevo=x`)).toEqual({
+      vista: 'juntos',
+      code: CODE,
+      tab: null,
+      nuevo: null,
+    });
+  });
+
+  it('dentro de Pelis y series la sala se hereda; al salir o con `sala: null`, se quita', () => {
+    const from = `?vista=cine&sala=${CODE}&cine=movie`;
+    expect(searchFor({ vista: 'cine', id: PELI }, from)).toBe(
+      `?vista=cine/${PELI}&cine=movie&sala=${CODE}`,
+    );
+    expect(searchFor({ vista: 'cine', id: null, sala: null }, from)).toBe('?vista=cine&cine=movie');
+    expect(searchFor({ vista: 'juntos', code: CODE, tab: 'siguiente' }, from)).toBe(
+      `?vista=juntos/${CODE}&panel=siguiente`,
+    );
+    /* Al volver de la sala a Pelis y series sin decirlo, no hay sala. */
+    expect(searchFor({ vista: 'cine', id: null }, `?vista=juntos/${CODE}&panel=siguiente`)).toBe(
+      '?vista=cine',
+    );
+    expect(
+      resolveRoute({ vista: 'cine', id: PELI }, { vista: 'cine', id: null, sala: CODE }),
+    ).toEqual({ vista: 'cine', id: PELI, sala: CODE });
+    expect(resolveRoute({ vista: 'cine', id: PELI }, { vista: 'agenda' })).toEqual({
+      vista: 'cine',
+      id: PELI,
+      sala: null,
+    });
+  });
+
+  it('buscando para la sala (cine&sala → buscar → ficha), la ficha sigue en la sala', () => {
+    const cine = `?vista=cine&sala=${CODE}`;
+    const buscar = searchFor({ vista: 'buscar' }, cine);
+    expect(buscar).toBe(`?vista=buscar&sala=${CODE}`);
+    expect(parseRoute(`${buscar}&q=dune`)).toEqual({ vista: 'buscar', sala: CODE });
+    expect(searchFor({ vista: 'cine', id: PELI }, `${buscar}&q=dune`)).toBe(
+      `?vista=cine/${PELI}&sala=${CODE}`,
+    );
+    expect(resolveRoute({ vista: 'cine', id: PELI }, { vista: 'buscar', sala: CODE })).toEqual({
+      vista: 'cine',
+      id: PELI,
+      sala: CODE,
+    });
+    /* Sin sala (o al ir a otra vista), nada. */
+    expect(searchFor({ vista: 'buscar' }, '?vista=agenda')).toBe('?vista=buscar');
+    expect(searchFor({ vista: 'agenda' }, buscar)).toBe('?vista=agenda');
+    expect(parseRoute('?vista=buscar')).toEqual({ vista: 'buscar', sala: null });
+  });
+
+  it('sameRoute: la sala, la pestaña y lo nuevo cuentan; una sala sin poner, no', () => {
+    expect(sameRoute({ vista: 'cine', id: null, sala: CODE }, { vista: 'cine', id: null })).toBe(
+      true,
+    );
+    expect(
+      sameRoute({ vista: 'cine', id: null, sala: CODE }, { vista: 'cine', id: null, sala: null }),
+    ).toBe(false);
+    expect(
+      sameRoute({ vista: 'juntos', code: CODE }, { vista: 'juntos', code: CODE, tab: null }),
+    ).toBe(true);
+    expect(
+      sameRoute({ vista: 'juntos', code: CODE }, { vista: 'juntos', code: CODE, tab: 'siguiente' }),
+    ).toBe(false);
   });
 });

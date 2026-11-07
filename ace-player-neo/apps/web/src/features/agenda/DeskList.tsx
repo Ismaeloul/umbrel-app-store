@@ -23,7 +23,12 @@
    lo abre como siempre.
 
    Día, pestaña, liga y estado se comparten con la vista (state.ts): es «la
-   misma agenda» antes y después de abrir un partido. */
+   misma agenda» antes y después de abrir un partido.
+
+   En la sala de «Ver juntos» (`uiScope="sala"`, pestaña Partidos) la lista
+   es la misma pero con su propio estado: empieza en hoy y, si hay alguno,
+   en «En directo», y lo que toques ahí no mueve la Agenda. El que suena es
+   el de la sala (`watchingId`), no el del reproductor de casa. */
 
 import './demo.ts';
 import './agenda.css';
@@ -395,7 +400,7 @@ export function DeskRow({
      partido, el que tienes abierto cuenta como «viéndolo» aunque el vídeo
      aún no haya arrancado. */
   const covered = useScoreCovered(match.id);
-  const hidden = useScoreHidden(match.id, !onSelect && selected);
+  const hidden = useScoreHidden(match.id, (!onSelect && selected) || watching);
   const shown = (live || done) && !covered && !hidden ? paintableScore(score) : null;
   const progress = live ? matchProgressAt(match, now, score) : 0;
   const channel = match.channels?.[0]?.name?.trim() || null;
@@ -524,26 +529,87 @@ export interface DeskListProps {
   /** En la Agenda: un clic elige el partido en vez de abrirlo. */
   onSelect?(match: FootballMatch): void;
   className?: string;
+  /** El partido que suena (barritas y marcador tapado). Si llega (también
+   *  null), manda sobre el del reproductor de casa: en la sala, el de la sala. */
+  watchingId?: string | null;
+  /** De quién es el día, la pestaña y el estado: de la Agenda (state.ts,
+   *  por defecto) o de la sala, que los guarda aparte y no toca la Agenda. */
+  uiScope?: 'agenda' | 'sala';
 }
 
-export function DeskList({ selectedId, active, onOpen, onSelect, className }: DeskListProps) {
+/** Lo que se toca arriba de la lista: día, pestaña o liga y estado. */
+interface DeskFilters {
+  day: string | null;
+  chip: string | null;
+  /** 'auto': aún sin tocar (la sala empieza en «En directo» si hay alguno). */
+  status: AgendaStatus | null | 'auto';
+  setDay(day: string): void;
+  setChip(chip: string | null): void;
+  setStatus(status: AgendaStatus | null): void;
+}
+
+/** Los filtros de la Agenda (compartidos) o los de la sala (locales). */
+function useDeskFilters(scope: 'agenda' | 'sala'): DeskFilters {
+  const ui = useAgendaUi();
+  const [local, setLocal] = useState<{
+    day: string | null;
+    chip: string | null;
+    status: AgendaStatus | null | 'auto';
+  }>({ day: null, chip: null, status: 'auto' });
+  if (scope === 'sala')
+    return {
+      ...local,
+      setDay: (day) => setLocal((state) => ({ ...state, day })),
+      setChip: (chip) => setLocal((state) => ({ ...state, chip })),
+      setStatus: (status) => setLocal((state) => ({ ...state, status })),
+    };
+  return {
+    day: ui.day,
+    chip: ui.chip,
+    status: ui.status,
+    setDay: setAgendaDay,
+    setChip: setAgendaChip,
+    setStatus: setAgendaStatus,
+  };
+}
+
+export function DeskList({
+  selectedId,
+  active,
+  onOpen,
+  onSelect,
+  className,
+  watchingId,
+  uiScope = 'agenda',
+}: DeskListProps) {
   const now = useNow();
   const today = madridClock(now).date;
   const schedule = useSchedule();
   const { preferences } = usePreferences();
-  const ui = useAgendaUi();
-  const watched = useWatchedMatch();
+  const filters = useDeskFilters(uiScope);
+  const playing = useWatchedMatch();
+  const watched = watchingId === undefined ? playing : watchingId;
   const baseId = useId();
 
   const days = schedule.data?.days ?? [];
-  const day = resolveDay(days, ui.day, today);
+  const day = resolveDay(days, filters.day, today);
   const dayMatches = days.find((item) => item.date === day)?.matches ?? EMPTY;
   const { scores } = useScores(dayMatches, now, active);
-  const status = ui.status;
-  const { all, competitions, forYou, chip, scoped, shown } = useMemo(
-    () => deskView(dayMatches, { chip: ui.chip, status }, now, scores, preferences),
-    [dayMatches, ui.chip, status, now, scores, preferences],
-  );
+  const requested = filters.status;
+  const { all, competitions, forYou, chip, scoped, shown } = useMemo(() => {
+    const view = deskView(
+      dayMatches,
+      { chip: filters.chip, status: requested === 'auto' ? null : requested },
+      now,
+      scores,
+      preferences,
+    );
+    // Sin tocar (solo en la sala): «En directo» si hay alguno; si no, todo.
+    if (requested !== 'auto' || countLive(view.scoped, now, scores) === 0) return view;
+    return { ...view, shown: byPhase(view.scoped, 'live', now, scores) };
+  }, [dayMatches, filters.chip, requested, now, scores, preferences]);
+  const status: AgendaStatus | null =
+    requested !== 'auto' ? requested : countLive(scoped, now, scores) > 0 ? 'live' : null;
   const leagues = useMemo(() => {
     const mine = new Set(
       all.filter((match) => isMine(match, preferences)).map((match) => match.competition),
@@ -590,12 +656,12 @@ export function DeskList({ selectedId, active, onOpen, onSelect, className }: De
 
   const pick = (next: string | null) => {
     haptic('selection');
-    setAgendaChip(next);
+    filters.setChip(next);
   };
 
   const pickStatus = (next: AgendaStatus) => {
     haptic('selection');
-    setAgendaStatus(status === next ? null : next);
+    filters.setStatus(status === next ? null : next);
   };
 
   const toggleGroup = (competition: string) => {
@@ -653,7 +719,7 @@ export function DeskList({ selectedId, active, onOpen, onSelect, className }: De
               today={today}
               onSelect={(date) => {
                 haptic('selection');
-                setAgendaDay(date);
+                filters.setDay(date);
               }}
             />
           ) : null}

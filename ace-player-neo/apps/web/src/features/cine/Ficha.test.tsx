@@ -1,8 +1,9 @@
 /* Ficha de una película o una serie (docs/vod.md §12.6, §10.3 y §13). */
 
-import type { VodList, VodMovie, VodSeries } from '@ace/shared';
+import type { PartyRoom, VodList, VodMovie, VodSeries } from '@ace/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import partyJoined from '@fixtures/web/v1/partyJoin.json';
 import seriesAviFixture from '@fixtures/variantes/vodTitle.episodio-avi.json';
 import seriesFixture from '@fixtures/variantes/vodTitle.series.json';
 import movieFixture from '@fixtures/v1/vodTitle.json';
@@ -19,7 +20,11 @@ import { DEMO_VOD_IDS, demoSaveLanguages, resetDemoVod } from './demo-data.ts';
 import { episodeName } from './EpisodeList.tsx';
 import { setHevcSupport } from './play.ts';
 import './demo.ts';
-import { demoRoutes, renderCine } from './test-utils.tsx';
+import { demoRoutes, renderCine, RoutedCine } from './test-utils.tsx';
+import type { PartyClient } from '../juntos/client.ts';
+import { PickingProvider, type Picking } from '../juntos/RoomPresence.tsx';
+import { PROPOSE_TEXT } from '../juntos/proposeTexts.ts';
+import { resetMemoryStorage } from '../../lib/storage.ts';
 
 let net: ReturnType<typeof mockFetch>;
 
@@ -584,5 +589,85 @@ describe('lo que dice el fichero (§4.11)', () => {
         'Audio: Inglés',
       ),
     );
+  });
+});
+
+describe('eligiendo para una sala de «Ver juntos» (docs/ver-juntos.md §11)', () => {
+  const ROOM = partyJoined.room as PartyRoom;
+  const CODE = ROOM.code;
+
+  function pick(over: Partial<Picking> = {}) {
+    /* Sin credencial guardada: la sala la da `PickingProvider`, sin SSE de verdad. */
+    localStorage.clear();
+    resetMemoryStorage();
+    const add = vi.fn(async (_order: Record<string, unknown>) => 'q_Propuest');
+    const picking: Picking = {
+      code: CODE,
+      client: { add } as unknown as PartyClient,
+      room: ROOM,
+      selfId: 'm_IsmaAnfitrion',
+      canControl: true,
+      queueMode: 'vote',
+      unread: 0,
+      host: 'Isma',
+      closed: null,
+      ...over,
+    };
+    net = mockFetch({ [`GET /api/v1/vod/titles/${MOVIE.id}`]: () => json(MOVIE) });
+    renderCine({
+      search: `?vista=cine/${MOVIE.id}&sala=${CODE}`,
+      ui: (
+        <PickingProvider value={picking}>
+          <RoutedCine />
+        </PickingProvider>
+      ),
+    });
+    return { add };
+  }
+
+  it('quien controla: «Poner en la sala ahora» (segundo toque si se corta lo que suena) y «Proponer a la sala»', async () => {
+    const other = { ...ROOM, title: { ...ROOM.title, id: 'f'.repeat(40), title: 'Oppenheimer' } };
+    const { add } = pick({ room: other });
+    const put = await screen.findByRole('button', { name: PROPOSE_TEXT.putNow });
+    expect(screen.getByRole('button', { name: PROPOSE_TEXT.propose })).toBeInTheDocument();
+    expect(screen.getByText(PROPOSE_TEXT.modeHint('vote'))).toBeInTheDocument();
+    /* Ni «Reproducir» de siempre ni «Ver juntos»: ya se está en una sala. */
+    expect(screen.queryByRole('button', { name: /^Seguir · / })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ver juntos' })).toBeNull();
+    fireEvent.click(put);
+    expect(add).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('button', { name: PROPOSE_TEXT.putConfirm('Oppenheimer', 'Dune') }),
+    );
+    await waitFor(() => expect(add).toHaveBeenCalledWith(expect.objectContaining({ play: true })));
+    expect(add.mock.calls[0]?.[0]).toMatchObject({ titleId: MOVIE.id, kind: 'movie' });
+    await waitFor(() => expect(location.search).toContain(`vista=juntos/${CODE}`));
+  });
+
+  it('quien no controla solo propone; vuelve a Siguiente con lo propuesto resaltado', async () => {
+    const { add } = pick({ canControl: false, queueMode: 'autoplay', selfId: 'm_AnaInvitada01' });
+    const propose = await screen.findByRole('button', { name: PROPOSE_TEXT.propose });
+    expect(screen.queryByRole('button', { name: PROPOSE_TEXT.putNow })).toBeNull();
+    expect(screen.getByText(PROPOSE_TEXT.modeHint('autoplay'))).toBeInTheDocument();
+    fireEvent.click(propose);
+    await waitFor(() => expect(add).toHaveBeenCalledOnce());
+    expect(add.mock.calls[0]?.[0]).not.toHaveProperty('play');
+    await waitFor(() =>
+      expect(location.search).toContain(`vista=juntos/${CODE}&panel=siguiente&nuevo=q_Propuest`),
+    );
+  });
+
+  it('«Elijo yo»: la pista lo dice; «Reproducir solo para mí» pide un segundo toque', async () => {
+    resetPlayerApi();
+    pick({ canControl: false, queueMode: 'leader' });
+    expect(await screen.findByText(PROPOSE_TEXT.modeHint('leader'))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: PROPOSE_TEXT.soloLink }));
+    expect(playerStore.get().kind).not.toBe('vod');
+    fireEvent.click(screen.getByRole('button', { name: PROPOSE_TEXT.soloConfirm }));
+    expect(playerStore.get()).toMatchObject({
+      kind: 'vod',
+      route: { vista: 'sala', id: MOVIE.id },
+    });
+    resetPlayerApi();
   });
 });

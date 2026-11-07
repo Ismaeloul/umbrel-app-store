@@ -144,7 +144,8 @@ export interface PartyService extends Lifecycle {
   /** Líder, co-líderes, ajustes y lista (docs/ver-juntos.md §11 y §13). */
   settings(code: string, body: PartySettingsBody): void;
   member(code: string, body: PartyMemberBody): void;
-  queue(code: string, body: PartyQueueBody): void;
+  /** Con `add`, el id de lo añadido (y, con `play`, ya suena para todos). */
+  queue(code: string, body: PartyQueueBody): { itemId?: string };
   leave(code: string, token: string): void;
   close(code: string, token: string): void;
   /** Las salas abiertas (`partyList`, solo la web de casa). */

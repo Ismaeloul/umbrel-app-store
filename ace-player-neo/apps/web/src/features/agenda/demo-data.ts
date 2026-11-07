@@ -14,7 +14,10 @@
    (`TeamBadge` con siglas y colores reales del club) y `competitionBadge`,
    como los daría el módulo `teams` del backend. `crest` y `logo` van a null
    porque en demo no hay backend que sirva PNG y no se empaquetan escudos de
-   terceros: se ve el escudo generado con los colores de cada club. */
+   terceros: se ve el escudo generado con los colores de cada club. La única
+   excepción es LaLiga, que lleva un logo de prueba propio
+   (public/demo/logo-prueba.png, una palabra de borde a borde) para que la
+   revisión visual vea si la cabecera de la liga recorta el logo. */
 
 import type {
   CompetitionBadge,
@@ -232,9 +235,12 @@ export function demoTeamBadge(name: string): TeamBadge | undefined {
   };
 }
 
-/** Competición de la demo: nombre, sin logo (logo: null). */
+/** Logo de prueba (propio, no el de la liga) que lleva LaLiga en la demo. */
+export const DEMO_TEST_LOGO = '/demo/logo-prueba.png';
+
+/** Competición de la demo: nombre y, salvo LaLiga (logo de prueba), sin logo. */
 export function demoCompetitionBadge(name: string): CompetitionBadge {
-  return { id: keyId('k', name), name, logo: null };
+  return { id: keyId('k', name), name, logo: name === 'LaLiga' ? DEMO_TEST_LOGO : null };
 }
 
 /* Ancla fija por carga de página, redondeada a 5 min: volver a pedir la

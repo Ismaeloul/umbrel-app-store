@@ -1414,18 +1414,23 @@
   min-height: 56px;
   padding: 8px 8px 4px 16px;
 }
-/* Logo de la liga o, sin él, la insignia con su color (competitionTone). */
-.desk-comp__logo,
+/* Logo de la liga o, sin él, la insignia con su color (competitionTone).
+   El logo va entero y sin recorte (sin radio ni fondo): los que son una
+   palabra («LaLiga») llegan de borde a borde y el redondeo se los comía. */
+.desk-comp__logo {
+  flex: none;
+  width: auto;
+  max-width: 44px;
+  height: 32px;
+  border-radius: 0;
+  background: none;
+  object-fit: contain;
+}
 .desk-comp__badge {
   flex: none;
   width: 32px;
   height: 32px;
   border-radius: 8px;
-}
-.desk-comp__logo {
-  object-fit: contain;
-}
-.desk-comp__badge {
   display: grid;
   place-items: center;
   background: var(--bb, var(--surface-2));
@@ -1508,9 +1513,9 @@
   padding: 8px 16px 8px 12px;
   text-align: left;
 }
+/* La fila elegida se ve por el fondo (y aria-current), sin raya a la izquierda. */
 .desk-row--sel {
   background: var(--accent-wash);
-  box-shadow: inset 3px 0 0 var(--accent-edge);
 }
 /* Sobre el amarillo de la fila elegida, el gris (--text-3) y el rojo del
    minuto no llegan a 4,5:1 en oscuro: el estado y el canal suben a

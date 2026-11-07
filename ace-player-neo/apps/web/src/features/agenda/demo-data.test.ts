@@ -6,6 +6,7 @@ import {
 } from '@ace/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  DEMO_TEST_LOGO,
   demoCompetitionBadge,
   demoPreheat,
   demoSchedule,
@@ -65,7 +66,7 @@ describe('agenda de la demo (inventario §3.8)', () => {
       expect(match.competitionBadge).toEqual({
         id: expect.stringMatching(/^k-/),
         name: match.competition,
-        logo: null,
+        logo: match.competition === 'LaLiga' ? DEMO_TEST_LOGO : null,
       });
     }
     expect(demoTeamBadge('FC Barcelona')).toMatchObject({ id: 'k-fc-barcelona', short: 'BAR' });
@@ -79,6 +80,8 @@ describe('agenda de la demo (inventario §3.8)', () => {
       name: 'Champions League',
       logo: null,
     });
+    // LaLiga lleva el logo de prueba (una palabra de borde a borde, del mismo origen).
+    expect(demoCompetitionBadge('LaLiga').logo).toBe('/demo/logo-prueba.png');
   });
 
   it('señal simulada por partido (precalentado)', () => {

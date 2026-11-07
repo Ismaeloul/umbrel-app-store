@@ -230,4 +230,47 @@ describe('router', () => {
     expect(location.search).toContain('q=dazn');
     expect(history.length).toBe(length);
   });
+
+  it('Pelis y series eligiendo para una sala: la ficha sigue en la sala y volver a la sala la quita', () => {
+    const CODE = 'Ab3_dE5-gH7jK9mN';
+    const PELI = 'b'.repeat(40);
+    function SalaProbe() {
+      const route = useRoute();
+      const navigate = useNavigate();
+      return (
+        <div>
+          <p data-testid="sala">{route.vista === 'cine' ? (route.sala ?? '-') : '-'}</p>
+          <button onClick={() => navigate({ vista: 'cine', id: null, sala: CODE })}>elegir</button>
+          <button onClick={() => navigate({ vista: 'cine', id: PELI })}>ficha</button>
+          <button onClick={() => navigate({ vista: 'buscar' })}>buscar</button>
+          <button
+            onClick={() =>
+              navigate({ vista: 'juntos', code: CODE, tab: 'siguiente', nuevo: 'q_AbCd1234' })
+            }
+          >
+            volver
+          </button>
+        </div>
+      );
+    }
+    render(
+      <RouterProvider>
+        <SalaProbe />
+      </RouterProvider>,
+    );
+    fireEvent.click(screen.getByText('elegir'));
+    expect(location.search).toBe(`?demo=1&vista=cine&sala=${CODE}`);
+    fireEvent.click(screen.getByText('ficha'));
+    expect(location.search).toBe(`?demo=1&vista=cine/${PELI}&sala=${CODE}`);
+    expect(screen.getByTestId('sala')).toHaveTextContent(CODE);
+    /* Por la búsqueda (lo normal para dar con un título concreto), tampoco se pierde. */
+    fireEvent.click(screen.getByText('buscar'));
+    expect(location.search).toBe(`?demo=1&vista=buscar&sala=${CODE}`);
+    fireEvent.click(screen.getByText('ficha'));
+    expect(location.search).toBe(`?demo=1&vista=cine/${PELI}&sala=${CODE}`);
+    expect(screen.getByTestId('sala')).toHaveTextContent(CODE);
+    fireEvent.click(screen.getByText('volver'));
+    expect(location.search).toBe(`?demo=1&vista=juntos/${CODE}&panel=siguiente&nuevo=q_AbCd1234`);
+    expect(screen.getByTestId('sala')).toHaveTextContent('-');
+  });
 });

@@ -114,8 +114,9 @@ describe('movimiento solo con transform y opacity', () => {
 });
 
 /* El reproductor lo lleva otro frente de trabajo: sus bucles (giro, ecualizador,
-   luz que respira, corte a negro) aún llevan cifras propias. */
-const DURACIONES_PENDIENTES = new Set(['player/player.css']);
+   luz que respira, corte a negro) aún llevan cifras propias. El ecualizador salió de
+   player.css a equalizer.css (se carga siempre: la sala en directo lo usa sin reproductor). */
+const DURACIONES_PENDIENTES = new Set(['player/player.css', 'player/equalizer.css']);
 
 describe('duraciones del movimiento, siempre de los tokens', () => {
   // Así el movimiento reducido las acorta todas a la vez (tokens.css) y no hay

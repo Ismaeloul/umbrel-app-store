@@ -4,8 +4,8 @@
 
    Igual en escritorio y en el móvil (las maquetas 01-escritorio,
    ver-juntos.html y ver-juntos-pelis.html):
-   - Arriba: «Sala de Ismael · 4» y «● Sincronizados» (o «Esperando a Ana…»,
-     «Reconectando…»).
+   - Arriba: «Sala de Ismael · 2 de 3» (conectados de los que hay) y
+     «● Sincronizados» (o «En pausa», «Esperando a Ana…», «Reconectando…»).
    - En el centro, para quien controla: −10 s, reproducir o pausar y +10 s; o
      el aviso del momento («Toca para empezar», un error).
    - Abajo: la barra de tiempo del reproductor de casa (`VodTimeline`: arrastrar,
@@ -15,7 +15,10 @@
      traía y no había forma de bajarlo); en el móvil, nada: mandan los
      botones del teléfono (M silencia en cualquier caso).
    - Quien no controla ve una barra de solo lectura (sin tirador, sin foco y
-     sin anunciarse como deslizador): no puede mover la sala.
+     sin anunciarse como deslizador): no puede mover la sala. Con el vídeo
+     parado ve en el centro «En pausa · la ha parado Isma» (quien lo dice el
+     aviso de la sala; si no, quien controla). Su primer toque en el vídeo
+     le cuenta, una vez por sesión, que solo Isma puede pausar o moverlo.
    - Sin reacciones ni chat encima: en pantalla completa, solo el vídeo.
    - El tiempo y la barra son los de la SALA (su reloj), no los de este vídeo:
      así todos ven el mismo minuto aunque este aparato vaya cargando.
@@ -32,9 +35,10 @@
      reproduce o pausa a los `CLICK_DELAY_MS` y un doble clic lo anula (solo
      pone la pantalla completa). La posición se calcula al pulsar y cada
      orden dice de dónde sale (`source`, para el registro del servidor).
-   - Si el navegador lo ha empezado en silencio (`view.soundBlocked`), la
-     píldora «Activar sonido» sale siempre, aunque los controles estén
-     escondidos; y el primer toque sobre el vídeo también lo quita.
+   - Si el navegador lo ha empezado en silencio (`view.soundBlocked`), un
+     botón grande en el centro, «Toca para oír», tapa los controles (sale
+     aunque estén escondidos). Ese toque, o el primero sobre el vídeo, solo
+     quita el silencio: ni pausa ni enseña nada más.
    - Con `?debug=juntos`, una capa con lo último del reproductor
      (`player.debug()`).
    - En directo (§14): ni pausa, ni ±10 s, ni barra de tiempo. Abajo, la
@@ -46,7 +50,7 @@
      la sala (`player.setQuality`, ni `client.control`) y lo puede tocar
      cualquiera, controle o no. */
 
-import type { PartyControlSource, PartyRoom } from '@ace/shared';
+import type { PartyChatMessage, PartyControlSource, PartyRoom } from '@ace/shared';
 import {
   useCallback,
   useEffect,
@@ -67,8 +71,9 @@ import { applySavedVolume, readSavedVolume, saveVolume } from '../../player/volu
 import { Button, IconButton } from '../../ui/Button.tsx';
 import { Icon } from '../../ui/Icon.tsx';
 import { MenuButton } from '../../ui/Menu.tsx';
-import { canControl, type PartyClient, type PartyState } from './client.ts';
-import { UpNext } from './Panels.tsx';
+import { canControl, controllers, type PartyClient, type PartyState } from './client.ts';
+import { joinNames } from './Panels.tsx';
+import { UpNext } from './Queue.tsx';
 import type { PlayerView, RoomPlayer } from './player.ts';
 import { clock, isRunning, targetPosition } from './sync.ts';
 import { JUNTOS_TEXT } from './texts.ts';
@@ -81,6 +86,49 @@ export const CLICK_DELAY_MS = 250;
 export const WAKE_GUARD_MS = 350;
 /** Lo que se esconde con los controles y no debe recibir el clic del toque que los enseña. */
 const GUARDED = '.juntos-center__controls, .juntos-chrome__bottom';
+
+/** El aviso «solo Isma puede pausar» sale una vez por sesión (de pestaña). */
+const READ_ONLY_KEY = 'aceneo-juntos-solo-lectura';
+let readOnlyShown = false;
+
+function readOnlyNoticeDue(): boolean {
+  if (readOnlyShown) return false;
+  readOnlyShown = true;
+  try {
+    if (globalThis.sessionStorage?.getItem(READ_ONLY_KEY)) return false;
+    globalThis.sessionStorage?.setItem(READ_ONLY_KEY, '1');
+  } catch {
+    /* Sin sessionStorage (modo privado estricto): basta con la variable. */
+  }
+  return true;
+}
+
+/** Para los tests: que el aviso vuelva a salir. */
+export function resetReadOnlyNotice(): void {
+  readOnlyShown = false;
+  try {
+    globalThis.sessionStorage?.removeItem(READ_ONLY_KEY);
+  } catch {
+    /* Sin sessionStorage: basta con la variable. */
+  }
+}
+
+const PAUSED_SUFFIX = ' ha pausado.';
+
+/**
+ * Quién ha parado el vídeo: el último aviso «Isma ha pausado.» del chat (el servidor lo escribe al
+ * pausar); si no lo hay, quien controla cuando es uno solo. Si no se sabe, null.
+ */
+export function pausedBy(chat: readonly PartyChatMessage[], room: PartyRoom): string | null {
+  const names = room.members.map((member) => member.name);
+  const last = chat.findLast(
+    (message) => message.kind === 'system' && message.text.endsWith(PAUSED_SUFFIX),
+  );
+  const name = last?.text.slice(0, -PAUSED_SUFFIX.length);
+  if (name && names.includes(name)) return name;
+  const managers = controllers(room);
+  return managers?.length === 1 ? (managers[0] ?? null) : null;
+}
 
 /** ¿Hay `?debug=juntos` en la dirección? (la capa de depuración). */
 function debugLayer(): boolean {
@@ -120,6 +168,8 @@ export function Theater({
   const position = targetPosition(playback, client.serverNow(), duration || null);
   const hostName = room.members.find((member) => member.id === room.hostId)?.name ?? '';
   const online = room.members.filter((member) => member.online).length;
+  /* Parado de verdad (no esperando a nadie ni en la espera del principio). */
+  const paused = !live && !playback.playing && !playback.lobby && playback.waitingFor.length === 0;
   const waitingNames = room.members
     .filter((member) => playback.waitingFor.includes(member.id))
     .map((member) => member.name);
@@ -274,10 +324,26 @@ export function Theater({
   }, [togglePlay, nudge, onFullscreen, video, wake]);
 
   const soundBlocked = view.soundBlocked;
+  /* El botón del silencio tapa los controles mientras haya vídeo (los avisos del centro, no). */
+  const soundCover =
+    soundBlocked &&
+    view.phase !== 'blocked' &&
+    view.phase !== 'interrupted' &&
+    view.phase !== 'error';
   const onSurface = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
-    /* En silencio por el navegador: este toque (un clic de verdad) ya deja sonar. */
-    if (soundBlocked) player.unmute();
+    /* En silencio por el navegador: este toque (un clic de verdad) solo deja sonar. */
+    if (soundBlocked) {
+      player.unmute();
+      return;
+    }
+    /* Quien no controla y toca el vídeo: una vez por sesión, por qué no pasa nada. */
+    if (!steer && !live) {
+      const names = controllers(room) ?? [];
+      if (names.length && readOnlyNoticeDue()) {
+        notify(JUNTOS_TEXT.readOnlyNotice(joinNames(names), names.length > 1));
+      }
+    }
     if (press.current.pointer === 'mouse') {
       wake();
       /* El segundo clic de un doble clic: ni reproduce ni pausa (lo hace el `dblclick`). */
@@ -341,6 +407,14 @@ export function Theater({
       {JUNTOS_TEXT.synced}
     </>
   );
+  if (paused) {
+    status = (
+      <>
+        <span className="juntos-chip__dot juntos-chip__dot--paused" aria-hidden="true" />
+        {JUNTOS_TEXT.paused}
+      </>
+    );
+  }
   if (live && !reconnecting) {
     status = (
       <>
@@ -377,23 +451,30 @@ export function Theater({
         }}
         aria-hidden="true"
       />
-      {soundBlocked ? (
-        <button
-          type="button"
-          className="juntos-chip juntos-sound"
-          title={JUNTOS_TEXT.soundOffHint}
-          onClick={() => player.unmute()}
-        >
-          <Icon name="mute" size={16} />
-          {JUNTOS_TEXT.soundOff}
-        </button>
+      {soundCover ? (
+        <div className="juntos-center juntos-center--sound">
+          <button
+            type="button"
+            className="juntos-hear"
+            title={JUNTOS_TEXT.soundOffHint}
+            onClick={() => {
+              player.unmute();
+              wake();
+            }}
+          >
+            <span className="juntos-hear__icon" aria-hidden="true">
+              <Icon name="mute" size={24} />
+            </span>
+            {JUNTOS_TEXT.tapToHear}
+          </button>
+        </div>
       ) : null}
       {debugLayer() ? <DebugLayer player={player} /> : null}
 
       <div className="juntos-chrome__top">
         <span className="juntos-chip">
           <Icon name="personas" size={16} />
-          {JUNTOS_TEXT.roomOf(hostName, online)}
+          {JUNTOS_TEXT.roomOf(hostName, online, room.members.length)}
         </span>
         {fullscreen ? <span className="juntos-chrome__title">{room.title.title}</span> : null}
         <span className="juntos-chip" role="status">
@@ -401,24 +482,27 @@ export function Theater({
         </span>
       </div>
 
-      <Center
-        view={view}
-        room={room}
-        player={player}
-        control={steer}
-        running={running}
-        waitingNames={waitingNames}
-        reconnecting={reconnecting}
-        fullscreen={fullscreen}
-        onToggle={() => {
-          togglePlay('button');
-          wake();
-        }}
-        onNudge={(delta) => {
-          nudge(delta, 'nudge');
-          wake();
-        }}
-      />
+      {soundCover ? null : (
+        <Center
+          view={view}
+          room={room}
+          player={player}
+          control={steer}
+          pausedBy={paused && !control ? pausedBy(state.chat, room) : undefined}
+          running={running}
+          waitingNames={waitingNames}
+          reconnecting={reconnecting}
+          fullscreen={fullscreen}
+          onToggle={() => {
+            togglePlay('button');
+            wake();
+          }}
+          onNudge={(delta) => {
+            nudge(delta, 'nudge');
+            wake();
+          }}
+        />
+      )}
       <UpNext room={room} client={client} selfId={client.credential.id} />
 
       {live ? (
@@ -507,6 +591,7 @@ function Center({
   waitingNames,
   reconnecting,
   fullscreen,
+  pausedBy: pauser,
   onToggle,
   onNudge,
 }: {
@@ -514,6 +599,11 @@ function Center({
   room: PartyRoom;
   player: RoomPlayer;
   control: boolean;
+  /**
+   * Quien no controla, con la sala en pausa: quién la ha parado (null si no se sabe). Sin él
+   * (`undefined`), no está en pausa o quien mira controla.
+   */
+  pausedBy?: string | null;
   running: boolean;
   waitingNames: readonly string[];
   reconnecting: boolean;
@@ -593,6 +683,15 @@ function Center({
     );
   } else if (view.buffering) {
     body = <span className="juntos-spinner juntos-spinner--bare" aria-hidden="true" />;
+  } else if (pauser !== undefined && !control) {
+    body = (
+      <div className="juntos-center__card juntos-center__card--paused" role="status">
+        <Icon name="pause" size={24} />
+        <span className="juntos-center__text">
+          {pauser ? JUNTOS_TEXT.pausedBy(pauser) : JUNTOS_TEXT.paused}
+        </span>
+      </div>
+    );
   } else if (control) {
     body = (
       <div className="juntos-center__controls">

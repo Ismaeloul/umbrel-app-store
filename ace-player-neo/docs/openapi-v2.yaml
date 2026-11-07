@@ -17076,6 +17076,9 @@ paths:
                       maxLength: 24
                   full:
                     type: boolean
+                  host:
+                    type: string
+                    maxLength: 24
                 required:
                   - code
                   - title
@@ -19348,6 +19351,8 @@ paths:
                         - type: string
                           maxLength: 200
                         - type: "null"
+                    play:
+                      type: boolean
                   required:
                     - token
                     - action
@@ -19400,6 +19405,9 @@ paths:
                   ok:
                     type: boolean
                     const: true
+                  itemId:
+                    type: string
+                    pattern: ^q_[A-Za-z0-9_-]{8}$
                 required:
                   - ok
                 additionalProperties: false

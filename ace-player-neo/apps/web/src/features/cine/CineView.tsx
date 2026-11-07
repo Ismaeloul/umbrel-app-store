@@ -2,16 +2,25 @@
    (`?vista=cine`) o la ficha de un título (`?vista=cine/<id>`). Las dos
    viven en la misma vista del armazón: al volver de una ficha, la portada
    conserva su estado (sigue montada, oculta) y el armazón le devuelve el
-   scroll (scrollKey `cine:portada`). Oculta (Activity), no pide nada. */
+   scroll (scrollKey `cine:portada`). Oculta (Activity), no pide nada.
 
-import { useEffect, useRef } from 'react';
+   Con `&sala=<código>` (docs/ver-juntos.md §11) se elige para una sala de
+   «Ver juntos»: la vista sigue conectada a la sala (RoomPresence), lleva la
+   barra «Eligiendo para la sala de…» y la ficha propone o pone en la sala en
+   vez de reproducir aquí. */
+
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { ViewProps } from '../../app/contracts.ts';
+import { RoomPresence } from '../juntos/RoomPresence.tsx';
 import { Ficha } from './Ficha.tsx';
 import { Home } from './Home.tsx';
+import { RoomPickingBar } from './RoomPicking.tsx';
 import './cine.css';
 
 export default function CineView({ route, active }: ViewProps) {
   const id = route.vista === 'cine' ? route.id : null;
+  /* Solo a la vista: oculta (Activity) no mantiene abierta la sala. */
+  const sala = route.vista === 'cine' && active ? (route.sala ?? null) : null;
   /* Al volver de una ficha, el foco vuelve al cartel que la abrió (el armazón
      lo dejaba en el titular de la portada, arriba y fuera de la pantalla, y
      con el teclado había que empezar desde el principio). Va dos fotogramas
@@ -38,8 +47,9 @@ export default function CineView({ route, active }: ViewProps) {
   }, [id, active]);
   /* La ficha va delante: el armazón da el foco al primer h1[tabindex=-1] de
      la vista, y el de la portada está oculto mientras hay ficha. */
-  return (
+  const screens: ReactNode = (
     <>
+      {sala ? <RoomPickingBar /> : null}
       {id ? (
         <div className="cine-screen">
           <Ficha key={id} id={id} active={active} />
@@ -56,4 +66,5 @@ export default function CineView({ route, active }: ViewProps) {
       </div>
     </>
   );
+  return <RoomPresence code={sala}>{screens}</RoomPresence>;
 }

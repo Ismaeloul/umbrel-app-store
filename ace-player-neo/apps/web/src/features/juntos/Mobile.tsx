@@ -2,8 +2,11 @@
    ver-juntos-pelis.html. El móvil usa el mismo marcado que el escritorio
    (Room.tsx, Panels.tsx), apilado y con su CSS; aquí solo va lo que el
    escritorio no tiene:
-   - En directo, las caras apiladas (unas encima de otras, con la corona y el
-     escudo) y los nombres al lado: «Ismael, Yassin, Lucía y Marco».
+   - Las caras apiladas (unas encima de otras, con la corona y el escudo) y
+     los nombres al lado: «Ismael, Yassin, Lucía y Marco». En directo y en
+     pelis y series (una fila de 36 px: el chat necesita el sitio). En la
+     espera, cada cara con su anillo (verde listo, el % cargando, gris sin
+     conexión), como la lista de Gente.
    - En Siguiente, «Pasar al siguiente» (o «Siguiente episodio») para quien
      controla: en escritorio no está y el móvil lo tenía en su Lista. */
 
@@ -12,14 +15,26 @@ import { describeFailure } from '../../api/index.ts';
 import { notify } from '../../notices/index.ts';
 import { Button } from '../../ui/Button.tsx';
 import { canControl, roleOf, type PartyClient } from './client.ts';
-import { Avatar, joinNames } from './Panels.tsx';
+import { Avatar, faceMark, faceMarkText, joinNames } from './Panels.tsx';
 import { JUNTOS_TEXT } from './texts.ts';
 
 /** Cuántas caras se apilan como mucho; el resto lo dicen los nombres. */
 const STACK_MAX = 5;
 
-/** En directo: las caras apiladas y quién está, en una línea. */
-export function MobileFaces({ room, selfId }: { room: PartyRoom; selfId: string }) {
+/** Las caras apiladas y quién está, en una línea (con el anillo de cada uno en la espera). */
+export function MobileFaces({
+  room,
+  selfId,
+  selfVoted,
+  unvoted = [],
+}: {
+  room: PartyRoom;
+  selfId: string;
+  /** «Esperando a todos»: lo mío, como lo sabe esta página. */
+  selfVoted?: boolean;
+  /** «Esperando a todos»: quién de los demás no ha tocado aún (`party.votes`). */
+  unvoted?: readonly string[];
+}) {
   const shown = room.members.slice(0, STACK_MAX);
   const names = joinNames(room.members.map((member) => member.name));
   return (
@@ -33,14 +48,16 @@ export function MobileFaces({ room, selfId }: { room: PartyRoom; selfId: string 
               : role === 'coleader'
                 ? JUNTOS_TEXT.coleader
                 : '';
+          const mark = faceMark(room, member, selfId, selfVoted, unvoted);
           return (
             <li key={member.id} className="juntos-stack__face">
-              <Avatar member={member} room={room} />
+              <Avatar member={member} room={room} mark={mark} />
               <span className="sr-only">
                 {member.name}
                 {member.id === selfId ? ` ${JUNTOS_TEXT.you}` : ''}
                 {tag ? ` · ${tag}` : ''}
                 {!member.online ? ` · ${JUNTOS_TEXT.offline}` : ''}
+                {mark !== undefined ? ` · ${faceMarkText(mark)}` : ''}
               </span>
             </li>
           );

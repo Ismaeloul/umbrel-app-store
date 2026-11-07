@@ -89,6 +89,9 @@ const MatchAlerts = lazy(() =>
   import('../features/settings/match-alerts.tsx').then((m) => ({ default: m.MatchAlerts })),
 );
 
+/** Los avisos en la sala de Ver juntos del móvil: encima de la caja del chat y del teclado. */
+const JUNTOS_TOAST_BOTTOM = 'calc(72px + var(--kb, 0px))';
+
 const WHAT: Record<Vista, string> = {
   agenda: 'la agenda',
   biblioteca: 'la biblioteca',
@@ -324,13 +327,17 @@ export function Shell() {
 
   const layout: LayoutValue = { kind, asideVisible, asideAvailable, setAsideOpen, columnVisible };
 
+  // En la sala de Ver juntos del móvil, los avisos van por encima de la caja
+  // del chat (y del teclado del iPhone, --kb): no tapan lo que se escribe.
   const toastBottom = tabbarVisible
     ? miniVisible
       ? 'calc(var(--tabbar-h) + var(--tabbar-gap) + var(--mini-h) + 20px)'
       : 'calc(var(--tabbar-h) + var(--tabbar-gap) + 8px)'
-    : kind === 'mobile' && miniVisible
-      ? 'calc(var(--mini-h) + 16px)'
-      : '0px';
+    : kind === 'mobile' && isJuntosRoom(route)
+      ? JUNTOS_TOAST_BOTTOM
+      : kind === 'mobile' && miniVisible
+        ? 'calc(var(--mini-h) + 16px)'
+        : '0px';
 
   return (
     <LayoutContext value={layout}>
