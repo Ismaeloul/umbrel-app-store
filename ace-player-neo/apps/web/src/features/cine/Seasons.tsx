@@ -132,6 +132,7 @@ export function Seasons({ series }: { series: VodSeries }) {
         <EpisodeList
           seriesId={series.id}
           seriesTitle={series.title}
+          seriesPoster={series.poster}
           season={season.n}
           episodes={season.episodes}
           mainId={series.main?.episodeId ?? null}

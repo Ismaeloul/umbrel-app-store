@@ -141,6 +141,9 @@ describe('Agenda del móvil (por competición)', () => {
     const live = row(LIVE.id);
     expect(await within(live).findByText("54'")).toBeInTheDocument();
     expect(live).toHaveClass('is-live', 'is-mine');
+    // «Tu equipo»: la estrella bajo la hora (sin la raya amarilla de antes).
+    expect(live.querySelector('.agm-row__mine')).not.toBeNull();
+    expect(row(DONE.id).querySelector('.agm-row__mine')).toBeNull();
     expect(live.querySelector('.agm-row__bar')).not.toBeNull();
     // Con señal en directo: el play.
     await waitFor(() => expect(live.querySelector('.agm-row__play')).not.toBeNull());

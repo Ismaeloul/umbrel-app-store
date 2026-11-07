@@ -12,7 +12,11 @@
 //   - en táctil, objetivos de al menos 44 px (contando su zona ampliada con
 //     ::before/::after);
 //   - en el móvil en horizontal, con un canal sonando, el vídeo ocupa la
-//     pantalla y los controles se ocultan solos (CONTROLS_HIDE_MS).
+//     pantalla y los controles se ocultan solos (CONTROLS_HIDE_MS);
+//   - el logo de una liga (`img.desk-comp__logo`) sin esquinas redondeadas:
+//     el redondeo se comía los logos de palabra de borde a borde;
+//   - lo suyo de cada vista (`checks`): en la sala en directo, Fuentes y
+//     Partidos sin salirse del panel ni scroll de lado.
 // Con --axe pasa además axe-core (WCAG 2.2 AA) en móvil (390×844) y
 // escritorio (1440×900 y 1536×864), en oscuro y en claro: cero violaciones serias o críticas.
 // Con --teclado recorre cada vista con Tab (móvil y escritorio, en oscuro):
@@ -135,6 +139,10 @@ const PARTY_FIXTURE = JSON.parse(
 const PARTY_CODE = PARTY_FIXTURE.room.code;
 const PARTY_HOST = PARTY_FIXTURE.member;
 const PARTY_GUEST = { id: 'm_AnaInvitada', token: 'm_AnaInvitada.c2VjcmV0b0RlQW5hSW52aXRhZGEx' };
+/** La sala en directo (§14), con otro código: su SSE contesta otra foto. */
+const PARTY_LIVE_CODE = 'd7R2vN8qLx4Tz6Wp';
+/** El canal que suena en ella (da igual cuál: no hay vídeo). */
+const PARTY_LIVE_HASH = 'dadadadadadadadadadadadadadadadadadadada';
 
 /** La sala tal y como llega en `party.snapshot`: Isma (anfitrión), Ana y Yassin, con chat. */
 function partySnapshot() {
@@ -178,14 +186,52 @@ function partySnapshot() {
   };
 }
 
+/** La sala en directo (§14): Isma (líder y anfitrión) pone el partido de la
+    demo `demo-1` para Ana; Fuentes y Partidos salen en casa. */
+function partyLiveSnapshot() {
+  const film = partySnapshot();
+  const channel = 'DAZN · 1080p';
+  return {
+    ...film,
+    room: {
+      ...film.room,
+      code: PARTY_LIVE_CODE,
+      inviteUrl: `https://sala.ismaeloul.es/s/${PARTY_LIVE_CODE}`,
+      title: {
+        id: PARTY_LIVE_HASH,
+        kind: 'live',
+        artId: PARTY_LIVE_HASH,
+        poster: null,
+        title: channel,
+        subtitle: null,
+        durationS: null,
+      },
+      playback: { playing: true, positionS: 0, at: 0, rev: 3, waitingFor: [], lobby: false },
+      queue: [],
+      upNext: null,
+      live: {
+        hash: PARTY_LIVE_HASH,
+        channel,
+        source: 'engine',
+        matchId: 'demo-1',
+        match: 'FC Barcelona – Juventus',
+        auto: true,
+      },
+    },
+  };
+}
+
 /** Corre en el navegador (addInitScript): un EventSource que contesta el SSE de
-    la sala de mentira con su foto; los demás, el de verdad. */
-function fakePartyEvents({ code, snapshot }) {
+    cada sala de mentira (`rooms`: código → foto) con su foto; los demás, el de verdad. */
+function fakePartyEvents({ rooms }) {
   const Real = globalThis.EventSource;
   if (!Real) return;
-  const target = `/api/v1/party/${code}/events`;
+  const snapshotFor = (url) => {
+    const code = Object.keys(rooms).find((key) => url.includes(`/api/v1/party/${key}/events`));
+    return code ? rooms[code] : null;
+  };
   class FakeSource extends EventTarget {
-    constructor(url) {
+    constructor(url, snapshot) {
       super();
       this.url = String(url);
       this.readyState = 0;
@@ -207,7 +253,8 @@ function fakePartyEvents({ code, snapshot }) {
     }
   }
   function EventSourceForReview(url, init) {
-    return String(url).includes(target) ? new FakeSource(url) : new Real(url, init);
+    const snapshot = snapshotFor(String(url));
+    return snapshot ? new FakeSource(url, snapshot) : new Real(url, init);
   }
   EventSourceForReview.CONNECTING = 0;
   EventSourceForReview.OPEN = 1;
@@ -261,9 +308,12 @@ function guestRoutes(base) {
   ];
 }
 
-/** La sala ya con su foto (sin el «Conectando…» del principio). */
+/** La sala ya con su foto (sin el «Conectando…» del principio). En el móvil en
+    horizontal el chat va en un cajón: basta con su botón. */
 async function partyReady(page) {
-  await page.waitForSelector('.juntos-chat, .juntos-people', { timeout: 15_000 });
+  await page.waitForSelector('.juntos-chat, .juntos-people, .juntos-drawer-btn', {
+    timeout: 15_000,
+  });
   await page.waitForTimeout(800);
 }
 
@@ -325,6 +375,75 @@ async function openSala(page) {
     .click();
   await page.waitForSelector('.sala', { timeout: 10_000 });
   await waitPlaying(page).catch(() => {});
+}
+
+/** ¿La sala del móvil en horizontal (el chat en su cajón, sin pestañas a la vista)? */
+async function phoneDrawer(page) {
+  return page.locator('.juntos-drawer-btn').isVisible();
+}
+
+/** Abre una pestaña de la sala en directo (Fuentes o Partidos) y espera a su contenido. */
+async function openLiveTab(page, name, ready) {
+  await page.getByRole('tab', { name, exact: true }).click();
+  await page.waitForSelector(ready, { timeout: 15_000 });
+  await page.waitForTimeout(500);
+}
+
+/** Corre en el navegador: Fuentes o Partidos caben en su panel. Nada visible se
+    sale por los lados de `.juntos__side` (o del panel en el móvil) y la lista
+    no tiene scroll de lado (Isma, 7-11-2026: «Poner» se veía muy a la derecha). */
+function liveFits() {
+  const problems = [];
+  const list = document.querySelector('.juntos-live');
+  if (!list) return ['no está `.juntos-live`'];
+  if (list.scrollWidth > list.clientWidth + 1)
+    problems.push(`.juntos-live con scroll de lado (${list.scrollWidth} > ${list.clientWidth})`);
+  const box = (
+    list.closest('.juntos__side') ??
+    list.closest('.juntos__panel') ??
+    list
+  ).getBoundingClientRect();
+  for (const element of list.querySelectorAll('*')) {
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+    const style = getComputedStyle(element);
+    if (style.visibility === 'hidden' || style.display === 'none') continue;
+    if (element.closest('.sr-only')) continue;
+    // Las píldoras que se deslizan de lado: su fila es la que tiene que caber.
+    if (element.parentElement?.closest('.desk-agenda__chips, .desk-agenda__leagues')) continue;
+    if (rect.left < box.left - 1 || rect.right > box.right + 1) {
+      const name = `${element.tagName.toLowerCase()}.${[...element.classList].join('.')}`;
+      problems.push(
+        `${name} se sale del panel (${Math.round(rect.left)}–${Math.round(rect.right)} fuera de ${Math.round(box.left)}–${Math.round(box.right)})`,
+      );
+      if (problems.length > 8) break;
+    }
+  }
+  return problems;
+}
+
+/** Corre en el navegador: el ecualizador del partido que ya está en la sala se ve (sin
+    player.css medía 0x0, porque el reproductor de casa no está montado). */
+function eqVisible() {
+  const bars = [...document.querySelectorAll('.juntos-agenda .player-eq i')];
+  if (!bars.length) return ['no se marca el partido que está en la sala (falta `.player-eq`)'];
+  return bars.some((bar) => {
+    const rect = bar.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  })
+    ? []
+    : ['el ecualizador del partido de la sala mide 0x0'];
+}
+
+/** Corre en el navegador: los logos de las ligas, sin redondear (agenda.css). */
+function logoCorners() {
+  const problems = [];
+  for (const img of document.querySelectorAll('img.desk-comp__logo')) {
+    const radius = getComputedStyle(img).borderTopLeftRadius;
+    if (parseFloat(radius) > 0)
+      problems.push(`logo de liga redondeado (${radius}): ${img.getAttribute('src') ?? ''}`);
+  }
+  return [...new Set(problems)].slice(0, 5);
 }
 
 async function dialogOpen(page) {
@@ -576,7 +695,7 @@ const VIEWS = [
   {
     name: 'juntos',
     search: '?vista=juntos',
-    ready: '.empty',
+    ready: '.juntos-home',
     storage: { 'aceneo-juntos-ultima': null },
   },
   // La sala desde casa, con la credencial del anfitrión (§7).
@@ -588,8 +707,55 @@ const VIEWS = [
     routes: PARTY_ROUTES,
     prepare: partyReady,
   },
+  // La sala en directo desde casa (§14), con Fuentes abierta; los chequeos
+  // pasan luego a Partidos (captura `-partidos`). En la demo, las fuentes las
+  // contesta features/sources/demo.ts y los partidos, la agenda de la demo.
+  {
+    name: 'juntos-directo',
+    search: `?vista=juntos/${PARTY_LIVE_CODE}`,
+    storage: { [credentialKey(PARTY_LIVE_CODE)]: JSON.stringify(PARTY_HOST) },
+    // En vivo, el latido, el vídeo y las fuentes irían al backend, que no conoce la sala.
+    routes: [
+      {
+        url: new RegExp(`/api/v1/party/${PARTY_LIVE_CODE}/[a-z]+(\\?|$)`),
+        fulfill: (route) =>
+          route.request().url().includes('/sources')
+            ? route.fulfill({ json: { candidates: [], scan: null } })
+            : route.fulfill({ json: { serverNow: Date.now(), rev: 3, stream: 'none' } }),
+      },
+    ],
+    prepare: async (page) => {
+      await partyReady(page);
+      // En el móvil en horizontal, solo el vídeo y el cajón del chat (sin pestañas).
+      if (await phoneDrawer(page)) return;
+      await openLiveTab(page, 'Fuentes', '.juntos-live__group, .juntos-live__empty');
+      // Con el comprobador ya acabado (en la demo, unos segundos): las fuentes con su señal.
+      await page
+        .waitForFunction(
+          () => !document.querySelector('.juntos-live')?.textContent?.includes('Comprobando'),
+          null,
+          { timeout: 20_000 },
+        )
+        .catch(() => {});
+    },
+    checks: async (page, size, shot) => {
+      if (await phoneDrawer(page)) return [];
+      const problems = (await page.evaluate(liveFits)).map((item) => `Fuentes: ${item}`);
+      await openLiveTab(page, 'Partidos', '.juntos-agenda .desk-row, .desk-agenda__empty');
+      await settle(page);
+      if (shot) await page.screenshot({ path: shot('partidos') });
+      problems.push(...(await page.evaluate(liveFits)).map((item) => `Partidos: ${item}`));
+      problems.push(...(await page.evaluate(eqVisible)).map((item) => `Partidos: ${item}`));
+      problems.push(
+        ...(await page.evaluate(auditInPage, size))
+          .filter((item) => !item.startsWith('aviso: '))
+          .map((item) => `Partidos: ${item}`),
+      );
+      return problems;
+    },
+  },
   // «Salas abiertas» (§14): solo en vivo (la demo contesta sin red y no tiene
-  // salas), con la lista retocada al vuelo.
+  // salas), con la lista retocada al vuelo: una de pelis y una en directo.
   ...(DEMO
     ? []
     : [
@@ -598,24 +764,27 @@ const VIEWS = [
           search: '?vista=juntos',
           ready: '.juntos-open',
           storage: { 'aceneo-juntos-ultima': null },
+          // Las dos: la en directo no salía (Isma, 7-11-2026).
+          prepare: (page) =>
+            page.waitForFunction(
+              () => document.querySelectorAll('.juntos-open__row').length >= 2,
+              null,
+              { timeout: 10_000 },
+            ),
           routes: [
             {
               url: /\/api\/v1\/party(\?|$)/,
               fulfill: (route) => {
-                const { room } = partySnapshot();
+                const item = ({ room }, minutes) => ({
+                  code: room.code,
+                  title: room.title,
+                  host: 'Isma',
+                  members: room.members.length,
+                  online: room.members.filter((m) => m.online).length,
+                  createdAt: Date.now() - minutes * 60_000,
+                });
                 return route.fulfill({
-                  json: {
-                    rooms: [
-                      {
-                        code: PARTY_CODE,
-                        title: room.title,
-                        host: 'Isma',
-                        members: room.members.length,
-                        online: room.members.filter((m) => m.online).length,
-                        createdAt: Date.now() - 20 * 60_000,
-                      },
-                    ],
-                  },
+                  json: { rooms: [item(partyLiveSnapshot(), 5), item(partySnapshot(), 20)] },
                 });
               },
             },
@@ -1243,7 +1412,9 @@ async function runCombo(browser, base, size, scheme, extras) {
     timezoneId: 'Europe/Madrid',
   });
   // El SSE de la sala de mentira de «Ver juntos» (solo ese; los demás, de verdad).
-  await context.addInitScript(fakePartyEvents, { code: PARTY_CODE, snapshot: partySnapshot() });
+  await context.addInitScript(fakePartyEvents, {
+    rooms: { [PARTY_CODE]: partySnapshot(), [PARTY_LIVE_CODE]: partyLiveSnapshot() },
+  });
   if (extras.transparency)
     await context.addInitScript(() => {
       try {
@@ -1279,6 +1450,14 @@ async function runCombo(browser, base, size, scheme, extras) {
         .filter((item) => item.startsWith('aviso: '))
         .map((item) => item.slice(7));
       entry.problems.push(...found.filter((item) => !item.startsWith('aviso: ')));
+      entry.problems.push(...(await page.evaluate(logoCorners)));
+      if (view.checks && !extras.suffix) {
+        const shot = SHOTS_DIR
+          ? (what) =>
+              path.join(SHOTS_DIR, view.name, `${view.name}-${sizeKey(size)}-${tema}-${what}.png`)
+          : null;
+        entry.problems.push(...(await view.checks(page, size, shot)));
+      }
       if (extras.checks) entry.problems.push(...(await extras.checks(page)));
       if (WITH_AXE && !extras.suffix && AXE_SIZES.has(sizeKey(size))) {
         // Lo que haya llegado después de la captura (Salud en Ajustes), ya quieto.
@@ -1307,6 +1486,13 @@ async function runCombo(browser, base, size, scheme, extras) {
       entry.problems.push(
         `no se pudo abrir: ${error instanceof Error ? error.message.split('\n')[0] : error}`,
       );
+      // Cómo se quedó, para ver por qué (`-error`).
+      if (SHOTS_DIR) {
+        const dir = path.join(SHOTS_DIR, view.name);
+        mkdirSync(dir, { recursive: true });
+        const file = path.join(dir, `${view.name}-${sizeKey(size)}-${tema}-error.png`);
+        await page.screenshot({ path: file }).catch(() => {});
+      }
     }
     results.push(entry);
     console.log(
@@ -1404,6 +1590,10 @@ const VIEW_TITLES = {
   'ajustes-iptv': 'Ajustes · IPTV',
   'ajustes-copia': 'Ajustes · Copia de seguridad',
   'ajustes-registro': 'Ajustes · Registro',
+  juntos: 'Ver juntos · portada',
+  'juntos-sala': 'Ver juntos · la sala de una película (desde casa)',
+  'juntos-directo': 'Ver juntos · la sala en directo: Fuentes (y Partidos, `-partidos`)',
+  'juntos-abiertas': 'Ver juntos · salas abiertas (una de pelis y una en directo)',
 };
 
 /** docs/capturas/fase2/README.md: una tabla por vista con cada tamaño y tema. */

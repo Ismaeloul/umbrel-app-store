@@ -25,6 +25,7 @@ import type { RoomSourceRow } from './liveSources.ts';
 import { LIVE_TEXT } from './liveTexts.ts';
 import { JUNTOS_TEXT } from './texts.ts';
 import { useRoomSources } from './useRoomSources.ts';
+import '../sources/demo.ts';
 import './live.css';
 
 /**
@@ -47,7 +48,11 @@ function Origin({ source }: { source: PartyLiveChoice['source'] }) {
   );
 }
 
-/** Una fila de Fuentes: número estable, nombre, calidad, señal y «Poner» (o «En la sala»). */
+/**
+ * Una fila de Fuentes: el número en su pastilla, la calidad, el origen y de dónde sale (en una
+ * línea), la señal en su glifo (la palabra va en el `title` y en el nombre de «Poner») y «Poner»
+ * (o «En la sala»).
+ */
 function SourceRowView({
   item,
   busy,
@@ -58,6 +63,8 @@ function SourceRowView({
   onPut(item: RoomSourceRow): void;
 }) {
   const hash = item.choice.hash;
+  const origin = item.choice.source === 'iptv' ? LIVE_TEXT.iptv : LIVE_TEXT.engine;
+  const signal = item.row.signal.word;
   return (
     <li className="juntos-live__row" data-here={item.here ? 'true' : undefined}>
       <span className="juntos-live__num">{item.row.number}</span>
@@ -70,12 +77,9 @@ function SourceRowView({
         </span>
       </span>
       {item.here ? null : (
-        <SignalBadge
-          state={item.row.signal.state}
-          label={item.row.signal.word}
-          size="sm"
-          className="juntos-live__sig"
-        />
+        <span className="juntos-live__sig" title={signal}>
+          <SignalBadge state={item.row.signal.state} label={signal} size="sm" compact hideWord />
+        </span>
       )}
       {item.here ? (
         <span className="juntos-live__here">
@@ -85,14 +89,16 @@ function SourceRowView({
       ) : (
         <Button
           size="sm"
-          variant="quiet"
+          variant="primary"
+          className="juntos-live__put"
           busy={busy === hash}
           disabled={busy !== null && busy !== hash}
           aria-label={LIVE_TEXT.putSource(
             item.row.number,
             item.choice.channel,
-            item.choice.source === 'iptv' ? LIVE_TEXT.iptv : LIVE_TEXT.engine,
+            origin,
             item.meta,
+            signal,
           )}
           onClick={() => onPut(item)}
         >

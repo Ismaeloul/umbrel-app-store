@@ -42,6 +42,7 @@ import {
   SkeletonRows,
 } from '../../ui/index.ts';
 import { JuntosButton, type JuntosTarget } from '../juntos/CreateButton.tsx';
+import { usePicking } from '../juntos/RoomPresence.tsx';
 import { Art, artFill } from './Art.tsx';
 import {
   prepareGridFromFicha,
@@ -73,6 +74,7 @@ import {
 } from './model.ts';
 import { canPlayHevc, playVod } from './play.ts';
 import { RemoveGoneButton, useInList } from './MyList.tsx';
+import { RoomActions } from './RoomPicking.tsx';
 import { Seasons } from './Seasons.tsx';
 import { Synopsis } from './Synopsis.tsx';
 import {
@@ -284,6 +286,8 @@ function DeskIcons({
 
 function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
   const navigate = useNavigate();
+  /* Eligiendo para una sala (docs/ver-juntos.md §11): proponer o poner en la sala. */
+  const picking = usePicking();
   const mark = useProgressMark();
   const [busy, setBusy] = useState(false);
   const block = playBlock(movie.playable, canPlayHevc(), movie.tech.container);
@@ -326,18 +330,22 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
   return (
     <div className="cine-actions">
       <div className="cine-actions__main">
-        <div className="cine-actions__buttons">
-          <Button
-            variant="primary"
-            icon="play"
-            className="cine-play"
-            disabled={block !== null}
-            aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
-            onClick={() => play()}
-          >
-            {resuming ? followText(clockText(progress.posS)) : CINE_TEXT.play}
-          </Button>
-        </div>
+        {picking ? (
+          <RoomActions target={juntos} disabled={block !== null} onSolo={() => play()} />
+        ) : (
+          <div className="cine-actions__buttons">
+            <Button
+              variant="primary"
+              icon="play"
+              className="cine-play"
+              disabled={block !== null}
+              aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
+              onClick={() => play()}
+            >
+              {resuming ? followText(clockText(progress.posS)) : CINE_TEXT.play}
+            </Button>
+          </div>
+        )}
         {ratio !== null || line ? (
           <div className="cine-actions__progress">
             {ratio !== null ? (
@@ -358,13 +366,13 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
       </div>
       <DeskIcons
         list={movie}
-        juntos={juntos}
+        juntos={picking ? null : juntos}
         juntosDisabled={block !== null}
         trailer={movie.trailer}
         title={movie.title}
       />
       <div className="cine-actions__more">
-        {resuming && !block ? (
+        {resuming && !block && !picking ? (
           <Button variant="quiet" size="sm" icon="back" onClick={() => play(0)}>
             {CINE_TEXT.fromStart}
           </Button>
@@ -390,6 +398,7 @@ function MovieActions({ movie, now }: { movie: VodMovie; now: number }) {
 
 function SeriesActions({ series }: { series: VodSeries }) {
   const navigate = useNavigate();
+  const picking = usePicking();
   const main = series.main;
   const entry = main
     ? series.seasons
@@ -422,34 +431,40 @@ function SeriesActions({ series }: { series: VodSeries }) {
       ? followText(shortCode(entry.season, entry.item.n))
       : seriesPlayLabel(main?.action ?? 'start', entry.season, entry.item.n)
     : (main?.label ?? '');
+  const playMain = () => {
+    if (!main) return;
+    playVod(
+      {
+        id: main.episodeId,
+        kind: 'episode',
+        title: series.title,
+        subtitle,
+        seriesId: series.id,
+        startS: main.posS,
+      },
+      navigate,
+    );
+  };
   return (
     <div className="cine-actions">
       {main ? (
         <div className="cine-actions__main">
-          <div className="cine-actions__buttons">
-            <Button
-              variant="primary"
-              icon="play"
-              className="cine-play"
-              disabled={block !== null}
-              aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
-              onClick={() =>
-                playVod(
-                  {
-                    id: main.episodeId,
-                    kind: 'episode',
-                    title: series.title,
-                    subtitle,
-                    seriesId: series.id,
-                    startS: main.posS,
-                  },
-                  navigate,
-                )
-              }
-            >
-              {label}
-            </Button>
-          </div>
+          {picking && juntos ? (
+            <RoomActions target={juntos} disabled={block !== null} onSolo={playMain} />
+          ) : (
+            <div className="cine-actions__buttons">
+              <Button
+                variant="primary"
+                icon="play"
+                className="cine-play"
+                disabled={block !== null}
+                aria-describedby={reason ? 'cine-play-reason' : line ? 'cine-play-line' : undefined}
+                onClick={playMain}
+              >
+                {label}
+              </Button>
+            </div>
+          )}
           {ratio !== null || line ? (
             <div className="cine-actions__progress">
               {ratio !== null ? (
@@ -471,7 +486,7 @@ function SeriesActions({ series }: { series: VodSeries }) {
       ) : null}
       <DeskIcons
         list={series}
-        juntos={juntos}
+        juntos={picking ? null : juntos}
         juntosDisabled={block !== null}
         trailer={series.trailer}
         title={series.title}

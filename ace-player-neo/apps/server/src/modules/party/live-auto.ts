@@ -127,14 +127,16 @@ export function choiceOf(
   candidate: ResolutionCandidate,
   room: Pick<PartyLiveChoice, 'matchId' | 'match'>,
 ): PartyLiveChoice {
-  const name = channelPart(candidate.title) || candidate.matchedChannel || 'Canal';
+  /* Lo mismo que pide `PartyLiveChoiceSchema` (§15): sin espacios de más ni vacío, y con sus
+     largos máximos; si no, la sala quedaba con un título fuera del contrato. */
+  const name = channelPart(candidate.title).trim() || candidate.matchedChannel.trim() || 'Canal';
   const quality = candidate.iptv?.quality ? (IPTV_QUALITY[candidate.iptv.quality] ?? null) : null;
   return {
     hash: candidate.id.toLowerCase(),
-    channel: (quality ? `${name} · ${quality}` : name).slice(0, 120),
+    channel: (quality ? `${name} · ${quality}` : name).slice(0, 120).trim(),
     source: isIptv(candidate) ? 'iptv' : 'engine',
-    matchId: room.matchId,
-    match: room.match,
+    matchId: room.matchId === null ? null : room.matchId.slice(0, 120),
+    match: room.match === null ? null : room.match.trim().slice(0, 200) || null,
   };
 }
 

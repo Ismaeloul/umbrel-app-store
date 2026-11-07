@@ -230,6 +230,51 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     expect(failures).toEqual([]);
   });
 
+  it('«Ver juntos»: `partyQueue` con `play` (§11): un `play` que no es booleano da 400 y un invitado del proxy no pone nada (403)', async () => {
+    const { app } = await createTestApp();
+    const title = 'b'.repeat(40);
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/party',
+      headers: web(),
+      payload: { titleId: title, kind: 'movie', artId: title, title: 'Dune', name: 'Isma' },
+    });
+    const host = created.json() as { room: { code: string } };
+    const code = host.room.code;
+    const guest = { 'x-ace-origin': 'guest' };
+    const joined = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/join`,
+      headers: guest,
+      payload: { name: 'Ana' },
+    });
+    const token = (joined.json() as { member: { token: string } }).member.token;
+    const body = (play: unknown) => ({
+      token,
+      action: 'add',
+      titleId: HASH,
+      kind: 'movie',
+      artId: HASH,
+      title: 'Otra',
+      play,
+    });
+    const bad = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/queue`,
+      headers: guest,
+      payload: body('sí'),
+    });
+    expect(bad.statusCode).toBe(400);
+    const refused = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/queue`,
+      headers: guest,
+      payload: body(true),
+    });
+    expect(refused.statusCode).toBe(403);
+    expect((refused.json() as { error: { code: string } }).error.code).toBe('party_leader_only');
+  });
+
   it('«Ver juntos»: el proxy de la sala (Caddyfile, @sala) deja pasar las rutas con credencial de sala y nada más', () => {
     const caddy = readFileSync(
       new URL('../../../deploy/umbrel/Caddyfile', import.meta.url),

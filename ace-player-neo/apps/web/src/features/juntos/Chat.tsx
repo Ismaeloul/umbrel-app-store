@@ -3,11 +3,22 @@
    cara y su nombre; los tuyos, a la derecha en amarillo; los avisos de la
    sala («Ismael ha saltado a 1:12:04»), centrados y en gris. Debajo, «Lucía
    está escribiendo…» y la caja para escribir. Igual en escritorio y en el
-   móvil (ver-juntos.html). Baja solo al último mensaje salvo que se esté
-   leyendo más arriba. */
+   móvil (ver-juntos.html).
+
+   Siempre se ve lo último: al abrirlo (al volver a la pestaña Chat), al
+   enfocar la caja (sube el teclado y la lista encoge) y al llegar un
+   mensaje si ya se estaba abajo; si se está leyendo más arriba, no se mueve.
+   Arriba, la lista se funde (una máscara) en vez de cortarse en seco. */
 
 import { PARTY, type PartyChatMessage, type PartyRoom } from '@ace/shared';
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { describeFailure } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
@@ -41,6 +52,7 @@ export function Chat({
   onSend,
   onTyping,
   onExpireTyping,
+  onFocusInput,
 }: {
   messages: readonly PartyChatMessage[];
   room: PartyRoom | null;
@@ -51,16 +63,39 @@ export function Chat({
   onTyping?: () => void;
   /** Quita los «está escribiendo» caducados (cada segundo mientras haya alguno). */
   onExpireTyping?: () => void;
+  /** Al enfocar la caja (la sala pasa a la pestaña Chat). */
+  onFocusInput?: () => void;
 }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const list = useRef<HTMLOListElement>(null);
   const stick = useRef(true);
 
+  /** Al último mensaje (y a seguir pegado abajo). */
+  const toBottom = () => {
+    const el = list.current;
+    if (!el) return;
+    stick.current = true;
+    el.scrollTop = el.scrollHeight;
+  };
+
+  /* Al abrirlo, abajo del todo; con un mensaje nuevo, solo si ya se estaba abajo. */
+  useLayoutEffect(toBottom, []);
   useEffect(() => {
     const el = list.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  /* La lista cambia de alto (sube el teclado, se encoge el vídeo): si se estaba abajo, sigue. */
+  useEffect(() => {
+    const el = list.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (stick.current) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const anyoneTyping = typing.length > 0;
   useEffect(() => {
@@ -167,6 +202,14 @@ export function Chat({
           placeholder={JUNTOS_TEXT.chatPlaceholder}
           autoComplete="off"
           enterKeyHint="send"
+          onFocus={() => {
+            onFocusInput?.();
+            toBottom();
+            /* Cuando el teclado ya ha subido (la lista ha encogido), otra vez. */
+            globalThis.setTimeout(() => {
+              if (stick.current) toBottom();
+            }, 350);
+          }}
           onChange={(event) => {
             setText(event.target.value);
             if (event.target.value.trim()) onTyping?.();

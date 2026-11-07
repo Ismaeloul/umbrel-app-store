@@ -25,9 +25,9 @@ export const LIVE_TEXT = {
   engine: 'AceStream',
   /** El anfitrión al que se le ha ido la corona (no es co-líder). */
   hostNotLeader: (leader: string) => `Has creado la sala · ahora manda ${leader}`,
-  /** El nombre accesible de «Poner» en Fuentes: qué fuente es. */
-  putSource: (number: number, channel: string, origin: string, meta: string) =>
-    `Poner la ${number}: ${channel}, ${origin}${meta ? `, ${meta}` : ''}`,
+  /** El nombre accesible de «Poner» en Fuentes: qué fuente es y su señal (el glifo no la dice). */
+  putSource: (number: number, channel: string, origin: string, meta: string, signal?: string) =>
+    `Poner la ${number}: ${channel}, ${origin}${meta ? `, ${meta}` : ''}${signal ? `. ${signal}` : ''}`,
   /** El de «Poner» en Partidos y en los canales favoritos. */
   putWhat: (what: string) => `Poner ${what}`,
   reclaim: 'Recuperar el mando',
@@ -36,4 +36,15 @@ export const LIVE_TEXT = {
   /** Fuentes o Partidos mientras se baja su código (se cargan al abrirlos). */
   panelLoading: 'Cargando…',
   matchesFailed: 'No se ha podido cargar la agenda.',
+  /** La barra de abajo de Partidos (directo §14): el partido elegido y «Poner en la sala». */
+  putbarLabel: 'Partido elegido',
+  putbarPick: 'Elige un partido',
+  putbarPickHint: 'Toca uno de la lista',
+  putbarChosen: 'Elegido',
+  putbarPut: 'Poner en la sala',
+  putbarHere: 'Ya está en la sala',
+  putbarHereButton: 'En la sala',
+  /** El nombre accesible de «Poner en la sala» con el partido. */
+  putbarPutWhat: (match: string) => `Poner en la sala: ${match}`,
+  putbarHint: 'Doble clic o Intro para ponerlo directamente',
 } as const;

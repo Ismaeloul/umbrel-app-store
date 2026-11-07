@@ -886,6 +886,25 @@ export class PartyClient {
     );
   }
 
+  /**
+   * Proponer (o, con `play`, poner ya para todos) un título desde Pelis y series (§11). Devuelve
+   * el id de lo añadido, para resaltarlo en Siguiente (null con un servidor que no lo manda).
+   */
+  async add(
+    order: DistributiveOmit<Extract<PartyQueueBody, { action: 'add' }>, 'token' | 'action'>,
+  ): Promise<string | null> {
+    const { code, credential } = this;
+    let itemId: string | null = null;
+    await this.guard(async () => {
+      const response = await api('partyQueue', {
+        params: { code },
+        body: { ...order, action: 'add', token: credential.token },
+      });
+      itemId = response.itemId ?? null;
+    });
+    return itemId;
+  }
+
   /** Si la respuesta dice que ya no estás o que no está la sala, la vista se cierra. */
   private async guard(run: () => Promise<unknown>): Promise<void> {
     try {

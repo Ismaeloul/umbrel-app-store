@@ -25,7 +25,7 @@ const DEFAULT_LAYOUT: LayoutValue = {
 };
 
 /** La vista con la ruta del router (la ficha se abre navegando, como en la app). */
-function RoutedCine({ active = true }: { active?: boolean }) {
+export function RoutedCine({ active = true }: { active?: boolean }) {
   const route = useRoute();
   return <CineView route={route} active={active} />;
 }

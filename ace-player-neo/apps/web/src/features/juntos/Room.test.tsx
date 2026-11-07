@@ -99,11 +99,18 @@ class FakeSource extends EventTarget {
 }
 
 const realMatchMedia = window.matchMedia;
-function setViewport(width: number) {
+function setViewport(width: number, height = 800) {
   window.matchMedia = ((query: string) => {
     const min = /min-width:\s*(\d+)px/.exec(query);
+    const maxHeight = /max-height:\s*(\d+)px/.exec(query);
+    const landscape = query.includes('orientation: landscape');
+    const matches = landscape
+      ? width > height && (!maxHeight || height <= Number(maxHeight[1]))
+      : min
+        ? width >= Number(min[1])
+        : false;
     return {
-      matches: min ? width >= Number(min[1]) : false,
+      matches,
       media: query,
       onchange: null,
       addEventListener: () => {},
@@ -271,7 +278,7 @@ describe('la sala en el móvil (ver-juntos.html y ver-juntos-pelis.html)', () =>
     ],
   });
 
-  it('el mismo marcado que el escritorio: título, caras y Chat, Siguiente y Gente; sin la tarjeta «Cuando acabe»', () => {
+  it('el mismo marcado que el escritorio: título, caras (apiladas) y Chat, Siguiente y Gente; sin la tarjeta «Cuando acabe»', () => {
     setViewport(390);
     net = mockFetch();
     mountRoom(HOST);
@@ -280,7 +287,7 @@ describe('la sala en el móvil (ver-juntos.html y ver-juntos-pelis.html)', () =>
     );
     expect(screen.getByRole('heading', { level: 1, name: ROOM.title.title })).toBeTruthy();
     expect(screen.getByRole('button', { name: JUNTOS_TEXT.invite })).toBeTruthy();
-    expect(document.querySelector('.juntos-faces')).toBeTruthy();
+    expect(document.querySelector('.juntos-stack')).toBeTruthy();
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       JUNTOS_TEXT.tabChat,
       expect.stringContaining(JUNTOS_TEXT.tabNext),
@@ -527,5 +534,204 @@ describe('sala en directo', () => {
     mountLive(HOST, { ...LIVE_ROOM, leaderId: ANA });
     expect(screen.getByText('Has creado la sala · ahora manda Ana')).toBeTruthy();
     expect(screen.queryByText(/Co-líder/)).toBeNull();
+  });
+});
+
+/* El rediseño de la sala (7-11-2026): la cabecera con su menú «⋯», los contadores de las
+   pestañas, abrir en Siguiente al volver de proponer y el chat que siempre enseña lo último. */
+describe('la sala: cabecera, pestañas y chat', () => {
+  const chatFrom = (id: number, memberId: string, name: string, text: string) => ({
+    message: { id, at: id, kind: 'chat', memberId, name, text },
+  });
+
+  it('en pelis también: Chat cuenta lo que no has leído; Siguiente, sin «0»', () => {
+    setViewport(390);
+    net = mockFetch();
+    mountRoom(HOST);
+    const tab = (name: RegExp) => screen.getByRole('tab', { name });
+    expect(tab(/Siguiente/).textContent).toBe(JUNTOS_TEXT.tabNext);
+    fireEvent.click(tab(/Gente/));
+    act(() => FakeSource.last?.emit('party.chat', chatFrom(5, ANA, 'Ana', 'Hola')));
+    act(() => FakeSource.last?.emit('party.chat', chatFrom(6, ANA, 'Ana', '¿Le das?')));
+    expect(tab(/Chat/).textContent).toBe(`${JUNTOS_TEXT.tabChat}2`);
+    fireEvent.click(tab(/Chat/));
+    expect(tab(/Chat/).textContent).toBe(JUNTOS_TEXT.tabChat);
+  });
+
+  it('volviendo de proponer: se abre en Siguiente (`initialTab`)', () => {
+    setViewport(390);
+    net = mockFetch();
+    saveCredential(CODE, credential(ANA));
+    render(
+      <Room
+        code={CODE}
+        credential={credential(ANA)}
+        onForbidden={() => undefined}
+        onLeft={() => undefined}
+        exitAction={null}
+        initialTab="siguiente"
+        highlightItemId="q_abcdefgh"
+      />,
+    );
+    act(() => FakeSource.last?.emit('party.snapshot', { room: ROOM, chat: [], serverNow: 1 }));
+    expect(screen.getByRole('tab', { selected: true }).textContent).toContain(JUNTOS_TEXT.tabNext);
+  });
+
+  it('en el móvil, las caras apiladas también en pelis (una fila, sin la lista de nombres de escritorio)', () => {
+    setViewport(390);
+    net = mockFetch();
+    mountRoom(ANA);
+    expect(document.querySelector('.juntos-stack')).toBeTruthy();
+    expect(document.querySelector('.juntos-faces')).toBeNull();
+    /* El invitado: «Salir» en un icono y sin menú (no hay nada más que hacer). */
+    expect(screen.getByRole('button', { name: JUNTOS_TEXT.leave })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: JUNTOS_TEXT.roomActions })).toBeNull();
+  });
+
+  it('quien creó la sala: «⋯» → «Cerrar la sala para todos» con un segundo toque', async () => {
+    setViewport(390);
+    net = mockFetch({ [CLOSE_URL]: { ok: true } });
+    const onLeft = mountRoom(HOST);
+    fireEvent.click(screen.getByRole('button', { name: JUNTOS_TEXT.roomActions }));
+    expect(screen.getByRole('menuitem', { name: JUNTOS_TEXT.handOverAndLeave })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: JUNTOS_TEXT.closeForAll }));
+    expect(closeCalls()).toHaveLength(0);
+    /* El menú se cierra al elegir: el segundo toque queda junto al título, en rojo. */
+    const armed = screen.getByRole('button', { name: JUNTOS_TEXT.closeArmed });
+    expect(armed).toHaveTextContent(JUNTOS_TEXT.closeArmedShort);
+    fireEvent.click(armed);
+    await waitFor(() => expect(onLeft).toHaveBeenCalledOnce());
+    expect(closeCalls()).toHaveLength(1);
+    expect(globalThis.confirm).not.toHaveBeenCalled();
+  });
+
+  it('«Pasar el mando y salir»: la corona a quien queda y se va (la sala sigue)', async () => {
+    setViewport(1280);
+    net = mockFetch({
+      [`POST /api/v1/party/${CODE}/member`]: () => json({ ok: true }),
+      [`POST /api/v1/party/${CODE}/leave`]: () => json({ ok: true }),
+    });
+    const onLeft = mountRoom(HOST);
+    fireEvent.click(screen.getByRole('button', { name: JUNTOS_TEXT.roomActions }));
+    fireEvent.click(screen.getByRole('menuitem', { name: JUNTOS_TEXT.handOverAndLeave }));
+    await waitFor(() => expect(onLeft).toHaveBeenCalledWith(false));
+    const posts = (net?.calls ?? []).filter((call) => call.method === 'POST');
+    const member = posts.findIndex((call) => call.url.endsWith('/member'));
+    const leave = posts.findIndex((call) => call.url.endsWith('/leave'));
+    expect(posts[member]?.body).toMatchObject({ memberId: ANA, action: 'lead' });
+    expect(member).toBeLessThan(leave);
+    expect(closeCalls()).toHaveLength(0);
+  });
+
+  it('sola en la sala, quien la creó no tiene «Pasar el mando y salir»', () => {
+    setViewport(390);
+    net = mockFetch();
+    mountRoom(HOST, vi.fn(), false, {
+      ...ROOM,
+      members: ROOM.members.map((m) => (m.id === ANA ? { ...m, online: false } : m)),
+    });
+    fireEvent.click(screen.getByRole('button', { name: JUNTOS_TEXT.roomActions }));
+    expect(screen.queryByRole('menuitem', { name: JUNTOS_TEXT.handOverAndLeave })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: JUNTOS_TEXT.closeForAll })).toBeTruthy();
+  });
+
+  it('«Conectando con la sala…» va en la cabecera, con su margen', () => {
+    setViewport(390);
+    net = mockFetch();
+    saveCredential(CODE, credential(ANA));
+    render(
+      <Room
+        code={CODE}
+        credential={credential(ANA)}
+        onForbidden={() => undefined}
+        onLeft={() => undefined}
+        exitAction={null}
+      />,
+    );
+    expect(screen.getByText(JUNTOS_TEXT.connecting).closest('.juntos-info')).toBeTruthy();
+  });
+
+  it('el chat enseña lo último: al abrirlo, al enfocar la caja y con cada mensaje si ya estaba abajo', () => {
+    setViewport(390);
+    net = mockFetch();
+    /* jsdom no mide: la lista dice que mide 300 y tiene 1000 de contenido. */
+    const height = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(1000);
+    const client = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300);
+    try {
+      mountRoom(ANA);
+      act(() =>
+        FakeSource.last?.emit('party.snapshot', {
+          room: ROOM,
+          chat: [chatFrom(1, HOST, 'Isma', 'Hola').message],
+          serverNow: 1,
+        }),
+      );
+      const list = document.querySelector('.juntos-chat__list') as HTMLElement;
+      expect(list.scrollTop).toBe(1000);
+      /* Leyendo más arriba: un mensaje nuevo no la mueve. */
+      list.scrollTop = 100;
+      fireEvent.scroll(list);
+      act(() => FakeSource.last?.emit('party.chat', chatFrom(2, HOST, 'Isma', 'Ya')));
+      expect(list.scrollTop).toBe(100);
+      /* Al enfocar la caja (sube el teclado), abajo otra vez. */
+      fireEvent.focus(screen.getByPlaceholderText(JUNTOS_TEXT.chatPlaceholder));
+      expect(list.scrollTop).toBe(1000);
+    } finally {
+      height.mockRestore();
+      client.mockRestore();
+    }
+  });
+
+  it('en directo, «Tú controlas» sin repetir el canal (ya va en la píldora del vídeo)', () => {
+    setViewport(1280);
+    net = mockFetch();
+    mountRoom(HOST, vi.fn(), false, {
+      ...ROOM,
+      live: {
+        hash: 'a'.repeat(40),
+        channel: 'DAZN 1 · 1080p',
+        source: 'engine',
+        matchId: null,
+        match: null,
+        auto: false,
+      },
+    });
+    expect(screen.getByText(JUNTOS_TEXT.liveYouControl)).toBeTruthy();
+    expect(document.querySelector('.juntos-info__who')?.textContent).not.toContain('DAZN');
+  });
+
+  it('el móvil tumbado: el bocadillo cuenta solo lo nuevo y abre el chat en el cajón', () => {
+    setViewport(844, 390);
+    net = mockFetch();
+    saveCredential(CODE, credential(ANA));
+    render(
+      <Room
+        code={CODE}
+        credential={credential(ANA)}
+        onForbidden={() => undefined}
+        onLeft={() => undefined}
+        exitAction={null}
+      />,
+    );
+    /* Lo que ya estaba dicho al entrar no cuenta como sin leer. */
+    act(() =>
+      FakeSource.last?.emit('party.snapshot', {
+        room: ROOM,
+        chat: [chatFrom(1, HOST, 'Isma', 'Hola').message],
+        serverNow: 1,
+      }),
+    );
+    expect(screen.getByRole('button', { name: JUNTOS_TEXT.openChat })).toBeTruthy();
+    act(() => FakeSource.last?.emit('party.chat', chatFrom(2, HOST, 'Isma', '¿Estás?')));
+    const bubble = screen.getByRole('button', { name: JUNTOS_TEXT.openChatUnread(1) });
+    /* Tumbado no es escritorio: sin «Cuando acabe» bajo el vídeo. */
+    expect(document.querySelector('.juntos-nextcard')).toBeNull();
+    fireEvent.click(bubble);
+    expect(document.querySelector('.juntos')).toHaveAttribute('data-drawer', 'true');
+    const close = screen.getByRole('button', { name: JUNTOS_TEXT.closePanel });
+    expect(document.activeElement).toBe(close);
+    expect(screen.queryByRole('button', { name: /Abrir el chat/ })).toBeNull();
+    fireEvent.click(close);
+    expect(screen.getByRole('button', { name: JUNTOS_TEXT.openChat })).toBe(document.activeElement);
   });
 });

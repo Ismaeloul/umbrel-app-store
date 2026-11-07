@@ -6,10 +6,14 @@
    - La sala (cualquier ancho): el rediseño de la maqueta 01-escritorio,
      pantalla 5. Sin cristal: superficies opacas con su borde de 1 px. Hasta
      1024 va apilado.
-   - Móvil (menos de 768), al final: los retoques de ver-juntos.html y
-     ver-juntos-pelis.html (el vídeo de lado a lado, las caras apiladas en
-     directo, el chat sin tarjeta, «Esperando a todos» a pantalla casi
-     completa, Fuentes como en la maqueta). Desde 768 no cambia nada. */
+   - Móvil (menos de 768), al final: la misma maqueta en casa y en la página
+     del invitado. Una columna fija del alto de lo que se ve (`--vvh`): el
+     vídeo de lado a lado, una cabecera de 52 px, las caras apiladas (36 px),
+     las pestañas (40 px) y el panel, lo único que se desplaza, con la caja
+     del chat abajo. Con el teclado (`html[data-kb]`) se queda lo justo para
+     escribir y leer. Tumbado, el vídeo a toda pantalla y el chat en un cajón.
+     Desde 768 (de pie) no cambia nada.
+   - Fuentes y Partidos van en live.css; las salas abiertas, en open-rooms.css. */
 
 .juntos {
   /* El escudo del co-líder: azul que pasa AA en los dos temas. */
@@ -121,6 +125,34 @@
 .juntos-av--unvoted {
   opacity: 0.6;
 }
+/* El anillo de la espera (§13), por fuera de la cara: verde, listo; amarillo, lo que lleva
+   cargado (`--ring`, de 0 a 1); gris, sin darle a «Estoy listo». Quien está desconectado ya va
+   en gris entero (sin anillo). */
+.juntos-av[data-ring] {
+  --ring-w: 3px;
+  box-shadow:
+    0 0 0 2px var(--bg-sunk),
+    0 0 0 calc(2px + var(--ring-w)) var(--ring-c, var(--line-strong));
+}
+.juntos-av[data-ring='ready'] {
+  --ring-c: #16a34a;
+}
+.juntos-av[data-ring='loading'] {
+  --ring-c: transparent;
+}
+.juntos-av[data-ring='loading']::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--accent) calc(var(--ring, 0) * 1turn),
+    var(--line-strong) calc(var(--ring, 0) * 1turn)
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  pointer-events: none;
+}
 .juntos-av__shield {
   position: absolute;
   right: -4px;
@@ -171,125 +203,65 @@
   outline-offset: 2px;
 }
 
-/* --- «Esperando a todos» (§13): encima del vídeo, que carga por debajo. --- */
-/* Mientras se espera, el vídeo (aún parado) deja sitio a la lista. */
-.juntos__stage:has(> .juntos-lobby) {
-  height: max(360px, 56.25cqw);
-  aspect-ratio: auto;
-}
+/* --- «Esperando a todos» (§13): una tarjeta del tamaño del vídeo, encima de él (que
+   carga por debajo). Título, una sola pista, «Estoy listo» y, para quien controla,
+   «Empezar sin esperar». Quién está listo va en las caras y en Gente. --- */
 .juntos-lobby {
   position: absolute;
   inset: 0;
   z-index: 6;
-  display: flex;
-  align-items: safe center;
-  gap: 22px;
-  padding: 18px 24px;
-  overflow-y: auto;
+  display: grid;
+  place-items: center;
+  padding: 12px 16px;
+  overflow: hidden;
   background:
     radial-gradient(60% 70% at 70% 40%, rgb(232 165 74 / 0.28), transparent 70%),
     linear-gradient(160deg, #2b1f0b, #0b0907);
   color: #fff;
-  container-type: inline-size;
-}
-.juntos-lobby > .juntos-poster {
-  width: clamp(96px, 22%, 150px);
-  border-radius: 12px;
-  background: rgb(255 255 255 / 0.08);
+  text-align: center;
+  container-type: size;
 }
 .juntos-lobby__body {
   display: grid;
-  flex: 1;
   gap: 6px;
-  align-content: safe center;
+  justify-items: center;
+  width: min(100%, 440px);
   min-width: 0;
-  max-width: 420px;
 }
 .juntos-lobby .juntos-kicker--accent {
   color: var(--accent);
 }
 .juntos-lobby__title {
+  max-width: 100%;
   margin: 0;
+  overflow: hidden;
   font-size: var(--fs-22, 22px);
   font-weight: 800;
   font-stretch: var(--w-head);
   letter-spacing: var(--tracking-head);
   line-height: var(--lh-tight);
-}
-.juntos-lobby__meta {
-  margin: 0;
-  color: rgb(255 255 255 / 0.78);
-  font-size: var(--fs-13, 13px);
-}
-.juntos-lobby__list {
-  display: grid;
-  margin: 6px 0;
-  padding: 4px 12px;
-  list-style: none;
-  border-radius: 14px;
-  background: rgb(255 255 255 / 0.07);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
-}
-.juntos-lobby__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 38px;
-  font-size: var(--fs-13, 13px);
-  font-weight: 750;
-}
-.juntos-lobby__row--off {
-  color: rgb(255 255 255 / 0.7);
-}
-.juntos-lobby__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.juntos-lobby__state {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: rgb(255 255 255 / 0.8);
-  font-size: var(--fs-12, 12px);
-  font-weight: 750;
-}
-.juntos-lobby__state--ok {
-  gap: 4px;
-  color: #4ade80;
-}
-.juntos-lobby__state--wait {
-  color: rgb(255 255 255 / 0.65);
-  font-weight: 650;
-}
-.juntos-lobby__bar {
-  display: block;
-  width: 56px;
-  height: 4px;
+.juntos-lobby__meta {
+  max-width: 100%;
+  margin: 0;
   overflow: hidden;
-  border-radius: 2px;
-  background: rgb(255 255 255 / 0.2);
+  color: rgb(255 255 255 / 0.78);
+  font-size: var(--fs-13, 13px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.juntos-lobby__bar span {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-  transform-origin: left center;
-  transition: transform var(--dur-rapido) var(--ease-estandar);
+.juntos-lobby__hint {
+  margin: 2px 0 6px;
+  color: #fff;
+  font-size: var(--fs-15, 15px);
+  font-weight: 700;
 }
-.juntos-lobby__pct {
-  min-width: 5ch;
-  font-family: var(--mono);
-  text-align: right;
-}
-/* «Estoy listo» (o «Estás listo») y, para quien controla, «Empezar ya». */
-.juntos-lobby__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
+/* «Estoy listo»: el botón grande (44 px o más), que pasa a «Estás listo». */
+.juntos-lobby__vote {
+  min-width: 180px;
+  min-height: 48px;
 }
 /* «Estás listo»: el mismo botón de «Estoy listo», ya hecho (aria-disabled, sigue en el Tab). */
 .juntos-lobby__vote--done,
@@ -297,35 +269,50 @@
   color: #4ade80;
   cursor: default;
 }
-.juntos-lobby__hint {
-  margin: 0;
-  color: rgb(255 255 255 / 0.75);
-  font-size: var(--fs-12, 12px);
-}
-/* «Así suena en tu aparato cuando empiece»: bajo «Estoy listo», hasta tocarlo. */
-.juntos-lobby__sound {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
+/* «Empezar sin esperar»: un enlace (lo secundario), con su toque de 44 px. */
+.juntos-lobby__start {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
   color: rgb(255 255 255 / 0.85);
-  font-size: var(--fs-12, 12px);
-  font-weight: 650;
+  font: inherit;
+  font-size: var(--fs-13, 13px);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
-@container (max-width: 520px) {
-  .juntos-lobby > .juntos-poster {
+.juntos-lobby__start--armed {
+  color: #fca5a5;
+}
+.juntos-lobby__start:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+/* Una tarjeta baja (el móvil de 360 a 430 de ancho mide unos 200 px de alto): fuera lo que
+   sobra, pero «Estoy listo» siempre se ve. */
+@container (max-height: 260px) {
+  .juntos-lobby {
+    padding: 8px 12px;
+  }
+  .juntos-lobby__body {
+    gap: 2px;
+  }
+  .juntos-lobby .juntos-kicker,
+  .juntos-lobby__meta {
     display: none;
   }
   .juntos-lobby__title {
-    font-size: var(--fs-17, 17px);
+    font-size: var(--fs-15, 15px);
   }
-  .juntos-lobby__row {
-    min-height: 30px;
+  .juntos-lobby__hint {
+    margin: 0 0 4px;
+    font-size: var(--fs-13, 13px);
   }
-}
-@media (max-width: 767px) {
-  .juntos-lobby {
-    padding: 12px 14px;
+  .juntos-lobby__vote {
+    min-height: 44px;
   }
 }
 
@@ -470,6 +457,49 @@
   margin: 0;
   color: var(--fail-ink);
 }
+/* En directo, en vez del cartel, el icono del partido. */
+.juntos-join__live {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  color: var(--accent-ink);
+}
+/* En el móvil, el cartel pequeño junto al título (no media pantalla) y el nombre y «Entrar en
+   la sala» a lo ancho, a la vista sin desplazar aunque salga el teclado. */
+@media (max-width: 639px) {
+  .juntos-join {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 6px 14px;
+    align-items: start;
+    padding-top: calc(var(--safe-top, 0px) + 20px);
+  }
+  .juntos-join__poster {
+    grid-row: 1 / span 3;
+    width: 64px;
+    border-radius: var(--r-s, 8px);
+  }
+  .juntos-join__body {
+    display: contents;
+  }
+  .juntos-join__body > * {
+    grid-column: 1 / -1;
+  }
+  .juntos-join__body > :is(.juntos-join__kicker, .juntos-join__title, .juntos-join__sub) {
+    grid-column: 2;
+  }
+  .juntos-join__title {
+    font-size: var(--fs-22, 22px);
+    line-height: var(--lh-tight);
+  }
+  .juntos-join__body .field {
+    max-width: none;
+    margin-top: 12px;
+  }
+  .juntos-join__submit {
+    width: 100%;
+    min-height: 48px;
+  }
+}
 
 /* Segundo toque armado («Cerrar sala», «Echar»): rojo lleno de verdad, que
    se distinga del botón en reposo aunque este ya fuera rojo. */
@@ -570,26 +600,38 @@
   inset: 0;
   touch-action: manipulation;
 }
-/* «Activar sonido»: el navegador lo ha empezado en silencio. Sale aunque los
-   controles estén escondidos (en el móvil y en la pantalla completa de la
-   página), bajo la fila de arriba. */
-.juntos-sound {
-  position: absolute;
-  top: 48px;
-  left: 50%;
+/* «Toca para oír»: el navegador lo ha empezado en silencio. Un botón grande en el centro
+   que tapa los controles (sale aunque estén escondidos); su toque solo quita el silencio. */
+.juntos-center--sound {
   z-index: 4;
-  min-height: 36px;
-  padding: 6px 14px;
-  border-color: rgb(255 255 255 / 0.22);
-  background: rgb(22 22 26 / 0.86);
-  color: #fff;
-  font-size: var(--fs-13, 13px);
-  cursor: pointer;
-  transform: translateX(-50%);
 }
-.juntos-sound:focus-visible {
-  outline: 2px solid var(--accent-edge);
-  outline-offset: 2px;
+.juntos-hear {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 6px 20px 6px 8px;
+  border: 1px solid rgb(255 255 255 / 0.22);
+  border-radius: var(--r-pill, 999px);
+  background: rgb(22 22 26 / 0.88);
+  color: #fff;
+  font: inherit;
+  font-size: var(--fs-15, 15px);
+  font-weight: 750;
+  cursor: pointer;
+}
+.juntos-hear__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent, #000);
+}
+.juntos-hear:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
 }
 /* `?debug=juntos`: lo último del reproductor, encima de todo y sin tocar nada. */
 .juntos-debug {
@@ -759,6 +801,16 @@
   font-size: var(--fs-17, 17px);
   font-weight: var(--wght-strong, 700);
 }
+/* «En pausa · la ha parado Isma»: quien no controla, con el vídeo parado. */
+.juntos-center__card--paused {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+}
+.juntos-center__card--paused .juntos-center__text {
+  font-size: var(--fs-15, 15px);
+}
 .juntos-center__hint {
   color: var(--on-video-2, rgb(255 255 255 / 0.76));
   font-size: var(--fs-13, 13px);
@@ -922,6 +974,13 @@
   overflow-y: auto;
   list-style: none;
   overscroll-behavior: contain;
+  /* Arriba, los mensajes se funden en vez de cortarse en seco. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+}
+/* El primer mensaje empuja abajo: con pocos, van pegados a la caja (como un chat). */
+.juntos-chat__list > :first-child {
+  margin-top: auto;
 }
 .juntos-chat__empty {
   color: var(--text-3);
@@ -1428,7 +1487,8 @@
 /* Desde 1024: vídeo y control a la izquierda; la gente y el chat a la derecha. */
 @media (min-width: 1024px) {
   .juntos__body {
-    grid-template-columns: minmax(0, 1fr) 330px;
+    /* Del ancho de la columna de la Agenda (380, 400 o 440 px según la pantalla). */
+    grid-template-columns: minmax(0, 1fr) var(--column-w, 380px);
     gap: 0;
     height: calc(100dvh - 120px);
     min-height: 520px;
@@ -1528,6 +1588,9 @@
 .juntos-chip__dot.juntos-chip__dot--live {
   background: var(--live);
 }
+.juntos-chip__dot.juntos-chip__dot--paused {
+  background: rgb(255 255 255 / 0.7);
+}
 /* Donde va el cartel de una película: un televisor. */
 .juntos-info__live {
   display: grid;
@@ -1540,194 +1603,98 @@
   color: var(--text-2);
 }
 
-/* Fuentes y Partidos. */
-.juntos-live {
-  display: grid;
-  gap: 14px;
-  padding: 12px 0;
+/* El bocadillo del chat y el cierre del cajón: solo con el móvil tumbado (al final). */
+.juntos-drawer-btn,
+.juntos__side-close {
+  display: none;
 }
-.juntos-live__group {
-  display: grid;
-  gap: 6px;
-}
-.juntos-live__list {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.juntos-live__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 6px 10px;
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
-}
-.juntos-live__row[data-here='true'] {
-  border-color: var(--accent-line, var(--accent));
-  background: var(--accent-wash);
-}
-.juntos-live__num {
+/* El menú «⋯» de la cabecera y el segundo toque de «Cerrar la sala para todos». */
+.juntos-info__actions .icon-btn {
   flex: none;
-  width: 22px;
-  color: var(--text-3);
-  font-family: var(--font-mono, monospace);
-  font-size: 13px;
-  text-align: center;
 }
-.juntos-live__text {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 8px;
-  min-width: 0;
-}
-.juntos-live__name {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.juntos-live__meta {
-  flex-basis: 100%;
-  color: var(--text-3);
-  font-size: 12.5px;
-}
-.juntos-live__origin {
-  flex: none;
-  padding: 1px 7px;
-  border-radius: var(--r-pill);
-  background: var(--line-soft);
-  color: var(--text-2);
-  font-size: var(--fs-11, 11px);
-  font-weight: 650;
-}
-.juntos-live__origin--iptv {
-  background: var(--accent-wash);
-  color: var(--accent-ink);
-}
-.juntos-live__here {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  color: var(--accent-ink);
-  font-size: 13px;
-  font-weight: 750;
-}
-.juntos-live__here .juntos-chip__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #35c759;
-}
-/* «Recuperar el mando» (directo §14): va con la sala, no con Fuentes (live.css, perezosa). */
-.juntos-live__reclaim {
-  justify-self: start;
-}
-.juntos-live__empty {
-  margin: 0;
-  color: var(--text-3);
-  font-size: 13.5px;
-}
-.juntos-live__more {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+.juntos-info__actions .juntos__close--armed {
   min-height: 44px;
-  border: 1.5px dashed var(--line-strong);
-  border-radius: 14px;
-  background: transparent;
-  color: var(--text-2);
-  font: inherit;
-  font-weight: 750;
-  cursor: pointer;
 }
 
-/* --- Salas abiertas en la portada (docs/ver-juntos.md §15) --- */
-.juntos-open {
-  display: grid;
-  gap: 8px;
-  width: min(720px, 100%);
-  margin: 0 auto;
-  padding: 0 16px 24px;
+/* Fuentes y Partidos (`.juntos-live*`) van en live.css; las salas abiertas de la portada
+   (`.juntos-open*`), en open-rooms.css. */
+
+/* Pantalla completa de la página (iPhone): la caja del vídeo no puede ser el contenedor de lo
+   fijo (container-type lo haría), o el vídeo se quedaría en su hueco. */
+.juntos--page-fs .juntos__main {
+  container-type: normal;
 }
-.juntos-open__list {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.juntos-open__row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--line-soft);
-  border-radius: 14px;
-  background: var(--surface);
-}
-.juntos-open__text {
-  display: grid;
-  flex: 1;
-  gap: 2px;
-  min-width: 180px;
-}
-.juntos-open__title {
-  color: var(--text);
-  font-size: 14.5px;
-  font-weight: 700;
-}
-.juntos-open__sub {
-  color: var(--text-2);
-  font-weight: 600;
-}
-.juntos-open__meta {
-  color: var(--text-3);
-  font-size: 13px;
-}
-.juntos-open__actions {
-  display: flex;
-  flex: none;
-  gap: 8px;
+.juntos-info--connecting {
+  min-height: 44px;
 }
 
-/* --- El móvil (menos de 768): ver-juntos.html y ver-juntos-pelis.html. --- */
+/* --- El móvil (menos de 768): la misma maqueta en casa y en la página del invitado. ---
+
+   Una columna fija del alto de lo que se ve (`--vvh` y `--vvtop`, lib/viewport.ts): en casa la
+   caja es la propia sala; en la página del invitado la pone guest.css y la sala la llena. Nada
+   de la página se desplaza: solo el panel (la lista del chat, Siguiente, Gente). La caja del
+   chat queda pegada abajo, por encima de la barra de Safari y del teclado.
+
+   - Escenario: 16:9 del ancho (encoge él si no caben 140 px de chat debajo).
+   - Cabecera: 52 px, el título en una línea, quién controla debajo y los iconos.
+   - Caras: 36 px, apiladas y con el anillo de la espera.
+   - Pestañas: 44 px de toque.
+   - Panel: lo que quede, con la caja del chat abajo.
+
+   Con el teclado (`html[data-kb]`): fuera las caras y quién controla; el vídeo, como mucho el
+   28 % de lo que se ve (y nada si ni así caben 140 px de chat). */
 @media (max-width: 767px) {
-  /* El margen de lo que no es el vídeo. */
-  .juntos {
-    --juntos-pad-l: var(--gutter);
-    --juntos-pad-r: var(--gutter);
-  }
-  /* En casa, la vista ya lleva el margen de la página y el del iPhone: la
-     sala se lo quita para que el vídeo vaya de borde a borde, y arriba deja
-     el de la barra de estado (no hay cabecera encima). */
   .app-main .juntos {
-    --juntos-pad-l: calc(var(--gutter) + var(--safe-left));
-    --juntos-pad-r: calc(var(--gutter) + var(--safe-right));
-    margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
-      calc(-1 * (var(--gutter) + var(--safe-right)));
-    padding-top: var(--safe-top);
+    position: fixed;
+    top: var(--vvtop, 0px);
+    right: 0;
+    left: 0;
+    z-index: calc(var(--z-nav, 40) + 2);
+    height: var(--vvh, 100dvh);
+    margin: 0;
+  }
+  .guest--room .juntos {
+    flex: 1;
+    min-height: 0;
+  }
+  .juntos {
+    --juntos-pad: var(--gutter, 16px);
+    /* Lo que va bajo el vídeo sin la lista del chat: cabecera, caras, pestañas y la caja. */
+    --juntos-chrome-h: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: var(--safe-top, 0px) var(--safe-right, 0px) 0 var(--safe-left, 0px);
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: var(--bg);
+  }
+  .juntos__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
   }
   .juntos__main {
+    display: flex;
+    flex: none;
+    flex-direction: column;
     gap: 0;
     padding: 0;
   }
+  /* El vídeo de lado a lado; si no caben 140 px de chat debajo, encoge él (nunca el chat). */
   .juntos__stage {
+    flex: none;
+    height: min(
+      56.25cqw,
+      max(96px, calc(var(--vvh, 100dvh) - var(--safe-top, 0px) - var(--juntos-chrome-h) - 140px))
+    );
     border-radius: 0;
+    aspect-ratio: auto;
   }
   .juntos-chrome__top {
-    padding: 12px 12px 28px;
+    padding: 10px 10px 24px;
   }
   .juntos-chrome__bottom {
     padding: 24px 6px 4px;
@@ -1741,90 +1708,143 @@
     height: 44px;
   }
 
-  /* El título, quién controla e «Invitar» o «Salir». */
+  /* La cabecera: el título en una línea y, debajo, quién controla; a la derecha, los iconos. */
   .juntos-info {
-    padding: 16px var(--juntos-pad-r) 0 var(--juntos-pad-l);
+    gap: 8px;
+    min-height: 52px;
+    padding: 4px var(--juntos-pad);
   }
-  /* El partido no lleva icono delante ni el canal detrás: el título ya lo
-     dice y el canal va en la línea de quién controla. */
-  .juntos-info__live,
-  .juntos-info:has(.juntos-info__live) .juntos-info__sub {
+  .juntos-info .juntos-info__poster,
+  .juntos-info__live {
     display: none;
   }
-  /* Hasta dos líneas: a 360 px, con «Invitar» al lado, una se queda corta. */
+  .juntos-info__text {
+    gap: 0;
+  }
   .juntos-info__title {
-    display: -webkit-box;
-    font-size: 1.25rem;
-    font-stretch: var(--w-head);
-    letter-spacing: var(--tracking-head);
-    line-height: var(--lh-tight);
-    white-space: normal;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    font-size: var(--fs-15, 15px);
+    line-height: 1.3;
+  }
+  .juntos-info__who {
+    overflow: hidden;
+    font-size: var(--fs-12, 12px);
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .juntos-info__actions {
+    gap: 4px;
   }
   .juntos-info__actions .btn {
-    padding-inline: 16px;
-  }
-  .juntos-info__actions .icon-btn {
-    flex: none;
+    min-height: 44px;
+    padding-inline: 14px;
   }
 
   .juntos__side {
-    gap: 14px;
-    padding: 10px var(--juntos-pad-r) 0 var(--juntos-pad-l);
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+    padding: 0;
   }
-  .juntos-faces {
-    gap: 8px;
-    /* Sitio para la corona. */
-    padding-top: 10px;
-  }
-  .juntos-faces__item {
-    width: 52px;
+  .juntos__side > * {
+    flex: none;
   }
 
-  /* En directo: las caras apiladas y los nombres al lado. */
+  /* Las caras apiladas y los nombres al lado: una fila de 36 px (sitio arriba para la corona). */
   .juntos-stack {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     min-width: 0;
-    padding-top: 10px;
+    height: 36px;
+    padding: 6px var(--juntos-pad) 0;
   }
   .juntos-stack__faces {
     display: flex;
     flex: none;
     margin: 0;
-    padding: 0;
+    padding: 0 0 0 4px;
     list-style: none;
   }
   .juntos-stack__face + .juntos-stack__face {
-    margin-left: -8px;
+    margin-left: -6px;
   }
-  .juntos-stack__face .juntos-av {
+  .juntos-stack .juntos-av {
+    width: 28px;
+    height: 28px;
+    font-size: var(--fs-11, 11px);
+  }
+  .juntos-stack .juntos-av:not([data-ring]) {
     box-shadow: 0 0 0 2px var(--bg);
+  }
+  .juntos-stack .juntos-av[data-ring] {
+    --ring-w: 2px;
+  }
+  .juntos-stack .juntos-av__crown {
+    top: -11px;
+  }
+  .juntos-stack .juntos-av__crown svg {
+    width: 13px;
+    height: 13px;
+  }
+  .juntos-stack .juntos-av__shield,
+  .juntos-stack .juntos-av__voted {
+    right: -5px;
+    bottom: -5px;
+    width: 15px;
+    height: 15px;
+  }
+  .juntos-stack .juntos-av__shield svg,
+  .juntos-stack .juntos-av__voted svg {
+    width: 11px;
+    height: 11px;
   }
   .juntos-stack__names {
     flex: 1;
     min-width: 0;
     margin: 0;
+    overflow: hidden;
     color: var(--text-3);
     font-size: var(--fs-13, 13px);
     line-height: var(--lh-snug);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  /* El chat sin tarjeta: las burbujas sobre el fondo y la caja abajo. Alto:
-     lo que deja la pantalla bajo el vídeo, el título, las caras y las
-     pestañas, hasta el borde de abajo (la sala va sin la isla; sin bajar de
-     240 px). */
+  /* Las pestañas: 44 px de toque, en una fila. */
+  .juntos__side-head {
+    padding: 4px var(--juntos-pad) 6px;
+  }
+
+  /* El panel: lo único que se desplaza. */
+  .juntos__side > .juntos__panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 var(--juntos-pad) 12px;
+  }
+  .juntos__side > .juntos__panel:has(> .juntos-chat) {
+    overflow: hidden;
+    padding: 0;
+  }
+
+  /* El chat sin tarjeta: las burbujas sobre el fondo y la caja abajo del todo. */
   .juntos-chat {
-    height: max(240px, calc(100dvh - 56.25vw - var(--safe-top) - var(--safe-bottom) - 266px));
+    flex: 1;
+    height: auto;
+    min-height: 0;
     border: 0;
     border-radius: 0;
     background: transparent;
   }
   .juntos-chat__list {
-    padding: 4px 0 8px;
+    min-height: 0;
+    padding: 6px var(--juntos-pad) 8px;
   }
   .juntos-chat__bubble {
     background: var(--surface);
@@ -1834,10 +1854,14 @@
     box-shadow: none;
   }
   .juntos-chat__typing {
-    padding: 0 4px;
+    padding: 0 calc(var(--juntos-pad) + 4px);
+  }
+  /* Sin nadie escribiendo, la línea no ocupa (es sitio del chat). */
+  .juntos-chat__typing:empty {
+    min-height: 0;
   }
   .juntos-chat__form {
-    margin: 6px 0 4px;
+    margin: 4px var(--juntos-pad) max(8px, env(safe-area-inset-bottom));
     padding: 4px 4px 4px 16px;
     background: var(--surface);
   }
@@ -1850,186 +1874,262 @@
     height: 44px;
   }
 
+  /* Siguiente y Gente, a lo ancho del panel. */
+  .juntos-next,
+  .juntos-people {
+    padding: 4px 0 0;
+  }
   /* «Pasar al siguiente», bajo Siguiente. */
   .juntos-skip {
     margin-top: 12px;
   }
+}
 
-  /* «Esperando a todos» (ver-juntos-pelis.html): casi a pantalla completa,
-     con el cartel grande en el centro y «Estoy listo» y «Empezar ya» abajo. */
-  .juntos__stage:has(> .juntos-lobby) {
-    height: auto;
-    min-height: max(480px, calc(100dvh - var(--safe-top) - 160px));
-    aspect-ratio: auto;
+/* --- Con el teclado abierto, en vertical: lo justo para escribir y leer. Solo en vertical:
+   tumbado (también en los móviles de menos de 768 de ancho) manda el bloque de abajo. --- */
+@media (max-width: 767px) and (orientation: portrait) {
+  html[data-kb] .juntos {
+    --juntos-chrome-h: 150px;
   }
-  .juntos-lobby {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
-    padding: 24px var(--juntos-pad-r) 18px var(--juntos-pad-l);
+  html[data-kb] .juntos-stack,
+  html[data-kb] .juntos-info__text > :not(.juntos-info__title) {
+    display: none;
   }
-  .juntos-lobby > .juntos-poster {
-    display: block;
-    align-self: center;
-    width: min(120px, 34%);
-    border-radius: 14px;
+  html[data-kb] .juntos-info {
+    min-height: 40px;
+    padding-block: 0;
   }
-  .juntos-lobby__body {
-    flex: 1;
-    gap: 8px;
-    align-content: start;
-    max-width: none;
-    text-align: center;
+  /* El vídeo, como mucho el 28 % de lo que se ve; si ni así caben 140 px de chat y 48 de
+     vídeo, nada (sigue sonando: solo deja de verse). */
+  html[data-kb] .juntos__stage {
+    height: clamp(
+      0px,
+      calc((var(--vvh, 100dvh) - var(--safe-top, 0px) - var(--juntos-chrome-h) - 188px) * 999),
+      min(
+        56.25cqw,
+        calc(var(--vvh, 100dvh) * 0.28),
+        calc(var(--vvh, 100dvh) - var(--safe-top, 0px) - var(--juntos-chrome-h) - 140px)
+      )
+    );
   }
-  .juntos-lobby__title {
-    font-size: 1.625rem;
+  /* Tan pequeño, los controles y los avisos no caben: solo el vídeo (y «Toca para oír»). */
+  html[data-kb] .juntos-chrome__top,
+  html[data-kb] .juntos-chrome__bottom,
+  html[data-kb] .juntos-center:not(.juntos-center--sound),
+  html[data-kb] .juntos-lobby,
+  html[data-kb] .juntos-upnext {
+    display: none;
   }
-  .juntos-lobby__list {
-    margin: 8px 0;
-    text-align: left;
-  }
-  .juntos-lobby__row {
-    min-height: 48px;
-  }
-  .juntos-lobby__actions {
-    flex-direction: column;
-    align-items: stretch;
-    margin-top: auto;
-  }
-  .juntos-lobby__vote,
-  .juntos-lobby__start {
-    min-height: 52px;
-  }
-
-  /* Fuentes y Partidos (ver-juntos.html): tarjetas con las filas dentro, la
-     que suena resaltada y «Poner» en amarillo. */
-  .juntos-live {
-    gap: 12px;
-    padding: 0;
-  }
-  .juntos-live__auto {
-    padding: 12px 14px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-l, 18px);
-    background: var(--surface);
-  }
-  .juntos-live__group {
-    gap: 0;
+  /* En la espera todavía no hay vídeo: con el teclado, el escenario fuera y su sitio al chat. */
+  html[data-kb] .juntos__stage:has(.juntos-lobby) {
+    height: 0;
     overflow: hidden;
-    border: 1px solid var(--line);
-    border-radius: var(--r-l, 18px);
-    background: var(--surface);
   }
-  .juntos-live__group > .juntos-kicker {
-    padding: 12px 14px 8px;
-  }
-  .juntos-live__group .juntos-live__list {
-    gap: 0;
-  }
-  .juntos-live__group .juntos-live__row {
-    min-height: 60px;
-    padding: 8px 14px;
-    border: 0;
-    border-top: 1px solid var(--line);
-    border-radius: 0;
-  }
-  .juntos-live__num {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: var(--surface-2);
-    color: var(--text-2);
-    font-weight: 700;
-  }
-  .juntos-live__row[data-here='true'] .juntos-live__num {
-    background: var(--accent);
-    color: var(--on-accent);
-  }
-  .juntos-live__name {
-    font-size: var(--fs-15, 15px);
-    font-weight: 750;
-  }
-  .juntos-live__row .btn--quiet {
-    background: var(--accent);
-    color: var(--on-accent);
-  }
-  .juntos-live__here {
-    padding: 6px 12px;
-    border-radius: var(--r-pill, 999px);
-    background: var(--accent-wash);
+  html[data-kb] .juntos-chat__form {
+    margin-bottom: 6px;
   }
 }
 
-/* --- La página del invitado en el móvil (menos de 768, `.guest--room`): la
-   sala a la altura de lo que se ve (`--vvh`, guest.css), con el chat hasta
-   abajo y su caja por encima de la barra de Safari y del margen del iPhone.
-   Una cadena de cajas flexibles: la de la sala, el cuerpo, el lado de las
-   pestañas y su panel; solo la lista del chat (y Siguiente o Gente) se
-   desplaza. El teclado ya lo descuenta `--vvh`: aquí no se suma `--kb`. --- */
-@media (max-width: 767px) {
+/* --- El móvil tumbado: el vídeo a toda la pantalla, sin cabecera ni pestañas. El chat, en
+   un cajón a la derecha (300 px) que abre el bocadillo con los mensajes sin leer. --- */
+@media (orientation: landscape) and (max-height: 540px) {
+  .app-main .juntos {
+    position: fixed;
+    top: var(--vvtop, 0px);
+    right: 0;
+    left: 0;
+    z-index: calc(var(--z-nav, 40) + 2);
+    height: var(--vvh, 100dvh);
+    margin: 0;
+  }
   .guest--room .juntos {
-    display: flex;
     flex: 1;
-    flex-direction: column;
     min-height: 0;
   }
-  .guest--room .juntos__body {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 0;
-    min-height: 0;
+  .juntos {
+    position: relative;
+    display: block;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
   }
-  .guest--room .juntos__main {
+  .juntos > .view-head,
+  .juntos-info,
+  .juntos-nextcard,
+  .juntos-stack,
+  .juntos-faces {
+    display: none;
+  }
+  .juntos__body,
+  .juntos__main {
+    display: block;
+    height: 100%;
+    padding: 0;
+  }
+  .juntos__stage {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    aspect-ratio: auto;
+  }
+  .juntos-chrome__top {
+    padding: 10px calc(var(--safe-right, 0px) + 12px) 24px calc(var(--safe-left, 0px) + 12px);
+  }
+  .juntos-chrome__bottom {
+    padding: 24px calc(var(--safe-right, 0px) + 8px) calc(var(--safe-bottom, 0px) + 4px)
+      calc(var(--safe-left, 0px) + 8px);
+  }
+  /* El bocadillo: a la derecha, a media altura, con los mensajes sin leer. */
+  .juntos-drawer-btn {
+    position: absolute;
+    top: 50%;
+    right: calc(var(--safe-right, 0px) + 10px);
+    z-index: 7;
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    border-radius: 50%;
+    background: rgb(22 22 26 / 0.8);
+    color: #fff;
+    cursor: pointer;
+    transform: translateY(-50%);
+  }
+  .juntos-drawer-btn:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .juntos-drawer-btn__count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    display: grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: var(--r-pill, 999px);
+    background: var(--accent);
+    color: var(--on-accent, #000);
+    font-size: var(--fs-11, 11px);
+    font-weight: 800;
+  }
+  .juntos__side {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 8;
+    display: none;
+    flex-direction: column;
+    width: min(300px, 46vw);
+    min-height: 0;
+    padding: 0 var(--safe-right, 0px) 0 0;
+    border-left: 1px solid var(--line);
+    background: var(--bg-sunk);
+  }
+  .juntos[data-drawer='true'] .juntos__side {
+    display: flex;
+  }
+  .juntos__side > * {
     flex: none;
   }
-  .guest--room .juntos__side {
+  .juntos__side-head {
     display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 6px 6px 6px 10px;
   }
-  .guest--room .juntos__side > * {
-    flex: none;
+  .juntos__side-close {
+    display: inline-grid;
   }
-  .guest--room .juntos__side > .juntos__panel {
+  .juntos__side > .juntos__panel {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    padding: 0 10px 10px;
   }
-  .guest--room .juntos-chat {
+  .juntos__side > .juntos__panel:has(> .juntos-chat) {
+    overflow: hidden;
+    padding: 0;
+  }
+  .juntos-chat {
     flex: 1;
-    height: 100%;
+    height: auto;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .juntos-chat__list {
+    min-height: 0;
+    padding: 4px 10px 6px;
+  }
+  .juntos-chat__bubble {
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .juntos-chat__msg--self .juntos-chat__bubble {
+    box-shadow: none;
+  }
+  .juntos-chat__typing:empty {
     min-height: 0;
   }
-  .guest--room .juntos__panel:has(> .juntos-chat) {
-    overflow: hidden;
+  .juntos-chat__form {
+    margin: 4px 10px max(8px, var(--safe-bottom, 0px));
+    background: var(--surface);
   }
-  .guest--room .juntos-chat__form {
-    margin-bottom: max(8px, env(safe-area-inset-bottom));
+  .juntos-next,
+  .juntos-people {
+    padding: 4px 0 0;
   }
-  /* «Esperando a todos»: la espera llena lo que se ve (como la maqueta) y el
-     chat queda debajo, deslizando el cuerpo. */
-  .guest--room .juntos__body:has(.juntos-lobby) {
-    overflow-y: auto;
+
+  /* Con el cajón abierto, el escenario se queda con lo que se ve a su izquierda: la espera, los
+     avisos del centro y el vídeo se centran ahí y no debajo del cajón. */
+  .juntos[data-drawer='true'] .juntos__stage {
+    width: calc(100% - min(300px, 46vw));
   }
-  .guest--room .juntos__main:has(> .juntos__stage > .juntos-lobby) {
-    display: flex;
-    flex-direction: column;
-    min-height: 100%;
-  }
-  .guest--room .juntos__stage:has(> .juntos-lobby) {
-    flex: 1;
-    min-height: 420px;
-    overflow: auto;
-  }
-  .guest--room .juntos__body:has(.juntos-lobby) > .juntos__side {
-    flex: none;
+
+  /* Con el teclado: el vídeo sigue a todo el alto que se ve, sin controles ni avisos encima
+     (no caben); y en el cajón, sin la fila de pestañas (solo la X, pequeña y flotante), para
+     que la lista gane sitio y se lea lo que contestan. */
+  html[data-kb] .juntos__stage {
     height: 100%;
+  }
+  html[data-kb] .juntos-chrome__top,
+  html[data-kb] .juntos-chrome__bottom,
+  html[data-kb] .juntos-center:not(.juntos-center--sound),
+  html[data-kb] .juntos-lobby,
+  html[data-kb] .juntos-upnext {
+    display: none;
+  }
+  html[data-kb] .juntos__side-head {
+    position: absolute;
+    top: 2px;
+    right: calc(var(--safe-right, 0px) + 2px);
+    z-index: 2;
+    padding: 0;
+  }
+  html[data-kb] .juntos__side-head > .seg {
+    display: none;
+  }
+  html[data-kb] .juntos__side-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-sunk);
+  }
+  html[data-kb] .juntos-chat__list {
+    padding-top: 2px;
+    padding-right: 40px;
+  }
+  html[data-kb] .juntos-chat__form {
+    margin: 2px 6px 4px;
   }
 }

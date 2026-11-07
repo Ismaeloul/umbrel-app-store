@@ -137,8 +137,8 @@ export function registerV1Routes(router: V1Router, services: Services): void {
     return { ok: true as const };
   });
   router.handle('partyQueue', (input) => {
-    party.queue(input.params.code, input.body);
-    return { ok: true as const };
+    const { itemId } = party.queue(input.params.code, input.body);
+    return itemId ? { ok: true as const, itemId } : { ok: true as const };
   });
   router.handle('partyLeave', (input) => {
     party.leave(input.params.code, input.body.token);

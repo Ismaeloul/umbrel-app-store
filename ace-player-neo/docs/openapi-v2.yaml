@@ -2,7 +2,7 @@
 openapi: 3.1.0
 info:
   title: Ace Player Neo · API v1
-  version: 1.1.4
+  version: 1.1.5
   description: "Generado desde packages/shared/src/routes.ts con scripts/openapi.ts: no editar a mano. Cada ruta existe también bajo /native (la entrada de la app iOS, D4), con origen native. Las rutas antiguas /api/* están en docs/openapi.yaml."
 servers:
   - url: /
@@ -17076,6 +17076,9 @@ paths:
                       maxLength: 24
                   full:
                     type: boolean
+                  host:
+                    type: string
+                    maxLength: 24
                 required:
                   - code
                   - title
@@ -19348,6 +19351,8 @@ paths:
                         - type: string
                           maxLength: 200
                         - type: "null"
+                    play:
+                      type: boolean
                   required:
                     - token
                     - action
@@ -19400,6 +19405,9 @@ paths:
                   ok:
                     type: boolean
                     const: true
+                  itemId:
+                    type: string
+                    pattern: ^q_[A-Za-z0-9_-]{8}$
                 required:
                   - ok
                 additionalProperties: false

@@ -11,7 +11,9 @@ export const JUNTOS_TEXT = {
   create: 'Crear sala',
   cancel: 'Cancelar',
   joinTitle: 'Te han invitado a ver',
-  join: 'Entrar',
+  /** «Isma te invita a ver» (la vista previa trae quién creó la sala; un servidor viejo, no). */
+  joinTitleFrom: (host: string) => `${host} te invita a ver`,
+  join: 'Entrar en la sala',
   alreadyIn: (names: string) => `Ya están: ${names}.`,
   full: 'La sala está llena.',
   gone: 'Esta sala ya no existe',
@@ -57,6 +59,15 @@ export const JUNTOS_TEXT = {
   /* El navegador lo ha empezado en silencio (no deja sonar sin un toque). */
   soundOff: 'Activar sonido',
   soundOffHint: 'Tu navegador lo ha empezado en silencio.',
+  /* El botón grande en el centro del vídeo mientras suena en silencio: el primer toque solo
+     quita el silencio. */
+  tapToHear: 'Toca para oír',
+  /* Quien no controla y ve el vídeo parado (no «Sincronizados»). */
+  paused: 'En pausa',
+  pausedBy: (name: string) => `En pausa · la ha parado ${name}`,
+  /** Una vez por sesión, al tocar el vídeo quien no controla. */
+  readOnlyNotice: (names: string, many: boolean) =>
+    `Solo ${names} ${many ? 'pueden' : 'puede'} pausar o mover el vídeo. Tú puedes chatear.`,
   connectSlow: 'La sala no contesta',
   connectSlowHint: 'Puede ser la conexión. Vuelve a intentarlo en un momento.',
   preparing: 'Preparando el vídeo…',
@@ -83,6 +94,9 @@ export const JUNTOS_TEXT = {
   fullscreen: 'Pantalla completa',
   exitFullscreen: 'Salir de pantalla completa',
   closePanel: 'Cerrar el chat',
+  /* El móvil en horizontal: el vídeo a toda pantalla y el chat en un cajón. */
+  openChat: 'Abrir el chat',
+  openChatUnread: (n: number) => `Abrir el chat, ${n} sin leer`,
   mute: 'Silenciar',
   unmute: 'Quitar silencio',
   volume: 'Volumen',
@@ -97,7 +111,9 @@ export const JUNTOS_TEXT = {
   tabNext: 'Siguiente',
   tabPeople: 'Gente',
   invite: 'Invitar',
-  roomOf: (name: string, count: number) => `Sala de ${name} · ${count}`,
+  /** «Sala de Isma · 2 de 3»: los que están conectados de los que hay. */
+  roomOf: (name: string, online: number, total: number) =>
+    `Sala de ${name} · ${online} de ${total}`,
   synced: 'Sincronizados',
   /* La línea bajo el título, según quién eres (en «Esperando a todos» aún no va nadie sincronizado). */
   youControl: (lobby: boolean) =>
@@ -119,7 +135,7 @@ export const JUNTOS_TEXT = {
   livePut: 'Poner',
   liveHere: 'En la sala',
   liveSearching: 'Buscando las fuentes del partido…',
-  liveSourcesFailed: 'Las fuentes y la agenda solo se ven desde casa.',
+  liveSourcesFailed: 'Las fuentes solo se ven desde casa.',
   liveNoSources: 'No hay fuentes para este partido.',
   liveNoSourcesFor: (match: string) => `No hay fuentes para ${match}.`,
   liveNoMatch: 'Suena un canal suelto: elige un partido en «Partidos».',
@@ -129,7 +145,8 @@ export const JUNTOS_TEXT = {
   liveNoMatches: 'Hoy no quedan partidos.',
   livePutChannel: 'Poner un canal',
   liveNoFavorites: 'No tienes canales en favoritos.',
-  liveYouControl: (channel: string) => `Tú controlas · ${channel}`,
+  /* El canal ya va en la píldora DIRECTO del vídeo: aquí no se repite. */
+  liveYouControl: 'Tú controlas',
   liveColeader: (leader: string) => `Co-líder · controlas con ${leader}`,
   liveGuestOf: (host: string, many: boolean) =>
     `Sala de ${host} · ${many ? 'controlan' : 'controla'} el partido`,
@@ -154,11 +171,16 @@ export const JUNTOS_TEXT = {
   roleColeader: 'Co-líder · también controla',
   roleColeaderOff: 'Co-líder',
   roleWatching: 'Viendo',
-  /* «Solo Ismael y Yassin pueden pausar…» (la nota de Gente para los invitados). */
-  guestNote: (names: string) =>
-    `Solo ${names} pueden pausar o cambiar lo que se ve. Tú puedes chatear y proponer lo siguiente.`,
-  guestNoteOne: (name: string) =>
-    `Solo ${name} puede pausar o cambiar lo que se ve. Tú puedes chatear y proponer lo siguiente.`,
+  /* El menú «⋯» de la cabecera de la sala. */
+  roomActions: 'Más opciones de la sala',
+  closeForAll: 'Cerrar la sala para todos',
+  handOverAndLeave: 'Pasar el mando y salir',
+  /* «Solo Ismael y Yassin pueden pausar…» (la nota de Gente para quien no controla). En casa se
+     puede proponer desde Pelis y series; el invitado de fuera no tiene catálogo: vota. */
+  guestNote: (names: string, propose = false) =>
+    `Solo ${names} pueden pausar o cambiar lo que se ve. ${propose ? 'Tú puedes chatear y proponer lo siguiente.' : 'Tú puedes chatear y votar lo que propongan.'}`,
+  guestNoteOne: (name: string, propose = false) =>
+    `Solo ${name} puede pausar o cambiar lo que se ve. ${propose ? 'Tú puedes chatear y proponer lo siguiente.' : 'Tú puedes chatear y votar lo que propongan.'}`,
   /* Quién controla (crear la sala y Gente, solo el líder). */
   settingsControl: 'Quién controla',
   controlSolo: 'Solo yo',
@@ -224,10 +246,14 @@ export const JUNTOS_TEXT = {
   youAreReady: 'Estás listo',
   /** «tú» al final de «Faltáis Ana, Bea y tú…». */
   youWord: 'tú',
+  /** «ti» en «Esperando a Ana y ti (42 %)». */
+  youObject: 'ti',
   notVoted: 'Sin confirmar',
   votedTag: 'listo',
   notVotedTag: 'sin confirmar',
   startNow: 'Empezar ya',
+  /** Quien controla, con alguien sin tocar o cargando (pide un segundo toque). */
+  startNoWait: 'Empezar sin esperar',
   startNowConfirm: 'Toca otra vez: empieza sin esperar',
   lobbyMissingVotes: (names: string, many: boolean) =>
     `${many ? 'Faltan' : 'Falta'} ${names} por darle a «Estoy listo»`,
@@ -238,6 +264,13 @@ export const JUNTOS_TEXT = {
   lobbyAlone: 'Empieza sola cuando entren los demás y estén listos',
   lobbyAllReady: 'Ya estáis todos listos',
   lobbyGuest: (name: string) => `Empieza cuando estén todos o cuando ${name} le dé.`,
+  /* La tarjeta de la espera (1.1.5): una sola pista. «Esperando a Ana (42 %)». */
+  lobbyWaitingFor: (names: string) => `Esperando a ${names}`,
+  lobbyWaitingPct: (name: string, pct: number) => `${name} (${pct} %)`,
+  lobbyWaitYou: 'Te esperamos a ti',
+  lobbyAllHere: 'Ya estáis todos',
+  /** Quien no ha entrado aún (la sala con uno solo). */
+  lobbyAloneShort: 'Empieza cuando entren los demás',
 
   // --- Chat (§13) ---
   typingOne: (name: string) => `${name} está escribiendo…`,

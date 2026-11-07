@@ -8,9 +8,10 @@
    - «Cambio automático si se cae» y que en directo nadie espera al que carga. */
 
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   PartyEventSchema,
+  PartyListSchema,
   type ChannelStreamQuery,
   type PartyCreateBody,
   type PartyEvent,
@@ -311,6 +312,61 @@ describe('«Ver juntos»: las salas abiertas desde casa', () => {
     expect(party.list().rooms.map((room) => room.code)).toEqual([second.room.code]);
     expect(() => party.end(first.room.code)).toThrow(
       expect.objectContaining({ code: 'party_not_found' }),
+    );
+  });
+
+  it('una sala en directo sale en la lista también tras cambiar a un canal IPTV, y cumple el contrato', () => {
+    const { party, clock } = setup();
+    const movie = party.create({
+      name: 'Ana',
+      titleId: MPLUS,
+      kind: 'movie',
+      artId: MPLUS,
+      poster: null,
+      title: 'Dune',
+      subtitle: null,
+      audio: null,
+      control: 'leader',
+      coleaders: true,
+      queueMode: 'vote',
+    });
+    clock.advance(1_000);
+    const live = party.create(BODY);
+    party.control(live.room.code, {
+      token: live.member.token,
+      action: 'live',
+      live: {
+        hash: MPLUS,
+        channel: 'M+ LaLiga · 1080p',
+        source: 'iptv',
+        matchId: BODY.live.matchId,
+        match: BODY.live.match,
+      },
+    });
+    const list = party.list();
+    expect(() => PartyListSchema.parse(list)).not.toThrow();
+    expect(list.rooms.map((room) => [room.code, room.title.kind])).toEqual([
+      [live.room.code, 'live'],
+      [movie.room.code, 'movie'],
+    ]);
+    expect(list.rooms[0]?.title).toMatchObject({
+      title: 'Real Madrid – Barcelona',
+      subtitle: 'M+ LaLiga · 1080p',
+    });
+  });
+
+  it('una sala que no cumple el contrato se omite (y queda en el registro); las demás siguen', () => {
+    const { party, core } = setup();
+    const warn = vi.spyOn(core.logger, 'warn');
+    const good = party.create(BODY);
+    /* Sin pasar por la ruta (que lo validaría): un hash que no es de 40 hex. */
+    party.create({ ...BODY, live: { ...BODY.live, hash: 'NO-ES-UN-HASH' } });
+    const list = party.list();
+    expect(list.rooms.map((room) => room.code)).toEqual([good.room.code]);
+    expect(() => PartyListSchema.parse(list)).not.toThrow();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ live: true }),
+      'Ver juntos: una sala no cumple el contrato de la lista; se omite',
     );
   });
 });

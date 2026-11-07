@@ -226,7 +226,7 @@ export function TitleGroup({
           <li key={card.id}>
             <a
               className="search-res"
-              href={searchFor({ vista: 'cine', id: card.id })}
+              href={searchFor({ vista: 'cine', id: card.id }, globalThis.location?.search ?? '')}
               onClick={(event) => {
                 if (!plainClick(event)) return;
                 event.preventDefault();

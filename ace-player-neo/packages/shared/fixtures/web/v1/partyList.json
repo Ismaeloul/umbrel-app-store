@@ -1,6 +1,22 @@
 {
   "rooms": [
     {
+      "code": "LeoDirectoRMBar1",
+      "title": {
+        "id": "aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00",
+        "kind": "live",
+        "artId": "aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00",
+        "poster": null,
+        "title": "Real Madrid – Barcelona",
+        "subtitle": "DAZN 1 · 1080p",
+        "durationS": null
+      },
+      "host": "Leo",
+      "members": 3,
+      "online": 3,
+      "createdAt": 1790188230000
+    },
+    {
       "code": "k3J9xQ2mZpL8wR4t",
       "title": {
         "id": "4b5c6d7e8f9012345678abcdef0123457a8b9c0d",

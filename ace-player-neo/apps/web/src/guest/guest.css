@@ -1,12 +1,13 @@
 /* Página de invitado de «Ver juntos» (docs/ver-juntos.md §9): una barra fina
    arriba y la sala debajo, con los márgenes seguros del iPhone.
 
-   En el móvil (menos de 768), ya dentro de la sala (`.guest--room`): la
-   página no se desplaza; la sala ocupa justo lo que se ve (`--vvh`, la altura
-   de `visualViewport` que publica lib/viewport.ts, con la barra de Safari y
-   el teclado ya descontados) y el chat llega hasta abajo con su caja por
-   encima de la barra (juntos.css, al final). Sin la barra de la marca, como
-   en la maqueta. Desde 768 no cambia nada. */
+   En el móvil (menos de 768, y también tumbado), ya dentro de la sala
+   (`.guest--room`): la página no se desplaza; esta caja fija ocupa justo lo
+   que se ve (`--vvh` y `--vvtop`, de visualViewport, que publica
+   lib/viewport.ts con la barra de Safari y el teclado ya descontados). Aquí
+   solo va la caja: lo de dentro (vídeo, cabecera, caras, pestañas y chat) lo
+   pone juntos.css, igual que la sala de casa. Sin la barra de la marca, como
+   en la maqueta. Desde 768 (de pie) no cambia nada. */
 
 body {
   min-height: 100dvh;
@@ -28,7 +29,7 @@ body {
   max-width: 1400px;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (orientation: landscape) and (max-height: 540px) {
   html:has(.guest--room),
   html:has(.guest--room) body {
     height: 100%;
@@ -37,8 +38,8 @@ body {
     overscroll-behavior: none;
   }
   .guest--room {
-    /* Los avisos, por encima de la caja del chat. */
-    --toast-bottom: 64px;
+    /* Los avisos, por encima de la caja del chat (y del teclado del iPhone). */
+    --guest-toast-bottom: calc(72px + var(--kb, 0px));
     position: fixed;
     top: var(--vvtop, 0px);
     right: 0;
@@ -56,9 +57,47 @@ body {
     flex: 1;
     flex-direction: column;
     width: 100%;
+    max-width: none;
     min-height: 0;
-    /* Sin la barra de la marca, el margen de la barra de estado lo pone la sala. */
-    padding-top: var(--safe-top, 0px);
-    padding-bottom: 0;
+    padding: 0;
+  }
+}
+/* Tumbado, el chat va en un cajón sobre el vídeo: los avisos, abajo del todo. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .guest--room {
+    --guest-toast-bottom: 0px;
+  }
+}
+
+/* En el ordenador, ya dentro: la sala llega hasta el borde de abajo, como en casa (antes se
+   quedaba en 100dvh − 120 px y debajo sobraba una franja vacía de unos 77 px). La caja ocupa
+   lo que se ve; la sala, lo que deja la barra; y la caja del chat, pegada al borde. */
+@media (min-width: 1024px) and (min-height: 541px) {
+  .guest--room {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+  .guest--room .guest__bar {
+    flex: none;
+  }
+  .guest--room .guest__main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+    padding-bottom: var(--safe-bottom, 0px);
+  }
+  .guest--room .juntos {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+  }
+  .guest--room .juntos__body {
+    flex: 1;
+    height: auto;
   }
 }

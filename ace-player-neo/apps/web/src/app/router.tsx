@@ -29,6 +29,7 @@ import {
 import {
   parseRoute,
   parseVista,
+  resolveRoute,
   routeDepth,
   sameRoute,
   searchFor,
@@ -148,8 +149,9 @@ export function RouterProvider({ children, onBeforeChange, initialSearch }: Rout
 
   const navigate = useCallback<Navigate>(
     (to, options = {}) => {
-      const next = typeof to === 'string' ? parseVista(to) : to;
       const current = targetRef.current;
+      /* Dentro de Pelis y series, la sala de la que se viene sigue (§11 de ver-juntos). */
+      const next = resolveRoute(typeof to === 'string' ? parseVista(to) : to, current);
       if (sameRoute(current, next) && !options.replace) return;
       targetRef.current = next;
       const currentSearch = globalThis.location?.search ?? '';

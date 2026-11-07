@@ -322,6 +322,12 @@ export function MobileRow({
               <i />
             </span>
           ) : null}
+          {/* «Tu equipo»: la estrella (se lee en la descripción de la fila). */}
+          {mine ? (
+            <span className="agm-row__mine" title="Tu equipo" aria-hidden="true">
+              <Icon name="star-f" size={16} />
+            </span>
+          ) : null}
         </span>
         <span className="agm-row__teams">
           {[

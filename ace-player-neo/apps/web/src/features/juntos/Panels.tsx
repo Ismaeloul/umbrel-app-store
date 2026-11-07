@@ -1,18 +1,14 @@
 /* Lo de la sala que viene de Rave (docs/ver-juntos.md §11 y §13): las caras
-   de la gente (corona del líder, escudo del co-líder), Gente con el menú del
-   líder (pulsación larga o «⋯»: hacer co-líder, pasar la corona, echar) y
-   «Quién controla», Siguiente (la regla y lo propuesto con sus votos), la
-   tarjeta «Cuando acabe», la cuenta atrás de «A continuación» y «Esperando a
-   todos» antes de empezar. Sin reacciones: el chat es solo texto. */
+   de la gente (corona del líder, escudo del co-líder y, en la espera, el
+   anillo de cada uno), Gente con el menú del líder (pulsación larga o «⋯»:
+   hacer co-líder, pasar la corona, echar), «Quién controla» y quién está
+   listo, y «Esperando a todos» antes de empezar: una tarjeta del tamaño del
+   vídeo con una sola pista y «Estoy listo». Siguiente, «Cuando acabe» y «A
+   continuación» van en Queue.tsx (se re-exportan aquí). Sin reacciones: el
+   chat es solo texto. */
 
-import {
-  PARTY,
-  type PartyMember,
-  type PartyQueueItem,
-  type PartyQueueMode,
-  type PartyRoom,
-} from '@ace/shared';
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import type { PartyMember, PartyRoom } from '@ace/shared';
+import type { CSSProperties, ReactNode } from 'react';
 import { describeFailure } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
@@ -23,13 +19,11 @@ import {
   canControl,
   canSwitchLive,
   controllers,
-  isManager,
   liveSwitchers,
   roleOf,
   type PartyClient,
 } from './client.ts';
-import { Art } from '../cine/Art.tsx';
-import { clock, targetPosition } from './sync.ts';
+import { clock } from './sync.ts';
 import { useSecondTap } from '../settings/second-tap.ts';
 import { JUNTOS_TEXT } from './texts.ts';
 
@@ -102,20 +96,54 @@ function initials(name: string): string {
   return (letters.slice(0, 2).join('') || '?').toLocaleUpperCase('es');
 }
 
+/**
+ * El anillo de una cara en «Esperando a todos» (§13): `ready`, listo (verde); `wait`, sin darle a
+ * «Estoy listo»; un número, el % que lleva cargado. Quien está desconectado va en gris (sin
+ * anillo de espera). Fuera de la espera, nada. Sale de lo mismo que la lista de Gente
+ * (`member.ready`, `progress` y `online`) y de quién ha tocado (`party.votes`).
+ */
+export type FaceMark = 'ready' | 'wait' | number;
+
+export function faceMark(
+  room: PartyRoom,
+  member: PartyMember,
+  selfId: string,
+  selfVoted: boolean | undefined,
+  unvoted: readonly string[],
+): FaceMark | undefined {
+  if (!room.playback.lobby || room.live || !member.online) return undefined;
+  const voted =
+    member.id === selfId && selfVoted !== undefined ? selfVoted : !unvoted.includes(member.id);
+  if (!voted) return 'wait';
+  return member.ready ? 'ready' : (member.progress ?? 0);
+}
+
+/** Lo que dice el anillo al lector de pantalla («listo», «sin confirmar», «42 %»). */
+export function faceMarkText(mark: FaceMark | undefined): string {
+  if (mark === undefined) return '';
+  if (mark === 'ready') return JUNTOS_TEXT.votedTag;
+  if (mark === 'wait') return JUNTOS_TEXT.notVotedTag;
+  return JUNTOS_TEXT.loadingPercent(mark);
+}
+
 /** La cara de alguien: iniciales en su color, corona encima del líder y escudo del co-líder. */
 export function Avatar({
   member,
   room,
   size = 'md',
   voted,
+  mark,
 }: {
   member: Pick<PartyMember, 'id' | 'name' | 'online'>;
   room: PartyRoom;
   size?: 'sm' | 'md';
   /** En «Esperando a todos» (§13): con la marca de «Estoy listo» (true) o atenuada (false). */
   voted?: boolean;
+  /** En «Esperando a todos»: el anillo (verde listo, el % cargando, gris sin tocar). */
+  mark?: FaceMark;
 }) {
   const role = roleOf(room, member.id);
+  const ring = mark === undefined ? undefined : typeof mark === 'number' ? 'loading' : mark;
   return (
     <span
       className={cx(
@@ -124,9 +152,15 @@ export function Avatar({
         !member.online && 'juntos-av--off',
         voted === false && 'juntos-av--unvoted',
       )}
-      style={{ '--av': faceColor(room, member.id) } as CSSProperties}
+      style={
+        {
+          '--av': faceColor(room, member.id),
+          ...(typeof mark === 'number' ? { '--ring': mark / 100 } : {}),
+        } as CSSProperties
+      }
       aria-hidden="true"
       data-voted={voted === undefined ? undefined : voted ? 'true' : 'false'}
+      data-ring={ring}
     >
       {initials(member.name)}
       {size === 'md' && role === 'leader' ? (
@@ -176,18 +210,16 @@ export function Faces({
           : member.id === selfId && selfVoted !== undefined
             ? selfVoted
             : !unvoted.includes(member.id);
+        const mark = faceMark(room, member, selfId, selfVoted, unvoted);
         return (
           <li key={member.id} className="juntos-faces__item">
-            <Avatar member={member} room={room} voted={voted} />
+            <Avatar member={member} room={room} voted={voted} mark={mark} />
             <span className="juntos-faces__name">
               {member.name}
               {member.id === selfId ? <span className="sr-only"> {JUNTOS_TEXT.you}</span> : null}
               {tag ? <span className="sr-only"> · {tag}</span> : null}
               {voted === undefined ? null : (
-                <span className="sr-only">
-                  {' '}
-                  · {voted ? JUNTOS_TEXT.votedTag : JUNTOS_TEXT.notVotedTag}
-                </span>
+                <span className="sr-only"> · {faceMarkText(mark) || JUNTOS_TEXT.offline}</span>
               )}
             </span>
           </li>
@@ -206,6 +238,9 @@ export function People({
   onCloseRoom,
   closeArmed = false,
   closing = false,
+  canPropose = false,
+  selfVoted,
+  unvoted = [],
 }: {
   room: PartyRoom;
   client: PartyClient;
@@ -215,6 +250,12 @@ export function People({
   /** Primer toque dado: el segundo la cierra (regla 31, sin confirm() nativo). */
   closeArmed?: boolean;
   closing?: boolean;
+  /** En casa se propone desde Pelis y series; el invitado de fuera solo vota (la nota lo dice). */
+  canPropose?: boolean;
+  /** «Esperando a todos»: lo mío, como lo sabe esta página (la lista dice quién está listo). */
+  selfVoted?: boolean;
+  /** «Esperando a todos»: quién de los demás no ha tocado aún (`party.votes`). */
+  unvoted?: readonly string[];
 }) {
   const control = canControl(room, selfId);
   const names = controllers(room);
@@ -223,7 +264,14 @@ export function People({
     <div className="juntos-people">
       <ul className="juntos-people__list" aria-label={JUNTOS_TEXT.people}>
         {room.members.map((member) => (
-          <Person key={member.id} member={member} room={room} client={client} selfId={selfId} />
+          <Person
+            key={member.id}
+            member={member}
+            room={room}
+            client={client}
+            selfId={selfId}
+            mark={faceMark(room, member, selfId, selfVoted, unvoted)}
+          />
         ))}
       </ul>
       {/* directo §14: en directo, quién puede cambiar la fuente (también los co-líderes). */}
@@ -233,8 +281,8 @@ export function People({
           <Icon name="info" size={18} />
           <span>
             {names.length === 1
-              ? JUNTOS_TEXT.guestNoteOne(names[0] ?? '')
-              : JUNTOS_TEXT.guestNote(joinNames(names))}
+              ? JUNTOS_TEXT.guestNoteOne(names[0] ?? '', canPropose)
+              : JUNTOS_TEXT.guestNote(joinNames(names), canPropose)}
           </span>
         </p>
       ) : null}
@@ -325,11 +373,14 @@ function Person({
   room,
   client,
   selfId,
+  mark,
 }: {
   member: PartyMember;
   room: PartyRoom;
   client: PartyClient;
   selfId: string;
+  /** «Esperando a todos»: listo, sin confirmar o su % (lo mismo que el anillo de su cara). */
+  mark?: FaceMark;
 }) {
   const self = room.members.find((m) => m.id === selfId);
   const iLead = room.leaderId === selfId;
@@ -381,7 +432,7 @@ function Person({
     });
   }
   const { bind, menu } = useContextMenu();
-  const status = !member.online
+  const roleText = !member.online
     ? JUNTOS_TEXT.offline
     : role === 'leader'
       ? JUNTOS_TEXT.roleLeader
@@ -392,12 +443,26 @@ function Person({
         : member.buffering
           ? JUNTOS_TEXT.loading
           : JUNTOS_TEXT.roleWatching;
+  /* En la espera, quién está listo va aquí (la tarjeta del vídeo solo lleva una pista). */
+  const lobbyState =
+    mark === undefined
+      ? null
+      : mark === 'ready'
+        ? JUNTOS_TEXT.ready
+        : mark === 'wait'
+          ? JUNTOS_TEXT.notVoted
+          : JUNTOS_TEXT.loadingPercent(mark);
+  const status = !lobbyState
+    ? roleText
+    : role === 'leader' || role === 'coleader'
+      ? `${role === 'leader' ? JUNTOS_TEXT.roleLeader : JUNTOS_TEXT.roleColeaderOff} · ${lobbyState}`
+      : lobbyState;
   return (
     <li
       className={cx('juntos-people__item', member.id === selfId && 'juntos-people__item--self')}
       {...(items.length ? bind : {})}
     >
-      <Avatar member={member} room={room} />
+      <Avatar member={member} room={room} mark={mark} />
       <span className="juntos-people__text">
         <span className="juntos-people__name">
           {member.name}
@@ -426,340 +491,13 @@ function Person({
   );
 }
 
-// --- Siguiente ---
+// --- Siguiente (Queue.tsx) ---
 
-const RULES: ReadonlyArray<readonly [PartyQueueMode, string]> = [
-  ['autoplay', JUNTOS_TEXT.ruleOrder],
-  ['vote', JUNTOS_TEXT.ruleVotes],
-  ['leader', JUNTOS_TEXT.rulePick],
-];
+/* La cola vive en Queue.tsx (la comparten la sala del móvil y la de escritorio, y resalta lo que se
+   acaba de proponer); se re-exporta para quien la importaba de aquí. */
+export { NextCard, NextPanel, UpNext, orderedQueue } from './Queue.tsx';
 
-function ruleLabel(mode: PartyQueueMode): string {
-  return RULES.find(([value]) => value === mode)?.[1] ?? JUNTOS_TEXT.ruleStop;
-}
-
-/** Lo propuesto en el orden en que se verá: por votos (en «Por votos») o como se añadió. */
-export function orderedQueue(room: PartyRoom): PartyQueueItem[] {
-  if (room.settings.queueMode !== 'vote') return [...room.queue];
-  /* `sort` es estable: en un empate gana lo que se añadió antes (como en el servidor). */
-  return [...room.queue].sort((a, b) => b.votes.length - a.votes.length);
-}
-
-/** Lo que vendrá al acabar, si se sabe: la cuenta atrás, lo propuesto o el siguiente episodio. */
-function nextUp(room: PartyRoom): {
-  title: string;
-  subtitle: string | null;
-  item: PartyQueueItem | null;
-} | null {
-  if (room.upNext) {
-    const item = room.queue.find((entry) => entry.id === room.upNext?.itemId) ?? null;
-    return { title: room.upNext.title.title, subtitle: room.upNext.title.subtitle, item };
-  }
-  const mode = room.settings.queueMode;
-  if (mode === 'leader' || mode === 'once') return null;
-  const first = orderedQueue(room)[0];
-  if (first) return { title: first.title.title, subtitle: first.title.subtitle, item: first };
-  if (room.title.kind === 'episode')
-    return { title: JUNTOS_TEXT.nextEpisode, subtitle: null, item: null };
-  return null;
-}
-
-function nextHint(room: PartyRoom, item: PartyQueueItem | null): string {
-  const mode = room.settings.queueMode;
-  const leader = room.members.find((m) => m.id === room.leaderId)?.name ?? '';
-  if (mode === 'leader') return JUNTOS_TEXT.nextPick(leader);
-  if (!item) return JUNTOS_TEXT.nextEpisodeAuto;
-  return mode === 'vote'
-    ? JUNTOS_TEXT.nextByVotes(JUNTOS_TEXT.votes(item.votes.length))
-    : JUNTOS_TEXT.nextFirst;
-}
-
-/** El cartel pequeño de un título (el relleno con su inicial si no tiene). */
-function Poster({ stamp, artId, title }: { stamp: string | null; artId: string; title: string }) {
-  return <Art id={artId} art="poster" v={stamp} title={title} className="juntos-poster" />;
-}
-
-/** La tarjeta «Cuando acabe · Por votos» bajo el vídeo (escritorio). */
-export function NextCard({ room, onSeeList }: { room: PartyRoom; onSeeList(): void }) {
-  const next = nextUp(room);
-  if (!next) return null;
-  const others = orderedQueue(room).filter((item) => item !== next.item);
-  const after = others[0];
-  const line = next.item
-    ? [
-        room.settings.queueMode === 'vote' ? JUNTOS_TEXT.votes(next.item.votes.length) : null,
-        after
-          ? JUNTOS_TEXT.nextThen(
-              after.title.subtitle
-                ? `${after.title.title} ${after.title.subtitle}`
-                : after.title.title,
-              after.votes.length,
-            )
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : JUNTOS_TEXT.nextEpisodeAuto;
-  const art = next.item?.title ?? room.title;
-  return (
-    <section className="juntos-nextcard" aria-label={JUNTOS_TEXT.whenEnds}>
-      <Poster stamp={art.poster} artId={art.artId} title={art.title} />
-      <span className="juntos-nextcard__text">
-        <span className="juntos-kicker juntos-kicker--accent">
-          {JUNTOS_TEXT.whenEndsRule(ruleLabel(room.settings.queueMode))}
-        </span>
-        <span className="juntos-nextcard__title">
-          {next.title}
-          {next.subtitle ? <span className="juntos-nextcard__sub"> {next.subtitle}</span> : null}
-        </span>
-        {line ? <span className="juntos-nextcard__line">{line}</span> : null}
-      </span>
-      <Button size="sm" variant="quiet" onClick={onSeeList}>
-        {JUNTOS_TEXT.seeList}
-      </Button>
-    </section>
-  );
-}
-
-/** El anillo de «Cuando acabe»: lo que falta de la cuenta atrás (con sus segundos) o de la película. */
-function Countdown({ room, client }: { room: PartyRoom; client: PartyClient }) {
-  const upNext = room.upNext;
-  const [now, setNow] = useState(() => client.serverNow());
-  useEffect(() => {
-    const timer = globalThis.setInterval(() => setNow(client.serverNow()), upNext ? 250 : 5_000);
-    return () => globalThis.clearInterval(timer);
-  }, [upNext, client]);
-  const duration = room.title.durationS ?? 0;
-  let done: number;
-  let seconds: number | null = null;
-  if (upNext) {
-    const left = Math.max(0, upNext.startsAt - now);
-    seconds = Math.ceil(left / 1000);
-    done = 1 - Math.min(1, left / PARTY.upNextMs);
-  } else {
-    done = duration ? targetPosition(room.playback, now, duration) / duration : 0;
-  }
-  const ring = 2 * Math.PI * 24;
-  return (
-    <span className="juntos-ring" aria-hidden="true">
-      <svg className="juntos-ring__svg" viewBox="0 0 52 52">
-        <circle cx="26" cy="26" r="24" className="juntos-ring__track" />
-        <circle
-          cx="26"
-          cy="26"
-          r="24"
-          className="juntos-ring__done"
-          strokeDasharray={ring}
-          strokeDashoffset={ring * (1 - Math.max(0, Math.min(1, done)))}
-        />
-      </svg>
-      {seconds !== null ? seconds : <Icon name="clock" size={18} />}
-    </span>
-  );
-}
-
-/** Una propuesta: cartel, título, quién la propuso y el voto. «Poner ya» y «Quitar», con el menú contextual. */
-function NextItem({
-  item,
-  room,
-  client,
-  selfId,
-}: {
-  item: PartyQueueItem;
-  room: PartyRoom;
-  client: PartyClient;
-  selfId: string;
-}) {
-  const control = canControl(room, selfId);
-  const voted = item.votes.includes(selfId);
-  const removable = isManager(room, selfId) || item.addedBy === selfId;
-  const kind = item.title.kind === 'episode' ? JUNTOS_TEXT.episode : JUNTOS_TEXT.movie;
-  const actions: MenuItem[] = [
-    ...(control
-      ? [
-          {
-            id: 'play',
-            label: JUNTOS_TEXT.playNow,
-            icon: 'play' as const,
-            onSelect: () => attempt(() => client.queue({ action: 'play', itemId: item.id })),
-          },
-        ]
-      : []),
-    ...(removable
-      ? [
-          {
-            id: 'remove',
-            label: JUNTOS_TEXT.remove,
-            icon: 'trash' as const,
-            danger: true,
-            onSelect: () => attempt(() => client.queue({ action: 'remove', itemId: item.id })),
-          },
-        ]
-      : []),
-  ];
-  const { bind, menu } = useContextMenu();
-  const title = item.title.subtitle
-    ? `${item.title.title} · ${item.title.subtitle}`
-    : item.title.title;
-  return (
-    <li
-      className="juntos-next__item"
-      title={actions.length ? JUNTOS_TEXT.itemMenuHint : undefined}
-      {...(actions.length ? bind : {})}
-    >
-      <Poster stamp={item.title.poster} artId={item.title.artId} title={item.title.title} />
-      <span className="juntos-next__text">
-        <span className="juntos-next__title">{title}</span>
-        <span className="juntos-next__by">{JUNTOS_TEXT.proposedBy(kind, item.addedByName)}</span>
-      </span>
-      <button
-        type="button"
-        className="juntos-vote"
-        aria-pressed={voted}
-        aria-label={`${JUNTOS_TEXT.vote} ${title} (${JUNTOS_TEXT.votes(item.votes.length)})`}
-        aria-haspopup={actions.length ? 'menu' : undefined}
-        onClick={() => attempt(() => client.queue({ action: 'vote', itemId: item.id }))}
-      >
-        <Icon name="chev-u" size={18} />
-        <span className="juntos-vote__n">{item.votes.length}</span>
-      </button>
-      {actions.length ? (
-        <Menu {...menu} label={JUNTOS_TEXT.itemActions(item.title.title)} items={actions} />
-      ) : null}
-    </li>
-  );
-}
-
-/**
- * La pestaña Siguiente, como la maqueta: «Cuando acabe» con su anillo, la
- * regla y lo propuesto con sus votos. Sin botones de más en cada fila:
- * «Poner ya» y «Quitar» van en el menú contextual (clic derecho, pulsación
- * larga o la tecla de menú sobre el voto).
- */
-export function NextPanel({
-  room,
-  client,
-  selfId,
-  onPropose,
-}: {
-  room: PartyRoom;
-  client: PartyClient;
-  selfId: string;
-  /** «Proponer algo de Pelis y series» (en casa; el invitado de fuera no tiene catálogo). */
-  onPropose?: () => void;
-}) {
-  const manager = isManager(room, selfId);
-  const next = nextUp(room);
-  const items = orderedQueue(room);
-  return (
-    <div className="juntos-next">
-      {next ? (
-        <div className="juntos-next__up">
-          <Poster
-            stamp={(next.item?.title ?? room.title).poster}
-            artId={(next.item?.title ?? room.title).artId}
-            title={next.title}
-          />
-          <span className="juntos-nextcard__text">
-            <span className="juntos-kicker juntos-kicker--accent">{JUNTOS_TEXT.whenEnds}</span>
-            <span className="juntos-nextcard__title">{next.title}</span>
-            <span className="juntos-nextcard__line">{nextHint(room, next.item)}</span>
-          </span>
-          <Countdown room={room} client={client} />
-        </div>
-      ) : null}
-      <div className="juntos-next__rules" role="radiogroup" aria-label={JUNTOS_TEXT.ruleLabel}>
-        {RULES.map(([mode, label]) => (
-          <button
-            key={mode}
-            type="button"
-            role="radio"
-            aria-checked={room.settings.queueMode === mode}
-            disabled={!manager}
-            className="juntos-rule-chip"
-            onClick={() => attempt(() => client.settings({ queueMode: mode }))}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {items.length === 0 ? (
-        <div className="juntos-next__empty">
-          <p>{JUNTOS_TEXT.queueEmpty}</p>
-          <p className="juntos-next__hint">
-            {onPropose ? JUNTOS_TEXT.queueEmptyHint : JUNTOS_TEXT.queueEmptyGuestHint}
-          </p>
-        </div>
-      ) : (
-        <ol className="juntos-next__list">
-          {items.map((item) => (
-            <NextItem key={item.id} item={item} room={room} client={client} selfId={selfId} />
-          ))}
-        </ol>
-      )}
-      {onPropose ? (
-        <button type="button" className="juntos-propose" onClick={onPropose}>
-          <Icon name="plus" size={18} />
-          {JUNTOS_TEXT.propose}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-// --- A continuación ---
-
-export function UpNext({
-  room,
-  client,
-  selfId,
-}: {
-  room: PartyRoom;
-  client: PartyClient;
-  selfId: string;
-}) {
-  const upNext = room.upNext;
-  const [now, setNow] = useState(() => client.serverNow());
-  useEffect(() => {
-    if (!upNext) return;
-    const timer = globalThis.setInterval(() => setNow(client.serverNow()), 250);
-    return () => globalThis.clearInterval(timer);
-  }, [upNext, client]);
-  if (!upNext) return null;
-  const seconds = Math.max(0, Math.ceil((upNext.startsAt - now) / 1000));
-  const control = canControl(room, selfId);
-  return (
-    <div className="juntos-upnext" role="status">
-      <span className="juntos-upnext__kicker">{JUNTOS_TEXT.upNextTitle}</span>
-      <span className="juntos-upnext__title">{upNext.title.title}</span>
-      {upNext.title.subtitle ? (
-        <span className="juntos-upnext__sub">{upNext.title.subtitle}</span>
-      ) : null}
-      <span className="juntos-upnext__in">{JUNTOS_TEXT.upNextIn(seconds)}</span>
-      {control ? (
-        <div className="juntos-upnext__actions">
-          <Button
-            size="sm"
-            variant="primary"
-            icon="play"
-            onClick={() => attempt(() => client.queue({ action: 'next' }))}
-          >
-            {JUNTOS_TEXT.watchNow}
-          </Button>
-          <Button
-            size="sm"
-            variant="quiet"
-            onClick={() => attempt(() => client.queue({ action: 'cancel' }))}
-          >
-            {JUNTOS_TEXT.cancelNext}
-          </Button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-// --- Esperando a todos (§13) ---
+// --- Esperando a todos ---
 
 /** «2 h 46 min» o «48 min». */
 function duration(seconds: number): string {
@@ -769,14 +507,16 @@ function duration(seconds: number): string {
   return h > 0 ? `${h} h ${m} min` : `${m} min`;
 }
 
-/** «Empezar ya» queda armado este rato tras el primer toque. */
+/** «Empezar sin esperar» queda armado este rato tras el primer toque. */
 const START_CONFIRM_MS = 5_000;
 
 /**
- * Antes de empezar (§13, pelis y series): quién ha tocado «Estoy listo», quién carga y quién
- * falta. Cada uno tiene su «Estoy listo» (el toque que deja sonar el vídeo en su aparato); la
- * sala arranca sola cuando le han dado todos y lo tienen cargado. Quien controla puede «Empezar
- * ya» (con un segundo toque si falta alguien: se ha ido a por palomitas).
+ * Antes de empezar (§13, pelis y series): una tarjeta del tamaño del vídeo, encima de él (que ya
+ * va cargando por debajo), con el título, UNA sola pista («Esperando a Ana (42 %)», «Te esperamos
+ * a ti», «Ya estáis todos») y «Estoy listo» (el toque que deja sonar el vídeo en este aparato). La
+ * sala arranca sola cuando le han dado todos y lo tienen cargado. Quien controla tiene además
+ * «Empezar sin esperar», con un segundo toque si falta alguien (se ha ido a por palomitas). Quién
+ * está listo, uno a uno, va en el anillo de las caras y en Gente: aquí no cabe en el móvil.
  */
 export function Lobby({
   room,
@@ -805,12 +545,20 @@ export function Lobby({
   const hasVoted = (member: PartyMember) =>
     member.id === selfId ? voted : !unvoted.includes(member.id);
   const present = room.members.filter((member) => member.online);
-  const othersUnvoted = present
-    .filter((member) => member.id !== selfId && !hasVoted(member))
-    .map((member) => member.name);
   const selfUnvoted = present.some((member) => member.id === selfId) && !voted;
-  const loading = present.filter((member) => !member.ready).map((member) => member.name);
-  const leader = room.members.find((m) => m.id === room.leaderId)?.name ?? '';
+  /* A quién se espera: sin tocar o aún cargando (con su %, si lo dice). Yo, al final y como «ti». */
+  const waiting = present
+    .filter((member) => !hasVoted(member) || !member.ready)
+    .sort((a, b) => Number(a.id === selfId) - Number(b.id === selfId))
+    .map((member) => {
+      const name = member.id === selfId ? JUNTOS_TEXT.youObject : member.name;
+      return hasVoted(member) && member.progress !== null
+        ? JUNTOS_TEXT.lobbyWaitingPct(name, member.progress)
+        : name;
+    });
+  const othersMissing = present.some(
+    (member) => member.id !== selfId && (!hasVoted(member) || !member.ready),
+  );
   const kind = room.title.kind === 'episode' ? JUNTOS_TEXT.episode : JUNTOS_TEXT.movie;
   const meta = [
     room.title.subtitle ?? null,
@@ -820,20 +568,14 @@ export function Lobby({
     .filter(Boolean)
     .join(' · ');
   const hint = selfUnvoted
-    ? othersUnvoted.length
-      ? JUNTOS_TEXT.lobbyMissingYouAnd(joinNames([...othersUnvoted, JUNTOS_TEXT.youWord]))
-      : JUNTOS_TEXT.lobbyMissingYou
-    : othersUnvoted.length
-      ? JUNTOS_TEXT.lobbyMissingVotes(joinNames(othersUnvoted), othersUnvoted.length > 1)
-      : loading.length
-        ? JUNTOS_TEXT.lobbyWaiting(joinNames(loading))
-        : present.length < 2
-          ? JUNTOS_TEXT.lobbyAlone
-          : control
-            ? JUNTOS_TEXT.lobbyAllReady
-            : JUNTOS_TEXT.lobbyGuest(leader);
+    ? JUNTOS_TEXT.lobbyWaitYou
+    : waiting.length
+      ? JUNTOS_TEXT.lobbyWaitingFor(joinNames(waiting))
+      : present.length < 2
+        ? JUNTOS_TEXT.lobbyAloneShort
+        : JUNTOS_TEXT.lobbyAllHere;
   /* Forzar con otro sin tocar o cargando pide un segundo toque; si no falta nadie más, no. */
-  const forcing = othersUnvoted.length > 0 || loading.length > 0;
+  const forcing = othersMissing;
   const startArmed = startTap.armed === 'start';
   const start = () => {
     /* El toque de quien fuerza también deja sonar su vídeo. */
@@ -842,82 +584,44 @@ export function Lobby({
   };
   return (
     <section className="juntos-lobby" aria-labelledby="juntos-lobby-title">
-      <Poster stamp={room.title.poster} artId={room.title.artId} title={room.title.title} />
       <div className="juntos-lobby__body">
         <p className="juntos-kicker juntos-kicker--accent">{JUNTOS_TEXT.lobbyTitle}</p>
         <h2 id="juntos-lobby-title" className="juntos-lobby__title">
           {room.title.title}
         </h2>
         <p className="juntos-lobby__meta">{meta}</p>
-        <ul className="juntos-lobby__list">
-          {room.members.map((member) => (
-            <li
-              key={member.id}
-              className={cx('juntos-lobby__row', !member.online && 'juntos-lobby__row--off')}
-              data-voted={hasVoted(member) ? 'true' : 'false'}
-            >
-              <Avatar member={member} room={room} size="sm" />
-              <span className="juntos-lobby__name">
-                {member.name}
-                {member.id === selfId ? ` ${JUNTOS_TEXT.you}` : ''}
-              </span>
-              {!member.online ? (
-                <span className="juntos-lobby__state">{JUNTOS_TEXT.offline}</span>
-              ) : !hasVoted(member) ? (
-                <span className="juntos-lobby__state juntos-lobby__state--wait">
-                  {JUNTOS_TEXT.notVoted}
-                </span>
-              ) : member.ready ? (
-                <span className="juntos-lobby__state juntos-lobby__state--ok">
-                  <Icon name="check" size={16} />
-                  {JUNTOS_TEXT.ready}
-                </span>
-              ) : (
-                <span className="juntos-lobby__state">
-                  <span className="juntos-lobby__bar" aria-hidden="true">
-                    <span style={{ transform: `scaleX(${(member.progress ?? 0) / 100})` }} />
-                  </span>
-                  <span className="juntos-lobby__pct">
-                    {member.progress === null
-                      ? JUNTOS_TEXT.loading
-                      : JUNTOS_TEXT.loadingPercent(member.progress)}
-                  </span>
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-        <div className="juntos-lobby__actions">
-          {/* Un solo botón que pasa a «Estás listo» (desactivado con aria-disabled, que no lo
-              saca del orden del Tab): el foco no se pierde al votar con el teclado. */}
-          <Button
-            variant={voted ? 'quiet' : 'primary'}
-            icon="check"
-            className={cx('juntos-lobby__vote', voted && 'juntos-lobby__vote--done')}
-            aria-disabled={voted ? 'true' : undefined}
-            onClick={voted ? undefined : onVote}
+        <p className="juntos-lobby__hint" role="status">
+          {hint}
+        </p>
+        {/* Un solo botón que pasa a «Estás listo» (desactivado con aria-disabled, que no lo
+            saca del orden del Tab): el foco no se pierde al votar con el teclado. */}
+        <Button
+          variant={voted ? 'quiet' : 'primary'}
+          icon="check"
+          className={cx('juntos-lobby__vote', voted && 'juntos-lobby__vote--done')}
+          aria-disabled={voted ? 'true' : undefined}
+          title={voted ? undefined : JUNTOS_TEXT.imReadyHint}
+          onClick={voted ? undefined : onVote}
+        >
+          {voted ? JUNTOS_TEXT.youAreReady : JUNTOS_TEXT.imReady}
+        </Button>
+        {control ? (
+          <button
+            type="button"
+            className={cx('juntos-lobby__start', startArmed && 'juntos-lobby__start--armed')}
+            onClick={() => (forcing ? startTap.tap('start', start) : start())}
           >
-            {voted ? JUNTOS_TEXT.youAreReady : JUNTOS_TEXT.imReady}
-          </Button>
-          {control ? (
-            <Button
-              variant={startArmed ? 'danger' : 'quiet'}
-              icon="play"
-              className="juntos-lobby__start"
-              onClick={() => (forcing ? startTap.tap('start', start) : start())}
-            >
-              {startArmed ? JUNTOS_TEXT.startNowConfirm : JUNTOS_TEXT.startNow}
-            </Button>
-          ) : null}
-        </div>
-        {voted ? null : <p className="juntos-lobby__sound">{JUNTOS_TEXT.imReadyHint}</p>}
+            {startArmed
+              ? JUNTOS_TEXT.startNowConfirm
+              : forcing
+                ? JUNTOS_TEXT.startNoWait
+                : JUNTOS_TEXT.startNow}
+          </button>
+        ) : null}
         {/* Siempre montada (vacía antes de votar): un lector de pantalla solo lee los cambios de
             una región que ya estaba. */}
         <p className="sr-only" role="status">
           {voted ? JUNTOS_TEXT.youAreReady : ''}
-        </p>
-        <p className="juntos-lobby__hint" role="status">
-          {hint}
         </p>
       </div>
     </section>

@@ -41,6 +41,7 @@ import {
   useContextMenu,
 } from '../../ui/index.ts';
 import { JuntosButton } from '../juntos/CreateButton.tsx';
+import { usePicking } from '../juntos/RoomPresence.tsx';
 import { Art, artFill } from './Art.tsx';
 import { playContinue, useContinueItems } from './ContinueRail.tsx';
 import {
@@ -446,7 +447,10 @@ export function DeskHome({ data, active }: { data: VodHomeData; active: boolean 
       if (card.poster) out.set(card.id, card.poster);
     return out;
   }, [data.newMovies, data.updatedSeries, items]);
-  const entries = data.continue;
+  /* Eligiendo para una sala (docs/ver-juntos.md §11): sin «Seguir viendo» ni el destacado, que
+     reproducen aquí, solo para este aparato. */
+  const picking = usePicking() !== null;
+  const entries = picking ? [] : data.continue;
   const sections = listSections(items);
   /* «Seguir viendo» con el mismo ancho de cartel que la rejilla: las columnas
      de las tres secciones caen una debajo de otra. */
@@ -463,7 +467,7 @@ export function DeskHome({ data, active }: { data: VodHomeData; active: boolean 
   const keyOf = (entry: VodContinue) => `${entry.id}:${entry.isNext}`;
   return (
     <div ref={ref} className={mobile ? 'cine-esc cine-esc--mobile' : 'cine-esc'} style={style}>
-      {mobile ? <Destacado entries={entries} posters={posters} /> : null}
+      {mobile && !picking ? <Destacado entries={entries} posters={posters} /> : null}
       {mobile && rest.length ? (
         <section className="cine-esc-row" aria-labelledby="cine-esc-medias">
           <SectionHead id="cine-esc-medias" title={DESK_TEXT.alsoHalf} />

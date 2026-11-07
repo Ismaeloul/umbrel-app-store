@@ -68,6 +68,8 @@ import { VodControls } from './vod/VodControls.tsx';
 import { VolumeControl } from './VolumeControl.tsx';
 import { useNavigate } from '../app/router.tsx';
 import { cx } from '../lib/cx.ts';
+// Las reglas base del ecualizador: siempre cargadas, también sin el reproductor montado.
+import './equalizer.css';
 
 /** Publica el hueco sobre el vídeo mientras existe (y lo retira al irse). */
 function publishStageSlot(node: HTMLDivElement | null) {

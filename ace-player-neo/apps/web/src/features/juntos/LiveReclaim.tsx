@@ -1,6 +1,6 @@
 /* «Recuperar el mando» de la sala en directo (docs/ver-juntos.md §14), junto a quién controla.
    Aparte de Fuentes y Partidos (LivePanels.tsx, LiveMatches.tsx): la sala lo pinta siempre y
-   aquellos se bajan al abrirlos. */
+   aquellos se bajan al abrirlos. Su estilo va en live.css (pequeño: viene con la sala). */
 
 import type { PartyRoom } from '@ace/shared';
 import { useState } from 'react';
@@ -9,6 +9,7 @@ import { notify } from '../../notices/index.ts';
 import { Button } from '../../ui/Button.tsx';
 import type { PartyClient } from './client.ts';
 import { LIVE_TEXT } from './liveTexts.ts';
+import './live.css';
 
 /**
  * «Recuperar el mando» (directo §14): quien creó la sala y no es el líder (la corona pasó a otro

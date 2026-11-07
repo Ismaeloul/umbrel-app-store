@@ -5,7 +5,8 @@
    nunca manda `abr=1`.
 
    - Ya dentro (con credencial), la raíz lleva `guest--room`: en el móvil la
-     sala va a la altura de lo que se ve, con el chat hasta abajo (guest.css).
+     sala va a la altura de lo que se ve, con el chat hasta abajo (guest.css),
+     y los avisos salen por encima de la caja del chat.
    - Sin red, el texto no habla del Umbrel (quien entra de fuera no lo
      conoce). Con la sala cerrada o sin contestar, «Volver a la entrada». */
 
@@ -89,7 +90,8 @@ export function GuestApp({ pathname }: { pathname: string }) {
             </EmptyState>
           )}
         </main>
-        <Toaster />
+        {/* En la sala del móvil, por encima de la caja del chat y del teclado (guest.css). */}
+        <Toaster bottomOffset="var(--guest-toast-bottom, 0px)" />
       </div>
     </QueryClientProvider>
   );

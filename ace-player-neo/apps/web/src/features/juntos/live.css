@@ -1,26 +1,183 @@
-/* La sala en directo (directo §14): lo nuevo de Fuentes y Partidos. Va aparte
-   de juntos.css (que cambia a la vez la sala en general); lo importa
-   LivePanels.tsx. */
+/* La sala en directo (docs/ver-juntos.md §14): Fuentes y Partidos, en todas las
+   anchuras. Todo el estilo `.juntos-live*` vive aquí (antes, la mitad iba en
+   juntos.css); lo importan LivePanels.tsx, LiveMatches.tsx y LiveReclaim.tsx.
+   La píldora DIRECTO del vídeo (`.juntos-live-pill`) sigue en juntos.css.
 
+   - Todo en una columna `minmax(0, 1fr)`: sin ella, una rejilla sin columnas
+     crecía con el nombre más largo (`nowrap`) y la fila se salía del panel
+     (Isma, 7-11-2026: «Poner» se veía muy a la derecha, había que deslizar).
+   - Cada canal es una tarjeta con sus filas; la que suena, resaltada; «Poner»
+     en el acento.
+   - Partidos es la lista de la Agenda (DeskList, `.juntos-agenda`) con una
+     barra pegada abajo: el partido elegido y «Poner en la sala». */
+
+.juntos-live {
+  /* El fondo del panel, para lo que se pega arriba o abajo al desplazarse. */
+  --live-bg: var(--bg);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* Cada fila con su alto: en el panel de escritorio (alto fijo y scroll) las
+     tarjetas, con overflow oculto, se encogían y se comían sus últimas filas. */
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 0;
+}
+.juntos-live__group,
+.juntos-live__list,
+.juntos-live__fold {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+/* --- Una tarjeta por canal --- */
+.juntos-live__group {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-l, 18px);
+  background: var(--surface);
+}
 .juntos-live__group-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
+  padding: 12px 14px 8px;
+}
+.juntos-live__group-head > .juntos-kicker {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .juntos-live__count {
   flex: none;
   color: var(--text-3);
   font-size: 12px;
 }
+.juntos-live__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* Una lista suelta (las plegadas, tus canales) también es una tarjeta. */
+.juntos-live > .juntos-live__list,
+.juntos-live__fold > .juntos-live__list {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-l, 18px);
+  background: var(--surface);
+}
+.juntos-live__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 8px 14px;
+}
+.juntos-live__group .juntos-live__row,
+.juntos-live__row + .juntos-live__row {
+  border-top: 1px solid var(--line);
+}
+.juntos-live__row[data-here='true'] {
+  background: var(--accent-wash);
+}
+/* El número de la fuente, en su pastilla (el mismo en toda la lista). */
+.juntos-live__num {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  font-weight: 700;
+}
+.juntos-live__row[data-here='true'] .juntos-live__num {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.juntos-live__text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.juntos-live__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-15, 15px);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* El origen y de dónde sale, en una línea con puntos suspensivos. */
+.juntos-live__meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.juntos-live__origin {
+  margin-right: 2px;
+  padding: 1px 7px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-11, 11px);
+  font-weight: 650;
+}
+.juntos-live__origin--iptv {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
 .juntos-live__sig {
+  display: inline-flex;
   flex: none;
 }
+.juntos-live__put {
+  flex: none;
+}
+.juntos-live__here {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.juntos-live__here .juntos-chip__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #35c759;
+}
+
+/* --- Plegadas: flojas, sin señal y de otro país --- */
 .juntos-live__fold {
-  display: grid;
   gap: 6px;
 }
-/* 44 px: el toque mínimo del resto de la sala (juntos.css), también en el iPhone. */
+/* Cerrada, sin el hueco de la lista escondida. */
+.juntos-live__fold:not([open]) {
+  gap: 0;
+}
+/* 44 px: el toque mínimo del resto de la sala, también en el iPhone. */
 .juntos-live__fold > summary {
   display: flex;
   align-items: center;
@@ -37,6 +194,7 @@
 }
 .juntos-live__fold > summary::before {
   content: '';
+  flex: none;
   width: 7px;
   height: 7px;
   margin-right: 10px;
@@ -48,42 +206,209 @@
 .juntos-live__fold[open] > summary::before {
   transform: rotate(45deg);
 }
+
+/* --- Avisos y botones sueltos --- */
+.juntos-live__auto {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-l, 18px);
+  background: var(--surface);
+}
 .juntos-live__status {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 0;
   color: var(--text-3);
   font-size: 13.5px;
 }
-/* Móvil: cada canal es una tarjeta (juntos.css). Su cabecera ya no es el título suelto
-   (`.juntos-live__group > .juntos-kicker`), así que el relleno va en ella. */
-@media (max-width: 767px) {
-  .juntos-live__group-head {
-    padding: 12px 14px 8px;
+.juntos-live__empty {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13.5px;
+}
+.juntos-live__more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+/* «Recuperar el mando» (directo §14): va con la sala, junto a quién controla. */
+.juntos-live__reclaim {
+  justify-self: start;
+}
+
+/* --- Partidos: la lista de la Agenda en la sala --- */
+.juntos-agenda {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-l, 18px);
+  background: var(--surface);
+}
+.juntos-agenda .desk-agenda__head {
+  padding: 8px 10px 12px 6px;
+}
+/* En el panel, aunque sea ancho: las ligas en su fila. */
+.juntos-agenda .desk-agenda__chips {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.juntos-agenda .desk-agenda__leagues {
+  flex-basis: 100%;
+  margin-left: -4px;
+  padding-left: 4px;
+  border-left: 0;
+}
+/* En un móvil estrecho no caben las pestañas y el día en una línea: el día baja. */
+@container desk-agenda (max-width: 340px) {
+  .juntos-agenda .desk-agenda__top {
+    flex-wrap: wrap;
+    row-gap: 6px;
   }
-  .juntos-live__group-head > .juntos-kicker {
-    padding: 0;
+}
+.juntos-agenda .desk-comp__head {
+  padding-inline: 12px 4px;
+}
+.juntos-agenda .desk-row {
+  padding-inline: 12px 10px;
+}
+
+/* La barra de abajo: el partido elegido y «Poner en la sala». Pegada al borde
+   inferior del panel mientras se desplaza la lista. */
+.juntos-live__putbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  background: var(--live-bg);
+}
+.juntos-live__putbar-text {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+.juntos-live__putbar-kicker {
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 650;
+}
+.juntos-live__putbar-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-15, 15px);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.juntos-live__putbar .btn {
+  flex: none;
+  min-height: 44px;
+}
+
+/* Móvil: solo los tamaños táctiles. */
+@media (max-width: 767px) {
+  .juntos-live__row {
+    min-height: 60px;
+  }
+  /* Partidos: las píldoras (estado y ligas) en UNA fila que se desliza de lado, para que la
+     cabecera no se coma el panel y se vean varios partidos sin deslizar la lista. */
+  .juntos-agenda .desk-agenda__chips {
+    flex-wrap: nowrap;
+    /* Aire para el anillo del foco, que el desplazamiento recortaría. */
+    margin-block: -4px;
+    padding: 4px 16px 4px 4px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+  }
+  .juntos-agenda .desk-agenda__chips::-webkit-scrollbar {
+    display: none;
+  }
+  .juntos-agenda .desk-agenda__leagues {
+    flex: none;
+    margin: 0;
+    padding: 0 0 0 8px;
+    overflow: visible;
+    border-left: 1px solid var(--line);
+    mask-image: none;
   }
 }
 
-/* Escritorio: la lista hace scroll dentro del panel y el interruptor del
-   cambio automático se queda arriba (antes, sin scroll, no se llegaba a las
-   últimas fuentes). */
-@media (min-width: 1024px) {
+/* Móvil (de pie o tumbado, en el cajón): la barra «Poner en la sala» pegada al borde de
+   abajo. El panel deja de tener su margen inferior (sticky lo respetaba y por esa franja
+   asomaban las filas) y la barra se lo queda dentro. */
+@media (max-width: 767px), (orientation: landscape) and (max-height: 540px) {
+  .juntos__side > .juntos__panel:has(.juntos-live__putbar) {
+    padding-bottom: 0;
+  }
+  .juntos-live__putbar {
+    padding-bottom: 12px;
+  }
+}
+
+/* Con el dedo, los controles de la lista de la Agenda a 44 px (en la Agenda
+   solo hace falta desde 768: debajo va la del móvil; en la sala, siempre). */
+@media (pointer: coarse) {
+  .juntos-agenda .desk-tabs__tab,
+  .juntos-agenda .desk-agenda__chips .chip--button {
+    min-height: var(--tap, 44px);
+  }
+  .juntos-agenda .desk-day .icon-btn::before,
+  .juntos-agenda .desk-comp__fold.icon-btn::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+  }
+  .juntos-agenda .desk-day__label {
+    position: relative;
+  }
+  .juntos-agenda .desk-day__label::before {
+    content: '';
+    position: absolute;
+    inset: -6px 0;
+  }
+}
+
+/* Escritorio: la lista hace scroll dentro del panel; el interruptor del cambio
+   automático se queda arriba y la barra de Partidos, abajo. */
+@media (min-width: 768px) {
   .juntos-live {
+    --live-bg: var(--bg-sunk, var(--bg));
     flex: 1;
-    align-content: start;
     min-height: 0;
     padding: 2px 14px 14px;
+    overflow-x: hidden;
     overflow-y: auto;
+  }
+  .juntos-live:has(> .juntos-live__putbar) {
+    padding-bottom: 0;
   }
   .juntos-live__auto {
     position: sticky;
     top: 0;
     z-index: 1;
-    padding-block: 8px;
-    background: var(--bg-sunk, var(--bg));
+    box-shadow: 0 -2px 0 var(--live-bg);
+  }
+  .juntos-live__putbar {
+    margin-inline: -14px;
+    padding: 10px 14px 14px;
   }
 }
 

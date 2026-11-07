@@ -4,7 +4,13 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { PartyJoinResponseSchema, PartyPreviewSchema, type VodGrant } from '@ace/shared';
+import {
+  PartyJoinResponseSchema,
+  PartyListSchema,
+  PartyPreviewSchema,
+  PartyQueueResponseSchema,
+  type VodGrant,
+} from '@ace/shared';
 import { createTestApp, web } from '../../../test/helpers/index.js';
 import { AppError } from '../../core/errors.js';
 import type { ArtReply } from '../iptv/vod/art.js';
@@ -212,6 +218,139 @@ describe('rutas de «Ver juntos»', () => {
     /* Nada más de la casa: ni el estado ni los ajustes. */
     const settings = await app.inject({ method: 'GET', url: '/api/v1/settings', headers: guest });
     expect(settings.statusCode).toBe(401);
+  });
+});
+
+describe('partyQueue por HTTP: proponer y «Poner en la sala ahora» (docs/ver-juntos.md §11)', () => {
+  const OTRA = '0123456789abcdef0123456789abcdef01234567';
+  const add = (token: string, extra: Record<string, unknown> = {}) => ({
+    token,
+    action: 'add',
+    titleId: OTRA,
+    kind: 'movie',
+    artId: OTRA,
+    title: 'Oppenheimer',
+    ...extra,
+  });
+
+  it('`add` responde con el id; con `play`, el anfitrión lo pone y un invitado recibe 403', async () => {
+    const { app } = await createTestApp();
+    const host = PartyJoinResponseSchema.parse(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/party',
+          headers: web(),
+          payload: createBody,
+        })
+      ).json(),
+    );
+    const code = host.room.code;
+    const guest = { 'x-ace-origin': 'guest' };
+    const ana = PartyJoinResponseSchema.parse(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/api/v1/party/${code}/join`,
+          headers: guest,
+          payload: { name: 'Ana' },
+        })
+      ).json(),
+    );
+    const proposed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/queue`,
+      headers: guest,
+      payload: add(ana.member.token),
+    });
+    expect(proposed.statusCode).toBe(200);
+    expect(PartyQueueResponseSchema.parse(proposed.json()).itemId).toMatch(/^q_/);
+    const refused = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/queue`,
+      headers: guest,
+      payload: add(ana.member.token, { play: true }),
+    });
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().error.code).toBe('party_leader_only');
+    const put = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/queue`,
+      headers: web(),
+      payload: add(host.member.token, { play: true }),
+    });
+    expect(put.statusCode).toBe(200);
+    expect(PartyQueueResponseSchema.parse(put.json())).toEqual({
+      ok: true,
+      itemId: expect.stringMatching(/^q_/),
+    });
+    const after = PartyPreviewSchema.parse(
+      (await app.inject({ method: 'GET', url: `/api/v1/party/${code}`, headers: web() })).json(),
+    );
+    expect(after.title.title).toBe('Oppenheimer');
+    expect(after.host).toBe('Isma');
+    const vote = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${code}/queue`,
+      headers: web(),
+      payload: {
+        token: host.member.token,
+        action: 'vote',
+        itemId: PartyQueueResponseSchema.parse(proposed.json()).itemId,
+      },
+    });
+    expect(vote.json()).toEqual({ ok: true });
+  });
+});
+
+describe('partyList por HTTP (docs/ver-juntos.md §15)', () => {
+  it('lista también la sala en directo (y tras cambiar a un canal IPTV), con la respuesta validada', async () => {
+    const { app } = await createTestApp();
+    const DAZN = 'aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00';
+    const IPTV = '0123456789abcdef0123456789abcdef01234567';
+    await app.inject({ method: 'POST', url: '/api/v1/party', headers: web(), payload: createBody });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/party',
+      headers: web(),
+      payload: {
+        name: 'Leo',
+        live: {
+          hash: DAZN,
+          channel: 'DAZN 1 · 1080p',
+          source: 'engine',
+          matchId: 'fltv-1',
+          match: 'Málaga – Racing',
+        },
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const live = PartyJoinResponseSchema.parse(created.json());
+    const switched = await app.inject({
+      method: 'POST',
+      url: `/api/v1/party/${live.room.code}/control`,
+      headers: web(),
+      payload: {
+        token: live.member.token,
+        action: 'live',
+        live: {
+          hash: IPTV,
+          channel: 'M+ LaLiga · FHD',
+          source: 'iptv',
+          matchId: 'fltv-1',
+          match: 'Málaga – Racing',
+        },
+      },
+    });
+    expect(switched.statusCode).toBe(200);
+    const list = await app.inject({ method: 'GET', url: '/api/v1/party', headers: web() });
+    expect(list.statusCode).toBe(200);
+    const rooms = PartyListSchema.parse(list.json()).rooms;
+    expect(rooms.map((room) => room.title.kind).sort()).toEqual(['live', 'movie']);
+    expect(rooms.find((room) => room.code === live.room.code)?.title).toMatchObject({
+      title: 'Málaga – Racing',
+      subtitle: 'M+ LaLiga · FHD',
+    });
   });
 });
 

@@ -1,0 +1,220 @@
+/* La portada de «Ver juntos» (docs/ver-juntos.md §15): «Volver a tu sala»,
+   las salas abiertas (en directo y de pelis y series) y las dos maneras de
+   empezar una. Sale de juntos.css (`.juntos-open*`), que es de la sala. */
+
+.juntos-home {
+  display: grid;
+  gap: 20px;
+  padding-bottom: 32px;
+}
+.juntos-home__back,
+.juntos-open,
+.juntos-start {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 0 16px;
+}
+.juntos-home__back {
+  display: flex;
+}
+
+/* --- Salas abiertas --- */
+.juntos-open {
+  display: grid;
+  gap: 12px;
+}
+.juntos-open__group {
+  display: grid;
+  gap: 8px;
+}
+.juntos-open__group-title {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13, 13px);
+  font-weight: 750;
+}
+.juntos-open__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.juntos-open__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.juntos-open__row--live {
+  border-color: color-mix(in oklab, var(--live) 35%, var(--line-soft));
+}
+/* El cartel de la peli (o, en directo, un televisor en su sitio). */
+.cine-art.juntos-open__poster,
+.juntos-open__mark {
+  flex: none;
+  width: 44px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.cine-art.juntos-open__poster {
+  display: block;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+}
+.juntos-open__mark {
+  display: grid;
+  place-items: center;
+  height: 44px;
+  color: var(--text-2);
+}
+.juntos-open__text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  /* Si no caben los botones al lado, bajan (flex-wrap): el texto nunca menos de esto. */
+  flex-basis: 180px;
+}
+.juntos-open__badge {
+  display: flex;
+}
+.juntos-open__title {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-15, 15px);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.juntos-open__sub {
+  color: var(--text-2);
+  font-weight: 600;
+}
+.juntos-open__channel {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--fs-13, 13px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.juntos-open__meta {
+  color: var(--text-3);
+  font-size: var(--fs-13, 13px);
+}
+.juntos-open__actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  margin-left: auto;
+}
+.juntos-open__actions .btn {
+  min-height: 44px;
+}
+.btn.juntos-open__close--armed {
+  background: color-mix(in oklab, var(--fail) 14%, var(--surface-2));
+  box-shadow: inset 0 0 0 1.5px var(--fail);
+}
+.juntos-open__failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.juntos-open__failed p {
+  margin: 0;
+  color: var(--text-2);
+}
+
+/* --- Empezar una sala: una peli o serie, o un partido --- */
+.juntos-start {
+  display: grid;
+  gap: 8px;
+}
+.juntos-start__lead {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-17, 17px);
+  font-weight: 800;
+}
+.juntos-start__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+}
+.juntos-start__card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 72px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.juntos-start__card:hover {
+  border-color: var(--line-strong);
+}
+.juntos-start__card:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 2px;
+}
+.juntos-start__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+.juntos-start__text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.juntos-start__title {
+  font-size: var(--fs-15, 15px);
+  font-weight: 750;
+}
+.juntos-start__hint {
+  color: var(--text-2);
+  font-size: var(--fs-13, 13px);
+  line-height: 1.35;
+}
+.juntos-start__chev {
+  flex: none;
+  color: var(--text-3);
+}
+
+@media (max-width: 767.98px) {
+  .juntos-home__back,
+  .juntos-open,
+  .juntos-start {
+    padding: 0 var(--gutter, 16px);
+  }
+  /* En el móvil, los botones de una sala debajo, a lo ancho. */
+  .juntos-open__actions {
+    width: 100%;
+  }
+  .juntos-open__actions .btn {
+    flex: 1;
+  }
+}

@@ -7,13 +7,16 @@
    | (nada) · agenda            | { vista: 'agenda' }                         |
    | biblioteca                 | { vista: 'biblioteca' }                     |
    | cine · cine/<40 hex>       | { vista: 'cine', id } (portada o ficha)     |
+   |   … &sala=<código>         | { …, sala } eligiendo para una sala         |
    | guia                       | { vista: 'guia' } (Guía TV, hija de Canales)|
    | buscar                     | { vista: 'buscar' }                         |
+   |   … &sala=<código>         | { …, sala } buscando para una sala          |
    | ajustes · ajustes/<sección>| { vista: 'ajustes', seccion }               |
    | partido/<id>               | { vista: 'partido', id, canal: null }       |
    | partido/canal/<hash>       | { vista: 'partido', id: null, canal: hash } |
    | sala/<40 hex>              | { vista: 'sala', id } (película o episodio) |
    | juntos · juntos/<código>   | { vista: 'juntos', code } (Ver juntos)      |
+   |   … &panel=siguiente&nuevo=<id> | { …, tab, nuevo } (Siguiente, resaltado)|
    | sistema                    | { vista: 'sistema' } (solo con el flag)     |
 
    Lo que no se entiende acaba en la agenda.
@@ -25,6 +28,12 @@
      `?vista=ajustes` no arrastra la búsqueda de Canales.
    - Globales (`demo=1`, `flag=`… todo lo que no sea de una vista): se
      conservan siempre.
+   - De la ruta (ROUTE_PARAMS: `sala`, `panel`, `nuevo`): son parte de la
+     ruta, no se recuerdan al salir. `sala` (Pelis y series eligiendo para una
+     sala de «Ver juntos», docs/ver-juntos.md §11) se hereda dentro de Pelis y
+     series y de la búsqueda si la ruta nueva no lo dice (`sala` sin poner): así
+     sigue al ir a fichas, categorías y a Buscar (y de Buscar a la ficha);
+     `sala: null` lo quita.
    Funciones puras: se prueban solas. */
 
 import { isSystemPageEnabled } from '../lib/flags.ts';
@@ -49,8 +58,23 @@ export type Route =
   | { vista: 'guia' }
   /* Películas y series (docs/vod.md §12.2): `id` null es la portada; si no,
      la ficha de una película o una serie (id sellado de 40 hex). */
-  | { vista: 'cine'; id: string | null }
-  | { vista: 'buscar' }
+  | {
+      vista: 'cine';
+      id: string | null;
+      /**
+       * Eligiendo para una sala de «Ver juntos» (su código; docs/ver-juntos.md §11). Sin poner,
+       * se hereda de la ruta actual dentro de Pelis y series; null, fuera de la sala.
+       */
+      sala?: string | null;
+    }
+  | {
+      vista: 'buscar';
+      /**
+       * Buscando para una sala (se viene de Pelis y series eligiendo para ella): la ficha que se
+       * abra desde aquí sigue en la sala. Se hereda como en `cine`.
+       */
+      sala?: string | null;
+    }
   | { vista: 'ajustes'; seccion: string | null }
   | { vista: 'partido'; id: string | null; canal: string | null }
   /* El escenario de una película o un episodio (docs/vod.md §12.2 y §12.8):
@@ -58,7 +82,14 @@ export type Route =
   | { vista: 'sala'; id: string }
   /* «Ver juntos» (docs/ver-juntos.md §7): una sala por su código de 16
      caracteres; sin código, la portada de «Ver juntos» (menú lateral). */
-  | { vista: 'juntos'; code: string | null }
+  | {
+      vista: 'juntos';
+      code: string | null;
+      /** La pestaña con la que se abre la sala (al volver de proponer, Siguiente). */
+      tab?: JuntosTab | null;
+      /** Lo que se acaba de proponer (id de la lista), resaltado un momento en Siguiente. */
+      nuevo?: string | null;
+    }
   | { vista: 'sistema' };
 
 /**
@@ -188,7 +219,16 @@ export function sideParent(vista: Vista): SideVista | null {
   return vista;
 }
 
+/** Las pestañas de una sala que se pueden pedir por la URL (`panel=`). */
+export const JUNTOS_TABS = ['chat', 'siguiente', 'gente', 'fuentes', 'partidos'] as const;
+export type JuntosTab = (typeof JUNTOS_TABS)[number];
+
 export const DEFAULT_ROUTE: Route = { vista: 'agenda' };
+
+/** Parámetros que son de la ruta (se leen en `parseRoute` y se escriben en `searchFor`). */
+export const ROUTE_PARAMS = ['sala', 'panel', 'nuevo'] as const;
+/** Id de algo de la lista de la sala (`PartyQueueItemIdSchema`). */
+const QUEUE_ITEM_RE = /^q_[A-Za-z0-9_-]{8}$/;
 
 const SEGMENT_RE = /^[A-Za-z0-9._~:-]{1,120}$/;
 const HASH_RE = /^[a-fA-F0-9]{40}$/;
@@ -250,11 +290,41 @@ export function parseVista(
 }
 
 export function parseRoute(search: string, allowSystem?: boolean): Route {
-  let vista: string | null = null;
+  let params = new URLSearchParams();
   try {
-    vista = new URLSearchParams(search).get('vista');
+    params = new URLSearchParams(search);
   } catch {}
-  return parseVista(vista, allowSystem);
+  return withRouteParams(parseVista(params.get('vista'), allowSystem), params);
+}
+
+/** Añade a `route` lo que dicen los parámetros de la ruta (ROUTE_PARAMS), si valen. */
+function withRouteParams(route: Route, params: URLSearchParams): Route {
+  if (route.vista === 'cine' || route.vista === 'buscar') {
+    const sala = params.get('sala') ?? '';
+    return { ...route, sala: PARTY_CODE_RE.test(sala) ? sala : null };
+  }
+  if (route.vista === 'juntos' && route.code) {
+    const panel = params.get('panel') ?? '';
+    const nuevo = params.get('nuevo') ?? '';
+    const tab = (JUNTOS_TABS as readonly string[]).includes(panel) ? (panel as JuntosTab) : null;
+    return { ...route, tab, nuevo: QUEUE_ITEM_RE.test(nuevo) ? nuevo : null };
+  }
+  return route;
+}
+
+/** Las vistas que eligen para una sala (`sala=`): Pelis y series y la búsqueda. */
+function pickingSala(route: Route): string | null {
+  return route.vista === 'cine' || route.vista === 'buscar' ? (route.sala ?? null) : null;
+}
+
+/**
+ * La ruta a la que se va de verdad: dentro de Pelis y series y de la búsqueda, una ruta sin `sala`
+ * (la ficha de un cartel o de un resultado, la portada tras una categoría, Buscar) sigue en la
+ * sala de la actual (§11).
+ */
+export function resolveRoute(next: Route, current: Route): Route {
+  if ((next.vista !== 'cine' && next.vista !== 'buscar') || next.sala !== undefined) return next;
+  return { ...next, sala: pickingSala(current) };
 }
 
 export function formatVista(route: Route): string {
@@ -322,10 +392,12 @@ export function viewParams(vista: Vista, search: string): string {
  * parámetros; si cambia, se quitan los de todas las vistas y se ponen
  * `restore`, los que la vista nueva tenía al dejarla (router.tsx).
  */
-export function searchFor(route: Route, currentSearch = '', restore = ''): string {
+export function searchFor(target: Route, currentSearch = '', restore = ''): string {
   const params = new URLSearchParams(currentSearch);
   const fromRoute = parseVista(params.get('vista'), true);
   const from = fromRoute.vista;
+  const route = resolveRoute(target, withRouteParams(fromRoute, params));
+  for (const name of ROUTE_PARAMS) params.delete(name);
   if (from !== route.vista) {
     for (const name of [...params.keys()]) if (ALL_VISTA_PARAMS.has(name)) params.delete(name);
   } else if (formatVista(fromRoute) !== formatVista(route)) {
@@ -335,12 +407,32 @@ export function searchFor(route: Route, currentSearch = '', restore = ''): strin
   if (from !== route.vista)
     for (const [name, value] of new URLSearchParams(restore))
       if (VISTA_PARAMS[route.vista].includes(name)) params.append(name, value);
+  const sala = pickingSala(route);
+  if (sala) params.set('sala', sala);
+  if (route.vista === 'juntos' && route.code) {
+    if (route.tab) params.set('panel', route.tab);
+    if (route.nuevo) params.set('nuevo', route.nuevo);
+  }
   // `/` sin escapar se lee mejor en la barra de direcciones y es válido en una query.
   return `?${params.toString().replace(/%2F/gi, '/').replace(/%2C/gi, ',')}`;
 }
 
+/**
+ * La misma ruta: la misma vista y, además, los parámetros de la ruta (la sala de Pelis y series,
+ * la pestaña y lo nuevo de una sala). Un `sala` sin poner no cuenta: se hereda (`resolveRoute`).
+ */
 export function sameRoute(a: Route, b: Route): boolean {
-  return formatVista(a) === formatVista(b);
+  if (formatVista(a) !== formatVista(b)) return false;
+  if (
+    (a.vista === 'cine' && b.vista === 'cine') ||
+    (a.vista === 'buscar' && b.vista === 'buscar')
+  ) {
+    return a.sala === undefined || b.sala === undefined || (a.sala ?? null) === (b.sala ?? null);
+  }
+  if (a.vista === 'juntos' && b.vista === 'juntos') {
+    return (a.tab ?? null) === (b.tab ?? null) && (a.nuevo ?? null) === (b.nuevo ?? null);
+  }
+  return true;
 }
 
 /** Posición para decidir el sentido de la transición (adelante / atrás). */
