@@ -1,0 +1,1 @@
+import{F as e,b as t}from"./mando-DVLI8i-H.js";function n(n,r){t(n)&&r?.(e(n.id.toLowerCase()))}var r=null;function i(){if(r!==null)return r;let e=`video/mp4; codecs="hvc1.1.6.L120.90"`;try{if(globalThis.MediaSource?.isTypeSupported?.(e))return r=!0;r=!!(globalThis.document?.createElement(`video`))?.canPlayType?.(e)}catch{r=!1}return r}export{n,i as t};
