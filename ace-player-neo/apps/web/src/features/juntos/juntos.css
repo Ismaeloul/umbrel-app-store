@@ -966,6 +966,10 @@
   background: var(--surface);
 }
 .juntos-chat__list {
+  /* Contiene los `.sr-only` (position: absolute) de cada burbuja. Sin esto se salían de
+     la lista con scroll y alargaban la página: con un chat largo quedaba una franja negra
+     abajo y, al escribir, la página bajaba sola (Isma, 11-11-2026). */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1527,6 +1531,7 @@
   .juntos-chat {
     flex: 1;
     height: auto;
+    min-height: 0;
     border: 0;
     border-radius: 0;
     background: transparent;

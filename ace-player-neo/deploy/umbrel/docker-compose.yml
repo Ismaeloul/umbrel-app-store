@@ -66,7 +66,7 @@ services:
       # comparte la red de Docker y sin el no puede pedir reinicios. En la 0.7.0
       # un token vacio ya no abre la puerta: se rechaza todo.
       ENGINE_CONTROL_TOKEN: "${APP_SEED}"
-    command: node /releases/1.1.5/engine-control.js
+    command: node /releases/1.1.6/engine-control.js
     volumes:
       - ${APP_DATA_DIR}/releases:/releases:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -160,7 +160,7 @@ services:
     # que espera a que storage este sano, no arrancaba nunca.
     # intel-media-driver (VAAPI iHD) va aparte y con su propio plazo: si falta
     # (otra arquitectura, sin red) no se pierde ffmpeg, solo la grafica.
-    command: sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; timeout 25 apk add intel-media-driver >/dev/null 2>&1 || echo 'sin intel-media-driver, video por x264'; exec node /releases/1.1.5/server.js"
+    command: sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; timeout 25 apk add intel-media-driver >/dev/null 2>&1 || echo 'sin intel-media-driver, video por x264'; exec node /releases/1.1.6/server.js"
     volumes:
       - ${APP_DATA_DIR}/releases:/releases:ro
       - ${APP_DATA_DIR}/data:/data
@@ -200,8 +200,8 @@ services:
     # restaure.
     command: >
       sh -c "rm -rf /www && mkdir -p /www &&
-             cp -r /releases/1.1.5/web/. /www/ &&
-             cp /releases/1.1.5/nginx.conf /etc/nginx/conf.d/default.conf &&
+             cp -r /releases/1.1.6/web/. /www/ &&
+             cp /releases/1.1.6/nginx.conf /etc/nginx/conf.d/default.conf &&
              exec nginx -g 'daemon off;'"
 
   # «Ver juntos» desde fuera de casa (docs/ver-juntos.md §9): Caddy con su
@@ -224,12 +224,12 @@ services:
       PARTY_DOMAIN: "sala.ismaeloul.es"
       NATIVE_SITE: "on"
       NATIVE_DOMAIN: "tv.ismaeloul.es"
-      ACE_WEB_ROOT: "/releases/1.1.5/web"
+      ACE_WEB_ROOT: "/releases/1.1.6/web"
       XDG_CONFIG_HOME: "/data/config"
     depends_on:
       storage:
         condition: service_healthy
-    command: caddy run --config /releases/1.1.5/Caddyfile --adapter caddyfile
+    command: caddy run --config /releases/1.1.6/Caddyfile --adapter caddyfile
     ports:
       - "8443:8443"
     volumes:

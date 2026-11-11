@@ -96,6 +96,8 @@ const SIZES = [
   // El portátil de Isma (auditoría web 0.9.0).
   { width: 1536, height: 864, touch: false },
   { width: 1920, height: 1080, touch: false },
+  // La ventana de Chrome de Isma en el monitor grande (captura del 11-11-2026).
+  { width: 2000, height: 970, touch: false },
   { width: 2560, height: 1440, touch: false },
 ].filter((size) => !ONLY_SIZES || ONLY_SIZES.includes(`${size.width}x${size.height}`));
 
@@ -380,6 +382,38 @@ async function openSala(page) {
 /** ¿La sala del móvil en horizontal (el chat en su cajón, sin pestañas a la vista)? */
 async function phoneDrawer(page) {
   return page.locator('.juntos-drawer-btn').isVisible();
+}
+
+/** La sala de casa no hace scroll de página (Isma, 11-11-2026: en escritorio sobraba
+    una franja negra abajo y, al escribir en el chat, la página bajaba sola). Mide el
+    sobrante, escribe en el chat y mira que la página siga arriba. */
+async function roomPageStill(page) {
+  const problems = [];
+  const extra = await page.evaluate(
+    () => document.scrollingElement.scrollHeight - window.innerHeight,
+  );
+  if (extra > 1) problems.push(`la página de la sala sobra ${extra} px de alto (hay scroll)`);
+  /* Un chat largo (la captura de Isma tenía decenas de mensajes): copias de la última
+     burbuja, solo para medir. */
+  const longExtra = await page.evaluate(() => {
+    const list = document.querySelector('.juntos-chat__list');
+    const last = list?.lastElementChild;
+    if (!list || !last) return 0;
+    for (let i = 0; i < 40; i += 1) list.append(last.cloneNode(true));
+    return document.scrollingElement.scrollHeight - window.innerHeight;
+  });
+  if (longExtra > 1)
+    problems.push(`con un chat largo la página de la sala sobra ${longExtra} px de alto`);
+  const input = page.locator('.juntos-chat input, .juntos-chat textarea').first();
+  if (await input.isVisible()) {
+    await input.click();
+    await page.keyboard.type('hola que tal', { delay: 20 });
+    await page.waitForTimeout(400);
+    const y = await page.evaluate(() => window.scrollY);
+    if (y > 0) problems.push(`al escribir en el chat la página baja ${y} px`);
+    await input.fill('');
+  }
+  return problems;
 }
 
 /** Abre una pestaña de la sala en directo (Fuentes o Partidos) y espera a su contenido. */
@@ -706,6 +740,7 @@ const VIEWS = [
     // En vivo, el latido y el vídeo irían al backend, que no conoce la sala.
     routes: PARTY_ROUTES,
     prepare: partyReady,
+    checks: async (page) => ((await phoneDrawer(page)) ? [] : roomPageStill(page)),
   },
   // La sala en directo desde casa (§14), con Fuentes abierta; los chequeos
   // pasan luego a Partidos (captura `-partidos`). En la demo, las fuentes las
@@ -803,6 +838,7 @@ const VIEWS = [
     guest: true,
     storage: { [credentialKey(PARTY_CODE)]: JSON.stringify(PARTY_GUEST) },
     prepare: partyReady,
+    checks: async (page) => ((await phoneDrawer(page)) ? [] : roomPageStill(page)),
   },
 ].filter((view) => !ONLY_VIEWS || ONLY_VIEWS.includes(view.name));
 
