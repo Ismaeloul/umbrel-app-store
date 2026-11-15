@@ -3,7 +3,7 @@ id: ismaeloul-trajet
 category: automation
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-trajet/icon.svg"
 name: Trajet
-version: "0.4.2"
+version: "0.4.3"
 tagline: Tus trayectos de Île-de-France en tiempo real, en el iPhone
 description: >-
   Trajet muestra los próximos pasos de tus trayectos habituales en transporte
@@ -32,6 +32,15 @@ description: >-
   antes de guardarla y la guarda cifrada.
 
 releaseNotes: >-
+  Tus paradas, sin rutas. La app del iPhone pasa a ser una sola pantalla con
+  tus paradas. Para un tren eliges de dónde sales y a dónde vas, y ves la vía,
+  la vía probable y a qué hora llegas. Para un bus eliges la parada y ves si
+  llega tarde; con «Paradas cerca de ti» salen las que tienes al lado. Tus
+  rutas guardadas se copian una vez como paradas, sin borrar nada, y el
+  servidor aprende de tus paradas igual que aprendía de las rutas.
+
+  Lo de antes sigue igual:
+
   Paradas sueltas. Ahora puedes añadir al tablero una parada y una línea —el
   bus de la esquina, el tranvía del trabajo— sin que sea parte de ninguna
   ruta, y ver sus próximos pasos en tiempo real junto a tus trenes. Se añaden
