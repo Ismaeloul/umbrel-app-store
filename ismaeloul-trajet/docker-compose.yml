@@ -1,9 +1,9 @@
 version: "3.7"
 
-# Trajet 0.4.1: el servidor de la app de iPhone y su panel.
+# Trajet 0.4.2: el servidor de la app de iPhone y su panel.
 #
 # La imagen es publica en GHCR: la construye y la publica el CI del repo
-# trajet-server al empujar el tag v0.4.1 (linux/amd64). umbreld hace un
+# trajet-server al empujar el tag v0.4.2 (linux/amd64). umbreld hace un
 # `docker pull` de cada image: antes de arrancar, y esta se baja sin login.
 #
 # Este fichero es PUBLICO: ni IPs, ni claves. Las direcciones que van en el QR
@@ -25,7 +25,7 @@ services:
       PROXY_AUTH_WHITELIST: "/api/v1/*"
 
   web:
-    image: ghcr.io/ismaeloul/trajet-server:0.4.1
+    image: ghcr.io/ismaeloul/trajet-server:0.4.2
     container_name: ismaeloul-trajet_web_1
     restart: unless-stopped
     # tini como PID 1: reenvia las senales a uvicorn y recoge huerfanos.
