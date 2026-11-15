@@ -2,6 +2,13 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 1.1.7 (2026-11-15)
+
+Version 1.1.7. Ver juntos en el ordenador: modo teatro. Un boton junto a
+Invitar quita el menu lateral y la cabecera y deja solo el video, lo mas grande
+que quepa, el chat y la fila de abajo, en pelis y en partidos. Esc o el mismo
+boton lo quitan, y el navegador se acuerda de como lo dejaste.
+
 ## 1.1.6 (2026-11-11)
 
 Version 1.1.6. Ver juntos en el ordenador: con un chat largo la sala ya

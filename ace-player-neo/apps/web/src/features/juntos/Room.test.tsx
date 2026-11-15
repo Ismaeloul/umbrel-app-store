@@ -735,3 +735,56 @@ describe('la sala: cabecera, pestañas y chat', () => {
     expect(screen.getByRole('button', { name: JUNTOS_TEXT.openChat })).toBe(document.activeElement);
   });
 });
+
+describe('modo teatro (escritorio, en casa)', () => {
+  function mountHouse() {
+    saveCredential(CODE, credential(HOST));
+    rememberRoom(CODE);
+    const view = render(
+      <Room
+        code={CODE}
+        credential={credential(HOST)}
+        onForbidden={() => undefined}
+        onLeft={vi.fn()}
+        exitAction={null}
+        header={<div className="view-head">Ver juntos</div>}
+      />,
+    );
+    act(() => FakeSource.last?.emit('party.snapshot', { room: ROOM, chat: [], serverNow: 1 }));
+    return view;
+  }
+  afterEach(() => localStorage.removeItem('ace.juntos.teatro'));
+
+  it('el botón lo enciende (y lo recuerda) y Esc lo apaga', () => {
+    setViewport(1440);
+    net = mockFetch();
+    const view = mountHouse();
+    fireEvent.click(screen.getByRole('button', { name: JUNTOS_TEXT.theater }));
+    expect(document.documentElement.hasAttribute('data-teatro')).toBe(true);
+    expect(document.querySelector('.juntos--teatro')).toBeTruthy();
+    expect(localStorage.getItem('ace.juntos.teatro')).toBe('1');
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(document.documentElement.hasAttribute('data-teatro')).toBe(false);
+    expect(screen.getByRole('button', { name: JUNTOS_TEXT.theater })).toBeTruthy();
+    expect(localStorage.getItem('ace.juntos.teatro')).toBeNull();
+    view.unmount();
+  });
+
+  it('recordado, vuelve encendido; al salir de la sala se quita de la página', () => {
+    setViewport(1440);
+    net = mockFetch();
+    localStorage.setItem('ace.juntos.teatro', '1');
+    const view = mountHouse();
+    expect(document.documentElement.hasAttribute('data-teatro')).toBe(true);
+    view.unmount();
+    expect(document.documentElement.hasAttribute('data-teatro')).toBe(false);
+  });
+
+  it('en el móvil no hay botón', () => {
+    setViewport(390);
+    net = mockFetch();
+    mountHouse();
+    expect(screen.queryByRole('button', { name: JUNTOS_TEXT.theater })).toBeNull();
+    expect(document.documentElement.hasAttribute('data-teatro')).toBe(false);
+  });
+});

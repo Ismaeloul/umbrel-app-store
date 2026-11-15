@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "1.1.6"
+version: "1.1.7"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,8 +13,10 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Version 1.1.6. Ver juntos en el ordenador: con un chat largo la sala ya
-  no deja una franja negra abajo ni se desplaza sola al escribir.
+  Version 1.1.7. Ver juntos en el ordenador: modo teatro. Un boton junto a
+  Invitar quita el menu lateral y la cabecera y deja solo el video, lo mas grande
+  que quepa, el chat y la fila de abajo, en pelis y en partidos. Esc o el mismo
+  boton lo quitan, y el navegador se acuerda de como lo dejaste.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []

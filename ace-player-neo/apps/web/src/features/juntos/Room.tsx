@@ -208,6 +208,35 @@ export function Room({
   const wide = useMediaQuery(MEDIA.tablet);
   const phoneLandscape = useMediaQuery(MEDIA.phoneLandscape);
   const desk = wide && !phoneLandscape;
+  /* Modo teatro (Isma, 15-11-2026): en casa y en el ordenador, fuera el menú lateral y la
+     cabecera; quedan el vídeo, el chat y la fila de abajo. Se acuerda entre visitas. */
+  const [theaterOn, setTheaterOn] = useState(readTheater);
+  /* Desde 1024 (vídeo y chat lado a lado, a todo el alto); en la tableta en vertical, no. */
+  const roomDesk = useMediaQuery(MEDIA.desktop);
+  /* Por debajo de 1280 (con el menú), «Invitar» va solo con su icono: si no, al título le
+     quedaban 89 px («Dune: Pa…» a 1024). */
+  const roomWide = useMediaQuery(MEDIA.wide);
+  const theater = theaterOn && desk && roomDesk && !!header;
+  const toggleTheater = () => {
+    const next = !theaterOn;
+    setTheaterOn(next);
+    writeTheater(next);
+  };
+  useEffect(() => {
+    if (!theater) return;
+    const root = document.documentElement;
+    root.setAttribute('data-teatro', '');
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || document.fullscreenElement) return;
+      setTheaterOn(false);
+      writeTheater(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      root.removeAttribute('data-teatro');
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [theater]);
   /* El cajón del chat del móvil en horizontal: lo abre el bocadillo (que se va mientras está
      abierto) y lo cierra su X; el foco va de uno a otro para no perderse. */
   const [drawer, setDrawer] = useState(false);
@@ -527,8 +556,18 @@ export function Room({
   }
   const headerActions = (
     <>
+      {desk && roomDesk && header ? (
+        <IconButton
+          variant="quiet"
+          icon="panel"
+          label={theater ? JUNTOS_TEXT.theaterOff : JUNTOS_TEXT.theater}
+          title={theater ? `${JUNTOS_TEXT.theaterOff} (Esc)` : JUNTOS_TEXT.theater}
+          pressed={theater}
+          onClick={toggleTheater}
+        />
+      ) : null}
       {canInvite ? (
-        desk ? (
+        desk && (roomWide || theater || !header) ? (
           <Button variant="primary" icon="link" onClick={() => void copyLink()}>
             {JUNTOS_TEXT.invite}
           </Button>
@@ -584,6 +623,7 @@ export function Room({
           'juntos',
           !!header && 'juntos--house',
           fullscreen === 'page' && 'juntos--page-fs',
+          theater && 'juntos--teatro',
         )}
         data-live={live ? 'true' : 'false'}
         data-lobby={lobby && !live ? 'true' : 'false'}
@@ -727,4 +767,22 @@ export function Room({
       </div>
     </PartyArt>
   );
+}
+
+/* El modo teatro se recuerda en este navegador (si el almacenamiento falla, empieza apagado). */
+const THEATER_KEY = 'ace.juntos.teatro';
+function readTheater(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(THEATER_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function writeTheater(on: boolean) {
+  try {
+    if (on) globalThis.localStorage?.setItem(THEATER_KEY, '1');
+    else globalThis.localStorage?.removeItem(THEATER_KEY);
+  } catch {
+    /* sin almacenamiento: solo dura esta visita */
+  }
 }
