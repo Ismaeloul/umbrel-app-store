@@ -2138,3 +2138,27 @@
     margin: 2px 6px 4px;
   }
 }
+
+/* --- Modo teatro (Room.tsx, Isma 15-11-2026): en casa y desde 1024, fuera el menú
+   lateral y la cabecera de la sección. Quedan el vídeo, el chat y la fila de abajo
+   (título, Invitar, «⋯»). Lo pone `<html data-teatro>` mientras la sala está abierta. --- */
+@media (min-width: 1024px) {
+  html[data-teatro] .app {
+    --side-w: 0px;
+  }
+  html[data-teatro] .sidenav,
+  html[data-teatro] .juntos--teatro > .view-head {
+    display: none;
+  }
+  .juntos--house.juntos--teatro .juntos__body {
+    height: calc(100dvh - var(--safe-top));
+  }
+  /* El vídeo, lo más grande que quepa con la fila del título debajo (sin scroll en la
+     columna): en una ventana ancha y baja manda el alto y el vídeo se centra. */
+  .juntos--teatro .juntos__stage {
+    --teatro-h: calc(100dvh - var(--safe-top) - 128px);
+    justify-self: center;
+    width: min(100%, calc(var(--teatro-h) * 16 / 9));
+    max-height: var(--teatro-h);
+  }
+}

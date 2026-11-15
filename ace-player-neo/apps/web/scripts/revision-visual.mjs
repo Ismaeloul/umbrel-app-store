@@ -389,6 +389,9 @@ async function phoneDrawer(page) {
     sobrante, escribe en el chat y mira que la página siga arriba. */
 async function roomPageStill(page) {
   const problems = [];
+  /* En la tableta en vertical (768-1023) la sala va apilada y la página sí se desplaza. */
+  const width = await page.evaluate(() => innerWidth);
+  if (width >= 768 && width < 1024) return problems;
   const extra = await page.evaluate(
     () => document.scrollingElement.scrollHeight - window.innerHeight,
   );
@@ -741,6 +744,43 @@ const VIEWS = [
     routes: PARTY_ROUTES,
     prepare: partyReady,
     checks: async (page) => ((await phoneDrawer(page)) ? [] : roomPageStill(page)),
+  },
+  // La misma sala en modo teatro (Room.tsx): en escritorio, sin el menú lateral ni la
+  // cabecera; la sala ocupa todo el alto y la página no hace scroll.
+  {
+    name: 'juntos-teatro',
+    search: `?vista=juntos/${PARTY_CODE}`,
+    storage: {
+      [credentialKey(PARTY_CODE)]: JSON.stringify(PARTY_HOST),
+      'ace.juntos.teatro': '1',
+    },
+    routes: PARTY_ROUTES,
+    prepare: partyReady,
+    checks: async (page) => {
+      if (await phoneDrawer(page)) return [];
+      const problems = await page.evaluate(() => {
+        const out = [];
+        if (innerWidth < 1024) return out;
+        const nav = document.querySelector('.sidenav');
+        if (nav && nav.getBoundingClientRect().width > 0) out.push('teatro: se ve el menú lateral');
+        if (document.querySelector('.juntos--teatro > .view-head')?.getBoundingClientRect().height)
+          out.push('teatro: se ve la cabecera');
+        const body = document.querySelector('.juntos__body')?.getBoundingClientRect();
+        if (body && Math.abs(body.bottom - innerHeight) > 2)
+          out.push(
+            `teatro: la sala acaba en ${Math.round(body.bottom)} y la ventana en ${innerHeight}`,
+          );
+        const main = document.querySelector('.juntos__main');
+        if (main && main.scrollHeight > main.clientHeight + 1)
+          out.push(
+            `teatro: la columna del vídeo hace scroll (${main.scrollHeight} > ${main.clientHeight})`,
+          );
+        if (body && body.left > 2)
+          out.push(`teatro: la sala empieza en x=${Math.round(body.left)}`);
+        return out;
+      });
+      return [...problems, ...(await roomPageStill(page))];
+    },
   },
   // La sala en directo desde casa (§14), con Fuentes abierta; los chequeos
   // pasan luego a Partidos (captura `-partidos`). En la demo, las fuentes las

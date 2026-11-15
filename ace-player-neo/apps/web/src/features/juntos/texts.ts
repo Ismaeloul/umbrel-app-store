@@ -111,6 +111,9 @@ export const JUNTOS_TEXT = {
   tabNext: 'Siguiente',
   tabPeople: 'Gente',
   invite: 'Invitar',
+  /** Modo teatro (escritorio): sin el menú lateral ni la cabecera, solo el vídeo y el chat. */
+  theater: 'Modo teatro',
+  theaterOff: 'Salir del modo teatro',
   /** «Sala de Isma · 2 de 3»: los que están conectados de los que hay. */
   roomOf: (name: string, online: number, total: number) =>
     `Sala de ${name} · ${online} de ${total}`,
