@@ -1,13 +1,13 @@
 version: "3.7"
 
-# Armario 0.1.2: armario virtual con análisis de prendas por IA.
+# Armario 0.2.0: armario virtual con análisis de prendas por IA.
 #
 # La imagen la construye y la publica en GHCR el CI del repo armario-virtual (público)
-# al empujar el tag v0.1.2 (linux/amd64). umbreld hace un `docker pull` antes
+# al empujar el tag v0.2.0 (linux/amd64). umbreld hace un `docker pull` antes
 # de arrancar, así que la imagen tiene que poder bajarse sin login.
 #
 # Este fichero es PÚBLICO: ni IPs ni claves. La API key de Claude se pega en
-# Ajustes y la sesión de Codex se inicia desde la terminal (ver la descripción).
+# Ajustes y la sesión de Codex se inicia también desde Ajustes.
 
 services:
   app_proxy:
@@ -18,7 +18,7 @@ services:
       PROXY_AUTH_ADD: "true"
 
   web:
-    image: ghcr.io/ismaeloul/armario:0.1.2
+    image: ghcr.io/ismaeloul/armario:0.2.0
     container_name: ismaeloul-armario_web_1
     restart: unless-stopped
     init: true
