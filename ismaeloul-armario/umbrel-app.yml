@@ -3,7 +3,7 @@ id: ismaeloul-armario
 category: files
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-armario/icon.svg"
 name: Armario
-version: "0.1.1"
+version: "0.1.2"
 tagline: Tu armario virtual, con las prendas catalogadas por IA
 description: >-
   Armario es un armario virtual personal. Haces una foto a cada prenda y la IA
@@ -28,8 +28,11 @@ description: >-
   El outfit diario según el tiempo llegará en una versión posterior.
 
 releaseNotes: >-
-  Primera versión: añadir prendas con análisis por IA, catálogo con filtros,
-  ficha de prenda, lavadora y ajustes.
+  Girar fotos. Un botón gira la foto 90° antes de analizarla, en el borrador y
+  en la ficha de la prenda, para corregir una foto que salió tumbada sin tener
+  que volver a subirla.
+
+  Actualizar no borra nada: tus prendas y la sesión de Codex se conservan.
 
 developer: Ismaeloul
 website: https://github.com/Ismaeloul/umbrel-app-store
