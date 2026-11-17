@@ -1,0 +1,45 @@
+manifestVersion: 1
+id: ismaeloul-armario
+category: files
+icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-armario/icon.svg"
+name: Armario
+version: "0.1.0"
+tagline: Tu armario virtual, con las prendas catalogadas por IA
+description: >-
+  Armario es un armario virtual personal. Haces una foto a cada prenda y la IA
+  rellena por ti el tipo, los colores, el estampado, el estilo y la temporada;
+  tú revisas el borrador y lo guardas.
+
+  El catálogo se filtra por temporada y por categoría, y cada prenda tiene su
+  ficha con las fotos de delante y detrás, si es favorita, cuántas veces te la
+  has puesto y si está en la lavadora.
+
+  La IA principal es Codex, con tu suscripción de ChatGPT; si falla, se usa
+  Claude con tu API key de Anthropic y la app te lo dice. Si fallan las dos,
+  puedes reintentar o rellenar los datos a mano.
+
+  Está pensada para el móvil: ábrela en el iPhone y añádela a la pantalla de
+  inicio. Tiene tema claro y oscuro.
+
+  Para usar Claude, pega tu API key en Ajustes. Para usar Codex hay que iniciar
+  sesión una vez desde la terminal del Umbrel:
+  sudo docker exec -it ismaeloul-armario_web_1 codex login --device-auth
+
+  El outfit diario según el tiempo llegará en una versión posterior.
+
+releaseNotes: >-
+  Primera versión: añadir prendas con análisis por IA, catálogo con filtros,
+  ficha de prenda, lavadora y ajustes.
+
+developer: Ismaeloul
+website: https://github.com/Ismaeloul/umbrel-app-store
+dependencies: []
+repo: https://github.com/Ismaeloul/umbrel-app-store
+support: https://github.com/Ismaeloul/umbrel-app-store/issues
+port: 7798
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: Ismaeloul
+submission: https://github.com/Ismaeloul/umbrel-app-store

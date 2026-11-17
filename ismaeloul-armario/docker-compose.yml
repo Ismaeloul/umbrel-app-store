@@ -1,0 +1,40 @@
+version: "3.7"
+
+# Armario 0.1.0: armario virtual con análisis de prendas por IA.
+#
+# La imagen la construye y la publica en GHCR el CI del repo armario-virtual
+# al empujar el tag v0.1.0 (linux/amd64). umbreld hace un `docker pull` antes
+# de arrancar, así que la imagen tiene que poder bajarse sin login.
+#
+# Este fichero es PÚBLICO: ni IPs ni claves. La API key de Claude se pega en
+# Ajustes y la sesión de Codex se inicia desde la terminal (ver la descripción).
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: ismaeloul-armario_web_1
+      APP_PORT: "8000"
+      # La app no tiene login propio: todo queda detrás del login de Umbrel.
+      PROXY_AUTH_ADD: "true"
+
+  web:
+    image: ghcr.io/ismaeloul/armario-virtual:0.1.0
+    container_name: ismaeloul-armario_web_1
+    restart: unless-stopped
+    init: true
+    # Sin root. 1000:1000 es el dueño de ${APP_DATA_DIR} en Umbrel.
+    user: "1000:1000"
+    environment:
+      TZ: "Europe/Paris"
+      ARMARIO_DATA_DIR: "/data"
+      # Sesión de Codex (auth.json). Codex renueva los tokens y reescribe el
+      # archivo, así que la carpeta tiene que ser escribible y persistente.
+      CODEX_HOME: "/codex-home"
+      HOME: "/tmp"
+    volumes:
+      # Base de datos y fotos. Sobrevive a las actualizaciones de la app.
+      - ${APP_DATA_DIR}/data:/data
+      # Aparte de data/ para que una copia de los datos no se lleve credenciales.
+      - ${APP_DATA_DIR}/codex-home:/codex-home
+    mem_limit: 1g
+    pids_limit: 256
