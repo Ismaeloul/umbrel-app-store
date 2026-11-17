@@ -3,7 +3,7 @@ id: ismaeloul-armario
 category: files
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-armario/icon.svg"
 name: Armario
-version: "0.2.0"
+version: "0.3.0"
 tagline: Tu armario virtual, con las prendas catalogadas por IA
 description: >-
   Armario es un armario virtual personal. Haces una foto a cada prenda y la IA
@@ -25,25 +25,34 @@ description: >-
   terminal), ves cuánto límite te queda en tu suscripción y pegas tu API key
   de Claude si quieres tenerlo de respaldo.
 
-  El outfit diario según el tiempo llegará en una versión posterior.
+  Cada día, la pantalla Hoy te propone un outfit según el tiempo de tu ciudad,
+  la época del año y lo que tienes en la lavadora. En Gustos valoras
+  combinaciones y la app aprende qué te pega y qué no.
 
 releaseNotes: >-
-  Sesión de Codex desde Ajustes. Ya no hace falta la terminal: pulsas «Iniciar
-  sesión en Codex», abres el enlace y escribes el código. También puedes cerrar
-  la sesión para entrar con otra cuenta.
+  Outfit del día. La pantalla Hoy propone qué ponerte según el tiempo de tu
+  ciudad y la temporada, sin repetir combinaciones ni usar lo que está en la
+  lavadora. Puedes pasar, pedir otra propuesta o marcar «Me gusta», que apunta
+  el uso de cada prenda.
 
-  Límite de Codex. Ajustes muestra cuánto llevas usado de tu suscripción en las
-  últimas 5 horas y en la semana, y cuándo se renueva.
+  Gustos. Una pestaña nueva para valorar combinaciones: me gusta o no me gusta,
+  y por qué (colores, calzado, estilo, soso, recargado, o señalando prendas).
+  Lo que valoras ajusta las propuestas de Hoy.
 
-  Foto de la etiqueta. Una tercera foto, opcional: la IA lee de ella la marca y
-  la talla, para que no tengas que escribirlas.
+  Reglas de estilo de partida. Antes de conocer tus gustos, la app ya sabe qué
+  colores, estilos, estampados y capas suelen combinar.
 
-  Aviso de dudas en el color. Cuando la IA duda entre dos colores (blanco o
-  crudo, gris o negro…), el borrador lo avisa y eliges con un toque.
+  Calzado. Al añadir eliges «Prenda de ropa» o «Zapatilla», con sus propias
+  fotos: lateral, de frente y el otro lateral.
 
-  La IA cataloga mejor: temporada coherente según el tipo de prenda, un
-  estampado nuevo («bloques de color»), mejor criterio para logo y gráfico, y
-  nombres siempre en singular.
+  Rasgos de la prenda. La IA apunta también el cierre, si tiene capucha, el
+  corte y el grosor. Las prendas que ya tenías los tienen vacíos hasta que los
+  rellenes al editarlas.
+
+  Ropa de verano solo en su época. Pantalón corto y manga corta se proponen de
+  mayo a septiembre, aunque un día de invierno suba la temperatura.
+
+  Iconos nuevos y, en Ajustes, una opción escondida para borrar lo aprendido.
 
   Actualizar no borra nada: tus prendas y la sesión de Codex se conservan.
 
