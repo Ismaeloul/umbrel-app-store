@@ -3,7 +3,7 @@ id: ismaeloul-armario
 category: files
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-armario/icon.svg"
 name: Armario
-version: "0.4.2"
+version: "0.4.3"
 tagline: Tu armario virtual, con las prendas catalogadas por IA
 description: >-
   Armario es un armario virtual personal. Haces una foto a cada prenda y la IA
@@ -34,6 +34,18 @@ description: >-
   combinaciones y la app aprende qué te pega y qué no.
 
 releaseNotes: >-
+  0.4.3: quince tiendas más, todas de Francia y desactivadas hasta que las
+  actives: Massimo Dutti, Lefties, Nike, Jack & Jones, Carhartt WIP, Snipes,
+  size?, Foot Locker, Jules, Bonobo, Uniqlo, Mango, H&M, COS y Weekday. En
+  H&M, COS, Uniqlo y Mango no se ven las tallas: se miran en la tienda.
+
+  El catálogo completo de cada tienda se lee de noche, despacio, y las
+  propuestas salen de todo él según tus gustos. Una zapatilla que está en
+  varias tiendas sale una sola vez, con el precio de cada una.
+
+  Descubrir enseña una pila de tarjetas con las fotos ya cargadas, una barra
+  de progreso real mientras se consulta, y los colores agotados en gris.
+
   0.4.2: JD Sports se lee ahora con el navegador (antes fallaba) y, al cambiar
   de color, la prenda conserva su nombre traducido.
 
