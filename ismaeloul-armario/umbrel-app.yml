@@ -3,7 +3,7 @@ id: ismaeloul-armario
 category: files
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-armario/icon.svg"
 name: Armario
-version: "0.4.3"
+version: "0.4.4"
 tagline: Tu armario virtual, con las prendas catalogadas por IA
 description: >-
   Armario es un armario virtual personal. Haces una foto a cada prenda y la IA
@@ -34,6 +34,11 @@ description: >-
   combinaciones y la app aprende qué te pega y qué no.
 
 releaseNotes: >-
+  0.4.4: Nike se lee ahora con el navegador y trae el catálogo entero (antes
+  solo la primera página). En Descubrir, la tarjeta de debajo ya no cambia
+  mientras decides. Con el filtro de una tienda, el botón dice «Ver más de»
+  esa tienda, o «Buscar más en» ella si no queda nada guardado.
+
   0.4.3: quince tiendas más, todas de Francia y desactivadas hasta que las
   actives: Massimo Dutti, Lefties, Nike, Jack & Jones, Carhartt WIP, Snipes,
   size?, Foot Locker, Jules, Bonobo, Uniqlo, Mango, H&M, COS y Weekday. En
