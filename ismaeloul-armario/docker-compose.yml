@@ -18,7 +18,7 @@ services:
       PROXY_AUTH_ADD: "true"
 
   web:
-    image: ghcr.io/ismaeloul/armario:0.3.2
+    image: ghcr.io/ismaeloul/armario:0.4.1
     container_name: ismaeloul-armario_web_1
     restart: unless-stopped
     init: true
@@ -36,5 +36,6 @@ services:
       - ${APP_DATA_DIR}/data:/data
       # Aparte de data/ para que una copia de los datos no se lleve credenciales.
       - ${APP_DATA_DIR}/codex-home:/codex-home
-    mem_limit: 1g
-    pids_limit: 256
+    # El navegador de Pull&Bear y Bershka (Chromium) necesita más memoria y más procesos que la app sola.
+    mem_limit: 3g
+    pids_limit: 1024

@@ -3,7 +3,7 @@ id: ismaeloul-armario
 category: files
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-armario/icon.svg"
 name: Armario
-version: "0.3.2"
+version: "0.4.1"
 tagline: Tu armario virtual, con las prendas catalogadas por IA
 description: >-
   Armario es un armario virtual personal. Haces una foto a cada prenda y la IA
@@ -25,40 +25,37 @@ description: >-
   terminal), ves cuánto límite te queda en tu suscripción y pegas tu API key
   de Claude si quieres tenerlo de respaldo.
 
+  La pestaña Compras trae cada semana novedades de las tiendas que actives,
+  las compara con tu armario y te las enseña para deslizar. La app solo enlaza
+  a la tienda: nunca compra ni guarda datos de pago.
+
   Cada día, la pantalla Hoy te propone un outfit según el tiempo de tu ciudad,
   la época del año y lo que tienes en la lavadora. En Gustos valoras
   combinaciones y la app aprende qué te pega y qué no.
 
 releaseNotes: >-
-  0.3.2: repaso general. Iconos nuevos, confirmación antes de eliminar una prenda, cerrar sesión o vaciar la lavadora, avisos cuando algo falla, campos que ya no hacen zoom en el iPhone y un algoritmo de outfits más afinado.
+  0.4.1: pestaña Compras. Novedades semanales de Zara, Courir, JD Sports,
+  Pull&Bear y Bershka (tiendas de Francia), puntuadas contra tu armario y tus
+  gustos. Deslizas a la derecha si te gusta y a la izquierda si no; puedes
+  volver atrás, filtrar por tienda y por tipo de prenda, y pedir más.
 
-  0.3.1: el código para iniciar sesión en Codex ya se copia al tocarlo.
+  Me gustan. Tu lista guardada, con caducidad. Al abrir una prenda ves su
+  referencia, tallas, composición, enlace y con qué prendas de tu armario
+  combina. «La he comprado» la pasa al armario con las fotos de la tienda.
 
-  Outfit del día. La pantalla Hoy propone qué ponerte según el tiempo de tu
-  ciudad y la temporada, sin repetir combinaciones ni usar lo que está en la
-  lavadora. Puedes pasar, pedir otra propuesta o marcar «Me gusta», que apunta
-  el uso de cada prenda.
+  Buscador. Pega una referencia o un enlace de la tienda para guardarla o
+  meterla directamente en tu armario.
 
-  Gustos. Una pestaña nueva para valorar combinaciones: me gusta o no me gusta,
-  y por qué (colores, calzado, estilo, soso, recargado, o señalando prendas).
-  Lo que valoras ajusta las propuestas de Hoy.
+  Colores. Si una prenda existe en más colores, eliges cuál ver.
 
-  Reglas de estilo de partida. Antes de conocer tus gustos, la app ya sabe qué
-  colores, estilos, estampados y capas suelen combinar.
+  Tiendas. Un panel con el estado de cada tienda: si funciona, si falló y por
+  qué, y cuándo toca la próxima consulta. Arrancan desactivadas.
 
-  Calzado. Al añadir eliges «Prenda de ropa» o «Zapatilla», con sus propias
-  fotos: lateral, de frente y el otro lateral.
+  Los nombres de las tiendas se traducen al español con Codex. En Ajustes
+  eliges el modelo y el esfuerzo para analizar fotos y para traducir.
 
-  Rasgos de la prenda. La IA apunta también el cierre, si tiene capucha, el
-  corte y el grosor. Las prendas que ya tenías los tienen vacíos hasta que los
-  rellenes al editarlas.
-
-  Ropa de verano solo en su época. Pantalón corto y manga corta se proponen de
-  mayo a septiembre, aunque un día de invierno suba la temperatura.
-
-  Iconos nuevos y, en Ajustes, una opción escondida para borrar lo aprendido.
-
-  Actualizar no borra nada: tus prendas y la sesión de Codex se conservan.
+  Esta versión pesa bastante más: incluye un navegador para leer Pull&Bear y
+  Bershka. Actualizar no borra nada.
 
 developer: Ismaeloul
 website: https://github.com/Ismaeloul/umbrel-app-store
