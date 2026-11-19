@@ -3,7 +3,7 @@ id: ismaeloul-armario
 category: files
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-armario/icon.svg"
 name: Armario
-version: "0.4.10"
+version: "0.4.11"
 tagline: Tu armario virtual, con las prendas catalogadas por IA
 description: >-
   Armario es un armario virtual personal. Haces una foto a cada prenda y la IA
@@ -34,6 +34,13 @@ description: >-
   combinaciones y la app aprende qué te pega y qué no.
 
 releaseNotes: >-
+  0.4.11: añadir prendas es más rápido (Codex redibuja todas las fotos a la
+  vez). Foto opcional «Textura y color» para acertar el color y el tejido.
+  Las zapatillas llevan una foto de las dos juntas, que es su portada. En la
+  ficha vuelven «Editar fotos con Codex» y llega «Pareja» para los conjuntos.
+  Hoy: afinidad mínima, camiseta bajo la sudadera con cremallera y abrigo
+  siempre que hace frío.
+
   0.4.10: ofertas en Compras (precio anterior tachado y el rebajado en rojo,
   cuando la tienda lo dice; aún no en Zara, H&M, Mango ni Jack & Jones). Los
   colores de una prenda son solo los de ese mismo modelo y no cambian al
