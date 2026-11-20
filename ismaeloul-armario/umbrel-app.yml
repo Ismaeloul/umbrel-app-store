@@ -3,7 +3,7 @@ id: ismaeloul-armario
 category: files
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-armario/icon.svg"
 name: Armario
-version: "0.4.17"
+version: "0.4.18"
 tagline: Tu armario virtual, con las prendas catalogadas por IA
 description: >-
   Armario es un armario virtual personal. Haces una foto a cada prenda y la IA
@@ -34,6 +34,10 @@ description: >-
   combinaciones y la app aprende qué te pega y qué no.
 
 releaseNotes: >-
+  0.4.18: filtros de Compras más completos: varias tiendas a la vez, tipo de
+  prenda concreto, color, precio máximo y solo rebajas. El difuminado de las
+  hojas que suben desde abajo aparece a la vez que la hoja.
+
   0.4.17: al tocar una prenda en Hoy, el Armario, Gustos o Tus outfits se
   abre su ficha en una hoja que sube desde abajo y se cierra deslizándola
   hacia abajo. En Compras, los filtros van en un solo botón y al tocar la
