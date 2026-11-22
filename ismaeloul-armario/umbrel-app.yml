@@ -1,0 +1,159 @@
+manifestVersion: 1
+id: ismaeloul-armario
+category: files
+icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-armario/icon.svg"
+name: Armario
+version: "0.4.18"
+tagline: Tu armario virtual, con las prendas catalogadas por IA
+description: >-
+  Armario es un armario virtual personal. Haces una foto a cada prenda y la IA
+  rellena por ti el tipo, los colores, el estampado, el estilo y la temporada;
+  tú revisas el borrador y lo guardas.
+
+  El catálogo se filtra por temporada y por categoría, y cada prenda tiene su
+  ficha con las fotos de delante y detrás, si es favorita, cuántas veces te la
+  has puesto y si está en la lavadora.
+
+  La IA principal es Codex, con tu suscripción de ChatGPT; si falla, se usa
+  Claude con tu API key de Anthropic y la app te lo dice. Si fallan las dos,
+  puedes reintentar o rellenar los datos a mano.
+
+  Está pensada para el móvil: ábrela en el iPhone y añádela a la pantalla de
+  inicio. Tiene tema claro y oscuro.
+
+  Todo se configura en Ajustes: inicias sesión en Codex con un código (sin
+  terminal), ves cuánto límite te queda en tu suscripción y pegas tu API key
+  de Claude si quieres tenerlo de respaldo.
+
+  La pestaña Compras trae cada semana novedades de las tiendas que actives,
+  las compara con tu armario y te las enseña para deslizar. La app solo enlaza
+  a la tienda: nunca compra ni guarda datos de pago.
+
+  Cada día, la pantalla Hoy te propone un outfit según el tiempo de tu ciudad,
+  la época del año y lo que tienes en la lavadora. En Gustos valoras
+  combinaciones y la app aprende qué te pega y qué no.
+
+releaseNotes: >-
+  0.4.18: filtros de Compras más completos: varias tiendas a la vez, tipo de
+  prenda concreto, color, precio máximo y solo rebajas. El difuminado de las
+  hojas que suben desde abajo aparece a la vez que la hoja.
+
+  0.4.17: al tocar una prenda en Hoy, el Armario, Gustos o Tus outfits se
+  abre su ficha en una hoja que sube desde abajo y se cierra deslizándola
+  hacia abajo. En Compras, los filtros van en un solo botón y al tocar la
+  ficha de la tarjeta salen sus datos con un botón para ir a la tienda.
+  Uniqlo ya no propone prendas agotadas.
+
+  0.4.16: en Ajustes → API.SH ves los créditos que te quedan de verdad
+  (consultarlo es gratis). En el Armario, el título y «Tus outfits» van en la
+  misma fila.
+
+  0.4.15: Uniqlo vuelve a Compras a través de API.SH. Pega tu clave en
+  Ajustes → API.SH (se guarda cifrada y no se puede volver a ver) y activa
+  Uniqlo en Tiendas. Gasta unos 13 créditos a la semana, con un tope de 300
+  al mes.
+
+  0.4.14: «Tus outfits» pasa al Armario, con su botón encima del selector de
+  temporada: ahí montas y ves los outfits que te quedan bien. En Gustos,
+  «Me gusta y guardar» guarda la combinación en «Tus outfits».
+
+  0.4.13: en Gustos, «Tus outfits»: monta un outfit que sabes que te queda
+  bien y el algoritmo lo tiene en cuenta (cuenta el doble). En Ajustes, «Qué
+  ropa toca ahora»: automático, verano o invierno. Hoy ya no propone siempre
+  la misma camiseta debajo de la sudadera ni una de verano en invierno.
+
+  0.4.12: en Gustos, toca la foto de una prenda para verla en grande y con
+  zoom, sin perder la combinación que estás valorando.
+
+  0.4.11: añadir prendas es más rápido (Codex redibuja todas las fotos a la
+  vez). Foto opcional «Textura y color» para acertar el color y el tejido.
+  Las zapatillas llevan una foto de las dos juntas, que es su portada. En la
+  ficha vuelven «Editar fotos con Codex» y llega «Pareja» para los conjuntos.
+  Hoy: afinidad mínima, camiseta bajo la sudadera con cremallera y abrigo
+  siempre que hace frío.
+
+  0.4.10: ofertas en Compras (precio anterior tachado y el rebajado en rojo,
+  cuando la tienda lo dice; aún no en Zara, H&M, Mango ni Jack & Jones). Los
+  colores de una prenda son solo los de ese mismo modelo y no cambian al
+  elegir uno ni al volver al anterior. Lo que guardas o buscas sin foto la
+  baja solo al poco rato. El corazón de Descubrir cambia de color.
+
+  0.4.8: en la ficha de una prenda, el recuadro de la foto toma la forma de
+  la foto (sin bandas) y las fotos se pasan tocando a la derecha o a la
+  izquierda, en bucle, con puntos como en Compras. Girar una foto se hace
+  ahora solo al añadir la prenda. Al abrir una ficha desde el final del
+  armario ya sale arriba del todo, y al volver el armario sigue donde estabas.
+
+  0.4.7: al añadir una prenda, cada foto sale junto a la que redibuja Codex
+  como foto de tienda. Con «Me vale» se usa la de Codex; con «No me vale»
+  le explicas qué ha fallado y la rehace. Tocando una foto se abre en grande
+  con zoom para comparar los detalles. Animaciones pulidas: cargas sin saltos
+  y el destello de «Analizando…» ya no se corta.
+
+  0.4.6: animaciones en toda la app (cargas con destello, cambios de pantalla
+  suaves, tarjetas que entran una tras otra). En la ficha de las prendas con
+  fotos tuyas, «Editar foto con Codex» las redibuja como fotos de tienda: ves
+  el antes y el después y decides; tus fotos se guardan. Al cambiar entre
+  claro y oscuro, las bandas del iPhone cambian también.
+
+  0.4.5: al comprar algo de Me gustan puedes decir «La he pedido, aún no ha
+  llegado»: entra en el armario como «Pedida», no se te propone en Hoy hasta
+  que pulses «Ya me ha llegado» en su ficha, y sí sale en Gustos para ir
+  valorando. El aviso de prendas en la lavadora abre ahora el listado de lo
+  que se está lavando. En la ficha, la foto se ve entera.
+
+  0.4.4: Nike se lee ahora con el navegador y trae el catálogo entero (antes
+  solo la primera página). En Descubrir, la tarjeta de debajo ya no cambia
+  mientras decides. Con el filtro de una tienda, el botón dice «Ver más de»
+  esa tienda, o «Buscar más en» ella si no queda nada guardado.
+
+  0.4.3: quince tiendas más, todas de Francia y desactivadas hasta que las
+  actives: Massimo Dutti, Lefties, Nike, Jack & Jones, Carhartt WIP, Snipes,
+  size?, Foot Locker, Jules, Bonobo, Uniqlo, Mango, H&M, COS y Weekday. En
+  H&M, COS, Uniqlo y Mango no se ven las tallas: se miran en la tienda.
+
+  El catálogo completo de cada tienda se lee de noche, despacio, y las
+  propuestas salen de todo él según tus gustos. Una zapatilla que está en
+  varias tiendas sale una sola vez, con el precio de cada una.
+
+  Descubrir enseña una pila de tarjetas con las fotos ya cargadas, una barra
+  de progreso real mientras se consulta, y los colores agotados en gris.
+
+  0.4.2: JD Sports se lee ahora con el navegador (antes fallaba) y, al cambiar
+  de color, la prenda conserva su nombre traducido.
+
+  0.4.1: pestaña Compras. Novedades semanales de Zara, Courir, JD Sports,
+  Pull&Bear y Bershka (tiendas de Francia), puntuadas contra tu armario y tus
+  gustos. Deslizas a la derecha si te gusta y a la izquierda si no; puedes
+  volver atrás, filtrar por tienda y por tipo de prenda, y pedir más.
+
+  Me gustan. Tu lista guardada, con caducidad. Al abrir una prenda ves su
+  referencia, tallas, composición, enlace y con qué prendas de tu armario
+  combina. «La he comprado» la pasa al armario con las fotos de la tienda.
+
+  Buscador. Pega una referencia o un enlace de la tienda para guardarla o
+  meterla directamente en tu armario.
+
+  Colores. Si una prenda existe en más colores, eliges cuál ver.
+
+  Tiendas. Un panel con el estado de cada tienda: si funciona, si falló y por
+  qué, y cuándo toca la próxima consulta. Arrancan desactivadas.
+
+  Los nombres de las tiendas se traducen al español con Codex. En Ajustes
+  eliges el modelo y el esfuerzo para analizar fotos y para traducir.
+
+  Esta versión pesa bastante más: incluye un navegador para leer Pull&Bear y
+  Bershka. Actualizar no borra nada.
+
+developer: Ismaeloul
+website: https://github.com/Ismaeloul/umbrel-app-store
+dependencies: []
+repo: https://github.com/Ismaeloul/armario-virtual
+support: https://github.com/Ismaeloul/armario-virtual/issues
+port: 7798
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: Ismaeloul
+submission: https://github.com/Ismaeloul/umbrel-app-store
