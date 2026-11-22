@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ace Player Neo">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0b0d11"/>
+      <stop offset="1" stop-color="#0b0d11"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="86" y="132" width="340" height="248" rx="40" fill="none" stroke="#ffd60a" stroke-width="26"/>
+  <path d="M256 145v222" stroke="#ffd60a" stroke-width="14" stroke-opacity=".45"/>
+  <circle cx="256" cy="256" r="72" fill="#ffd60a"/>
+  <path d="M238 222l54 34-54 34z" fill="#1a1400" stroke="#1a1400" stroke-width="10" stroke-linejoin="round"/>
+</svg>
