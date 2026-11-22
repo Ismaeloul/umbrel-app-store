@@ -2,6 +2,13 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 1.1.8 (2026-11-22)
+
+Version 1.1.8. Listas de canales: ya vale pegar el enlace de la carpeta del
+directorio (el que acaba en .ipns.inbrowser.link/), la app busca dentro la
+lista. Y una lista M3U guardada con el boton HTML ya no entra sin nombres
+(«Stream 81726596», todo en Importado): se lee segun lo que trae.
+
 ## 1.1.7 (2026-11-15)
 
 Version 1.1.7. Ver juntos en el ordenador: modo teatro. Un boton junto a

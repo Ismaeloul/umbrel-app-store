@@ -98,8 +98,15 @@ export function createDirectoriesService(deps: DirectoriesDeps): DirectoriesServ
   const nowIso = (): string => clock.date().toISOString();
   const normalizeContext = () => ({ defaultUrl: config.sync.defaultWebSyncUrl, now: clock.date() });
 
+  /* Manda lo que trae el texto, no el botón con que se guardó (1.1.8): una lista M3U guardada como
+     «HTML» entraba sin nombres ni categorías («Stream 81726596», todo en «Importado»). */
   function parse(type: WebSource['type'], text: string): ParsedStream[] {
-    return (type === 'html' ? parseHtml(text) : parseM3u(text)).slice(0, MAX_WEB_STREAMS);
+    const real: WebSource['type'] = /#EXT(M3U|INF)/i.test(text)
+      ? 'm3u'
+      : /<(html|body|a)/i.test(text)
+        ? 'html'
+        : type;
+    return (real === 'html' ? parseHtml(text) : parseM3u(text)).slice(0, MAX_WEB_STREAMS);
   }
 
   /* Descarga y parsea (server.js:4975-4977 y 5096-5098). */

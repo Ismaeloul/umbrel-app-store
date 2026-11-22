@@ -215,6 +215,34 @@ describe('POST /api/streams/sync (server.js:4960-5008, B-191, B-192)', () => {
     expect(result.web.map((item) => item.title)).toEqual(['Canal B', `Stream ${ID_C.slice(0, 8)}`]);
   });
 
+  it('una lista M3U guardada como HTML se lee como M3U, con nombres y categorías (1.1.8)', async () => {
+    const { service, state } = createHarness({
+      routes: {
+        'https://otra.example/lista.m3u': {
+          body: `#EXTM3U
+#EXTINF:-1 tvg-id="DAZN 1" group-title="DAZN",DAZN 1 1080p
+acestream://${ID_B}
+`,
+        },
+        'https://otra.example/pagina': { body: `<html><body>acestream://${ID_C}</body></html>` },
+      },
+    });
+    seedPrincipal(state);
+    const lista = await service.sync({
+      sourceId: 'principal',
+      url: 'https://otra.example/lista.m3u',
+      type: 'html',
+    });
+    expect(lista.web).toMatchObject([{ id: ID_B, title: 'DAZN 1 1080p', category: 'DAZN' }]);
+    // y al revés: una página guardada como M3U
+    const pagina = await service.sync({
+      sourceId: 'principal',
+      url: 'https://otra.example/pagina',
+      type: 'm3u',
+    });
+    expect(pagina.web.map((item) => item.id)).toEqual([ID_C]);
+  });
+
   it('bad_url, source_not_found y source_limit sin salir a la red', async () => {
     const { service, state, requested } = createHarness();
     state.seed({
