@@ -8,7 +8,12 @@ import { createSilentLogger } from '../../core/logger.js';
 import { createTestCore } from '../../../test/helpers/index.js';
 import { createNetClient } from '../net/index.js';
 import { fakeTransport, tableResolver, type FakeHandler, type FakeReply } from '../net/testing.js';
-import { alternateGatewayUrl, createDirectoryFetcher, esFalloDePasarela } from './fetcher.js';
+import {
+  alternateGatewayUrl,
+  createDirectoryFetcher,
+  esFalloDePasarela,
+  listaDeCarpeta,
+} from './fetcher.js';
 import {
   autoSyncWeb,
   fetchDirectoryText as legacyFetchDirectoryText,
@@ -238,6 +243,39 @@ describe('IPFS directo antes que la pasarela (T-121, B-196)', () => {
       await codeOf(fetcher.fetchDirectoryText('https://ipfs.io/ipns/k51abc/x', controller.signal)),
     ).toBe('apagando');
     expect(requested()).toEqual([]);
+  });
+});
+
+describe('el enlace es la carpeta del directorio, no la lista (1.1.8)', () => {
+  const CARPETA_URL = `${GATEWAY}/${raizTexto}/data?format=car&dag-scope=entity`;
+
+  it('baja la carpeta, ve que lleva una lista y baja la lista', async () => {
+    const { fetcher, requested } = setup({
+      [`${ROUTING}/k51abc`]: { body: registroIpnsV2(`/ipfs/${raizTexto}`) },
+      [CARPETA_URL]: { body: carDe(bloques.slice(0, 2)) },
+      [CAR_URL]: { body: carDe(bloques) },
+    });
+    expect(await fetcher.fetchDirectoryText('https://k51abc.ipns.inbrowser.link/data/')).toBe(
+      esperado,
+    );
+    expect(requested()).toEqual([`${ROUTING}/k51abc`, CARPETA_URL, CAR_URL]);
+  });
+
+  it('una carpeta sin lista ni página → ipfs_not_file', async () => {
+    const { fetcher } = setup({
+      [`${GATEWAY}/${raizTexto}?format=car&dag-scope=entity`]: { body: carDe(bloques.slice(0, 1)) },
+    });
+    expect(await codeOf(fetcher.fetchIpfsDirectory(`https://ipfs.io/ipfs/${raizTexto}`))).toBe(
+      'ipfs_not_file',
+    );
+  });
+
+  it('listaDeCarpeta: hashes_acestream.m3u, si no otra lista, si no la página', () => {
+    const elcano = ['hashes.json', 'hashes.m3u', 'hashes.txt', 'hashes_acestream.m3u', 'index.html'];
+    expect(listaDeCarpeta(elcano)).toBe('hashes_acestream.m3u');
+    expect(listaDeCarpeta(['index.html', 'b.m3u8', 'a.m3u'])).toBe('a.m3u');
+    expect(listaDeCarpeta(['hashes.txt', 'index.html'])).toBe('index.html');
+    expect(listaDeCarpeta(['hashes.txt'])).toBeNull();
   });
 });
 

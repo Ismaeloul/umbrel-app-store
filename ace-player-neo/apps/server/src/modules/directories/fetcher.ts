@@ -13,8 +13,10 @@ import { AppError } from '../../core/errors.js';
 import type { Logger } from '../../core/logger.js';
 import type { NetClient } from '../net/types.js';
 import {
+  ipfsBlock,
   ipfsCarBlocks,
   ipfsCidFromText,
+  ipfsNode,
   ipfsReadFile,
   ipfsUrlParts,
   ipfsWalk,
@@ -77,6 +79,23 @@ export const IPFS_TRUSTLESS_FALLBACKS = [
   'https://gateway.pinata.cloud',
 ] as const;
 
+/**
+ * Lista dentro de una carpeta IPFS (1.1.8). El enlace que se comparte de un directorio suele ser
+ * la carpeta entera (`https://<nombre>.ipns.<pasarela>/`), que en un navegador abre su index.html;
+ * aquí se busca la lista: `hashes_acestream.m3u`, si no cualquier .m3u/.m3u8 y, a falta de lista,
+ * la página. `null` si no hay nada que leer.
+ */
+export function listaDeCarpeta(names: readonly string[]): string | null {
+  const m3u = names.filter((name) => /.m3u8?$/i.test(name)).sort();
+  return (
+    m3u.find((name) => name.toLowerCase() === 'hashes_acestream.m3u') ??
+    m3u.find((name) => /acestream/i.test(name)) ??
+    m3u[0] ??
+    names.find((name) => /^index.html?$/i.test(name)) ??
+    null
+  );
+}
+
 export interface DirectoryFetcher {
   fetchDirectoryText(url: string, signal?: AbortSignal): Promise<string>;
   fetchIpfsDirectory(url: string, signal?: AbortSignal): Promise<string>;
@@ -137,6 +156,23 @@ export function createDirectoryFetcher(deps: DirectoryFetcherDeps): DirectoryFet
       segments = [...(target[3] || '').split('/').filter(Boolean), ...segments];
     }
     const root = ipfsCidFromText(name);
+    const leido = await readEntity(name, root, segments, signal);
+    if (typeof leido === 'string') return leido;
+    /* Era una carpeta: se baja la lista que lleva dentro (un solo nivel). */
+    const lista = listaDeCarpeta(leido.folder);
+    if (!lista) throw new AppError('ipfs_not_file');
+    const dentro = await readEntity(name, root, [...segments, lista], signal);
+    if (typeof dentro !== 'string') throw new AppError('ipfs_not_file');
+    return dentro;
+  }
+
+  /* Un fichero (su texto) o una carpeta (los nombres que contiene), de la primera pasarela que responda. */
+  async function readEntity(
+    name: string,
+    root: ReturnType<typeof ipfsCidFromText>,
+    segments: string[],
+    signal?: AbortSignal,
+  ): Promise<string | { folder: string[] }> {
     const route = segments.map(encodeURIComponent).join('/');
     /* La que funcionó la última vez va primero; las demás, en su orden. */
     const order = [preferred, ...gateways.filter((g) => g !== preferred)];
@@ -153,11 +189,15 @@ export function createDirectoryFetcher(deps: DirectoryFetcherDeps): DirectoryFet
           },
         );
         const blocks = ipfsCarBlocks(car.body);
-        const text = ipfsReadFile(
-          blocks,
-          ipfsWalk(blocks, root, segments),
-          MAX_BODY_BYTES,
-        ).toString('utf8');
+        const target = ipfsWalk(blocks, root, segments);
+        if (target.codec === 0x70) {
+          const node = ipfsNode(ipfsBlock(blocks, target));
+          if (node.type === 1) {
+            preferred = gateway;
+            return { folder: node.links.flatMap((link) => (link.name ? [link.name] : [])) };
+          }
+        }
+        const text = ipfsReadFile(blocks, target, MAX_BODY_BYTES).toString('utf8');
         preferred = gateway;
         return text;
       } catch (error) {
